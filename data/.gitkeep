@@ -1,0 +1,9 @@
+# Everything else in this directory is gitignored.
+#
+# Raw inputs live here and NEVER move between laptops:
+#   data/zenodo_p3/   Soum   — Zenodo Part III, ~9.9 GB
+#   data/ais/         Jaiveer — NOAA Marine Cadastre AIS + derived Parquet
+#   data/fields/      Anushka — cached HYCOM/ERA5 arrays, <case>.npz
+#   data/labels/      Soum   — features.csv (this one is small; commit it deliberately)
+#
+# Outputs move. Inputs stay put.

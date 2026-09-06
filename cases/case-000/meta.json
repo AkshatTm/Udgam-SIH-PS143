@@ -1,0 +1,13 @@
+{
+  "case_id": "case-000",
+  "title": "FAKE bundle \u2014 contract reference only",
+  "satellite": "Sentinel-1A (fake)",
+  "scene_id": "FAKE-000",
+  "detection_time": "2017-01-29T00:14:00Z",
+  "acts_available": [
+    "detect",
+    "trace",
+    "attribute"
+  ],
+  "notes": "Synthetic. Never shown to a judge. Regenerate with scripts/make_case000.py."
+}

@@ -1,0 +1,21 @@
+# Six people on Windows, macOS and Linux. Without this, one person's editor rewrites line
+# endings and the next person sees "every line changed" on a file nobody touched — which is
+# how a real conflict gets lost in the noise.
+* text=auto eol=lf
+
+# Binary — never touch these
+*.png binary
+*.jpg binary
+*.tif binary
+*.tiff binary
+*.7z  binary
+*.zip binary
+*.npz binary
+*.pkl binary
+*.parquet binary
+
+# Bundle outputs are generated. Show them collapsed in PR diffs — reviewing 3000x96
+# coordinates by eye is not a review, and the validator is what actually checks them.
+cases/**/particles.json linguist-generated=true
+cases/**/origin.json    linguist-generated=true
+cases/**/vessels.geojson linguist-generated=true

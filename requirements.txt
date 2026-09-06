@@ -1,0 +1,47 @@
+# Naap — pinned Python dependencies.
+#
+#   py -3.11 -m venv venv
+#   venv\Scripts\activate          # Windows
+#   source venv/bin/activate       # macOS/Linux
+#   pip install -r requirements.txt
+#
+# Python 3.11 (Master section 3.5). 3.10 or 3.12 will work — but say so in the group, so a
+# version-specific bug stays diagnosable. Versions below are what was installed and verified
+# on 2026-09-06.
+#
+# NO NEW DEPENDENCIES AFTER TUE 8 SEPT in the pipeline; none anywhere after the freeze.
+# Adding one late means six laptops silently disagree at the worst possible moment.
+#
+# Nothing here needs a GPU. Not one component of this project does.
+
+# --- core numerics, used by everyone
+numpy==2.4.6
+scipy==1.17.1
+
+# --- imagery (Akshat: scene export · Soum: detection)
+pillow==12.3.0
+rasterio==1.4.4
+opencv-python==5.0.0.93
+scikit-image==0.26.0
+
+# --- geometry (Soum: polygons · Jaiveer: AIS spatial filtering)
+shapely==2.1.2
+geopandas==1.1.4
+
+# --- classifier (Soum, Stage 1). RandomForest only — the CNN is October work.
+scikit-learn==1.9.0
+
+# --- Google Earth Engine: SAR scenes, HYCOM currents, ERA5 winds
+#     (Akshat, Anushka, Soum). Run `earthengine authenticate` once.
+earthengine-api==1.7.42
+requests==2.34.2
+
+# --- AIS at volume (Jaiveer, Stage 3). Filter to bbox+time ON READ —
+#     never load a whole NOAA daily CSV into pandas (docs/TRAPS.md #12).
+duckdb==1.5.5
+pyarrow==25.0.1
+pandas==3.0.5
+
+# --- sanity plots. Every drift phase ends in a picture; that is how
+#     wrong-but-running code gets caught cheaply.
+matplotlib==3.11.1

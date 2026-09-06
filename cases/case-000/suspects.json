@@ -1,0 +1,66 @@
+{
+  "funnel": {
+    "in_region": 412,
+    "in_window": 63,
+    "plausible": 12,
+    "scored": 3
+  },
+  "suspects": [
+    {
+      "mmsi": "367000101",
+      "name": "FAKE ATLAS",
+      "vessel_type": "tanker",
+      "score": 0.82,
+      "closest_km": 3.1,
+      "closest_time": "2017-01-28T10:14:00Z",
+      "heading_consistent": true,
+      "ais_gap_minutes": 85,
+      "reasons": [
+        "inside the 50% origin radius during the window",
+        "85-minute transponder gap overlapping the window",
+        "tanker on a course consistent with the origin"
+      ]
+    },
+    {
+      "mmsi": "367000104",
+      "name": "FAKE CORAL",
+      "vessel_type": "cargo",
+      "score": 0.44,
+      "closest_km": 8.7,
+      "closest_time": "2017-01-28T07:14:00Z",
+      "heading_consistent": true,
+      "ais_gap_minutes": 0,
+      "reasons": [
+        "inside the 90% origin radius",
+        "no transponder gap"
+      ]
+    },
+    {
+      "mmsi": "367000102",
+      "name": "FAKE MERIDIAN",
+      "vessel_type": "cargo",
+      "score": 0.28,
+      "closest_km": 11.2,
+      "closest_time": "2017-01-28T13:14:00Z",
+      "heading_consistent": false,
+      "ais_gap_minutes": 0,
+      "reasons": [
+        "at the edge of the 90% origin radius"
+      ]
+    }
+  ],
+  "excluded": [
+    {
+      "mmsi": "367000103",
+      "name": "FAKE PELICAN",
+      "closest_km": 6.4,
+      "reason": "heading away from the origin throughout the window"
+    },
+    {
+      "mmsi": "367000105",
+      "name": "FAKE VESPER",
+      "closest_km": 9.9,
+      "reason": "left the region before the origin time window opened"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+# Raw inputs never move between laptops — outputs move instead (Master §7)
+data/*
+!data/.gitkeep
+# ...except the labelled training table, which is small and IS a deliverable
+# (docs/02_SOUM_DETECTION.md: "features.csv committed (hundreds of rows)")
+!data/labels/
+data/labels/*
+!data/labels/features.csv
+
+# Environments
+venv/
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Big raw formats — nothing over ~20 MB belongs in this repo
+*.tif
+*.tiff
+*.7z
+*.zip
+*.npz
+*.parquet
+*.pkl.gz
+
+# Intermediate stage outputs — regenerable, the bundle in cases/ is the artefact
+pipeline/*/out/
+
+# Throwaway end-to-end smoke bundle (scripts/make_case000.py --scene-only)
+cases/case-smoke/
+
+# Frontend build
+web/.next/
+web/dist/
+web/public/cases/
+
+# Credentials — never, under any circumstances
+.env
+*.pem
+.earthengine/
+credentials.json
+
+# OS noise
+.DS_Store
+Thumbs.db
