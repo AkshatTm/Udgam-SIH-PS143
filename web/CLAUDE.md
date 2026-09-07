@@ -13,7 +13,7 @@ Owns the entire judge-facing app. Full brief: `docs/04_HARSHITA_FRONTEND.md`. Se
 - Parse each bundle **once** into memory; consider Float32Array for particle positions.
 - Scrubbing must not re-fetch, re-parse, or re-render the map container. Slider state feeds the deck layer only, via `updateTriggers`.
 - No per-frame allocation in the animation loop.
-- Test the full 3000 particles x 96 steps on the actual demo machine, not just yours.
+- Test the full 3000 particles x 97 steps on the actual demo machine, not just yours.
 
 ## Escape hatches if it stutters (both invisible to a viewer)
 Decimate to every 2nd timestep · drop to 2000 particles. Never change the schema.

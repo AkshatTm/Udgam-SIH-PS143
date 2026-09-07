@@ -107,7 +107,7 @@ Test it by fetching `/cases/case-000/meta.json` in your app and printing it to t
 
 Everything rests on the slider being smooth. Not "mostly okay" — smooth.
 
-**Test it with the full 3000 dots and 96 time steps.** Test it on your laptop AND on the laptop we will actually present from.
+**Test it with the full 3000 dots and 97 time steps.** Test it on your laptop AND on the laptop we will actually present from.
 
 **If it stutters, you have two easy fixes and both are invisible to a viewer:**
 1. Show every 2nd time step instead of every one.

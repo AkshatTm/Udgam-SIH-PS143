@@ -242,7 +242,7 @@ def check_particles(d, box, meta):
     if len(lens) > 1:
         err(f"particles.json: timesteps have differing particle counts {sorted(lens)[:5]} — "
             "particles must never be added or dropped mid-run")
-    span_h = p["n_steps"] * p["timestep_minutes"] / 60
+    span_h = (p["n_steps"] - 1) * p["timestep_minutes"] / 60
     if not 6 <= span_h <= 72:
         warn(f"particles.json: rewind spans {span_h:.1f} h; the demo is scoped to ~24 h")
     if box:

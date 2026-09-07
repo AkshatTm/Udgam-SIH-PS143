@@ -167,7 +167,7 @@ def main():
     ap.add_argument("--cases-root", default=str(REPO / "cases"))
     ap.add_argument("--stub", action="store_true", help="required until the real engine exists")
     ap.add_argument("--particles", type=int, default=3000)
-    ap.add_argument("--steps", type=int, default=96)
+    ap.add_argument("--steps", type=int, default=97)
     ap.add_argument("--timestep-minutes", type=int, default=15)
     ap.add_argument("--seed", type=int, default=143)
     a = ap.parse_args()
@@ -197,7 +197,7 @@ def main():
 
     OUT.mkdir(parents=True, exist_ok=True)
     write_particles(OUT / "particles.json", t0, positions, a.timestep_minutes)
-    span_h = a.steps * a.timestep_minutes / 60
+    span_h = (a.steps - 1) * a.timestep_minutes / 60
     clon, clat, r50, r90 = write_origin(OUT / "origin.json", positions[-1], t0, span_h, 50)
 
     p0, pn = positions[0][0], positions[-1][0]

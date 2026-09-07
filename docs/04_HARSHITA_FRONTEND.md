@@ -28,7 +28,7 @@ Header: case title + case switcher tabs · Left rail: three stage dots (Detect /
 1. Time slider bound to `t` in the store (0…n_steps−1).
 2. deck.gl ScatterplotLayer reading `particles.positions[t]` — **load positions once into memory (consider Float32Array conversion), never re-fetch or re-parse on scrub**. Update via layer `data`/`updateTriggers` on t change.
 3. Play/pause auto-scrub (~8× real time) plus manual drag.
-**Checkpoint (the project's most important):** scrubbing 3000×96 fake particles is visually smooth on your laptop AND one weaker laptop. If it stutters: decimate to every 2nd timestep, drop to 2000 particles, ensure no per-frame allocation. Both fixes are invisible to a viewer. Report the result either way — finding a problem today is a win, not a failure.
+**Checkpoint (the project's most important):** scrubbing 3000×97 fake particles is visually smooth on your laptop AND one weaker laptop. If it stutters: decimate to every 2nd timestep, drop to 2000 particles, ensure no per-frame allocation. Both fixes are invisible to a viewer. Report the result either way — finding a problem today is a win, not a failure.
 
 ## Phase 3 — Tue (~5 h)
 1. Origin HeatmapLayer from `origin.json` (grid → weighted points; fade in as t approaches max rewind). 50%/90% radius circles.

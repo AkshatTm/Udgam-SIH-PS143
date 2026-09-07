@@ -77,7 +77,7 @@ Mutating the data array without `updateTriggers` leaves the layer showing the ol
 - **Related:** re-rendering the map container on every slider tick tanks the frame rate. Slider state must feed the layer, not the map component.
 
 ## 16. Re-parsing JSON on every scrub · Harshita
-Parse each bundle once into memory. 3000 × 96 positions re-parsed per frame will stutter no matter how fast deck.gl is.
+Parse each bundle once into memory. 3000 × 97 positions re-parsed per frame will stutter no matter how fast deck.gl is.
 
 ## 17. localStorage in the browser · Harshita
 Not available in some embedded/preview contexts and unnecessary here. All state in Zustand, in memory.

@@ -13,7 +13,7 @@ Your job: take the oil patch, and calculate where it came from.
 
 **How:** oil floating on the sea moves with two things — the ocean current, and the wind pushing on the surface. Scientists found that oil moves at the current speed, plus about 3% of the wind speed. That is the whole physics.
 
-So you put 3000 imaginary dots on the oil patch. Then you step time backwards, 15 minutes at a time, moving each dot against the current and wind. After 96 steps you have gone back 24 hours, and the dots have gathered near where the oil started.
+So you put 3000 imaginary dots on the oil patch. Then you step time backwards, 15 minutes at a time, moving each dot against the current and wind. After 96 backward steps (stored as 97 positions, including the start) you have gone back 24 hours, and the dots have gathered near where the oil started.
 
 **The most important part:** you do this 50 times, each time changing the numbers slightly (maybe the wind effect was 2.5%, maybe 3.5%). The 50 answers spread out. That spread IS your honest uncertainty. You never give one exact point — you give a cloud, and it gets wider the further back you look. That is physically true, and saying so is what makes judges trust us.
 

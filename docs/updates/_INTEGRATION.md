@@ -11,7 +11,7 @@ log; this file is only for the joins.
 ## [2026-09-06] Handoff #1 — contracts frozen, case-000 published, all stubs wired
 
 **Published:** `docs/CONTRACTS.md` (frozen) · `cases/case-000/` (fake, full-size: 3000 particles
-× 96 steps, 8.4 MB) · a working `--stub` in every stage · `scripts/validate_case.py` +
+× 97 steps, 8.4 MB) · a working `--stub` in every stage · `scripts/validate_case.py` +
 `scripts/test_validator.py`.
 
 **Validator:** PASS on `case-000`, 0 errors, 0 warnings.
