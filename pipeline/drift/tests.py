@@ -173,6 +173,98 @@ def test_4_plausibility_guards():
     return ok
 
 
+# ---------------------------------------------------------------------------- test 5
+def test_5_ensemble_and_grid():
+    """Phase 3. The ensemble must ADD uncertainty without MOVING the answer, and the grid it
+    produces must be the right way up.
+
+    The orientation check is the important one. origin.json is row-major from the top-left
+    with row 0 = NORTH, matching bounds.json's pixel convention. Getting that backwards
+    produces a heatmap that is upside down over the map -- it looks like a plausible cloud,
+    it validates, and it points Stage 3 at the wrong water. Nothing but a test catches it.
+    """
+    import ensemble as ens
+
+    print("\nTest 5 - ensemble spread, grid orientation, time window")
+    field = AnalyticField(ENNORE[0], ENNORE[1], amplitude=0.5, wind=(6.0, -4.0))
+    rng = np.random.default_rng(143)
+    seed = np.column_stack([
+        np.full(300, ENNORE[0]) + rng.normal(0, 0.01, 300),
+        np.full(300, ENNORE[1]) + rng.normal(0, 0.01, 300)])
+    n_steps, dt = 49, 15                                    # 12 h, enough to separate members
+
+    control, _, _, _ = ens.run_once(seed, T0, field, n_steps, dt, wind_coeff=0.03)
+    pool, conv_idx, members = ens.run_ensemble(seed, T0, field, n_steps, dt, n_runs=10,
+                                               rng=np.random.default_rng(7))
+
+    (c_lon, c_lat), c_r50, c_r90 = ens.radii_km(control)
+    (e_lon, e_lat), e_r50, e_r90 = ens.radii_km(pool)
+
+    ok = check("5a  the ensemble is wider than one run",
+               e_r90 > c_r90,
+               f"control r90 {c_r90:.2f} km -> ensemble r90 {e_r90:.2f} km "
+               f"(+{(e_r90 - c_r90):.2f} km of honest uncertainty)")
+
+    dx, dy = deg_to_m(np.array([e_lon - c_lon]), np.array([e_lat - c_lat]),
+                      np.array([c_lat]))
+    off_km = float(np.hypot(dx, dy)[0]) / 1000.0
+    ok &= check("5b  ...but it does not move the answer",
+                off_km < max(0.35 * e_r90, 1.0),
+                f"ensemble centroid sits {off_km:.2f} km from the control centroid "
+                f"(perturbations are symmetric, so this must stay small vs r90 {e_r90:.2f} km)")
+
+    ok &= check("5c  radii are ordered and positive",
+                0.0 < e_r50 < e_r90,
+                f"r50 {e_r50:.2f} km < r90 {e_r90:.2f} km")
+
+    # --- orientation: a cloud pushed NORTH must light up the TOP rows of the grid ---------
+    # Deliberately bimodal: 90% of the points near the NORTH edge of their own bounding box,
+    # 10% near the south edge. A symmetric or skewed blob would not distinguish the two
+    # orientations -- the mass has to be unambiguously at one end.
+    lat_n = np.full(3600, 13.35) + rng.normal(0, 0.004, 3600)
+    lat_s = np.full(400, 13.25) + rng.normal(0, 0.004, 400)
+    north_cloud = np.column_stack([
+        np.full(4000, 80.35) + rng.normal(0, 0.01, 4000),
+        np.concatenate([lat_n, lat_s])])
+    bounds, values = ens.origin_grid(north_cloud)
+    rows = values.shape[0]
+    top_mass = float(values[: rows // 2].sum())
+    bottom_mass = float(values[rows // 2:].sum())
+    ok &= check("5d  row 0 is NORTH (the heatmap is not upside down)",
+                top_mass > 3.0 * bottom_mass,
+                f"a cloud offset north puts {top_mass / (top_mass + bottom_mass) * 100:.1f}% "
+                f"of the grid mass in the top half")
+
+    ok &= check("5e  grid is 120x120 and normalised to peak 1.0",
+                values.shape == (120, 120) and abs(float(values.max()) - 1.0) < 1e-9,
+                f"shape {values.shape}, max {float(values.max()):.6f}, "
+                f"bounds contain the cloud: {bounds['south']:.3f}..{bounds['north']:.3f} N")
+
+    # --- the time window, both branches --------------------------------------------------
+    start, end, method = ens.time_window(
+        conv_idx, [m["spread_start_km"] for m in members],
+        [m["spread_min_km"] for m in members], T0, dt, n_steps)
+    ok &= check("5f  time_window is ordered and inside the rewind",
+                start < end <= T0 and (T0 - start) <= timedelta(minutes=(n_steps - 1) * dt),
+                f"[{start.isoformat().replace('+00:00', 'Z')}, "
+                f"{end.isoformat().replace('+00:00', 'Z')}]  method={method}")
+
+    # A field that genuinely converges: hand it indices that dip hard in the middle.
+    fake_idx = [40, 42, 44, 45, 46, 48, 50, 52]
+    s2, e2, m2 = ens.time_window(fake_idx, [10.0] * 8, [2.0] * 8, T0, dt, n_steps)
+    ok &= check("5g  a real convergence dip is reported as measured, not bounded",
+                m2 == "convergence" and s2 < e2,
+                f"synthetic tight dip -> method={m2}, window spans "
+                f"{(e2 - s2).total_seconds() / 3600:.2f} h")
+
+    # ...and noise must NOT be dressed up as a measurement.
+    s3, e3, m3 = ens.time_window(fake_idx, [10.0] * 8, [9.9] * 8, T0, dt, n_steps)
+    ok &= check("5h  a flat spread curve falls back to the bounded window",
+                m3 == "bounded",
+                f"no real tightening (spread 10.0 -> 9.9 km) -> method={m3}")
+    return ok
+
+
 def main():
     print("=" * 78)
     print("NAAP Stage 2 (drift) - Phase 1 known-answer tests")
@@ -183,7 +275,8 @@ def main():
     suites = [("1  constant current", test_1_constant_current),
               ("2  round trip", test_2_round_trip),
               ("3  wind only", test_3_wind_only),
-              ("4  plausibility guards", test_4_plausibility_guards)]
+              ("4  plausibility guards", test_4_plausibility_guards),
+              ("5  ensemble + origin grid", test_5_ensemble_and_grid)]
 
     passed = 0
     for name, fn in suites:
@@ -196,9 +289,9 @@ def main():
 
     print("\n" + "=" * 78)
     checks_ok = sum(1 for _, c, _ in _results if c)
-    print(f"{passed}/4 tests passed   ({checks_ok}/{len(_results)} individual assertions)")
+    print(f"{passed}/{len(suites)} tests passed   ({checks_ok}/{len(_results)} individual assertions)")
     print("=" * 78)
-    if passed != 4:
+    if passed != len(suites):
         print("\nFAILING. Fix the producing code -- never the expected value.")
         return 1
     return 0

@@ -2,30 +2,26 @@
 """
 Stage 2 — backward drift. Owner: Anushka.
 
-    python pipeline/drift/run.py --case case-000 --fake
+    python pipeline/drift/run.py --case case-000 --real          # PHASE 3, the real thing
+    python pipeline/drift/run.py --case case-000 --fake          # analytic ocean, no GEE
 
-PHASE 1. Reads `detections.geojson`, seeds particles off the highest-confidence oil feature,
-rewinds them through the REAL RK2 integrator (`step.py`) driven by ANALYTIC fields (`fields.py`),
-and writes schema-valid `out/particles.json` + `out/origin.json`.
+PHASE 3. Reads `detections.geojson`, seeds particles off the highest-confidence oil feature,
+rewinds them 24 h through the RK2 integrator (`step.py`), and writes the two files the rest of
+the project consumes:
 
-Real physics, fake ocean. There is no GEE here and no ensemble yet: Phase 2 swaps the analytic
-field for a HYCOM+ERA5 `GriddedField` exposing the same two methods, Phase 3 adds the 50-run
-ensemble. Neither touches this file's structure.
+    out/particles.json   the animation  -- ONE control run, 3000 particles x 97 frames
+    out/origin.json      the answer     -- 50 perturbed runs pooled into a probability grid
 
-KEPT from Akshat's stub (the file shapes are frozen):
-  - `seed_particles()` — implements the contract rule that `shape_class` carries physics:
-    "linear" seeds along the polygon's principal axis (a moving ship), "blob" seeds gaussian
-    around the centroid (a stationary event).
-  - `write_particles()` / `write_origin()`.
-DELETED:
-  - `fake_walk()`, the biased random walk. Replaced by `step.integrate()`.
+WHY TWO DIFFERENT THINGS
+    The slider needs coherent trajectories a human can follow, so `particles.json` is the
+    single unperturbed run. The origin cloud needs uncertainty, so `origin.json` comes from
+    the 50-member ensemble in `ensemble.py`. Showing the ensemble as the animation would look
+    like fog; showing the control run as the answer would claim a precision we do not have.
 
-STILL OUTSTANDING (do not let this pass unnoticed at integration):
-  - ensemble_runs is 1, not 50, and origin.json says so. Phase 3 makes it honest.
-  - `time_window` is still the stub's crude [t0-span, t0-span/3], not a convergence estimate.
-  (the n_steps fencepost is RESOLVED: Akshat pushed 278f463 setting n_steps = 97 = the t0
-   position plus 96 backward intervals = exactly 24.0 h. Duration is always derived as
-   (n_steps - 1) x timestep_minutes; never hardcode a frame count.)
+PHASE HISTORY
+    Phase 1  real RK2 over an analytic ocean (`--fake`), four known-answer tests
+    Phase 2  the analytic ocean swapped for HYCOM + ERA5 under the same two methods
+    Phase 3  --real, the 50-run ensemble, the true histogram grid, the convergence window
 """
 import argparse
 import json
@@ -36,7 +32,8 @@ from pathlib import Path
 
 import numpy as np
 
-from fields import make_fake
+import ensemble as ens
+from fields import load_case_field, make_fake
 from step import assert_displacement_plausible, displacement_km, integrate
 
 HERE = Path(__file__).resolve().parent
@@ -44,7 +41,7 @@ REPO = HERE.parents[1]
 OUT = HERE / "out"
 
 KM_PER_DEG = 111.32
-ABSTAIN_RADIUS_KM = 40.0     # agreed rule: a cloud wider than this refuses attribution
+ABSTAIN_RADIUS_KM = ens.ABSTAIN_RADIUS_KM
 
 
 def iso(dt):
@@ -107,7 +104,6 @@ def seed_particles(feat, n, rng):
             for _ in range(n)]
 
 
-
 def write_particles(path, t0, positions, dt_min):
     path.write_text(json.dumps({
         "t0": iso(t0), "direction": "backward", "timestep_minutes": dt_min,
@@ -115,72 +111,69 @@ def write_particles(path, t0, positions, dt_min):
         "positions": positions}))
 
 
-def write_origin(path, final, t0, span_h, runs):
-    """120x120 normalised probability grid, row-major from the top-left (row 0 = NORTH)."""
-    n = len(final)
-    clon = sum(p[0] for p in final) / n
-    clat = sum(p[1] for p in final) / n
-    klat = math.cos(math.radians(clat))
+def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_steps, n_runs):
+    """The real thing: a histogram of every ensemble endpoint, radii measured from the raw
+    points, and a time window that is honest about whether it was measured or bounded."""
+    (clon, clat), r50, r90 = ens.radii_km(endpoints)
+    bounds, values = ens.origin_grid(endpoints)
 
-    d = [math.hypot((p[0] - clon) * klat * KM_PER_DEG, (p[1] - clat) * KM_PER_DEG)
-         for p in final]
-    d.sort()
-    r50 = d[int(0.50 * (n - 1))]
-    r90 = d[int(0.90 * (n - 1))]
+    start, end, method = ens.time_window(
+        conv_idx,
+        [m["spread_start_km"] for m in members],
+        [m["spread_min_km"] for m in members],
+        t0, timestep_minutes, n_steps)
 
-    rows = cols = 120
-    half = max(r90 * 1.8 / KM_PER_DEG, 0.05)
-    west, east = clon - half / max(klat, 1e-6), clon + half / max(klat, 1e-6)
-    south, north = clat - half, clat + half
-    sigma = max(r50, 0.5) / KM_PER_DEG
-
-    values, peak = [], 0.0
-    for r in range(rows):
-        lat = north - (north - south) * r / (rows - 1)     # row 0 = north
-        for c in range(cols):
-            lon = west + (east - west) * c / (cols - 1)
-            dd = ((lon - clon) * klat) ** 2 + (lat - clat) ** 2
-            v = math.exp(-dd / (2 * sigma * sigma))
-            peak = max(peak, v)
-            values.append(v)
-    values = [round(v / peak, 4) for v in values]           # normalise to peak 1.0
-
-    path.write_text(json.dumps({
-        "bounds": {"west": r5(west), "south": r5(south), "east": r5(east), "north": r5(north)},
-        "shape": [rows, cols], "values": values,
+    rows, cols = values.shape
+    doc = {
+        "bounds": bounds,
+        "shape": [rows, cols],
+        "values": [float(v) for v in values.reshape(-1)],
         "centroid": [r5(clon), r5(clat)],
-        "radius_50_km": round(r50, 2), "radius_90_km": round(r90, 2),
-        "time_window": [iso(t0 - timedelta(hours=span_h)),
-                        iso(t0 - timedelta(hours=span_h / 3))],
-        "ensemble_runs": runs,
-        "abstain": r90 > ABSTAIN_RADIUS_KM}))
-    return clon, clat, r50, r90
+        "radius_50_km": round(r50, 2),
+        "radius_90_km": round(r90, 2),
+        "time_window": [iso(start), iso(end)],
+        "ensemble_runs": int(n_runs),
+        "abstain": bool(r90 > ABSTAIN_RADIUS_KM),
+        # Additive field the brief asks for (03_ANUSHKA_DRIFT.md Phase 3 step 3): says whether
+        # the window was measured from ensemble convergence or is the bounded fallback.
+        # Not part of the frozen schema — Akshat, flag it if you would rather it lived
+        # somewhere else; nothing breaks if the frontend ignores it.
+        "time_window_method": method,
+    }
+    path.write_text(json.dumps(doc))
+    return clon, clat, r50, r90, method, doc["abstain"]
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Stage 2 — backward drift (Phase 1: fake fields)")
+    ap = argparse.ArgumentParser(description="Stage 2 — backward drift + 50-run ensemble")
     ap.add_argument("--case", required=True)
     ap.add_argument("--cases-root", default=str(REPO / "cases"))
+    ap.add_argument("--real", action="store_true",
+                    help="PHASE 3: real HYCOM + ERA5 from data/fields/<case>.npz")
     ap.add_argument("--fake", action="store_true",
                     help="real RK2 integrator driven by analytic fields (Phase 1)")
     ap.add_argument("--stub", action="store_true", help=argparse.SUPPRESS)  # back-compat alias
     ap.add_argument("--field", choices=["analytic", "constant"], default="analytic",
-                    help="analytic = a vortex cell centred on the slick; constant = uniform")
+                    help="with --fake: analytic = a vortex cell on the slick; constant = uniform")
     ap.add_argument("--wind", type=float, nargs=2, default=(6.0, -4.0), metavar=("U", "V"),
-                    help="fake 10 m wind, signed m/s components (east, north)")
+                    help="with --fake: 10 m wind, signed m/s components (east, north)")
     ap.add_argument("--particles", type=int, default=3000)
+    ap.add_argument("--runs", type=int, default=50,
+                    help="ensemble members. The cut order allows 25; say so in origin.json.")
     ap.add_argument("--steps", type=int, default=97,
                     help="STORED POSITIONS, not physics steps: 97 = t0 + 96 backward "
                          "intervals = exactly 24.0 h (CONTRACTS.md 5)")
     ap.add_argument("--timestep-minutes", type=int, default=15)
     ap.add_argument("--seed", type=int, default=143)
+    ap.add_argument("--out", default=str(OUT), help="directory for particles.json/origin.json")
     a = ap.parse_args()
 
-    if not (a.fake or a.stub):
+    if not (a.real or a.fake or a.stub):
         raise SystemExit(
-            "drift/run.py has no REAL fields yet — pass --fake.\n"
-            "--fake runs the true RK2 integrator over an analytic ocean. Phase 2 (HYCOM + ERA5)\n"
-            "is what makes the numbers mean something. See docs/03_ANUSHKA_DRIFT.md.")
+            "choose an ocean: --real (HYCOM + ERA5, Phase 3) or --fake (analytic, Phase 1).\n"
+            "--real needs data/fields/<case>.npz — run pipeline/drift/fetch_fields.py first.")
+    if a.real and a.fake:
+        raise SystemExit("--real and --fake are mutually exclusive.")
 
     case_dir = Path(a.cases_root) / a.case
     det_path = case_dir / "detections.geojson"
@@ -199,35 +192,68 @@ def main():
     rng = random.Random(a.seed)
     seed = seed_particles(feat, a.particles, rng)
 
-    clon0, clat0 = float(feat["properties"]["centroid"][0]), float(feat["properties"]["centroid"][1])
-    field = make_fake(a.field, lon0=clon0, lat0=clat0, wind=tuple(a.wind))
+    if a.real:
+        field = load_case_field(a.case, repo_root=REPO)
+        tag = "REAL"
+    else:
+        clon0 = float(feat["properties"]["centroid"][0])
+        clat0 = float(feat["properties"]["centroid"][1])
+        field = make_fake(a.field, lon0=clon0, lat0=clat0, wind=tuple(a.wind))
+        tag = "FAKE"
 
-    # Backward = negative dt through the same field. step.integrate() records the state
-    # BEFORE each step, so positions[0] sits on the slick, as the contract requires.
+    span_h = (a.steps - 1) * a.timestep_minutes / 60.0    # states recorded, not steps taken
+
+    # ---- control run: the animation ---------------------------------------------------
     history, times = integrate(seed, t0, field, a.steps, a.timestep_minutes,
                                direction="backward")
     positions = np.round(history, 5).tolist()
 
-    OUT.mkdir(parents=True, exist_ok=True)
-    write_particles(OUT / "particles.json", t0, positions, a.timestep_minutes)
-    span_h = (a.steps - 1) * a.timestep_minutes / 60      # states recorded, not steps taken
-    clon, clat, r50, r90 = write_origin(OUT / "origin.json", positions[-1], t0, span_h, 1)
+    # ---- ensemble: the answer ---------------------------------------------------------
+    nprng = np.random.default_rng(a.seed)
+
+    def tick(done, total):
+        if done == 1 or done % 10 == 0 or done == total:
+            print(f"              ensemble {done}/{total}", flush=True)
+
+    endpoints, conv_idx, members = ens.run_ensemble(
+        seed, t0, field, a.steps, a.timestep_minutes, n_runs=a.runs, rng=nprng, progress=tick)
+
+    out_dir = Path(a.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    write_particles(out_dir / "particles.json", t0, positions, a.timestep_minutes)
+    clon, clat, r50, r90, method, abstain = write_origin(
+        out_dir / "origin.json", endpoints, conv_idx, members,
+        t0, a.timestep_minutes, a.steps, a.runs)
+
+    # The endpoint pool, kept so plot_heatmap.py can draw the cloud without rerunning 50 runs.
+    np.savez_compressed(out_dir / f"ensemble_{a.case}.npz",
+                        endpoints=endpoints,
+                        control_final=history[-1],
+                        seed=np.asarray(seed, dtype=np.float64),
+                        conv_idx=conv_idx,
+                        wind_coeff=np.array([m["wind_coeff"] for m in members]),
+                        current_scale=np.array([m["current_scale"] for m in members]))
 
     # The permanent plausibility guard, on every real run, not just in tests.py.
     med_km = assert_displacement_plausible(history[0], history[-1], hours=span_h)
     dist = displacement_km(history[0], history[-1])
+    ws = np.array([m["wind_coeff"] for m in members])
+    cs = np.array([m["current_scale"] for m in members])
 
-    print(f"[drift:FAKE]  wrote {OUT / 'particles.json'}")
-    print(f"              wrote {OUT / 'origin.json'}")
+    print(f"[drift:{tag}]  wrote {out_dir / 'particles.json'}")
+    print(f"              wrote {out_dir / 'origin.json'}")
     print(f"              field  {field}")
     print(f"              seeded {a.particles} from {feat['properties']['id']} "
           f"({feat['properties']['shape_class']}), rewound {span_h:.2f} h "
           f"in {a.steps} steps of {a.timestep_minutes} min")
     print(f"              t0 {iso(t0)} -> {iso(times[-1])}")
-    print(f"              displacement  median {med_km:.1f} km   "
+    print(f"              control displacement  median {med_km:.1f} km   "
           f"min {float(dist.min()):.1f}   max {float(dist.max()):.1f}")
+    print(f"              ensemble {a.runs} runs x {a.particles} = {len(endpoints):,} endpoints"
+          f"   wind_coeff {ws.min():.4f}-{ws.max():.4f}   current x{cs.min():.2f}-{cs.max():.2f}")
     print(f"              origin ({clon:.4f}, {clat:.4f})  "
-          f"r50={r50:.1f} km  r90={r90:.1f} km  ensemble_runs=1 (Phase 3 makes this 50)")
+          f"r50={r50:.1f} km  r90={r90:.1f} km  abstain={abstain}")
+    print(f"              time_window method={method}")
 
 
 if __name__ == "__main__":

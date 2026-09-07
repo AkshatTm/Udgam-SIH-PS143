@@ -15,8 +15,124 @@ docs/updates/anushka.md. Read the top entry and tell me where I left off."*
 | 0 | Setup: repo, branch `anushka`, venv, packages, GEE signup | ✅ done (GEE auth unverified — see open issues) |
 | 1 | Fake fields + RK2 stepper + four known-answer tests | ✅ **code done — 4/4 green.** 3 human steps left, see "Phase 1 — what remains" |
 | 2 | Real HYCOM + ERA5 loaders, quiver plot | ✅ **done 2026-09-07.** Field cached, quiver posted, test-4 guards green on real fields |
-| 3 | Backward + 50-run ensemble → real `particles.json` / `origin.json` | ⬜ not started (**Tue evening, hard deadline**) |
+| 3 | Backward + 50-run ensemble → real `particles.json` / `origin.json` | ✅ **done 2026-09-07.** Real files written, validator PASS 0 warnings, tests 5/5. Rerun on Soum's real detections when they land |
 | 4 | Buffer Wed; rerun on the US case | ⬜ not started |
+
+---
+
+## [2026-09-07 22:20] Phase 3 — backward ensemble, origin cloud, the handoff files  ✅
+
+**Done:** Stage 2 now produces the two files the rest of the project consumes, from the real
+Ennore ocean, with real uncertainty. `--real` drives the integrator off `load_case_field()`;
+the 50-run ensemble lives in a new `ensemble.py`; the origin grid is a true 2D histogram of
+150,000 endpoints instead of the stub's painted gaussian.
+
+**The result** (case-000 detections, real HYCOM + ERA5 fields):
+
+```
+origin      (80.6210, 13.6997)   r50 8.8 km   r90 17.3 km   abstain=False
+            49 km from the slick on a bearing of 025 deg -- NORTH-EAST, i.e. UPSTREAM of a
+            south-running East India Coastal Current, which is the only direction a 24 h
+            rewind can honestly go
+control     median displacement 48.4 km (40.1-55.8) over exactly 24.00 h
+ensemble    50 runs x 3000 particles = 150,000 endpoints
+window      2017-01-28T00:14Z -> 2017-01-28T16:14Z   method=bounded
+validator   PASS   acts=['detect','trace','attribute']   0 warnings
+tests       5/5, 20/20 assertions
+```
+
+The one-run warning Phase 1 shipped with (`only 1 ensemble runs; uncertainty will look fake`)
+is gone. This is the first Stage 2 output with **zero** validator warnings.
+
+### Files touched
+
+| File | Change |
+|---|---|
+| `pipeline/drift/ensemble.py` | **new** — `PerturbedField`, `run_once`, `run_ensemble`, `radii_km`, `origin_grid`, `time_window`, stratified parameter draws |
+| `pipeline/drift/run.py` | `--real` (HYCOM+ERA5) alongside `--fake`; control run + ensemble; `write_origin` rewritten around the real histogram; `--runs`, `--out` |
+| `pipeline/drift/tests.py` | **+test 5** (8 assertions): ensemble spread, no centroid bias, grid orientation, normalisation, both time-window branches |
+| `pipeline/drift/plot_heatmap.py` | **new** — the Phase 3 checkpoint picture |
+| `pipeline/drift/out/` | `particles.json` (6.34 MB), `origin.json` (14,400 floats), `ensemble_case-000.npz`, `heatmap_case-000.png` |
+
+### Run command (this is the handoff)
+
+```bash
+venv\Scripts\activate
+python pipeline/drift/run.py --case case-000 --real --particles 3000 --runs 50
+python pipeline/drift/plot_heatmap.py --case case-000
+python pipeline/drift/tests.py
+# then copy out/particles.json + out/origin.json into cases/<case>/ and:
+python scripts/validate_case.py cases/<case>
+```
+Runs in about 22 s for the full 50 x 3000. Deterministic: `--seed 143` reproduces these
+numbers exactly.
+
+### Three decisions worth defending
+
+- **`particles.json` is ONE control run, not the ensemble.** The slider needs trajectories a
+  human can follow; 50 overlaid members look like fog. The ensemble is the *answer*
+  (`origin.json`), the control run is the *animation*. Showing the ensemble as the animation
+  would be unreadable; showing the control run as the answer would claim a precision we do
+  not have.
+- **The ensemble parameters are stratified, not drawn independently.** 50 independent draws
+  from N(1, 0.15) land with a sample mean scattered by ~0.02, and on the first run the mean
+  current came out 3% fast — which pushed the entire origin cloud 1.4 km further from the
+  slick than the physics warranted. That is a sampling artefact reported as physics.
+  Stratifying (one draw per equal-probability slice, `statistics.NormalDist`, no new
+  dependency) gives realised mean 0.9982 / sd 0.1488 against a claimed 1.00 / 0.15, and the
+  pooled ensemble centroid now sits 80 m from the control endpoint instead of 1.4 km.
+- **The grid is smoothed, and the bandwidth is derived, not eyeballed.** A raw histogram of a
+  LINEAR slick is 50 near-parallel ridges — each member translates the seed line almost
+  rigidly — which would tell Stage 3 to prefer stripes that mean nothing. The KDE bandwidth
+  is fixed at a tenth of r50, tied to the cloud's own scale. It changes the picture only:
+  every reported number (centroid, r50, r90) is measured from the raw endpoints.
+
+### Open issues
+
+1. **`time_window` is the bounded window, not a convergence measurement — and that is the
+   honest answer here.** The refined method (10th-90th percentile of per-run convergence
+   times) is implemented and tested, but it only fires when the rewound cloud actually
+   tightens. Over Ennore it does not: HYCOM on GEE is daily, so across 24 h the field is a
+   linear blend of two snapshots, the flow is smooth, and the cloud translates rather than
+   converging. Two guards refuse to dress that up — the median member must tighten to <= 90%
+   of its starting spread, and the dip must be interior. Both fail, so we ship
+   `[t0-24h, t0-8h]` and say so. **This is the cut-order outcome the brief anticipated, not a
+   shortfall.** If a case with a real eddy comes along the measured window switches on by
+   itself; test 5g proves the branch works.
+2. **`origin.json` carries one field beyond the frozen schema: `time_window_method`**
+   ("bounded" or "convergence"). `03_ANUSHKA_DRIFT.md` asks for the window to be marked, and
+   there was nowhere in the schema to mark it. Additive only — the validator passes and a
+   frontend that ignores it loses nothing. **Akshat: reject it or bless it, but do not let it
+   ship unnoticed.** It matters because it is the difference between "we measured when the
+   oil went in" and "we bounded when the oil went in".
+3. **case-000's `area_km2` disagrees with its own polygon.** The `det-01` ring spans about
+   21 km; `area_km2: 12.4` with `elongation: 8.2` implies a slick about 10 km long. The
+   seeder follows the *geometry* (correct — the polygon is the measurement), so it seeds a
+   21 km line. Harmless in a synthetic bundle, but if Soum's real detector ever writes
+   `area_km2` from a different mask than the polygon it exports, Stage 2 silently seeds the
+   wrong length of slick. Worth one assertion in Stage 1.
+4. **~~Not yet run in the Windows venv~~ — RESOLVED 2026-09-07 22:35.** Re-run inside
+   `venv\Scripts\activate` on Python 3.11: **5/5, 20/20**, and every number identical to the
+   Linux/3.10 run to the last decimal — including test 5's ensemble figures (control r90 2.36
+   → ensemble 3.35 km, centroid offset 0.16 km, r50 1.81 km). The `--real` run reproduces
+   `origin (80.6210, 13.6997)  r50=8.8  r90=17.3  abstain=False` exactly. Same outcome as
+   Phase 1's cross-check. Nothing here uses scipy — the gaussian blur is written out in NumPy
+   on purpose — so numpy + matplotlib is the whole requirement.
+
+   *Note for whoever runs this next:* `tests.py` lives in `pipeline/drift/`, so from the repo
+   root it is `python pipeline\drift\tests.py`, not `python tests.py`.
+5. **Not yet committed or pushed.** Branch `anushka` is still at `8b2ee64` (Phase 2). Phase 1's
+   open items #2 (post the checkpoint) and #3 (push the branch) are still open and still
+   blocking Harshita.
+
+**Checkpoint image:** `pipeline/drift/out/heatmap_case-000.png` — left: the slick, the control
+run rewinding, and the cloud it lands in, with the coast for scale. Right: `origin.json`
+exactly as stored, 120x120 row-0-is-north, with the 50% and 90% circles. Post in group.
+
+**Next:** Phase 4. When Soum's real `detections.geojson` for Ennore lands, `fetch_fields.py
+--case <real-case>` then the same run command — nothing in the drift code needs to change,
+which is the whole point of the seam. Then the US case: re-run `check_gee.py` first, because
+HYCOM's GEE archive ends 2024-09-05 and the Gulf sits at negative longitude.
 
 ---
 
