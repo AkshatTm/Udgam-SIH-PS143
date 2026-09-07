@@ -61,12 +61,12 @@ The code is finished and proven. Three things are outstanding, and none of them 
 
 | # | Step | Why it matters | Status |
 |---|---|---|---|
-| 0 | Merge `main` (see the block above) |  `origin/main` is 1 commit ahead and touches `run.py`. Do this before anything else. | ⬜ |
-| 1 | Re-run both commands inside `venv\Scripts\activate` on Windows | The green result above came from Python 3.10.12 / NumPy 2.2.6 on a Linux shell. The project standard is 3.11. A result you haven't seen on your own machine isn't yours yet. | ⬜ |
+| 0 | Merge `main` | Done — rebased onto `278f463`. One conflict in `run.py` (both sides had changed the same two lines to the same values); kept the local side, which carries the explanatory help text. | ✅ |
+| 1 | Re-run both commands in the Windows venv | Done, post-rebase. 4/4, 12/12. `rewound 24.00 h in 97 steps`, `t0 2017-01-29T00:14:00Z -> 2017-01-28T00:14:00Z`. Identical to the Linux/3.10 run to the last decimal — median 14.0 km, origin (80.3363, 13.2336), r50 6.2, r90 9.6. | ✅ |
 | 2 | Post the test output in the group | This IS the Phase 1 checkpoint in `03_ANUSHKA_DRIFT.md`. Until it's posted, the team's picture of Stage 2 is "not started". | ⬜ |
-| 3 | Commit the drift files + this log, push branch `anushka` | `run.py --fake` writes a schema-valid bundle Harshita can build the slider against. It helps nobody sitting on one laptop. **Commit only the 5 drift/log files** — see open issue #6. | ⬜ |
+| 3 | **Push branch `anushka`** | Committed as `5ec0aa4`, rebased onto `278f463`. Not yet pushed — `git push origin anushka`. `run.py --fake` writes a schema-valid bundle Harshita can build the slider against; it helps nobody sitting on one laptop. | ⬜ |
 
-Nothing in Phase 2 is blocked by these. But #3 unblocks Harshita, so it is the one worth doing tonight.
+Nothing in Phase 2 is blocked by these. **#3 unblocks Harshita, so it is the one worth doing tonight.**
 
 ---
 
@@ -142,10 +142,12 @@ makes it 50.
    `step.py`'s `integrate()` docstring now states the fencepost rule so the next person doesn't
    reintroduce it.
 
-6. **Uncommitted changes to `cases/case-000/`** (`bounds.json`, `meta.json`, `suspects.json`) and
-   `.gitignore` were already modified in the working tree before Phase 1 started, by something
-   else. Harshita builds against that fixture — check what they are before committing, and don't
-   sweep them into a drift commit.
+6. **~~Uncommitted changes to `cases/case-000/`~~ — RESOLVED, they were noise.** The three JSONs
+   were byte-identical to the committed versions; only the line endings had been changed to CRLF
+   by something on Windows, which `.gitattributes` (`* text=auto eol=lf`) flags. The `.gitignore`
+   edit appended `venv/` and `data/`, both already covered on lines 11 and 2. All four reverted
+   with `git checkout --`; nothing was lost. *If they reappear, find out which tool is rewriting
+   line endings — it will keep doing it.*
 7. The vortex used in test 4a is a closed cell, so its 48 h displacement (8.81 km) sits near the
    5 km floor. Real HYCOM will move particles further. If the floor ever trips on real fields,
    look at the field before loosening the bound.
