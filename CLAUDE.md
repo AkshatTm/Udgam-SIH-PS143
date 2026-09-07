@@ -41,4 +41,4 @@ Must print `PASS`. It catches lat/lon swaps, naive timestamps, unit errors, dime
 Append to `docs/updates/<yourname>.md` using the format in `docs/updates/TEMPLATE.md`. Four lines: what was done, files touched, exact run command, open issues. This is how another AI (or another person) resumes your work without you.
 
 ## Known traps
-Read `docs/TRAPS.md` before debugging anything geospatial. HYCOM is cm/s. GeoJSON is lon-lat. Pixel (0,0) is top-left = (west, north). ERA5 wind is u/v components, not speed/direction.
+Read `docs/TRAPS.md` before debugging anything geospatial. HYCOM on GEE is a scaled int — divide by 1000. GeoJSON is lon-lat. Pixel (0,0) is top-left = (west, north). ERA5 wind is u/v components, not speed/direction.

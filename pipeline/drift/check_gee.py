@@ -14,7 +14,7 @@ Answers, in about ten seconds, the four questions that can otherwise eat an even
      the right order of magnitude?
 
 Question 4 is the point. Auth failing is loud. A collection quietly returning zero images over
-your region, or HYCOM handing you centimetres per second when you assumed metres, is silent --
+your region, or HYCOM handing you scaled integers when you assumed metres per second, is silent --
 and silent is what costs a day. (docs/TRAPS.md #2)
 
 Run this at the top of Phase 2, and again before the US case: HYCOM's GEE archive ends
@@ -38,7 +38,7 @@ ENNORE_T0 = datetime(2017, 1, 29, 0, 14, 0, tzinfo=timezone.utc)
 LOOKBACK_HOURS = 30
 
 CURRENTS = "HYCOM/sea_water_velocity"
-CURRENT_BANDS = ["velocity_u_0", "velocity_v_0"]        # surface layer, cm/s
+CURRENT_BANDS = ["velocity_u_0", "velocity_v_0"]        # surface layer, int * 0.001 m/s
 WINDS = "ECMWF/ERA5/HOURLY"
 WIND_BANDS = ["u_component_of_wind_10m", "v_component_of_wind_10m"]   # signed m/s
 
@@ -153,7 +153,9 @@ def main():
           f"  ->  {t0.isoformat().replace('+00:00', 'Z')}\n")
 
     check_collection(ee, CURRENTS, CURRENT_BANDS, bbox, t0, a.hours,
-                     "HYCOM is CENTIMETRES per second. A reading of 12.0 here is 0.12 m/s. "
+                     "HYCOM on GEE is a SCALED INTEGER: catalog units m/s, scale 0.001. A "
+                     "reading of 480 here is 0.48 m/s. Divide by 1000 in the loader, once -- "
+                     "NOT by 100, which is the raw-NetCDF convention and inflates by 10x. "
                      "Divide by 100 in the loader, once. (docs/TRAPS.md #2)")
     print()
     check_collection(ee, WINDS, WIND_BANDS, bbox, t0, a.hours,

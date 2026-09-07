@@ -62,15 +62,16 @@ def naive_timestamp(d):
     return "timezone-naive"
 
 
-def hycom_cm_per_s(d):
-    """TRAPS #2 — HYCOM bands are cm/s. Forget the /100 and particles cross an ocean in a day."""
+def hycom_misscaled(d):
+    """TRAPS #2 — HYCOM on GEE is int x 0.001 m/s. Get the scaling wrong and particles cross
+    an ocean in a day. (x100 here is deliberately extreme; the real 2026-09-07 bug was x10.)"""
     p = read(d, "particles.json")
     o = p["positions"][0]
     p["positions"] = [[[o[i][0] + (pt[0] - o[i][0]) * 100,
                         o[i][1] + (pt[1] - o[i][1]) * 100]
                        for i, pt in enumerate(step)] for step in p["positions"]]
     write(d, "particles.json", p)
-    return "cm/s"
+    return "units"
 
 
 def funnel_increases(d):
@@ -100,7 +101,7 @@ def suspect_not_in_ais(d):
 MUTATIONS = [
     ("detection polygon written as [lat, lon]", swap_detection_lonlat, "swapped"),
     ("particles.t0 missing its trailing Z",     naive_timestamp,       "naive"),
-    ("particle drift left in cm/s (x100)",      hycom_cm_per_s,        "cm/s"),
+    ("particle drift mis-scaled (x100)",        hycom_misscaled,       "units"),
     ("funnel counts increasing",                funnel_increases,      "funnel"),
     ("origin values shorter than shape",        origin_grid_size_lies, "shape"),
     ("suspect MMSI absent from vessels.geojson", suspect_not_in_ais,   "vessels.geojson"),

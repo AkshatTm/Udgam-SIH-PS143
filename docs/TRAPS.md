@@ -17,10 +17,19 @@ GeoJSON is `[longitude, latitude]`. Every human instinct says lat-lon. Every map
 - **Catch:** the validator explicitly tests "outside bounds but inside when swapped" and names the file.
 - **Rule:** MapLibre and deck.gl want `[lon, lat]`. Shapely wants `(x, y)` = `(lon, lat)`. `rasterio` row/col is `(y, x)`. NumPy arrays index `[row, col]` = `[y, x]` = `[lat, lon]`. **The array is the odd one out — convert at the boundary and never carry both conventions in one function.**
 
-## 2. HYCOM is cm/s · Anushka
-`HYCOM/sea_water_velocity` bands are centimetres per second. Divide by 100.
-- **Symptom:** particles travel hundreds or thousands of km in 24 h.
-- **Catch:** validator errors above 400 km; test 4 asserts speed < 3 m/s.
+## 2. HYCOM on GEE is a scaled integer — divide by 1000 · Anushka
+`HYCOM/sea_water_velocity` bands carry catalog **units m/s with scale factor 0.001**, so the
+value `getRegion` hands you is millimetres per second. **Divide by 1000, not 100.**
+- **Do not trust the "cm/s, divide by 100" advice** that circulates for HYCOM — it describes
+  the raw NetCDF distribution, not Earth Engine's ingestion of it. Dividing by 100 leaves
+  every current **10x too fast**.
+- **Symptom:** median current ~4.8 m/s instead of ~0.48 m/s over the Ennore box; particles
+  travel hundreds of km in 24 h.
+- **Catch:** test 4 asserts speed < 3 m/s; `fetch_fields.py` prints median/p90/p99/max and
+  `GriddedField` refuses to load a field whose p99 exceeds 3 m/s.
+- **Verified** 2026-09-07 against the GEE catalog band table, and confirmed by the resulting
+  field: median 0.48 m/s, max 1.10 m/s, southward along the Coromandel coast — the January
+  East India Coastal Current.
 
 ## 3. ERA5 wind is u/v components · Anushka
 Bands are `u_component_of_wind_10m` / `v_component_of_wind_10m` — signed eastward/northward m/s, **not** speed and bearing. Wind speed is `hypot(u, v)`. The 3% rule applies to the vector.

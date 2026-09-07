@@ -92,11 +92,15 @@ This is the smart part of your plan. You build and test the whole physics engine
 
 ## 5. The one bug that will definitely happen
 
-The ocean current data from Google is in **centimetres per second**, not metres per second.
+*(Corrected 2026-09-07. This section originally said divide by 100. The bug happened exactly as predicted — and the number in this doc was itself wrong. Full write-up: `claude/HYCOM_UNIT_CORRECTION.md`.)*
 
-If you forget to divide by 100, your dots will fly hundreds of kilometres and the whole answer is nonsense. It will not crash. It will just be silently wrong.
+The ocean current numbers from Google are not metres per second. They arrive as a whole number that has to be **divided by 1000** to become metres per second.
 
-Test 4 above catches it automatically. That is exactly why you write the tests first.
+You will find advice online — and in the first draft of these docs — saying divide by 100. That is wrong for the Google version of this data. It leaves every current **ten times too fast**, which is the dangerous kind of wrong: fast enough to be nonsense, slow enough to look almost believable. Divide by **1000**.
+
+If you get this wrong, your dots fly hundreds of kilometres and the whole answer is nonsense. It will not crash. It will just be silently wrong.
+
+Test 4 above catches it automatically — and on Monday, it did, on the very first download, before a single dot had moved. That is exactly why you write the tests first.
 
 Two smaller versions of the same trap:
 - Wind data comes as two numbers (east amount, north amount), not as "speed and direction". Do not let the AI convert to compass directions.

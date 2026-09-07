@@ -15,7 +15,7 @@ these exist so nobody has to catch a units bug by eye.
   3  Wind only          10 m/s wind, no current -> particle moves at 0.3 m/s.
   4  Plausibility       permanent guards: speed < 3 m/s, 48 h displacement 5-200 km.
                         Asserted in BOTH directions -- they must accept a real ocean and
-                        reject a cm/s one, or they are decoration.
+                        reject a mis-scaled one, or they are decoration.
 """
 import sys
 import traceback
@@ -144,13 +144,14 @@ def test_4_plausibility_guards():
     except ImplausibleDrift as e:
         ok &= check("4a  a real-looking ocean passes the 48 h guard (5-200 km)", False, str(e))
 
-    # 4b: the cm/s bug must be REJECTED. 0.5 m/s misread from HYCOM's cm/s is 50.
+    # 4b: a mis-scaled field must be REJECTED. Missing HYCOM's 0.001 scale gives ~10x;
+    #     50 m/s here is deliberately far past the limit so the guard has no excuse.
     try:
         run_for(start, T0, ConstantField(current=(50.0, 0.0)), hours=1)
-        ok &= check("4b  a cm/s field (50 m/s) is rejected", False,
+        ok &= check("4b  a mis-scaled field (50 m/s) is rejected", False,
                     "the guard did NOT fire -- the HYCOM trap would pass silently")
     except ImplausibleDrift as e:
-        ok &= check("4b  a cm/s field (50 m/s) is rejected", True,
+        ok &= check("4b  a mis-scaled field (50 m/s) is rejected", True,
                     f"raised as expected: {str(e).splitlines()[0]}")
 
     # 4c: a dead field must be REJECTED too -- zero drift is as wrong as infinite drift.

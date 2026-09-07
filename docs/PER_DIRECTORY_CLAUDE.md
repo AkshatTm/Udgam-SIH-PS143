@@ -36,7 +36,7 @@ Owns: backward particle advection through real current+wind fields, 50-run ensem
 - **No ML here.** Pure physics: `velocity = current + 0.03 * wind`, RK2, dt = 15 min, vectorised NumPy.
 - **Backward = negative dt through the same field.** NOT a minus sign on velocity.
 - `drift/tests.py` must stay green on every change. Four known-answer tests: constant current (0.5 m/s east, 10 h → 18.0 km east), round trip (forward then backward returns within 0.5 km), wind-only (10 m/s → 0.3 m/s), and permanent plausibility asserts (speed < 3 m/s; 48 h displacement 5–200 km).
-- **HYCOM velocity bands are cm/s — divide by 100.** This is the single most common silent bug in this component.
+- **HYCOM velocity bands on GEE are a scaled integer (units m/s, scale 0.001) — divide by 1000, not 100.** This is the single most common silent bug in this component; ÷100 leaves every current 10× too fast.
 - Longitudes stay in −180…180, never 0…360.
 - Output is always a **probability grid**, never a point. Ensemble spread IS the uncertainty.
 

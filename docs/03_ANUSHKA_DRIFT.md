@@ -30,7 +30,7 @@ Build the integrator against analytic fields first. `drift/fields.py` exposes `g
 
 ## Phase 2 — Mon (~5 h) · real fields
 GEE Python API (`ee.Initialize()` after auth):
-- Currents: `HYCOM/sea_water_velocity`, bands `velocity_u_0`,`velocity_v_0` (surface). **Units are cm/s → divide by 100** — this is the classic silent bug here; test 4 catches it if you forget.
+- Currents: `HYCOM/sea_water_velocity`, bands `velocity_u_0`,`velocity_v_0` (surface). **GEE serves these as a scaled integer: catalog units m/s, scale factor 0.001 → divide by 1000, NOT 100** (corrected 2026-09-07; the "cm/s ÷100" figure describes raw HYCOM NetCDF and leaves currents 10× too fast). This is the classic silent bug here; test 4 catches it if you forget.
 - Winds: `ECMWF/ERA5/HOURLY` (fall back to `ECMWF/ERA5_LAND/HOURLY` only if needed — we're over ocean, so use ERA5), bands `u_component_of_wind_10m`, `v_component_of_wind_10m`.
 - Pull a small grid around the case (Ennore: 79.5–81.5 E, 12.0–14.5 N), time span detection_time − 30 h → detection_time, into NumPy via `sampleRectangle` or `getRegion` (AI chooses; region is small). Cache to `data/fields/<case>.npz` so you never re-fetch.
 - `get_uv` = bilinear in space, linear in time, over the cached arrays. Longitudes: keep everything in −180…180.

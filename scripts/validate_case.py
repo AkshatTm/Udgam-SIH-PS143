@@ -258,7 +258,7 @@ def check_particles(d, box, meta):
         dist = math.hypot(dx, dy)
         if dist > 400:
             err(f"particles.json: particle 0 travelled {dist:.0f} km in {span_h:.0f} h "
-                "— check current units (HYCOM is cm/s, divide by 100)")
+                "— check current units (HYCOM on GEE is int x 0.001 m/s: divide by 1000)")
         elif dist < 0.5:
             err(f"particles.json: particle 0 barely moved ({dist:.2f} km) — fields may be zero")
         elif dist > 250:

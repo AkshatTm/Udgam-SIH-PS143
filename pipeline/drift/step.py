@@ -152,8 +152,8 @@ def integrate(positions, t0, field, n_steps, timestep_minutes=15, direction="bac
 
 # --------------------------------------------------------------------------------------
 # Permanent plausibility guards (test 4). These run on fake fields AND on the real GEE
-# fields from Phase 2 onward. They are the thing that catches the HYCOM cm/s bug without
-# anybody having to notice it by eye.
+# fields from Phase 2 onward. They are the thing that catches the HYCOM mis-scaling bug
+# without anybody having to notice it by eye. (They did, on 2026-09-07.)
 # --------------------------------------------------------------------------------------
 
 class ImplausibleDrift(AssertionError):
@@ -161,15 +161,17 @@ class ImplausibleDrift(AssertionError):
 
 
 def assert_speed_plausible(u, v, limit=MAX_PLAUSIBLE_SPEED_MS):
-    """No parcel of surface water moves faster than a few m/s. A field 100x too fast is
-    HYCOM's cm/s read as m/s (docs/TRAPS.md #2)."""
+    """No parcel of surface water moves faster than a few m/s. A field ~10x too fast is
+    HYCOM's GEE scale factor missed: the bands are int * 0.001 m/s (docs/TRAPS.md #2)."""
     s = speed(u, v)
     worst = float(np.max(s)) if s.size else 0.0
     if worst > limit:
         raise ImplausibleDrift(
             f"drift speed {worst:.2f} m/s exceeds the {limit} m/s limit. "
-            f"A real surface current is 0-1.5 m/s. If this is ~100x too fast, the current "
-            f"field is still in cm/s -- divide by 100 in the loader (docs/TRAPS.md #2).")
+            f"A real surface current is 0-1.5 m/s. GEE serves HYCOM as an integer with "
+            f"scale 0.001, so the loader must DIVIDE BY 1000 -- not 100, which leaves the "
+            f"field 10x too fast and is what tripped this guard on 2026-09-07. "
+            f"(docs/TRAPS.md #2)")
     return worst
 
 

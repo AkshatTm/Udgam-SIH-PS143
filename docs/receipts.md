@@ -26,7 +26,7 @@ Export settings actually used (these must match what `bounds.json` records):
 
 | What | Collection | Bands | Note |
 |---|---|---|---|
-| Currents | `HYCOM/sea_water_velocity` | `velocity_u_0`, `velocity_v_0` | **cm/s — divided by 100.** Daily, 0.08°, ends 2024-09-05 in GEE |
+| Currents | `HYCOM/sea_water_velocity` | `velocity_u_0`, `velocity_v_0` | **Scaled integer: catalog units m/s, scale 0.001 — divided by 1000.** Daily (24 h cadence), 0.08°, ends 2024-09-05 in GEE. Ennore field: median 0.48 m/s, max 1.10 m/s |
 | Wind | `ECMWF/ERA5/HOURLY` | `u_component_of_wind_10m`, `v_component_of_wind_10m` | signed components, not speed/bearing |
 
 Drift physics: surface oil moves at current + **3%** of wind speed (the "3% rule"), RK2,

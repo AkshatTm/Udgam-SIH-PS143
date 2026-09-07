@@ -14,9 +14,90 @@ docs/updates/anushka.md. Read the top entry and tell me where I left off."*
 |---|---|---|
 | 0 | Setup: repo, branch `anushka`, venv, packages, GEE signup | ✅ done (GEE auth unverified — see open issues) |
 | 1 | Fake fields + RK2 stepper + four known-answer tests | ✅ **code done — 4/4 green.** 3 human steps left, see "Phase 1 — what remains" |
-| 2 | Real HYCOM + ERA5 loaders, quiver plot | ⬜ not started (Mon) |
+| 2 | Real HYCOM + ERA5 loaders, quiver plot | ✅ **done 2026-09-07.** Field cached, quiver posted, test-4 guards green on real fields |
 | 3 | Backward + 50-run ensemble → real `particles.json` / `origin.json` | ⬜ not started (**Tue evening, hard deadline**) |
 | 4 | Buffer Wed; rerun on the US case | ⬜ not started |
+
+---
+
+## [2026-09-07 21:30] Phase 2 — real fields  ✅
+
+**Done:** `get_uv` / `get_wind` now return real HYCOM current and ERA5 wind for Ennore.
+`step.py`, `tests.py` and `run.py` were not touched, which was the design goal — the field
+source is swapped underneath them.
+
+### ⚠️ Unit correction that affects the whole team
+
+`docs/TRAPS.md` #2 (and five other docs) said **HYCOM is cm/s → divide by 100**. That is wrong
+for Earth Engine. The GEE catalog band table gives `velocity_u_0` / `velocity_v_0` as
+**units m/s with scale factor 0.001**, so `getRegion` returns millimetres per second:
+**divide by 1000.** The ÷100 figure describes the raw HYCOM NetCDF distribution.
+
+Dividing by 100 gave a median current of **4.8 m/s** over the Ennore box (max 11.0 m/s) — a
+physically impossible ocean. Dividing by 1000 gives **median 0.48 m/s, max 1.10 m/s**, flowing
+south along the Coromandel coast, which is the January East India Coastal Current under the NE
+monsoon. Verified against the catalog, not just by plausibility.
+
+**Test 4 caught this on the first fetch**, exactly as designed — the p99 guard fired before any
+particle was integrated. This is the receipt for why the tests were written before the data.
+
+Corrected in: `docs/TRAPS.md`, `docs/03_ANUSHKA_DRIFT.md`, `docs/SETUP_ANUSHKA.md`,
+`docs/PER_DIRECTORY_CLAUDE.md`, `docs/PROMPTING_PLAYBOOK.md`, `docs/receipts.md`, `CLAUDE.md`,
+`pipeline/drift/CLAUDE.md`. **Akshat: `receipts.md` is judge-facing — this was in it.**
+
+### Files touched
+
+| File | Change |
+|---|---|
+| `pipeline/drift/fetch_fields.py` | **new** — pulls HYCOM + ERA5 via `getRegion`, caches to `data/fields/<case>.npz`, prints field statistics |
+| `pipeline/drift/fields.py` | **+`GriddedField`** (bilinear space, linear time, land-aware) and `load_case_field()` |
+| `pipeline/drift/plot_quiver.py` | **new** — the checkpoint picture; coastline comes free from HYCOM's own land mask, no cartopy |
+| `pipeline/drift/check_gee.py` | corrected the unit note it prints |
+| `data/fields/case-000.npz` | **new**, 0.02 MB — gitignored |
+
+### The cached field
+
+- Currents: 19 lon × 20 lat, **2 time steps, 24 h apart** (HYCOM on GEE is daily)
+- Winds: 7 lon × 6 lat, 30 time steps, hourly
+- 41 % of the box is land-masked in HYCOM
+
+**Open issue — currents are daily, not hourly.** Over a 24 h rewind the current field is a
+linear blend of just two snapshots, so sub-daily eddies are invisible. This is a real limit on
+how tight the origin cloud can honestly be, and it belongs in the receipts and the demo
+narrative rather than being hidden. The Phase 3 ensemble (current × N(1, 0.15)) is what carries
+this uncertainty. Wind is hourly, so no issue there.
+
+### Verified on real fields, not just fakes
+
+```
+60x60 sweep over the whole box          all finite (land falls back, no NaN leaks)
+24 h backward, 200 particles            97 frames, exactly 24.0 h
+  displacement                          median 50.6 km (min 41.1, max 57.0)  -> plausible
+  centroid                              [80.450, 13.298] -> [80.644, 13.710]
+round trip fwd->back through real field returns within 0.000 km
+tests.py                                4/4, 12/12 assertions
+```
+
+Origin sits **north-east and offshore** of the slick, which is the correct direction: the
+current runs south-west, so rewinding travels upstream against it. The quiver plot agrees.
+
+**Run command:**
+```bash
+venv\Scripts\activate
+python pipeline/drift/check_gee.py
+python pipeline/drift/fetch_fields.py --case case-000        # add --force to refetch
+python pipeline/drift/plot_quiver.py --case case-000
+python pipeline/drift/tests.py
+```
+
+**Checkpoint image:** `pipeline/drift/out/quiver_case-000.png` — land west, arrows 0.3–1.1 m/s
+running south, slick outline in water. Post in group.
+
+**Next:** Phase 3 (Tue, hard deadline) — seed from `detections.geojson`, 24 h backward, 50-run
+ensemble, 2D histogram → real `particles.json` + `origin.json` for Akshat. `GriddedField` is
+ready; `run.py` still calls the fake field and needs switching to `load_case_field()`.
+
+---
 
 ## Test scoreboard — last run 2026-09-06, all four green
 
@@ -153,7 +234,8 @@ makes it 50.
    look at the field before loosening the bound.
 
 **Next:** Phase 2 — HYCOM (`HYCOM/sea_water_velocity`, bands `velocity_u_0`/`velocity_v_0`,
-**cm/s → divide by 100**) and ERA5 (`ECMWF/ERA5/HOURLY`, `u_component_of_wind_10m` /
+**cm/s → divide by 100** — ⚠️ SUPERSEDED 2026-09-07: the correct divisor is **1000**, see the
+Phase 2 entry above) and ERA5 (`ECMWF/ERA5/HOURLY`, `u_component_of_wind_10m` /
 `v_component_of_wind_10m`) into a `GriddedField` with the same `get_uv` / `get_wind` methods,
 cached to `data/fields/<case>.npz`. Nothing in `step.py`, `tests.py` or `run.py` should need to
 change. Checkpoint is a quiver plot over Ennore with plausible arrows, plus test 4 green on the
