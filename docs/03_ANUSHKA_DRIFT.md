@@ -39,7 +39,7 @@ GEE Python API (`ee.Initialize()` after auth):
 
 ## Phase 3 — Tue (~5 h) · backward, ensemble, files
 1. Seeding from `detections.geojson`: take the highest-confidence "oil" feature. `shape_class=="linear"` → seed 3000 particles along the polygon's principal axis (jitter ±300 m); `"blob"` → gaussian around centroid (σ ≈ half the equivalent radius). t0 = detection_time.
-2. Backward 24 h (96 steps), storing every step → `particles.json` (positions[0] = on-slick).
+2. Backward 24 h (96 steps → 97 stored positions, including the start), storing every step → `particles.json` (positions[0] = on-slick).
 3. **Ensemble:** 50 runs perturbing wind coefficient ~ U(0.025, 0.035), current field × N(1, 0.15) per run, seed jitter. Collect all 50×3000 final positions → 2D histogram (120×120 over a bounds box that contains them) → normalise → `origin.json` with centroid, radius_50_km/radius_90_km (radii of circles around centroid containing 50%/90% of mass), `time_window` = [t0−24h + spread where particle density peaks — AI implements: the window between the 10th and 90th percentile of per-run convergence times; if that's unstable, simply report [t0−24h, t0−8h] and mark method="bounded"], `ensemble_runs: 50`, `abstain` = true if radius_90 > 40 km.
 4. Run the validator; plot heatmap over the map; hand to Akshat with the run command.
 

@@ -103,11 +103,11 @@ GeoJSON FeatureCollection. Each feature:
 { "t0": "2017-01-29T00:14:00Z",
   "direction": "backward",
   "timestep_minutes": 15,
-  "n_steps": 96,
+  "n_steps": 97,
   "n_particles": 3000,
   "positions": [ [[lon,lat],[lon,lat], "... n_particles pairs"], "... n_steps arrays" ] }
 ```
-`positions[0]` = particle positions at t0 (on the slick). `positions[n_steps-1]` = positions at t0 − 24 h. ~3000 particles × 96 steps ≈ 5 MB — acceptable. If bigger, decimate steps, never break the schema.
+`positions[0]` = particle positions at t0. `positions[n_steps-1]` = positions at t0 − (n_steps−1) × timestep_minutes. With n_steps: 97 and timestep_minutes: 15 that is exactly t0 − 24 h. Duration is always derived as (n_steps−1) × dt — never hardcode the frame count anywhere. ~3000 particles × 97 steps ≈ 5 MB — acceptable. If bigger, decimate steps, never break the schema.
 
 ### origin.json  (Stage 2 → Stage 3, and → frontend)
 ```json

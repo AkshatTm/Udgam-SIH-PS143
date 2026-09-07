@@ -3,13 +3,13 @@
 make_case000.py — generate the fake case bundle.
 
     python scripts/make_case000.py                    # writes cases/case-000/
-    python scripts/make_case000.py --out cases/case-000 --particles 3000 --steps 96
+    python scripts/make_case000.py --out cases/case-000 --particles 3000 --steps 97
 
 This is the CONTRACT MADE CONCRETE. Harshita builds the entire frontend against
 it before any real pipeline exists; Anushka and Jaiveer read its detections and
 origin grid as stand-in inputs. Numbers are invented, shapes are exact.
 
-Deliberately full-size (3000 particles x 96 steps) so the Monday stutter test is
+Deliberately full-size (3000 particles x 97 steps) so the Monday stutter test is
 an honest test of the real workload.
 
 Regenerate rather than hand-editing. Requires numpy + Pillow.
@@ -84,7 +84,7 @@ def main():
                     help="write only meta.json + bounds.json + sar.png — the state a real case "
                          "starts in, before any stage has run. Used by the end-to-end seam test.")
     ap.add_argument("--particles", type=int, default=3000)
-    ap.add_argument("--steps", type=int, default=96)
+    ap.add_argument("--steps", type=int, default=97)
     ap.add_argument("--px", type=int, default=1400)
     ap.add_argument("--seed", type=int, default=143)
     a = ap.parse_args()
