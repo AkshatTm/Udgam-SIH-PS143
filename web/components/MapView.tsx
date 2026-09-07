@@ -14,12 +14,16 @@ import {
   NavigationControl,
   setWorkerUrl,
   type GeoJSONSource,
+  type IControl,
   type ImageSource,
   type MapMouseEvent,
   type StyleSpecification,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import { ScatterplotLayer } from "@deck.gl/layers";
 import { useAppStore } from "@/lib/store";
+import { tFromNorm } from "@/lib/timestep";
 import type { Bounds } from "@/lib/contracts";
 
 // maplibre-gl v6 loads its GeoJSON/vector tiler in a separate ESM worker. Its built-in worker
@@ -40,6 +44,10 @@ const DARK_STYLE: StyleSpecification = {
 const OIL_COLOR = "#ff4d4d";
 const LOOKALIKE_COLOR = "#9aa4b2";
 
+// Particle dots — a bright sky tone that reads on the dark SAR backdrop. Urooz owns final
+// tokens; behaviour is what matters here.
+const PARTICLE_FILL: [number, number, number, number] = [125, 211, 252, 190];
+
 function imageCoordinates(b: Bounds): [
   [number, number],
   [number, number],
@@ -58,6 +66,7 @@ function imageCoordinates(b: Bounds): [
 export default function MapView() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MlMap | null>(null);
+  const overlayRef = useRef<MapboxOverlay | null>(null);
   const styleReadyRef = useRef(false);
 
   const activeCaseId = useAppStore((s) => s.activeCaseId);
@@ -65,6 +74,13 @@ export default function MapView() {
   const detections = useAppStore((s) => s.detections);
   const layers = useAppStore((s) => s.layers);
   const selectedDetectionId = useAppStore((s) => s.selectedDetectionId);
+
+  // Phase 2 particle playback. `t` is the integer timestep the slider currently points at;
+  // it only changes ~8×/s during playback, so the deck layer effect below stays cheap.
+  const particles = useAppStore((s) => s.particles);
+  const particlesVisible = useAppStore((s) => s.layers.particles);
+  const tNorm = useAppStore((s) => s.tNorm);
+  const t = tFromNorm(tNorm, particles?.nSteps ?? 0);
 
   // Create the map exactly once.
   useEffect(() => {
@@ -80,6 +96,14 @@ export default function MapView() {
     });
     map.addControl(new NavigationControl({ showCompass: false }), "top-left");
     mapRef.current = map;
+
+    // deck.gl particle layer rides on top of the map through a single MapboxOverlay control.
+    // Overlaid (not interleaved) mode keeps it independent of the map's style/GL state — it
+    // just tracks the camera. Layers are pushed in via overlay.setProps() from the effect
+    // below; the map itself never re-renders when the timestep changes.
+    const overlay = new MapboxOverlay({ interleaved: false, layers: [] });
+    map.addControl(overlay as unknown as IControl);
+    overlayRef.current = overlay;
 
     map.on("load", () => {
       styleReadyRef.current = true;
@@ -177,12 +201,47 @@ export default function MapView() {
     });
 
     return () => {
-      map.remove();
+      map.remove(); // also disposes the MapboxOverlay control + its deck.gl instance
       mapRef.current = null;
+      overlayRef.current = null;
       styleReadyRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Particle frame. Runs only when the integer timestep, the toggle, or the (once-loaded)
+  // bundle changes — NOT on every animation frame, and never re-fetching particles.json.
+  // A new ScatterplotLayer with a fresh `data` object is deck.gl's signal to re-upload the
+  // position buffer; `frames[t]` is a pre-built view, so no particle array is allocated here.
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    if (!particles || !particlesVisible) {
+      overlay.setProps({ layers: [] });
+      return;
+    }
+
+    const frame = particles.frames[t] ?? particles.frames[0];
+    overlay.setProps({
+      layers: [
+        new ScatterplotLayer({
+          id: "particles",
+          data: {
+            length: particles.nParticles,
+            attributes: { getPosition: { value: frame, size: 2 } },
+          },
+          getFillColor: PARTICLE_FILL,
+          getRadius: 2,
+          radiusUnits: "pixels",
+          radiusMinPixels: 1,
+          radiusMaxPixels: 3,
+          stroked: false,
+          pickable: false,
+        }),
+      ],
+    });
+  }, [particles, particlesVisible, t]);
 
   // SAR source follows the active case / bounds.
   useEffect(() => {

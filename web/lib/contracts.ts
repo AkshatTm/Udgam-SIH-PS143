@@ -52,6 +52,21 @@ export interface DetectionCollection {
   features: DetectionFeature[];
 }
 
+/**
+ * particles.json exactly as it sits on disk (CONTRACTS.md §5). Stage 2 → frontend only.
+ * `positions` is [n_steps][n_particles][lon, lat]; positions[0] is on the slick at `t0`,
+ * positions[n_steps-1] is at `t0 − 24 h`. The frontend converts this to typed arrays once
+ * (see lib/particles.ts) — this raw shape is never held in state.
+ */
+export interface RawParticleBundle {
+  t0: string; // UTC ISO 8601, trailing Z — equals meta.detection_time within 60 s
+  direction: string; // "backward"
+  timestep_minutes: number;
+  n_steps: number;
+  n_particles: number;
+  positions: LonLat[][];
+}
+
 /** The three stages, in fixed rail order. */
 export const ALL_ACTS: Act[] = ["detect", "trace", "attribute"];
 

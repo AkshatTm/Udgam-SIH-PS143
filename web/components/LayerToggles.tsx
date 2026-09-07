@@ -2,12 +2,13 @@
 
 import { useAppStore, type LayerId } from "@/lib/store";
 
-// SAR + Detections are live in Phase 1. Particles / Origin / Vessels are shown so the final
-// shape is clear, but disabled — their layers don't exist yet.
+// SAR + Detections landed in Phase 1, Particles in Phase 2. Origin / Vessels are shown so the
+// final shape is clear, but disabled — their layers don't exist yet. The Particles toggle is
+// additionally greyed for a case with no `trace` act (no particle bundle to show).
 const TOGGLES: { id: LayerId; label: string; live: boolean }[] = [
   { id: "sar", label: "SAR", live: true },
   { id: "detections", label: "Detections", live: true },
-  { id: "particles", label: "Particles", live: false },
+  { id: "particles", label: "Particles", live: true },
   { id: "origin", label: "Origin", live: false },
   { id: "vessels", label: "Vessels", live: false },
 ];
@@ -15,21 +16,31 @@ const TOGGLES: { id: LayerId; label: string; live: boolean }[] = [
 export default function LayerToggles() {
   const layers = useAppStore((s) => s.layers);
   const toggleLayer = useAppStore((s) => s.toggleLayer);
+  const meta = useAppStore((s) => s.meta);
+
+  const traceAvailable = meta?.acts_available.includes("trace") ?? false;
 
   return (
     <div className="flex gap-1.5">
       {TOGGLES.map(({ id, label, live }) => {
+        const enabled = live && (id !== "particles" || traceAvailable);
         const on = layers[id];
         return (
           <button
             key={id}
             type="button"
-            disabled={!live}
+            disabled={!enabled}
             onClick={() => toggleLayer(id)}
             aria-pressed={on}
-            title={live ? label : `${label} — available in a later phase`}
+            title={
+              enabled
+                ? label
+                : id === "particles"
+                  ? `${label} — this case has no drift stage`
+                  : `${label} — available in a later phase`
+            }
             className={`rounded-full border px-3 py-1 text-[11px] font-medium transition-colors ${
-              !live
+              !enabled
                 ? "cursor-not-allowed border-white/5 text-white/20"
                 : on
                   ? "border-white/30 bg-white/15 text-white"
