@@ -2,24 +2,30 @@
 """
 Stage 2 — backward drift. Owner: Anushka.
 
-    python pipeline/drift/run.py --case case-000 --stub
+    python pipeline/drift/run.py --case case-000 --fake
 
-STUB ONLY. Reads `detections.geojson`, seeds particles off the highest-confidence oil feature,
-random-walks them "backwards", and writes schema-valid `out/particles.json` + `out/origin.json`.
-No physics, no GEE, no ensemble — this exists so the seam is wired before the physics is.
+PHASE 1. Reads `detections.geojson`, seeds particles off the highest-confidence oil feature,
+rewinds them through the REAL RK2 integrator (`step.py`) driven by ANALYTIC fields (`fields.py`),
+and writes schema-valid `out/particles.json` + `out/origin.json`.
 
-What to KEEP when the real engine lands:
-  - `seed_particles()`. It already implements the contract rule that `shape_class` carries
-    physics: "linear" seeds along the polygon's principal axis (a moving ship), "blob" seeds
-    gaussian around the centroid (a stationary event).
-  - `write_particles()` / `write_origin()` — the file shapes are frozen.
-What to DELETE:
-  - `fake_walk()`, replaced by RK2 through real HYCOM + ERA5 fields:
-    velocity = current + 0.03 * wind, dt = 15 min, backward = NEGATIVE dt through the same
-    field (not a minus sign on velocity), vectorised NumPy over an [n, 2] lon/lat array.
-    HYCOM velocity bands are cm/s -> divide by 100 (docs/TRAPS.md #2).
+Real physics, fake ocean. There is no GEE here and no ensemble yet: Phase 2 swaps the analytic
+field for a HYCOM+ERA5 `GriddedField` exposing the same two methods, Phase 3 adds the 50-run
+ensemble. Neither touches this file's structure.
 
-Deliberately stdlib-only. The real engine needs numpy, scipy, earthengine-api, matplotlib.
+KEPT from Akshat's stub (the file shapes are frozen):
+  - `seed_particles()` — implements the contract rule that `shape_class` carries physics:
+    "linear" seeds along the polygon's principal axis (a moving ship), "blob" seeds gaussian
+    around the centroid (a stationary event).
+  - `write_particles()` / `write_origin()`.
+DELETED:
+  - `fake_walk()`, the biased random walk. Replaced by `step.integrate()`.
+
+STILL OUTSTANDING (do not let this pass unnoticed at integration):
+  - ensemble_runs is 1, not 50, and origin.json says so. Phase 3 makes it honest.
+  - `time_window` is still the stub's crude [t0-span, t0-span/3], not a convergence estimate.
+  (the n_steps fencepost is RESOLVED: Akshat pushed 278f463 setting n_steps = 97 = the t0
+   position plus 96 backward intervals = exactly 24.0 h. Duration is always derived as
+   (n_steps - 1) x timestep_minutes; never hardcode a frame count.)
 """
 import argparse
 import json
@@ -27,6 +33,11 @@ import math
 import random
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import numpy as np
+
+from fields import make_fake
+from step import assert_displacement_plausible, displacement_km, integrate
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -96,21 +107,6 @@ def seed_particles(feat, n, rng):
             for _ in range(n)]
 
 
-def fake_walk(seed, steps, rng):
-    """DELETE THIS. A biased random walk standing in for advection. Drift is chosen to land
-    in the tens-of-km range over 24 h, which is what a real ocean does — so the validator's
-    plausibility guards are actually exercised rather than trivially satisfied."""
-    drift = (0.0022, 0.0016)                 # degrees per 15-min step
-    positions, cur = [], [list(p) for p in seed]
-    for s in range(steps):
-        positions.append([[r5(p[0]), r5(p[1])] for p in cur])
-        # spread grows with rewind depth — the honest bit the demo shows
-        spread = 0.00042 * (1 + 2.2 * s / steps)
-        for p in cur:
-            p[0] += drift[0] + rng.gauss(0, spread)
-            p[1] += drift[1] + rng.gauss(0, spread)
-    return positions
-
 
 def write_particles(path, t0, positions, dt_min):
     path.write_text(json.dumps({
@@ -162,20 +158,29 @@ def write_origin(path, final, t0, span_h, runs):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Stage 2 — backward drift (stub)")
+    ap = argparse.ArgumentParser(description="Stage 2 — backward drift (Phase 1: fake fields)")
     ap.add_argument("--case", required=True)
     ap.add_argument("--cases-root", default=str(REPO / "cases"))
-    ap.add_argument("--stub", action="store_true", help="required until the real engine exists")
+    ap.add_argument("--fake", action="store_true",
+                    help="real RK2 integrator driven by analytic fields (Phase 1)")
+    ap.add_argument("--stub", action="store_true", help=argparse.SUPPRESS)  # back-compat alias
+    ap.add_argument("--field", choices=["analytic", "constant"], default="analytic",
+                    help="analytic = a vortex cell centred on the slick; constant = uniform")
+    ap.add_argument("--wind", type=float, nargs=2, default=(6.0, -4.0), metavar=("U", "V"),
+                    help="fake 10 m wind, signed m/s components (east, north)")
     ap.add_argument("--particles", type=int, default=3000)
-    ap.add_argument("--steps", type=int, default=97)
+    ap.add_argument("--steps", type=int, default=97,
+                    help="STORED POSITIONS, not physics steps: 97 = t0 + 96 backward "
+                         "intervals = exactly 24.0 h (CONTRACTS.md 5)")
     ap.add_argument("--timestep-minutes", type=int, default=15)
     ap.add_argument("--seed", type=int, default=143)
     a = ap.parse_args()
 
-    if not a.stub:
+    if not (a.fake or a.stub):
         raise SystemExit(
-            "drift/run.py has no real implementation yet — pass --stub.\n"
-            "Building it is Phases 1-3 of docs/03_ANUSHKA_DRIFT.md. Tests come first.")
+            "drift/run.py has no REAL fields yet — pass --fake.\n"
+            "--fake runs the true RK2 integrator over an analytic ocean. Phase 2 (HYCOM + ERA5)\n"
+            "is what makes the numbers mean something. See docs/03_ANUSHKA_DRIFT.md.")
 
     case_dir = Path(a.cases_root) / a.case
     det_path = case_dir / "detections.geojson"
@@ -193,22 +198,36 @@ def main():
 
     rng = random.Random(a.seed)
     seed = seed_particles(feat, a.particles, rng)
-    positions = fake_walk(seed, a.steps, rng)
+
+    clon0, clat0 = float(feat["properties"]["centroid"][0]), float(feat["properties"]["centroid"][1])
+    field = make_fake(a.field, lon0=clon0, lat0=clat0, wind=tuple(a.wind))
+
+    # Backward = negative dt through the same field. step.integrate() records the state
+    # BEFORE each step, so positions[0] sits on the slick, as the contract requires.
+    history, times = integrate(seed, t0, field, a.steps, a.timestep_minutes,
+                               direction="backward")
+    positions = np.round(history, 5).tolist()
 
     OUT.mkdir(parents=True, exist_ok=True)
     write_particles(OUT / "particles.json", t0, positions, a.timestep_minutes)
-    span_h = (a.steps - 1) * a.timestep_minutes / 60
-    clon, clat, r50, r90 = write_origin(OUT / "origin.json", positions[-1], t0, span_h, 50)
+    span_h = (a.steps - 1) * a.timestep_minutes / 60      # states recorded, not steps taken
+    clon, clat, r50, r90 = write_origin(OUT / "origin.json", positions[-1], t0, span_h, 1)
 
-    p0, pn = positions[0][0], positions[-1][0]
-    km = math.hypot((pn[0] - p0[0]) * KM_PER_DEG * math.cos(math.radians(clat)),
-                    (pn[1] - p0[1]) * KM_PER_DEG)
-    print(f"[drift:STUB]  wrote {OUT / 'particles.json'}")
+    # The permanent plausibility guard, on every real run, not just in tests.py.
+    med_km = assert_displacement_plausible(history[0], history[-1], hours=span_h)
+    dist = displacement_km(history[0], history[-1])
+
+    print(f"[drift:FAKE]  wrote {OUT / 'particles.json'}")
     print(f"              wrote {OUT / 'origin.json'}")
+    print(f"              field  {field}")
     print(f"              seeded {a.particles} from {feat['properties']['id']} "
-          f"({feat['properties']['shape_class']}), rewound {span_h:.0f} h in {a.steps} steps")
-    print(f"              particle 0 travelled {km:.1f} km   "
-          f"origin ({clon:.4f}, {clat:.4f})  r50={r50:.1f} km  r90={r90:.1f} km")
+          f"({feat['properties']['shape_class']}), rewound {span_h:.2f} h "
+          f"in {a.steps} steps of {a.timestep_minutes} min")
+    print(f"              t0 {iso(t0)} -> {iso(times[-1])}")
+    print(f"              displacement  median {med_km:.1f} km   "
+          f"min {float(dist.min()):.1f}   max {float(dist.max()):.1f}")
+    print(f"              origin ({clon:.4f}, {clat:.4f})  "
+          f"r50={r50:.1f} km  r90={r90:.1f} km  ensemble_runs=1 (Phase 3 makes this 50)")
 
 
 if __name__ == "__main__":
