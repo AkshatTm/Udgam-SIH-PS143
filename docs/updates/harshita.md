@@ -12,6 +12,52 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-07 15:20] Phase 2 bug fix — T-0 particle cloud was mirrored across the slick
+
+**Done:** At T-0 the particle cloud crossed the det-01 polygon in an X instead of lying along
+it — only ~28% of `positions[0]` fell inside the slick. Root cause was in the data producer,
+not the frontend: `scripts/make_case000.py` seeded the particles along `radians(-24)` **in
+lon/lat space**, but the polygon (`ellipse_ring`) and the SAR slick (`make_sar`) apply that
+-24 deg tilt **in pixel space**, and `px2ll` then flips the y axis (pixel y points south). Net
+effect: polygon principal axis `+24 deg` in lon/lat, particle-cloud axis `-24 deg` — mirror
+images sharing the centroid. Fixed the generator to seed at `+24 deg` (`cos` is even so the
+longitude spread and every RNG draw are unchanged; only the latitude offset flips sign, so
+`sar.png` / `detections.geojson` / `meta.json` / `bounds.json` / `suspects.json` regenerate
+byte-identical, and `origin.json` / `vessels.geojson` shift only by the corrected final-cloud
+mean). Regenerated the full bundle with `.venv` (Python 3.11.9, numpy + pillow) and re-ran the
+validator — `PASS`, 0 warnings. After the fix `positions[0]` PCA axis is `+23.93 deg` (polygon
+is `+24.00`) and **100%** of T-0 particles sit inside the det-01 polygon; `positions[0]` mean
+`[80.4355, 13.3098]` lands on the det-01 centroid `[80.436, 13.31]`. Coordinates stay
+`[lon, lat]` / EPSG:4326, all <=5 dp, in bounds. No schema, UI, or frontend-code change.
+
+**Files touched:** `scripts/make_case000.py` (modified — seed axis `-24 -> +24 deg`) ·
+`cases/case-000/particles.json` (regenerated output) · `cases/case-000/origin.json`
+(regenerated — centroid follows the corrected cloud) · `cases/case-000/vessels.geojson`
+(regenerated — tracks built from the origin centroid).
+
+**Run command:**
+```bash
+.venv\Scripts\python scripts\make_case000.py
+.venv\Scripts\python scripts\validate_case.py cases\case-000
+```
+Expected output: generator writes `cases/case-000/` (7 files, ~5.8 MB); validator prints
+`PASS   acts=['detect', 'trace', 'attribute']  (0 warning(s))`.
+In the app: toggle Particles on at T-0 → the blue cluster lies *along* the red slick outline,
+not across it.
+
+**Checkpoint artefact:** point-in-polygon check — `positions[0]` inside det-01: 28.3% before →
+100.0% after; PCA axis 155.86 deg → 23.93 deg (det-01 polygon is 24.00 deg). `validate_case.py`
+PASS, 0 warnings. Phase-2 frontend (`tsc --noEmit`, `next build`) unaffected — no web code
+touched; deck.gl `ScatterplotLayer` already binds `positions[t]` as `[lon, lat]`.
+
+**Open issues:**
+- `web/public/cases/case-000/` is a gitignored copy — refresh it before running the app:
+  `robocopy cases web\public\cases /MIR`.
+- none outstanding on the fix itself.
+
+**Next:** Phase 3 — Origin `HeatmapLayer` from `origin.json`, stage-aware right panel, stage-rail
+logic from `acts_available`.
+
 ## [2026-09-07 00:45] Phase 2 — particle playback (slider + deck.gl ScatterplotLayer + play/pause)
 
 **Done:** The time slider now drives 3000 particles across 96 timesteps and it is smooth. New
