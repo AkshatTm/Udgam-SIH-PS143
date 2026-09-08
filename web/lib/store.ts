@@ -6,6 +6,8 @@ import { DEFAULT_CASE_ID } from "./cases";
 import { loadCase } from "./loadCase";
 import { loadParticleBundle, type ParticleBundle } from "./particles";
 import { loadOriginBundle, type OriginBundle } from "./origin";
+import { loadVesselBundle, type VesselBundle } from "./vessels";
+import { loadSuspectsBundle, type SuspectsBundle } from "./suspects";
 
 export type LayerId = "sar" | "detections" | "particles" | "origin" | "vessels";
 
@@ -35,6 +37,18 @@ export interface AppState {
   originStatus: LoadStatus;
   originError: string | null;
 
+  // Phase 5 attribution. Same discipline as particles/origin: fetched + parsed once per case,
+  // then only read from memory. `vessels` feeds the map's vessel PathLayer; `suspects` feeds
+  // the Attribute context panel. They are independent of each other — a vessel-track failure
+  // does not block the suspect cards, and vice versa.
+  vessels: VesselBundle | null;
+  vesselsStatus: LoadStatus;
+  vesselsError: string | null;
+
+  suspects: SuspectsBundle | null;
+  suspectsStatus: LoadStatus;
+  suspectsError: string | null;
+
   activeStage: Act;
   selectedDetectionId: string | null;
 
@@ -45,6 +59,8 @@ export interface AppState {
   loadActiveCase: () => Promise<void>;
   loadParticles: () => Promise<void>;
   loadOrigin: () => Promise<void>;
+  loadVessels: () => Promise<void>;
+  loadSuspects: () => Promise<void>;
   setStage: (stage: Act) => void;
   selectDetection: (id: string | null) => void;
   toggleLayer: (id: LayerId) => void;
@@ -70,6 +86,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   origin: null,
   originStatus: "idle",
   originError: null,
+
+  vessels: null,
+  vesselsStatus: "idle",
+  vesselsError: null,
+
+  suspects: null,
+  suspectsStatus: "idle",
+  suspectsError: null,
 
   activeStage: "detect",
   selectedDetectionId: null,
@@ -105,6 +129,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       origin: null,
       originStatus: "idle",
       originError: null,
+      // Reset attribution for the incoming case.
+      vessels: null,
+      vesselsStatus: "idle",
+      vesselsError: null,
+      suspects: null,
+      suspectsStatus: "idle",
+      suspectsError: null,
     });
     try {
       const { meta, bounds, detections } = await loadCase(id);
@@ -119,6 +150,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (meta.acts_available.includes("trace")) {
         void get().loadParticles();
         void get().loadOrigin();
+      }
+      // Fetch the attribution bundles in the background. CONTRACTS §1: `attribute` requires
+      // vessels.geojson + suspects.json (and trace, so origin.abstain is always available
+      // alongside them — the Attribute panel depends on that to gate the suspect list).
+      if (meta.acts_available.includes("attribute")) {
+        void get().loadVessels();
+        void get().loadSuspects();
       }
     } catch (err) {
       if (get().activeCaseId !== id) return;
@@ -167,6 +205,36 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (err) {
       if (get().activeCaseId !== id) return;
       set({ origin: null, originStatus: "error", originError: (err as Error).message });
+    }
+  },
+
+  loadVessels: async () => {
+    const id = get().activeCaseId;
+    if (get().vesselsStatus === "loading") return;
+    set({ vesselsStatus: "loading", vesselsError: null });
+    try {
+      const bundle = await loadVesselBundle(id);
+      // A different case was selected while this bundle was in flight — drop it.
+      if (get().activeCaseId !== id) return;
+      set({ vessels: bundle, vesselsStatus: "ready" });
+    } catch (err) {
+      if (get().activeCaseId !== id) return;
+      set({ vessels: null, vesselsStatus: "error", vesselsError: (err as Error).message });
+    }
+  },
+
+  loadSuspects: async () => {
+    const id = get().activeCaseId;
+    if (get().suspectsStatus === "loading") return;
+    set({ suspectsStatus: "loading", suspectsError: null });
+    try {
+      const bundle = await loadSuspectsBundle(id);
+      // A different case was selected while this bundle was in flight — drop it.
+      if (get().activeCaseId !== id) return;
+      set({ suspects: bundle, suspectsStatus: "ready" });
+    } catch (err) {
+      if (get().activeCaseId !== id) return;
+      set({ suspects: null, suspectsStatus: "error", suspectsError: (err as Error).message });
     }
   },
 

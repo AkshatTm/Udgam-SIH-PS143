@@ -32,7 +32,8 @@ import { HeatmapLayer } from "@deck.gl/aggregation-layers";
 import { useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
 import { buildOriginPointCloud, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
-import type { Bounds } from "@/lib/contracts";
+import { sceneAndVesselExtent } from "@/lib/extent";
+import type { Bounds, LonLat } from "@/lib/contracts";
 
 // maplibre-gl v6 loads its GeoJSON/vector tiler in a separate ESM worker. Its built-in worker
 // resolver needs an http(s) `import.meta.url`, which webpack replaces with a build-time
@@ -88,6 +89,61 @@ const originRingPath = (d: OriginRing): OriginRing["path"] => d.path;
 const originRingColor = (d: OriginRing): [number, number, number, number] =>
   d.kind === "r50" ? ORIGIN_RING_50 : ORIGIN_RING_90;
 
+// Vessel tracks (Phase 5) — cool blue family, distinct from the amber particle/origin palette
+// and from the red/grey detection colours, so all three layers stay readable together. Role is
+// conveyed by emphasis (opacity + width), not a hue change, to avoid inventing a new colour
+// that could collide with an existing token the way the amber particle/heatmap colours did.
+//
+// IMPORTANT: role is only ever assigned when `origin.abstain` has been confirmed `false`. While
+// abstain is `true`, or origin hasn't loaded yet, every track renders as "plain" — the map must
+// never visually imply a vessel is responsible when the contract says attribution isn't possible.
+type VesselRole = "top" | "suspect" | "excluded" | "plain";
+
+interface VesselMapItem {
+  mmsi: string;
+  path: LonLat[];
+  role: VesselRole;
+}
+
+const VESSEL_COLOR_PLAIN: [number, number, number, number] = [96, 165, 250, 140];
+const VESSEL_COLOR_SUSPECT: [number, number, number, number] = [56, 189, 248, 200];
+const VESSEL_COLOR_TOP_SUSPECT: [number, number, number, number] = [56, 189, 248, 255];
+// Excluded — muted, per docs/06 ("visually ruled out"). The strikethrough motif itself is
+// applied on the exclusion card in ContextPanel; a dashed line isn't a deck.gl PathLayer
+// primitive, so the map conveys "ruled out" via reduced opacity + thin width instead.
+const VESSEL_COLOR_EXCLUDED: [number, number, number, number] = [148, 163, 184, 120];
+
+const VESSEL_WIDTH_PLAIN = 1.2;
+const VESSEL_WIDTH_SUSPECT = 1.8;
+const VESSEL_WIDTH_TOP_SUSPECT = 3;
+const VESSEL_WIDTH_EXCLUDED = 1;
+
+const vesselTrackPath = (d: VesselMapItem): LonLat[] => d.path;
+const vesselTrackColor = (d: VesselMapItem): [number, number, number, number] => {
+  switch (d.role) {
+    case "top":
+      return VESSEL_COLOR_TOP_SUSPECT;
+    case "suspect":
+      return VESSEL_COLOR_SUSPECT;
+    case "excluded":
+      return VESSEL_COLOR_EXCLUDED;
+    default:
+      return VESSEL_COLOR_PLAIN;
+  }
+};
+const vesselTrackWidth = (d: VesselMapItem): number => {
+  switch (d.role) {
+    case "top":
+      return VESSEL_WIDTH_TOP_SUSPECT;
+    case "suspect":
+      return VESSEL_WIDTH_SUSPECT;
+    case "excluded":
+      return VESSEL_WIDTH_EXCLUDED;
+    default:
+      return VESSEL_WIDTH_PLAIN;
+  }
+};
+
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const u = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
   return u * u * (3 - 2 * u);
@@ -115,6 +171,7 @@ export default function MapView() {
   const styleReadyRef = useRef(false);
 
   const activeCaseId = useAppStore((s) => s.activeCaseId);
+  const activeStage = useAppStore((s) => s.activeStage);
   const bounds = useAppStore((s) => s.bounds);
   const detections = useAppStore((s) => s.detections);
   const layers = useAppStore((s) => s.layers);
@@ -142,6 +199,50 @@ export default function MapView() {
     () => (origin ? buildOriginRadiusRings(origin) : null),
     [origin],
   );
+
+  // Phase 5 attribution. `vessels` is static geometry (no timestep dependency at all) — the
+  // PathLayer built from it is memoised on the bundle + suspects identity, never on `t`.
+  const vessels = useAppStore((s) => s.vessels);
+  const vesselsVisible = useAppStore((s) => s.layers.vessels);
+  const suspects = useAppStore((s) => s.suspects);
+
+  // Role (top suspect / suspect / excluded) is only ever attached once origin.abstain is
+  // confirmed false — see the comment on VesselRole above. `origin` is read from the store
+  // above (Phase 3 origin cloud); this reuses that same value rather than re-fetching anything.
+  const abstainConfirmedFalse = origin !== null && origin.abstain === false;
+
+  const vesselItems = useMemo(() => {
+    if (!vessels) return [] as VesselMapItem[];
+    if (!abstainConfirmedFalse || !suspects) {
+      return vessels.tracks.map((t) => ({ mmsi: t.mmsi, path: t.path, role: "plain" as const }));
+    }
+    const topMmsi = suspects.suspects[0]?.mmsi;
+    const suspectMmsi = new Set(suspects.suspects.map((s) => s.mmsi));
+    const excludedMmsi = new Set(suspects.excluded.map((e) => e.mmsi));
+    return vessels.tracks.map((t) => {
+      let role: VesselRole = "plain";
+      if (t.mmsi === topMmsi) role = "top";
+      else if (suspectMmsi.has(t.mmsi)) role = "suspect";
+      else if (excludedMmsi.has(t.mmsi)) role = "excluded";
+      return { mmsi: t.mmsi, path: t.path, role };
+    });
+  }, [vessels, suspects, abstainConfirmedFalse]);
+
+  const vesselLayer = useMemo(() => {
+    if (!vesselsVisible || vesselItems.length === 0) return null;
+    return new PathLayer<VesselMapItem>({
+      id: "vessels",
+      data: vesselItems,
+      getPath: vesselTrackPath,
+      getColor: vesselTrackColor,
+      getWidth: vesselTrackWidth,
+      widthUnits: "pixels",
+      widthMinPixels: 1,
+      capRounded: true,
+      jointRounded: true,
+      pickable: false,
+    });
+  }, [vesselItems, vesselsVisible]);
 
   // Create the map exactly once.
   useEffect(() => {
@@ -351,12 +452,12 @@ export default function MapView() {
     });
   }, [particles, particlesVisible, t]);
 
-  // Push the composed list into the deck overlay. Order is bottom→top: heatmap, rings,
-  // particles. Runs only when one of the memoised pieces actually changes — never on a bare
-  // animation frame — and never re-renders the map container.
+  // Push the composed list into the deck overlay. Order is bottom→top: heatmap, rings, vessel
+  // tracks, particles. Runs only when one of the memoised pieces actually changes — never on a
+  // bare animation frame — and never re-renders the map container.
   useEffect(() => {
-    overlayRef.current?.setProps({ layers: [...originLayerList, particleLayer] });
-  }, [originLayerList, particleLayer]);
+    overlayRef.current?.setProps({ layers: [...originLayerList, vesselLayer, particleLayer] });
+  }, [originLayerList, vesselLayer, particleLayer]);
 
   // SAR source follows the active case / bounds.
   useEffect(() => {
@@ -369,14 +470,32 @@ export default function MapView() {
         coordinates: imageCoordinates(bounds),
       });
     }
+  }, [activeCaseId, bounds]);
+
+  // Camera. Detect and Trace fit exactly to the scene raster — byte-identical to this file
+  // before Phase 5, so their framing is unaffected by anything below. Attribute fits to the
+  // union of the scene + every vessel track (lib/extent.ts) instead, because vessel tracks
+  // legitimately run past the scene edge (they do even in the synthetic case-000 bundle) and a
+  // scene-only camera would guarantee some are clipped.
+  //
+  // This is deliberately the ONLY stage-dependent camera behaviour in the app. It does not fold
+  // in particles/origin extents and does not decide the larger per-stage-vs-global camera
+  // question for them — that is a separate, larger decision (see docs/HANDOFF_HARSHITA…, §11.3 /
+  // §16 D4) left for Akshat. `sceneAndVesselExtent` is a pure calculator with no opinion on when
+  // to use it; this effect is the one place that opinion lives, and it only ever applies to the
+  // Attribute stage.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReadyRef.current || !bounds) return;
+    const target = activeStage === "attribute" ? sceneAndVesselExtent(bounds, vessels) : bounds;
     map.fitBounds(
       [
-        [bounds.west, bounds.south],
-        [bounds.east, bounds.north],
+        [target.west, target.south],
+        [target.east, target.north],
       ],
       { padding: 40, animate: false },
     );
-  }, [activeCaseId, bounds]);
+  }, [activeStage, bounds, vessels]);
 
   // Detection features follow the store.
   useEffect(() => {

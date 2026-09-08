@@ -93,6 +93,68 @@ export interface RawOriginBundle {
   abstain: boolean;
 }
 
+/**
+ * vessels.geojson exactly as it sits on disk (CONTRACTS.md §7). Stage 3 → frontend.
+ * `n_points` / `max_gap_minutes` are documented but not enforced by validate_case.py — treated
+ * as optional here so a producer that omits them doesn't break the frontend.
+ */
+export interface RawVesselProperties {
+  mmsi: string;
+  name: string;
+  vessel_type: string;
+  n_points?: number;
+  max_gap_minutes?: number;
+}
+
+export interface RawVesselFeature {
+  type: "Feature";
+  geometry: { type: "LineString"; coordinates: LonLat[] };
+  properties: RawVesselProperties;
+}
+
+export interface RawVesselCollection {
+  type: "FeatureCollection";
+  features: RawVesselFeature[];
+}
+
+/**
+ * suspects.json exactly as it sits on disk (CONTRACTS.md §8). Stage 3 → frontend.
+ * Only `mmsi/name/score/closest_km/reasons` (suspects) and `mmsi/reason` (excluded) are
+ * enforced by validate_case.py — everything else is "where available" per the contract's own
+ * example, so it is optional here. The frontend never fills in a missing field with a guess.
+ */
+export interface RawFunnel {
+  in_region: number;
+  in_window: number;
+  plausible: number;
+  scored: number;
+}
+
+export interface RawSuspect {
+  mmsi: string;
+  name: string;
+  vessel_type?: string;
+  score: number; // [0, 1]
+  closest_km: number;
+  closest_time?: string; // UTC ISO 8601, trailing Z
+  heading_consistent?: boolean;
+  ais_gap_minutes?: number;
+  reasons: string[];
+}
+
+export interface RawExcludedVessel {
+  mmsi: string;
+  name?: string;
+  closest_km?: number;
+  reason: string;
+}
+
+export interface RawSuspectsBundle {
+  funnel: RawFunnel;
+  suspects: RawSuspect[];
+  excluded: RawExcludedVessel[];
+}
+
 /** The three stages, in fixed rail order. */
 export const ALL_ACTS: Act[] = ["detect", "trace", "attribute"];
 

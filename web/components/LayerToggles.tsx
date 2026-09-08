@@ -2,15 +2,15 @@
 
 import { useAppStore, type LayerId } from "@/lib/store";
 
-// SAR + Detections landed in Phase 1, Particles + Origin in Phases 2–3. Vessels is shown so the
-// final shape is clear, but disabled — its layer doesn't exist yet. Particles and Origin are
-// additionally greyed for a case with no `trace` act (no particle / origin bundle to show).
+// SAR + Detections landed in Phase 1, Particles + Origin in Phases 2–3, Vessels in Phase 5.
+// Particles/Origin are greyed for a case with no `trace` act; Vessels is greyed for a case with
+// no `attribute` act (no vessels.geojson to show — same reasoning as the stage rail).
 const TOGGLES: { id: LayerId; label: string; live: boolean }[] = [
   { id: "sar", label: "SAR", live: true },
   { id: "detections", label: "Detections", live: true },
   { id: "particles", label: "Particles", live: true },
   { id: "origin", label: "Origin", live: true },
-  { id: "vessels", label: "Vessels", live: false },
+  { id: "vessels", label: "Vessels", live: true },
 ];
 
 export default function LayerToggles() {
@@ -19,6 +19,7 @@ export default function LayerToggles() {
   const meta = useAppStore((s) => s.meta);
 
   const traceAvailable = meta?.acts_available.includes("trace") ?? false;
+  const attributeAvailable = meta?.acts_available.includes("attribute") ?? false;
 
   return (
     <div className="flex items-center gap-1">
@@ -27,7 +28,9 @@ export default function LayerToggles() {
       </span>
       {TOGGLES.map(({ id, label, live }) => {
         const needsTrace = id === "particles" || id === "origin";
-        const enabled = live && (!needsTrace || traceAvailable);
+        const needsAttribute = id === "vessels";
+        const enabled =
+          live && (!needsTrace || traceAvailable) && (!needsAttribute || attributeAvailable);
         const on = layers[id];
         return (
           <button
@@ -41,7 +44,9 @@ export default function LayerToggles() {
                 ? label
                 : needsTrace
                   ? `${label} — this case has no drift stage`
-                  : `${label} — available in a later phase`
+                  : needsAttribute
+                    ? `${label} — this case has no attribution stage`
+                    : `${label} — available in a later phase`
             }
             className={`rounded px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
               !enabled
