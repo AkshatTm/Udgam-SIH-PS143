@@ -12,6 +12,199 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-08 15:55] Phase 3 — origin heatmap + rings, Detect object card + feature bars, Trace card
+
+**Done:** Phase 3 of the frontend is complete on `case-000`. Seven files:
+
+- **`web/lib/origin.ts` (NEW).** `loadOriginBundle(id)` fetches `/cases/<id>/origin.json` **once**
+  (`cache: "no-store"`), validates every field the frontend consumes against CONTRACTS §6 —
+  `bounds` (4 finite numbers, `west<east`, `south<north`, lon −180..180, lat −90..90), `shape`
+  `[rows,cols]` positive ints, `values` (`len == rows*cols`, each finite, `>= 0`, peak `<= 1`,
+  peak `!= 0`), `centroid` (`[lon,lat]` in range — the [lat,lon]-swap guard), `radius_50_km` /
+  `radius_90_km` (`>= 0`, `50 <= 90`), `time_window` (two strings, trailing `Z`, parseable,
+  `start <= end`), `ensemble_runs` (int `>= 1`), `abstain` (boolean). A bad field throws a
+  descriptive `Error` the shell surfaces as a banner — **never patched client-side**. Then
+  `buildOriginPointCloud()` expands the row-major grid into a weighted `[lon,lat]` point cloud
+  in deck.gl binary-attribute form — **row 0 = NORTH** (`lat = north − (r+0.5)/rows·latSpan`),
+  C-order `values[r*cols+c]` (TRAPS #8/#9), cells `<= 0` dropped — and `buildOriginRadiusRings()`
+  builds the 50 % / 90 % rings as closed `[lon,lat]` polygons around `centroid`, converting km to
+  an angular offset on a sphere (`Δlat° = r/R_earth · 180/π`, `Δlon° = Δlat°/cos φ` — **km are
+  never treated as degrees**). All three functions are pure and allocate once; callers memoise on
+  the bundle identity, so nothing here runs on a scrub.
+- **`web/lib/contracts.ts`.** Added `RawOriginBundle` (the on-disk shape, mirrors CONTRACTS §6
+  field-for-field) and a bare `GeoBounds` helper (origin.json's `bounds` has no `width_px`/`db_*`
+  unlike `bounds.json`). No change to the frozen `docs/CONTRACTS.md`.
+- **`web/lib/store.ts`.** `origin` / `originStatus` / `originError` state (same discipline as
+  particles: fetched + parsed once per case, then read from memory). `loadOrigin()` mirrors
+  `loadParticles()` — guards a concurrent load, drops a stale response if the case switched
+  mid-fetch. `loadActiveCase` fires **both** trace bundles in the background when
+  `meta.acts_available` includes `"trace"` (CONTRACTS §1); both reset on a case switch.
+- **`web/components/MapView.tsx`.** Origin `HeatmapLayer` (id `origin`, `weightsTextureSize: 512`)
+  + 50/90 `PathLayer` (id `origin-radii`), drawn under the particles. `originCloud` / `originRings`
+  are `useMemo`'d on the bundle identity; `originOpacity` is a `smoothstep(0.2, 0.9, t/(nSteps−1))`
+  of the rewind fraction — **from the integer timestep `t`, not the raw `tNorm`** — and `0` when
+  the Origin toggle is off. The origin layers stay mounted for the life of the case; the fade and
+  the toggle are an `opacity`-only change, so **deck.gl never re-aggregates on a scrub**. Particle
+  and origin layers are separate memos composed in one push effect. This same change is the
+  slider-freeze performance fix — see the `[2026-09-08 11:55]` entry below for the profiling and
+  before/after numbers.
+- **`web/components/ContextPanel.tsx`.** Detect **object card** — classification badge (solid red
+  "Oil" / muted grey "Look-alike"), confidence as the headline, then **Recharts horizontal feature
+  bars** for elongation / edge gradient / contrast (display-only magnitudes, labelled *"not model
+  probabilities"* — the measured value is always printed beside the bar), then area / shape class /
+  centroid / id. New **`TraceCard`** for the Trace stage — centroid (5 dp), 50 % / 90 % radius (km),
+  ensemble runs, the origin **time window** (rendered in UTC with the raw ISO/`Z` string kept on
+  `title`), and the uncertainty note *"The cloud widens with rewind depth — the further back you
+  drift, the less certain the origin."* Clean loading and error states; the Attribute branch is
+  unchanged.
+- **`web/components/LayerToggles.tsx`.** Origin toggle is now `live: true`, greyed (with tooltip)
+  for a case with no `trace` act, same as Particles.
+- **`web/components/AppShell.tsx`.** `ContextPanel` is now a `next/dynamic` (`ssr: false`) import
+  with an `<aside>` skeleton — keeps Recharts out of the first-load bundle.
+
+State is Zustand-in-memory only (no localStorage / no `persist`). The frontend calls no Python —
+every `fetch` is a static `/cases/<id>/*.json`. No new package downloaded: `@deck.gl/aggregation-
+layers` (for `HeatmapLayer`) was already in the lockfile as a direct dependency of `deck.gl@9.4.0`;
+`package.json` now just declares it explicitly. No data / case / schema / pipeline change.
+
+**Files touched:** `web/lib/origin.ts` (new) · `web/lib/contracts.ts` (modified — origin types) ·
+`web/lib/store.ts` (modified — origin state + `loadOrigin`) · `web/components/MapView.tsx`
+(modified — HeatmapLayer + rings + fade + perf fix) · `web/components/ContextPanel.tsx` (modified —
+DetectCard + feature bars + TraceCard) · `web/components/LayerToggles.tsx` (modified — Origin live) ·
+`web/components/AppShell.tsx` (modified — lazy ContextPanel) · `web/package.json` +
+`web/package-lock.json` (modified — explicit `@deck.gl/aggregation-layers` declaration, no tree change)
+
+**Run command:**
+```bash
+robocopy cases web\public\cases /MIR    # bundle copy (unchanged)
+cd web && npm run dev                    # open http://localhost:3000
+```
+Expected: toggle **Particles** + **Origin** on. Click the oil slick → object card with the
+classification badge, 87 % confidence, and the three feature bars. Left rail: click **Trace** →
+origin card (centroid `80.64695, 13.46316`, radii `4.2 km` / `11.8 km`, window `28 Jan 2017
+04:14 UTC → 16:14 UTC`, ensemble runs `50`, the uncertainty note). Drag / ▶ the slider toward
+T−24h → the orange origin cloud + two white rings ease in with no slider stall; the Trace card
+stays put while the map rewinds.
+
+**Checkpoint artefact:**
+- **Static (all PASS):** `npm run lint` → 0 warnings · `npx tsc --noEmit` → clean ·
+  `npm run build` → compiled, `/` route 7.12 kB / 95 kB first load (built via a temp `distDir`
+  because `next dev` holds `.next` on Windows).
+- **Browser acceptance** — headed Chrome over CDP, real GPU (ANGLE / Intel UHD), temporary
+  `_updateWeightmap` / `_updateBounds` / rAF-frame probes added for the measurement and then
+  removed (not in the diff). Scripts + screenshots live in the session scratchpad, not committed.
+  - Origin OFF and ON at T−0: heatmap hidden (`opacity 0`); no stall.
+  - Drag T−0→T−24 with Origin ON: cloud + 50/90 rings fade in; **`_updateWeightmap` = 0**
+    during the drag; p50 16.7 / p95 16.8 / max 17.0 ms.
+  - Scrub across the fade threshold ×16–20: **`_updateWeightmap` = 0**, max 17.1 ms, 0 long frames
+    (this crossing used to stall ~300 ms each time).
+  - Play full rewind / play again: 60 fps, ends at `T−24.0 h`. Pause → readout freezes; resume →
+    readout advances (`T−4.8 h` held, then `T−9.8 h` after resume).
+  - Origin OFF scrub vs Origin ON scrub: identical timing (max 17.2 vs 17.0 ms).
+  - Select oil `det-01`: card shows `Oil` / `87 %` / `12.4 km²` / elongation `8.2` / edge gradient
+    `0.34` / contrast `−6.2 dB` / `linear` / `80.436, 13.310` / `det-01` + the Recharts bars —
+    every value matches `detections.geojson`.
+  - Select look-alike `det-02`: `Look-alike` / `71 %` / `7.9 km²` / `1.4` / `0.11` / `−3.1 dB` /
+    `blob` / `80.262, 13.130` / `det-02` — matches `detections.geojson`.
+  - Click empty water → selection cleared, panel returns to "Select a detection on the map."
+  - Detect → Trace → Detect (and → Attribute): **map `<canvas>` identity unchanged** across every
+    switch (no remount); slider stays interactive while on Trace (value `1 → 0.4`, timestep 58).
+  - `TraceCard` vs `origin.json`: centroid `80.64695, 13.46316` (5 dp), `50% radius 4.2 km`,
+    `90% radius 11.8 km`, `Ensemble runs 50`, window `28 Jan 2017 04:14 UTC` → `28 Jan 2017
+    16:14 UTC` with the raw `2017-01-28T04:14:00Z` / `…16:14:00Z` on hover `title`, uncertainty
+    note exact — all correct.
+  - Rings: centre = `origin.centroid` exactly; r50 half-spans `Δlat 0.03777°` (`4.2/6371.0088·
+    180/π`), `Δlon 0.03884°` (`÷ cos 13.463°`); r90 `Δlat 0.10612°` (`11.8 km`) — closed rings.
+  - Particle deck-canvas pixels differ between `t=0` and `t=96` (particles keep updating).
+  - `TraceCard` `innerText` byte-identical and the same DOM node before/after a full T−0→T−24
+    drag (not remounted while the map / particles / origin update around it).
+  - Console: **0 errors, 0 exceptions.** One benign warning only (see open issues).
+- **Frame-time distribution** (5 scenarios, ~800–1600 samples each): every scenario p50 16.7 ms,
+  p95 ≤ 16.9 ms, p99 ≤ 17.2 ms, max ≤ 17.7 ms, **0 frames > 50 ms**, `_updateWeightmap` = 0
+  during all scrub / playback. Origin ON is indistinguishable from Origin OFF.
+
+**Open issues (non-blocking):**
+- **Greyed / unavailable StageRail path is UNVERIFIED at runtime.** `case-000` exposes all three
+  acts (`acts_available: ["detect","trace","attribute"]`), so no greyed rail button exists to
+  click. The code path is present (`disabled={!available}`, `cursor-not-allowed` styling, tooltip,
+  `setStage` guard) — re-test against the Ennore two-act bundle (`acts_available: ["detect",
+  "trace"]`) when it lands. Same for the truly-unavailable Attribute panel.
+- **Synthetic `case-000` origin cloud/rings extend beyond the SAR frame.** `origin.json` `bounds`
+  (80.347–80.947 E, 13.163–13.763 N) reach past `bounds.json` / the SAR image (80.1–80.7 E,
+  12.95–13.55 N), so the cloud and the top-right of the rings render over black at full rewind.
+  This is a property of the synthetic bundle, not a frontend bug — the layer draws where the grid
+  says. Re-check on the real Ennore bundle.
+- **Benign console warning:** `luma.gl: Binding weightsTexture not set: Not found in shader
+  layout.` — fires once on first heatmap render; known deck.gl 9.4 `HeatmapLayer` issue; the
+  heatmap renders correctly.
+- Playing ▶ within ~1 s of the page finishing load (before the async shader compile settles) can
+  show a few ~150 ms hitches on the first play-through. Not reproducible at any realistic pace
+  (the fade alone gives a ~2.4 s runway from T−0); every subsequent play / scrub is clean.
+- Not tested: the real Ennore bundle, any case other than `case-000`, the no-spill / `abstain`
+  states, and the actual demo laptop (measurements are from this dev machine's Intel UHD).
+- `web/public/cases/case-000/` is a gitignored copy — refresh it before running.
+
+**Next:** Phase 4 — swap in the real Ennore bundle (a data-only change, per the architecture),
+then polish loading / empty / unavailable states for the HOD demo and re-run the greyed-StageRail
+check.
+
+## [2026-09-08 11:55] Phase 3 bug fix — origin HeatmapLayer froze the slider on fade-in
+
+**Done:** Playback/scrub stalled for 0.3–1.8 s whenever the origin cloud faded in. Profiled it
+in headed Chrome over CDP (probe on `HeatmapLayer._updateWeightmap` / `_updateBounds` +
+a rAF frame timer): the aggregation was **not** re-running per tick, but the layers were being
+**added to / removed from** the deck list on the `fade > 0` boundary, so deck.gl re-mounted the
+`HeatmapLayer` on every threshold crossing — each mount = allocate a 2048² rgba32float weights
+texture + compile 3 shader programs + a 4.2 M-vertex max-reduction pass (~1.7 s first time,
+~0.3 s after, on the demo-class Intel UHD GPU). That main-thread/GPU block was the "freeze".
+Fix, all in `MapView.tsx`: (1) the origin `HeatmapLayer` + rings `PathLayer` are now built from
+memoised data (`originCloud` / `originRings`, keyed on bundle identity — already the case) and
+**stay mounted for the life of the case**; the T−24h→T−0 fade and the Origin toggle are a pure
+`opacity` change (0 = hidden), which deck.gl applies without re-aggregating. (2) They mount as
+soon as `origin.json` loads (opacity 0), so the one-time shader/texture cost is paid during the
+existing "Loading…" state, not mid-playback. (3) `weightsTextureSize: 512` (was default 2048) —
+the grid is 120×120 over ~0.6°, so 512 is finer than the data and cuts that one-time cost ~16×.
+(4) fade is derived from the integer timestep `t`, not the raw `tNorm`, so it changes ≤ n_steps
+times across a scrub, never continuously; particle layer and origin layers are separate `useMemo`s
+composed in one push effect. No change to `origin.json`, `particles.json`, contracts, the store,
+Anushka's pipeline, or any other component. Fade / 50-90 rings / Origin toggle / particle
+performance all preserved.
+
+**Files touched:** `web/components/MapView.tsx` (modified — deck layer composition only)
+
+**Run command:**
+```bash
+robocopy cases web\public\cases /MIR    # bundle copy (unchanged)
+cd web && npm run dev                    # open http://localhost:3000
+```
+Expected output: toggle Particles + Origin on. At T‑0 the heatmap is hidden; drag/▶ toward
+T−24h and the orange origin cloud + two white 50/90 % rings ease in with **no slider stall** at
+the fade point. `npm run lint`, `npx tsc --noEmit`, `npm run build` all pass (build via a temp
+`distDir` because `next dev` holds `.next` on Windows).
+
+**Checkpoint artefact:** CDP verification (`scratchpad/verify.mjs`, screenshots
+`v_origin_on_T0.png` / `v_full_rewind.png` / `v_mid_fade.png`). Frame timing, max frame ms:
+| scenario | before | after |
+|---|---|---|
+| play full rewind, Origin ON | ~1500 ms (3 long frames) | **17 ms (0)** |
+| scrub across fade threshold ×12 | ~333 ms (10 long frames) | **17 ms (0)** |
+| manual drag T‑0→T‑24, Origin ON | stall on fade-in | **17 ms (0)** |
+| Origin OFF scrub vs Origin ON scrub | — | identical (17 ms) |
+CPU profile of a warm playback: 92 % idle, no `_updateWeightmap`, no shader compile. Particle
+readout advances T−2.8 h → T−9.0 h mid-playback (particles keep updating). 0 console errors.
+
+**Open issues:**
+- If you hit ▶ within ~1 s of the page finishing load (before the async shader compile settles)
+  the first play-through can show a few ~150 ms hitches. Not reproducible at any realistic pace
+  (the fade alone gives a ~2.4 s runway from T‑0), and every subsequent play/scrub is clean.
+- Heatmap bloom still extends past the SAR frame at full rewind (radius/intensity/colour tokens
+  are Urooz's — unchanged by this fix).
+- `web/public/cases/case-000/` is a gitignored copy — refresh before running.
+
+**Next:** the Trace-stage origin card — done later the same day; see the
+[2026-09-08 15:55] Phase 3 implementation entry above. (Stage-rail `acts_available` logic
+already landed in Phase 1.) Then Phase 4: swap in the real Ennore bundle.
+
 ## [2026-09-07 15:20] Phase 2 bug fix — T-0 particle cloud was mirrored across the slick
 
 **Done:** At T-0 the particle cloud crossed the det-01 polygon in an X instead of lying along

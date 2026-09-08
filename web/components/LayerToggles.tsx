@@ -2,14 +2,14 @@
 
 import { useAppStore, type LayerId } from "@/lib/store";
 
-// SAR + Detections landed in Phase 1, Particles in Phase 2. Origin / Vessels are shown so the
-// final shape is clear, but disabled — their layers don't exist yet. The Particles toggle is
-// additionally greyed for a case with no `trace` act (no particle bundle to show).
+// SAR + Detections landed in Phase 1, Particles + Origin in Phases 2–3. Vessels is shown so the
+// final shape is clear, but disabled — its layer doesn't exist yet. Particles and Origin are
+// additionally greyed for a case with no `trace` act (no particle / origin bundle to show).
 const TOGGLES: { id: LayerId; label: string; live: boolean }[] = [
   { id: "sar", label: "SAR", live: true },
   { id: "detections", label: "Detections", live: true },
   { id: "particles", label: "Particles", live: true },
-  { id: "origin", label: "Origin", live: false },
+  { id: "origin", label: "Origin", live: true },
   { id: "vessels", label: "Vessels", live: false },
 ];
 
@@ -23,7 +23,8 @@ export default function LayerToggles() {
   return (
     <div className="flex gap-1.5">
       {TOGGLES.map(({ id, label, live }) => {
-        const enabled = live && (id !== "particles" || traceAvailable);
+        const needsTrace = id === "particles" || id === "origin";
+        const enabled = live && (!needsTrace || traceAvailable);
         const on = layers[id];
         return (
           <button
@@ -35,7 +36,7 @@ export default function LayerToggles() {
             title={
               enabled
                 ? label
-                : id === "particles"
+                : needsTrace
                   ? `${label} — this case has no drift stage`
                   : `${label} — available in a later phase`
             }

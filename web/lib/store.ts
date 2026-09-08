@@ -5,6 +5,7 @@ import type { Act, Bounds, CaseMeta, DetectionCollection } from "./contracts";
 import { DEFAULT_CASE_ID } from "./cases";
 import { loadCase } from "./loadCase";
 import { loadParticleBundle, type ParticleBundle } from "./particles";
+import { loadOriginBundle, type OriginBundle } from "./origin";
 
 export type LayerId = "sar" | "detections" | "particles" | "origin" | "vessels";
 
@@ -26,6 +27,14 @@ export interface AppState {
   particlesError: string | null;
   playing: boolean;
 
+  // Phase 3 origin cloud. Same discipline as particles: fetched + parsed once per case, then
+  // only read from memory — never re-fetched or re-parsed while the slider moves. MapView
+  // consumes it: the origin HeatmapLayer + 50/90 % rings and the Trace-stage origin card are
+  // both derived from this bundle.
+  origin: OriginBundle | null;
+  originStatus: LoadStatus;
+  originError: string | null;
+
   activeStage: Act;
   selectedDetectionId: string | null;
 
@@ -35,6 +44,7 @@ export interface AppState {
   setActiveCase: (id: string) => void;
   loadActiveCase: () => Promise<void>;
   loadParticles: () => Promise<void>;
+  loadOrigin: () => Promise<void>;
   setStage: (stage: Act) => void;
   selectDetection: (id: string | null) => void;
   toggleLayer: (id: LayerId) => void;
@@ -56,6 +66,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   particlesStatus: "idle",
   particlesError: null,
   playing: false,
+
+  origin: null,
+  originStatus: "idle",
+  originError: null,
 
   activeStage: "detect",
   selectedDetectionId: null,
@@ -87,6 +101,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       particlesError: null,
       playing: false,
       tNorm: 1,
+      // Reset the origin cloud for the incoming case.
+      origin: null,
+      originStatus: "idle",
+      originError: null,
     });
     try {
       const { meta, bounds, detections } = await loadCase(id);
@@ -96,9 +114,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? get().activeStage
         : meta.acts_available[0];
       set({ status: "ready", meta, bounds, detections, activeStage });
-      // Fetch the particle bundle in the background — it must not block the map / detections.
+      // Fetch the trace-stage bundles in the background — they must not block the map /
+      // detections. Both files are required whenever the `trace` act is available (CONTRACTS §1).
       if (meta.acts_available.includes("trace")) {
         void get().loadParticles();
+        void get().loadOrigin();
       }
     } catch (err) {
       if (get().activeCaseId !== id) return;
@@ -132,6 +152,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (err) {
       if (get().activeCaseId !== id) return;
       set({ particles: null, particlesStatus: "error", particlesError: (err as Error).message });
+    }
+  },
+
+  loadOrigin: async () => {
+    const id = get().activeCaseId;
+    if (get().originStatus === "loading") return;
+    set({ originStatus: "loading", originError: null });
+    try {
+      const bundle = await loadOriginBundle(id);
+      // A different case was selected while this bundle was in flight — drop it.
+      if (get().activeCaseId !== id) return;
+      set({ origin: bundle, originStatus: "ready" });
+    } catch (err) {
+      if (get().activeCaseId !== id) return;
+      set({ origin: null, originStatus: "error", originError: (err as Error).message });
     }
   },
 

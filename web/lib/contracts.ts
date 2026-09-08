@@ -15,6 +15,14 @@ export interface CaseMeta {
   notes?: string;
 }
 
+/** A bare geographic extent, WGS84 / EPSG:4326. `west < east`, `south < north`. */
+export interface GeoBounds {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
 export interface Bounds {
   west: number;
   south: number;
@@ -65,6 +73,24 @@ export interface RawParticleBundle {
   n_steps: number;
   n_particles: number;
   positions: LonLat[][];
+}
+
+/**
+ * origin.json exactly as it sits on disk (CONTRACTS.md §6). Stage 2 → Stage 3, and → frontend.
+ * `values` is the flattened probability grid, row-major from the top-left (row 0 = NORTH edge),
+ * normalised so the peak is 1.0 and never negative. The frontend converts it to a Float32Array
+ * once (see lib/origin.ts) — this raw shape is never held in state.
+ */
+export interface RawOriginBundle {
+  bounds: GeoBounds;
+  shape: number[]; // [rows, cols]
+  values: number[]; // length rows * cols
+  centroid: LonLat; // [lon, lat]
+  radius_50_km: number;
+  radius_90_km: number;
+  time_window: string[]; // [start, end] — UTC ISO 8601, trailing Z
+  ensemble_runs: number;
+  abstain: boolean;
 }
 
 /** The three stages, in fixed rail order. */

@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { useAppStore } from "@/lib/store";
 import Header from "./Header";
 import StageRail from "./StageRail";
-import ContextPanel from "./ContextPanel";
 import TimeSlider from "./TimeSlider";
 import LayerToggles from "./LayerToggles";
 
@@ -13,6 +12,15 @@ import LayerToggles from "./LayerToggles";
 const MapView = dynamic(() => import("./MapView"), {
   ssr: false,
   loading: () => <div className="absolute inset-0 bg-[#0b0f14]" />,
+});
+
+// The context panel pulls in Recharts (for the Detect object-card feature bars). Keep it out
+// of the first-load bundle — it only matters once a case has loaded, same as the map.
+const ContextPanel = dynamic(() => import("./ContextPanel"), {
+  ssr: false,
+  loading: () => (
+    <aside className="w-80 shrink-0 border-l border-white/10 bg-[#0b0f14]" />
+  ),
 });
 
 export default function AppShell() {

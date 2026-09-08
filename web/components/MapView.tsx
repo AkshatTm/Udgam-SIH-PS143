@@ -5,10 +5,16 @@
 //
 // The map object is created once. Store changes (case, layer visibility, selection) are pushed
 // in via imperative map calls in effects — the map container never re-renders on those.
-// deck.gl / MapboxOverlay is intentionally NOT wired here yet; it arrives in Phase 2 with the
-// particle ScatterplotLayer.
+// deck.gl rides on top through a single MapboxOverlay control (created once, next to the map).
+// The layer list is composed from two memoised pieces and pushed via one effect:
+//   - the particle ScatterplotLayer (Phase 2) — the only layer that changes every playback tick;
+//   - the origin HeatmapLayer + 50/90 % radius rings (Phase 3) — built ONCE per origin bundle,
+//     mounted as soon as the bundle loads and kept mounted for the life of the case, with the
+//     T−24h→T−0 fade (and the Origin toggle) driven purely by `opacity`. deck.gl never re-runs
+//     the expensive heatmap aggregation on a scrub — only the fully-faded pixels change.
+// The timestep only ever updates deck layers, never the map.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Map as MlMap,
   NavigationControl,
@@ -21,9 +27,11 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { ScatterplotLayer } from "@deck.gl/layers";
+import { PathLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { HeatmapLayer } from "@deck.gl/aggregation-layers";
 import { useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
+import { buildOriginPointCloud, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
 import type { Bounds } from "@/lib/contracts";
 
 // maplibre-gl v6 loads its GeoJSON/vector tiler in a separate ESM worker. Its built-in worker
@@ -47,6 +55,43 @@ const LOOKALIKE_COLOR = "#9aa4b2";
 // Particle dots — a bright sky tone that reads on the dark SAR backdrop. Urooz owns final
 // tokens; behaviour is what matters here.
 const PARTICLE_FILL: [number, number, number, number] = [125, 211, 252, 190];
+
+// Origin heatmap fade. Rewind fraction (0 at T−0, 1 at T−24h) is run through a smoothstep so
+// the cloud is fully hidden near the detection time and eases in only as the slider approaches
+// maximum rewind — "the origin becomes knowable the further back you drift" (docs/04 §Phase 3).
+const ORIGIN_FADE_IN_START = 0.2; // rewind fraction at which the cloud starts to appear
+const ORIGIN_FADE_IN_FULL = 0.9; // rewind fraction at which it reaches full opacity
+// The origin grid has a long low-probability tail (~90 % of cells are non-zero), so keep the
+// blur radius tight and push the transparency threshold up — that concentrates the visible
+// cloud near the actual mass instead of blooming across the whole scene. The precise
+// 50 % / 90 % extent is carried by the rings below; Urooz owns the final colour tokens.
+const ORIGIN_RADIUS_PIXELS = 28;
+const ORIGIN_INTENSITY = 0.6;
+const ORIGIN_THRESHOLD = 0.18;
+// HeatmapLayer aggregates its weighted points into a square GPU texture and then does a
+// point-per-texel max-reduction pass. The default size is 2048 → a 4.2 M-vertex reduction
+// that stalls integrated GPUs for ~1.6 s the first time it runs (measured on Intel UHD). The
+// origin grid is only 120×120 over ~0.6°, so 512 is already finer than the data — it cuts
+// that one-time cost ~16× while leaving the cloud visually identical.
+const ORIGIN_WEIGHTS_TEXTURE_SIZE = 512;
+
+// 50 % / 90 % origin-probability rings, drawn as thin white outlines over the heatmap. The
+// inner (50 %) ring is a touch brighter; the outer (90 %) ring is slightly softer but still
+// clearly readable where it crosses the bright part of the heatmap. Urooz owns final tokens.
+const ORIGIN_RING_50: [number, number, number, number] = [255, 255, 255, 245];
+const ORIGIN_RING_90: [number, number, number, number] = [255, 255, 255, 210];
+const ORIGIN_RING_WIDTH_PX = 2;
+
+// Hoisted so their identity is stable across renders — the ring geometry is static, so these
+// accessors must never look like they changed (which would ask deck.gl to re-tessellate).
+const originRingPath = (d: OriginRing): OriginRing["path"] => d.path;
+const originRingColor = (d: OriginRing): [number, number, number, number] =>
+  d.kind === "r50" ? ORIGIN_RING_50 : ORIGIN_RING_90;
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const u = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return u * u * (3 - 2 * u);
+}
 
 function imageCoordinates(b: Bounds): [
   [number, number],
@@ -81,6 +126,22 @@ export default function MapView() {
   const particlesVisible = useAppStore((s) => s.layers.particles);
   const tNorm = useAppStore((s) => s.tNorm);
   const t = tFromNorm(tNorm, particles?.nSteps ?? 0);
+
+  // Phase 3 origin cloud. Step 1 parsed origin.json once into the store; here the row-major
+  // grid is expanded once into a weighted [lon,lat] point cloud and memoised on the bundle
+  // identity — it is never rebuilt on a scrub, and origin.json is never re-fetched.
+  const origin = useAppStore((s) => s.origin);
+  const originVisible = useAppStore((s) => s.layers.origin);
+  const originCloud = useMemo(
+    () => (origin ? buildOriginPointCloud(origin) : null),
+    [origin],
+  );
+  // 50 % / 90 % rings around origin.centroid, using radius_50_km / radius_90_km. Built once
+  // per bundle — the km→degree conversion never runs on a scrub (see lib/origin.ts).
+  const originRings = useMemo(
+    () => (origin ? buildOriginRadiusRings(origin) : null),
+    [origin],
+  );
 
   // Create the map exactly once.
   useEffect(() => {
@@ -209,39 +270,93 @@ export default function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Particle frame. Runs only when the integer timestep, the toggle, or the (once-loaded)
-  // bundle changes — NOT on every animation frame, and never re-fetching particles.json.
-  // A new ScatterplotLayer with a fresh `data` object is deck.gl's signal to re-upload the
-  // position buffer; `frames[t]` is a pre-built view, so no particle array is allocated here.
-  useEffect(() => {
-    const overlay = overlayRef.current;
-    if (!overlay) return;
+  // Origin opacity — this is the ONLY thing about the origin layers that changes on a scrub.
+  // 0 when Origin is toggled off. Otherwise the rewind fraction (0 at T−0, 1 at T−24h) run
+  // through a smoothstep, so the cloud is hidden near the detection time and eases in only as
+  // the slider nears maximum rewind ("the origin becomes knowable the further back you drift",
+  // docs/04 §Phase 3). Taken from the integer timestep `t`, NOT the raw slider value, so it
+  // changes at most n_steps times across a full scrub — never continuously as the handle drags.
+  const originOpacity = useMemo(() => {
+    if (!originVisible) return 0;
+    const nSteps = particles?.nSteps ?? 0;
+    const rewind = nSteps > 1 ? t / (nSteps - 1) : 0;
+    return smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind);
+  }, [originVisible, t, particles]);
 
-    if (!particles || !particlesVisible) {
-      overlay.setProps({ layers: [] });
-      return;
-    }
-
-    const frame = particles.frames[t] ?? particles.frames[0];
-    overlay.setProps({
-      layers: [
-        new ScatterplotLayer({
-          id: "particles",
-          data: {
-            length: particles.nParticles,
-            attributes: { getPosition: { value: frame, size: 2 } },
-          },
-          getFillColor: PARTICLE_FILL,
-          getRadius: 2,
-          radiusUnits: "pixels",
-          radiusMinPixels: 1,
-          radiusMaxPixels: 3,
-          stroked: false,
+  // Origin heatmap + 50/90 % rings — the backdrop the particles rewind into, drawn UNDERNEATH
+  // them. Everything expensive about these layers is done ONCE, up front, and never on a scrub:
+  //   - `originCloud` / `originRings` (grid → weighted points, km → ring polygons) are memoised
+  //     on the bundle identity above;
+  //   - the HeatmapLayer aggregates its points into a GPU texture and compiles three shader
+  //     programs the first time it is drawn. That cost (~1 s wall, mostly async, on integrated
+  //     GPUs) is paid as soon as the origin bundle loads, because the layers mount then and are
+  //     kept mounted and drawn for the life of the case.
+  // The T−24h → T−0 fade is therefore a pure `opacity` change, which deck.gl applies WITHOUT
+  // re-aggregating or re-tessellating. Removing the layers from the list on fade-out instead
+  // made deck.gl re-mount + re-aggregate on every re-entry — the 0.3–1.8 s "slider freeze"
+  // this file used to have.
+  const originLayerList = useMemo(() => {
+    if (!originCloud) return [] as (HeatmapLayer | PathLayer<OriginRing>)[];
+    const list: (HeatmapLayer | PathLayer<OriginRing>)[] = [
+      new HeatmapLayer({
+        id: "origin",
+        data: originCloud,
+        radiusPixels: ORIGIN_RADIUS_PIXELS,
+        intensity: ORIGIN_INTENSITY,
+        threshold: ORIGIN_THRESHOLD,
+        weightsTextureSize: ORIGIN_WEIGHTS_TEXTURE_SIZE,
+        opacity: originOpacity,
+        pickable: false,
+      }),
+    ];
+    if (originRings) {
+      list.push(
+        new PathLayer<OriginRing>({
+          id: "origin-radii",
+          data: originRings,
+          getPath: originRingPath,
+          getColor: originRingColor,
+          getWidth: ORIGIN_RING_WIDTH_PX,
+          widthUnits: "pixels",
+          widthMinPixels: 1,
+          capRounded: true,
+          jointRounded: true,
+          opacity: originOpacity,
           pickable: false,
         }),
-      ],
+      );
+    }
+    return list;
+  }, [originCloud, originRings, originOpacity]);
+
+  // Particle cloud — one pre-built binary position frame per timestep (Phase 2). This is the
+  // only deck layer that is rebuilt on every playback tick; `frames[t]` is a pre-computed view,
+  // so nothing large is allocated here.
+  const particleLayer = useMemo(() => {
+    if (!particles || !particlesVisible) return null;
+    const frame = particles.frames[t] ?? particles.frames[0];
+    return new ScatterplotLayer({
+      id: "particles",
+      data: {
+        length: particles.nParticles,
+        attributes: { getPosition: { value: frame, size: 2 } },
+      },
+      getFillColor: PARTICLE_FILL,
+      getRadius: 2,
+      radiusUnits: "pixels",
+      radiusMinPixels: 1,
+      radiusMaxPixels: 3,
+      stroked: false,
+      pickable: false,
     });
   }, [particles, particlesVisible, t]);
+
+  // Push the composed list into the deck overlay. Order is bottom→top: heatmap, rings,
+  // particles. Runs only when one of the memoised pieces actually changes — never on a bare
+  // animation frame — and never re-renders the map container.
+  useEffect(() => {
+    overlayRef.current?.setProps({ layers: [...originLayerList, particleLayer] });
+  }, [originLayerList, particleLayer]);
 
   // SAR source follows the active case / bounds.
   useEffect(() => {
