@@ -52,9 +52,9 @@ const DARK_STYLE: StyleSpecification = {
 const OIL_COLOR = "#ff4d4d";
 const LOOKALIKE_COLOR = "#9aa4b2";
 
-// Particle dots — a bright sky tone that reads on the dark SAR backdrop. Urooz owns final
-// tokens; behaviour is what matters here.
-const PARTICLE_FILL: [number, number, number, number] = [125, 211, 252, 190];
+// Particle dots — warm amber on the dark SAR backdrop. Reads clearly against the grayscale SAR
+// image and distinguishes particles from the vessel layer (cool blue, future). V3 palette.
+const PARTICLE_FILL: [number, number, number, number] = [251, 146, 60, 210];
 
 // Origin heatmap fade. Rewind fraction (0 at T−0, 1 at T−24h) is run through a smoothstep so
 // the cloud is fully hidden near the detection time and eases in only as the slider approaches
@@ -75,12 +75,12 @@ const ORIGIN_THRESHOLD = 0.18;
 // that one-time cost ~16× while leaving the cloud visually identical.
 const ORIGIN_WEIGHTS_TEXTURE_SIZE = 512;
 
-// 50 % / 90 % origin-probability rings, drawn as thin white outlines over the heatmap. The
-// inner (50 %) ring is a touch brighter; the outer (90 %) ring is slightly softer but still
-// clearly readable where it crosses the bright part of the heatmap. Urooz owns final tokens.
-const ORIGIN_RING_50: [number, number, number, number] = [255, 255, 255, 245];
-const ORIGIN_RING_90: [number, number, number, number] = [255, 255, 255, 210];
-const ORIGIN_RING_WIDTH_PX = 2;
+// 50 % / 90 % origin-probability rings — warm amber-yellow outlines over the heatmap. The inner
+// (50 %) ring is brighter; the outer (90 %) ring is softer but still readable. Both complement
+// the warm heatmap colour ramp rather than clashing with a white outline. V3 palette.
+const ORIGIN_RING_50: [number, number, number, number] = [251, 191, 36, 230];
+const ORIGIN_RING_90: [number, number, number, number] = [251, 191, 36, 140];
+const ORIGIN_RING_WIDTH_PX = 1.5;
 
 // Hoisted so their identity is stable across renders — the ring geometry is static, so these
 // accessors must never look like they changed (which would ask deck.gl to re-tessellate).
@@ -345,7 +345,7 @@ export default function MapView() {
       getRadius: 2,
       radiusUnits: "pixels",
       radiusMinPixels: 1,
-      radiusMaxPixels: 3,
+      radiusMaxPixels: 4,
       stroked: false,
       pickable: false,
     });

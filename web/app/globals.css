@@ -4,7 +4,16 @@
 
 :root {
   --background: #0b0f14;
-  --foreground: #ededed;
+  --foreground: #e2e8f0;
+
+  /* Forensic colour tokens — used in components and slider CSS */
+  --amber:   #f97316;          /* particles + active accent */
+  --amber-50: rgba(249,115,22,0.50);
+  --amber-20: rgba(249,115,22,0.20);
+  --border:  rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.14);
+  --label:   rgba(255,255,255,0.38);
+  --value:   rgba(255,255,255,0.90);
 }
 
 html,
@@ -15,8 +24,94 @@ body {
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  /* Geist Sans is already loaded as --font-geist-sans via layout.tsx */
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+/* ── Monospace: Geist Mono for all technical values ──────────────────────── */
+.font-mono,
+[class*="font-mono"] {
+  font-family: var(--font-geist-mono), ui-monospace, "Cascadia Code",
+    "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ── Custom scrollbar for ContextPanel ───────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* ── Forensic timeline scrubber ──────────────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 16px;         /* click area */
+}
+
+/* Track */
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 1px;
+}
+input[type="range"]::-moz-range-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 1px;
+}
+
+/* Thumb — precision dot */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--amber);
+  border: none;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.25);
+  transition: box-shadow 0.15s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.20);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--amber);
+  border: none;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.25);
+}
+
+/* Disabled state */
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+}
+input[type="range"]:disabled::-moz-range-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+}
+input[type="range"]:disabled::-webkit-slider-runnable-track {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 @layer utilities {

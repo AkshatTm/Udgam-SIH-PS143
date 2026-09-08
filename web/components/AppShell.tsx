@@ -19,7 +19,7 @@ const MapView = dynamic(() => import("./MapView"), {
 const ContextPanel = dynamic(() => import("./ContextPanel"), {
   ssr: false,
   loading: () => (
-    <aside className="w-80 shrink-0 border-l border-white/10 bg-[#0b0f14]" />
+    <aside className="w-72 shrink-0 border-l border-white/[0.08] bg-[#0b0f14]" />
   ),
 });
 
@@ -36,11 +36,16 @@ export default function AppShell() {
   if (status === "error") {
     return (
       <div className="flex h-full items-center justify-center bg-[#0b0f14] p-8">
-        <div className="max-w-md rounded-md border border-[#ff4d4d]/40 bg-[#ff4d4d]/10 p-4 text-sm text-[#ffb0b0]">
-          <div className="font-semibold text-[#ff8a8a]">Case bundle failed to load</div>
-          <p className="mt-1 whitespace-pre-wrap text-[#ffb0b0]/80">{error}</p>
-          <p className="mt-2 text-xs text-[#ffb0b0]/60">
-            This is a contract bug — tell Akshat. The frontend does not patch bundle data.
+        <div className="max-w-md rounded border border-[#ff4d4d]/30 bg-[#ff4d4d]/[0.08] p-4">
+          <div className="text-[11px] font-semibold text-[#ff8a8a]">
+            Case bundle failed to load
+          </div>
+          <p className="mt-1 whitespace-pre-wrap text-[10px] text-[#ffb0b0]/70">
+            {error}
+          </p>
+          <p className="mt-2 text-[10px] text-[#ffb0b0]/50">
+            This is a contract bug — tell Akshat. The frontend does not patch
+            bundle data.
           </p>
         </div>
       </div>
@@ -50,8 +55,10 @@ export default function AppShell() {
   // First load, nothing to show yet.
   if (!meta) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#0b0f14] text-sm text-white/50">
-        Loading case…
+      <div className="flex h-full items-center justify-center bg-[#0b0f14]">
+        <span className="font-mono text-[11px] text-white/30">
+          Loading case…
+        </span>
       </div>
     );
   }
@@ -65,17 +72,20 @@ export default function AppShell() {
         <div className="relative min-w-0">
           <MapView />
           {status === "loading" && (
-            <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded bg-black/60 px-3 py-1 text-xs text-white/70">
-              Loading…
+            <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded border border-white/[0.08] bg-black/50 px-3 py-1">
+              <span className="font-mono text-[10px] text-white/50">
+                Loading…
+              </span>
             </div>
           )}
         </div>
         <ContextPanel />
       </div>
 
-      <footer className="flex flex-col gap-2 bg-[#0b0f14] pb-2.5">
+      {/* Footer: forensic timeline above, layer toggles below */}
+      <footer className="flex flex-col bg-[#0b0f14]">
         <TimeSlider />
-        <div className="px-4">
+        <div className="flex items-center border-t border-white/[0.06] px-4 py-1.5">
           <LayerToggles />
         </div>
       </footer>
