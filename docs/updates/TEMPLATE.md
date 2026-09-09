@@ -72,7 +72,7 @@ Expected output: `4/4 tests passed`, then a schema-valid `particles.json` + `ori
   worth re-checking once real fields are in; if it grows past ~1 km something else is wrong.
 - Haven't decided yet whether to cache GEE fields as .npz or .zarr. Going with .npz, simpler.
 
-**Next:** Phase 2 — HYCOM + ERA5 loaders, remembering HYCOM bands are cm/s (divide by 100).
+**Next:** Phase 2 — HYCOM + ERA5 loaders, remembering HYCOM bands on GEE are a scaled integer (units m/s, scale 0.001 → divide by **1000**, not 100).
 ```
 
 ---

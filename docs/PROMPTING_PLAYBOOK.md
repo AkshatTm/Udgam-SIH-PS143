@@ -44,7 +44,7 @@ This is the real risk on this project, not syntax errors. Geospatial code fails 
 **Symptom → first suspect:**
 | What you see | Look here first |
 |---|---|
-| Everything is 1000x or 0.001x off | Units. HYCOM cm/s. Metres vs km vs degrees. |
+| Everything is 1000x or 0.001x off | Units. HYCOM on GEE is int × 0.001 m/s (÷1000, not ÷100). Metres vs km vs degrees. |
 | Result is mirrored or rotated 90° | `[lat, lon]` vs `[lon, lat]`. |
 | Everything is on land / in the wrong hemisphere | Longitude convention 0–360 vs −180–180, or a sign flip. |
 | Off by exactly 5.5 hours, or 5:30 | Local time crept in. Everything is UTC with `Z`. |
