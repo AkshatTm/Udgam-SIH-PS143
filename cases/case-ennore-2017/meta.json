@@ -1,0 +1,24 @@
+{
+  "case_id": "case-ennore-2017",
+  "title": "Ennore oil spill — Chennai, January 2017",
+  "short_location": "Kamarajar (Ennore) Port, Chennai, Tamil Nadu",
+  "case_type": "spill",
+  "satellite": "Sentinel-1A",
+  "scene_id": "S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04",
+  "detection_time": "2017-01-29T00:31:32Z",
+  "acts_available": [
+    "trace",
+    "verify"
+  ],
+  "known_origin": {
+    "lon": 80.36,
+    "lat": 13.235,
+    "label": "MT Dawn Kanchipuram / MT BW Maple collision, Kamarajar Port approach channel (APPROXIMATE — Akshat to pin)"
+  },
+  "gallery": {
+    "thumbnail": "thumb.png",
+    "blurb": "Two tankers collided off Chennai at dawn. Where did the oil enter the water — and when?",
+    "difficulty": "medium"
+  },
+  "notes": "NO SAR-VISIBLE SLICK — known-source case (decision D16). This 06:01 IST dawn pass is +1 d from the 28 Jan 2017 collision; low wind, sheltered water, no coherent VV+VH depression (dB sampling confirms the eyeball read). Trace is seeded from meta.known_origin — the documented collision position in the Kamarajar Port approach channel — NOT a NAAP detection. AKSHAT: pin the exact collision lat/lon from the DG Shipping / MoEF enquiry or the INCOIS OSDAG report and update known_origin + source_url; the current value is an approximate off the port entrance and must stay inside bounds.json [80.27, 13.04, 80.42, 13.26]. No 'attribute' act: Indian coastal AIS is not publicly bulk-downloadable, so there is no vessel layer — that gap is itself part of the pitch (Master §1.2). INCOIS published a forward-drift advisory for this spill that our backward trace can be sanity-checked against. Source: INCOIS OSDAG; DG Shipping enquiry; contemporaneous press."
+}

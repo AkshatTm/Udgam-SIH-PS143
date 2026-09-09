@@ -81,7 +81,7 @@ Precomputation is fine and we say so openly: *"the pipeline runs offline and exp
 
 | # | Case | Type | Acts | Role |
 |---|---|---|---|---|
-| 1 | **Ennore, Chennai — 29 Jan 2017** | spill | detect, trace, verify | India relevance. INCOIS published a drift model we benchmark against. **No free AIS for Indian waters — no attribution, and we say why.** |
+| 1 | **Ennore, Chennai — 29 Jan 2017** | spill | trace, verify | India relevance. **No SAR-visible slick (dawn, low wind) — trace is seeded from the documented collision position via `meta.known_origin`, D16.** INCOIS published a drift model we benchmark against. **No free AIS for Indian waters — no attribution, and we say why.** |
 | 2 | **Huntington Beach / San Pedro Bay — Oct 2021** | spill | all | **Infrastructure + exoneration case.** NTSB MIR-24-01 names MSC DANIT and BEIJING. |
 | 3 | **Golden Ray, St Simons Sound — Aug 2021** | spill | all | Fixed wreck source. SkyTruth published imagery. |
 | 4 | **TBD — vessel source, US waters** | spill | all | A transiting-vessel discharge |
@@ -201,6 +201,11 @@ Violating these is how the project dies. They are in `CLAUDE.md` too.
   "scene_id": "<GEE system:index — the real one>",
   "detection_time": "2021-10-03T01:52:00Z",
   "acts_available": ["detect", "trace", "attribute", "verify"],
+  "known_origin": {
+    "lon": -81.40, "lat": 31.13,
+    "label": "M/V Golden Ray wreck, mid-channel St Simons Sound",
+    "source_url": "https://www.ntsb.gov/..."
+  },
   "gallery": {
     "thumbnail": "thumb.png",
     "blurb": "588 barrels of crude reached Orange County beaches. What released it?",
@@ -211,7 +216,16 @@ Violating these is how the project dies. They are in `CLAUDE.md` too.
 ```
 `case_type` ∈ `spill | lookalike | nospill` · `difficulty` ∈ `easy | medium | hard` · `acts_available` ⊆ `["detect","trace","attribute","verify"]`.
 
-Dependency rules the validator enforces: `trace` requires `detect`; `attribute` requires `trace`; `verify` requires `verification.json` to exist.
+**`known_origin` (optional, D16).** A documented fixed source the trace stage seeds from when
+there is no SAR-visible slick — a wreck, a pipeline right-of-way, a collision position. Either
+`[lon, lat]` or an object with `lon`/`lat` and an optional `label` and `source_url`. When present
+it substitutes for a detection: a bundle may then carry `trace` (and `attribute`, `verify`)
+without `detect`, and `detections.geojson` is not required. The frontend must render the origin
+as *seeded from a documented source*, never as a NAAP detection. Allowed (and coord-checked) on
+a normal detection case too, as a ground-truth pin.
+
+Dependency rules the validator enforces: `trace` requires `detect` **or** `meta.known_origin`;
+`attribute` requires `trace`; `verify` requires `verification.json` to exist.
 
 ## 6.2 `bounds.json`
 ```json
@@ -465,6 +479,7 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 | D13 | **97 steps, not 96** | `positions[n_steps−1] = t0 − (n_steps−1)×dt`; 97×15 min = exactly 24 h, matching what we say on stage. |
 | D14 | **2-band float32 GeoTIFF exports, not PNG-only** | VH is Soum's strongest feature and the signal is ~1 dB deep; 8-bit quantisation destroys it. |
 | D15 | **Urooz is research lead** | Design work moves to Harshita; her research could outlive the hackathon. |
+| D16 | **`trace` may run without `detect` when `meta.known_origin` is set** | Golden Ray and Ennore have no SAR-visible slick but a citable known source (a wreck; a collision position). The origin is seeded from the documented coordinate, not detected — the Trace and Verify screens say so, and it stays honest because `known_origin` carries a `source_url`. `detections.geojson` is then not required. |
 
 ---
 

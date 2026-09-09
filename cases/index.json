@@ -1,6 +1,7 @@
 {
   "cases": [
     "case-huntington-2021",
+    "case-ennore-2017",
     "case-golden-ray-2021"
   ],
   "default": "case-huntington-2021"

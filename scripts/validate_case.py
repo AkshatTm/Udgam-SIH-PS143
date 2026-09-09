@@ -125,6 +125,37 @@ def walk_coords(geom, box, where, limit=400):
             return
 
 
+def known_origin_coords(ko, where):
+    """A known_origin is either [lon, lat] or {"lon":..., "lat":..., "label":...}.
+    Return (lon, lat) as floats, or None if absent or malformed (malformed appends
+    an error). This is the documented fixed source a trace-without-detect case seeds
+    from — Golden Ray's wreck, Ennore's collision position (Master §6.1, decision D16)."""
+    if ko is None:
+        return None
+    if isinstance(ko, dict):
+        if "lon" not in ko or "lat" not in ko:
+            err(f"{where}: known_origin object needs 'lon' and 'lat'")
+            return None
+        lon, lat = ko["lon"], ko["lat"]
+    elif isinstance(ko, (list, tuple)) and len(ko) == 2:
+        lon, lat = ko[0], ko[1]
+    else:
+        err(f"{where}: known_origin must be [lon, lat] or an object with lon/lat")
+        return None
+    try:
+        return float(lon), float(lat)
+    except (TypeError, ValueError):
+        err(f"{where}: known_origin lon/lat must be numbers, got {lon!r}, {lat!r}")
+        return None
+
+
+def check_known_origin(m, box):
+    """Shape-check meta.known_origin and, via box.check, catch a [lat, lon] swap in it."""
+    coords = known_origin_coords(m.get("known_origin"), "meta.json/known_origin")
+    if coords and box:
+        box.check(coords[0], coords[1], "meta.json/known_origin")
+
+
 def polygon_area_km2(geom):
     """Rough planar area of a GeoJSON Polygon's outer ring, cos-lat scaled at its
     centroid. Good to a few % at slick scale — enough to catch an area_km2 that is
@@ -160,8 +191,9 @@ def check_meta(d):
     bad = [a for a in acts if a not in ("detect", "trace", "attribute", "verify")]
     if bad:
         err(f"meta.json/acts_available: unknown act(s) {bad}")
-    if "trace" in acts and "detect" not in acts:
-        err("meta.json: 'trace' without 'detect' — trace needs a slick to seed from")
+    if "trace" in acts and "detect" not in acts and m.get("known_origin") is None:
+        err("meta.json: 'trace' without 'detect' requires meta.known_origin (a documented "
+            "fixed source to seed from) — got neither a detection nor a known origin")
     if "attribute" in acts and "trace" not in acts:
         err("meta.json: 'attribute' without 'trace' — attribution needs an origin cloud")
     if "verify" in acts and not (d / "verification.json").exists():
@@ -554,6 +586,9 @@ def _run_bundle(d, strict=False):
     acts = meta["acts_available"] if meta else []
     b = check_bounds(d)
     box = Box(b) if b else None
+
+    if meta:
+        check_known_origin(meta, box)
 
     if "detect" in acts:
         check_detections(d, box)

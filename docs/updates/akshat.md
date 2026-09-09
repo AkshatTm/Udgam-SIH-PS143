@@ -4,6 +4,65 @@
 
 ---
 
+## [2026-09-10] Phase 1/3 — D16 ruling: trace-without-detect via `meta.known_origin`; Golden Ray + Ennore scaffolded as known-source cases
+
+**Done:** Ruled and implemented the trace-without-detect contract change the last entry left
+open. New optional `meta.json` field **`known_origin`** (`[lon,lat]` or `{lon,lat,label,source_url}`):
+a documented fixed source the trace stage seeds from when there is no SAR-visible slick. A bundle
+with `known_origin` may carry `trace`/`attribute`/`verify` without `detect`, and
+`detections.geojson` is no longer required. Master Plan §6.1 + Part 3 (Ennore row) + Part 9
+(**D16**) updated; `docs/CONTRACTS.md` left frozen (Master wins). Validator relaxed to match:
+new `check_known_origin` (shape + reuses the lon/lat-swap detector on the pin), `check_meta`
+gate now accepts `known_origin` in place of `detect`. `test_validator.py` 12→**14/14** (added a
+"trace, no detect, no known_origin" mutation and a "known_origin as [lat,lon]" mutation).
+
+Scaffolded both no-slick cases on the new shape:
+- **`cases/case-golden-ray-2021/meta.json`** → acts `["trace","attribute","verify"]`,
+  `known_origin` = wreck at `[-81.40, 31.13]` (inside bounds). Validates cleanly except for the
+  not-yet-produced stage outputs — the "trace without detect" error is gone.
+- **`cases/case-ennore-2017/meta.json`** → acts `["trace","verify"]` (no attribute: no public
+  Indian AIS), `known_origin` = collision position **APPROX `[80.36, 13.235]`** — flagged in
+  `notes` for Akshat to pin from the DG Shipping / INCOIS report. Was untracked; `git add` it.
+- **`verification/case-ennore-2017.json`** (new) — `official_finding` drafted from widely-reported
+  facts with explicit TODO markers on `source_url`, IMO numbers, and the volume figure (do not
+  ship until checked); `assessment.explanation` left as Phase-4 human prose.
+- **`cases/index.json`** → `["case-huntington-2021", "case-ennore-2017", "case-golden-ray-2021"]`,
+  default huntington. Order is a proposal — change if you want Golden Ray second.
+
+**Files touched:** `scripts/validate_case.py`, `scripts/test_validator.py` (modified) ·
+`cases/case-golden-ray-2021/meta.json`, `cases/case-ennore-2017/meta.json`, `cases/index.json` ·
+`verification/case-ennore-2017.json` (new), `verification/README.md` ·
+`docs/00_MASTER_PLAN.md` (§6.1, Part 3, Part 9) · `docs/updates/_INTEGRATION.md`
+
+**Run command:**
+```bash
+python scripts/test_validator.py                          # 14/14 caught and named
+python scripts/validate_case.py cases/case-golden-ray-2021  # FAIL only on missing stage outputs — NOT "trace without detect"
+python scripts/validate_case.py cases/case-ennore-2017      # same
+```
+
+**Open issues / for you:**
+- **Pin the Ennore collision coordinate** and add `source_url` + IMO numbers to
+  `verification/case-ennore-2017.json` and `cases/case-ennore-2017/meta.json`. Current pin is a
+  guess off the port entrance.
+- **Confirm the Ennore oil-volume figure** and its revision history before that case ships.
+- **Phase 4 prose** still owed by hand for all three verify cases (Huntington, Golden Ray,
+  Ennore) — after the stages run.
+- **Route to Harshita:** `web/lib/loadCase.ts` fetches `detections.geojson` unconditionally —
+  must be gated on `"detect" in acts_available` or known-source cases 404 on load. Trace origin
+  card needs a "seeded from documented source" state. `contracts.ts` `CaseMeta` wants optional
+  `known_origin`.
+- **Route to Anushka:** drift stage must seed from `meta.known_origin` when `detections.geojson`
+  is absent (Golden Ray, Ennore).
+- **Route to Jaiveer:** Golden Ray needs NOAA AIS for St Simons Sound ~31 Jul–9 Aug 2021; salvage
+  fleet → `excluded[]`, wreck → `infrastructure[]`.
+- Broadcast D16 + the `known_origin` shape to the group (draft in `_INTEGRATION.md`).
+
+**Next:** send the routed messages + D16 broadcast → then Anushka/Jaiveer can produce the
+Golden Ray + Ennore stage outputs and the first real known-source bundle can be wired.
+
+---
+
 ## [2026-09-10] Phase 1 — Huntington Beach confirmed as hero; Golden Ray + Ennore have no SAR slick
 
 **Done:** GEE auth working (project `quizzer-dev-487316`). Wrote `scripts/find_scenes.py`

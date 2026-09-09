@@ -8,6 +8,60 @@ log; this file is only for the joins.
 
 ---
 
+## [2026-09-10] D16 — trace-without-detect via `meta.known_origin`; Golden Ray + Ennore scaffolded
+
+**The ruling (frozen-schema change, Akshat's).** `trace` may now run without `detect` when
+`meta.json` carries **`known_origin`** — a documented fixed source (`[lon,lat]` or
+`{lon,lat,label,source_url}`). `detections.geojson` is then not required. Master §6.1, Part 3
+(Ennore), Part 9 (**D16**) updated. `docs/CONTRACTS.md` left frozen. The frontend must render such
+an origin as *seeded from a documented source*, not a NAAP detection.
+
+**Validator (`scripts/validate_case.py`, `test_validator.py` 12→14):** new `check_known_origin`
+(shape-check + runs the pin through the existing lon/lat-swap detector); `check_meta` accepts
+`known_origin` in place of `detect`; `check_detections` already gated on `"detect" in acts`. Two
+new self-test mutations: trace act with neither detect nor known_origin (caught), and
+`known_origin` written `[lat,lon]` (caught by the swap detector).
+
+**Scaffolds:**
+- `cases/case-golden-ray-2021/meta.json` — acts `["trace","attribute","verify"]`,
+  `known_origin` wreck `[-81.40, 31.13]`. Validator now FAILs only on the missing stage outputs
+  (`particles`/`origin`/`vessels`/`suspects`) + unfinished `verification.json` — the correct
+  scaffold state.
+- `cases/case-ennore-2017/meta.json` — acts `["trace","verify"]` (no `attribute`: no public
+  Indian AIS). `known_origin` collision position **APPROX `[80.36, 13.235]`**, flagged in `notes`
+  for Akshat to pin from the DG Shipping / INCOIS OSDAG report. Previously untracked — now needs
+  `git add cases/case-ennore-2017/`.
+- `verification/case-ennore-2017.json` (new) — `official_finding` drafted from widely-reported
+  facts, with explicit TODO markers on `source_url`, IMO numbers and the oil-volume figure.
+  `naap_result` + `assessment.explanation` are Phase-4 human TODO.
+- `cases/index.json` → `["case-huntington-2021", "case-ennore-2017", "case-golden-ray-2021"]`.
+
+### Routed to owners
+- **Harshita:** `web/lib/loadCase.ts` fetches `detections.geojson` unconditionally (~L83–91) —
+  gate on `"detect" in meta.acts_available` or known-source cases 404 on load. Trace origin card
+  needs a "seeded from documented source: `<known_origin.label>`" state. `contracts.ts` `CaseMeta`
+  → optional `known_origin`.
+- **Anushka:** drift stage seeds from `meta.known_origin` when `detections.geojson` is absent
+  (Golden Ray, Ennore). Ensemble / origin grid / forward drift unchanged.
+- **Jaiveer:** Golden Ray `vessels.geojson` + `suspects.json` — NOAA AIS St Simons Sound
+  ~31 Jul–9 Aug 2021; salvage fleet (VB-10000, T&T Salvage) → `excluded[]` as responders; wreck
+  → `infrastructure[]`. Ennore has no attribute act.
+
+### Draft broadcast for the group (Akshat sends)
+> 🚩 **Contract change D16 — `meta.known_origin`.** Cases with no SAR-visible slick but a
+> documented source (Golden Ray wreck, Ennore collision) now run `trace`/`attribute`/`verify`
+> without `detect`. `meta.json` gets an optional `known_origin` (`[lon,lat]` or
+> `{lon,lat,label,source_url}`); when it's set, `detections.geojson` isn't required. Master §6.1
+> + Part 9 (D16). Validator already enforces it (`test_validator.py` 14/14).
+> - **Harshita:** `loadCase.ts` must stop fetching `detections.geojson` unconditionally — gate on
+>   `"detect" in acts_available`. Origin card: "seeded from documented source", not a detection.
+> - **Anushka:** seed the trace from `meta.known_origin` when there's no `detections.geojson`
+>   (Golden Ray, Ennore).
+> - **Jaiveer:** Golden Ray is on — NOAA AIS St Simons Sound 31 Jul–9 Aug 2021, salvage fleet
+>   excluded as responders, wreck as an infrastructure finding.
+
+---
+
 ## [2026-09-10] Phase 1 — Huntington Beach confirmed (hero); Golden Ray + Ennore show no SAR slick
 
 **Merge is live.** `origin/main` now carries the 4-branch merge + validator hardening + exporter

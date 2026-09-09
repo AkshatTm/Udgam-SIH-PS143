@@ -48,6 +48,9 @@ web/public/maplibre/
 .earthengine/
 credentials.json
 
+# Per-teammate handoff briefs — shared by hand (WhatsApp), never pushed
+HANDOFF_*.md
+
 # OS noise
 .DS_Store
 Thumbs.db

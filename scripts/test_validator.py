@@ -154,6 +154,28 @@ def verify_missing_source_url(d):
     return "source_url"
 
 
+def trace_without_known_origin(d):
+    """D16 — a trace bundle with no 'detect' act and no meta.known_origin has nothing to
+    seed the rewind from."""
+    m = read(d, "meta.json")
+    m["acts_available"] = [a for a in m["acts_available"] if a != "detect"]
+    m.pop("known_origin", None)
+    write(d, "meta.json", m)
+    return "known_origin"
+
+
+def known_origin_lonlat_swapped(d):
+    """meta.known_origin written as [lat, lon] — the same swap the coordinate checker
+    catches everywhere else, now on the documented fixed source."""
+    m = read(d, "meta.json")
+    b = read(d, "bounds.json")
+    lon = (b["west"] + b["east"]) / 2
+    lat = (b["south"] + b["north"]) / 2
+    m["known_origin"] = [lat, lon]  # deliberately swapped
+    write(d, "meta.json", m)
+    return "swapped"
+
+
 def dark_vessel_has_mmsi(d):
     """A dark vessel is radar-only — giving it an MMSI invents an AIS identity."""
     s = read(d, "suspects.json")
@@ -175,6 +197,8 @@ MUTATIONS = [
     ("verification verdict not in the 4 values", verify_verdict_invalid, "verdict",  False),
     ("verification source_url empty",           verify_missing_source_url, "source_url", False),
     ("dark vessel carries an invented MMSI",    dark_vessel_has_mmsi,    "mmsi must be null", False),
+    ("trace act with no detect and no known_origin", trace_without_known_origin, "known_origin", False),
+    ("meta.known_origin written as [lat, lon]", known_origin_lonlat_swapped, "swapped", False),
 ]
 
 
