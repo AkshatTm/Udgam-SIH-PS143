@@ -156,7 +156,7 @@ def main():
                      "HYCOM on GEE is a SCALED INTEGER: catalog units m/s, scale 0.001. A "
                      "reading of 480 here is 0.48 m/s. Divide by 1000 in the loader, once -- "
                      "NOT by 100, which is the raw-NetCDF convention and inflates by 10x. "
-                     "Divide by 100 in the loader, once. (docs/TRAPS.md #2)")
+                     "(docs/TRAPS.md #2)")
     print()
     check_collection(ee, WINDS, WIND_BANDS, bbox, t0, a.hours,
                      "ERA5 wind is signed u/v components in m/s, already. Not speed and bearing "
