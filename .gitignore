@@ -19,6 +19,9 @@ __pycache__/
 # Big raw formats — nothing over ~20 MB belongs in this repo
 *.tif
 *.tiff
+# ...except the case bundle's 2-band SAR GeoTIFF: Stage 1 reads it from cases/<id>/ and the
+# no-imports architecture needs it to travel with the repo (~8-10 MB/case at 10 m, tight box).
+!cases/*/sar_vv_vh.tif
 *.7z
 *.zip
 *.npz

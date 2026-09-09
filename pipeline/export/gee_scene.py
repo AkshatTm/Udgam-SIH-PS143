@@ -54,6 +54,19 @@ DEFAULT_TIF_SCALE_M = 10         # metres per pixel for the GeoTIFF — Soum's t
 DOWNLOAD_URL_PIXEL_CEILING = 8_000_000   # ~ getDownloadURL practical limit for 2 float bands
 
 
+def _label_bands(tif_path, names):
+    """Write band names into the GeoTIFF so Soum reads 'VV'/'VH', not 'band 1'/'band 2'.
+    GEE preserves band order (select(['VV','VH'])) but not the labels."""
+    try:
+        import rasterio
+        with rasterio.open(tif_path, "r+") as ds:
+            for i, n in enumerate(names, start=1):
+                ds.set_band_description(i, n)
+                ds.update_tags(i, POLARISATION=n, UNITS="dB")
+    except Exception as e:
+        print(f"          (could not label bands: {e} — band 1 is {names[0]} regardless)")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Export a Sentinel-1 scene to the 4 case artefacts")
     ap.add_argument("--project", required=True, help="your GEE cloud project id")
@@ -180,9 +193,12 @@ def main():
             if dr.status_code != 200:
                 raise SystemExit(f"GeoTIFF download failed ({dr.status_code}). Retry with "
                                  f"--drive.\n{dr.text[:400]}")
-            (case_dir / "sar_vv_vh.tif").write_bytes(dr.content)
-            print(f"GeoTIFF   wrote sar_vv_vh.tif ({tw}x{th}, {len(tif_bands)} band(s), "
-                  f"{len(dr.content) / 1e6:.1f} MB) @ {a.tif_scale} m/px")
+            tif_path = case_dir / "sar_vv_vh.tif"
+            tif_path.write_bytes(dr.content)
+            _label_bands(tif_path, tif_bands)
+            print(f"GeoTIFF   wrote sar_vv_vh.tif ({tw}x{th}, band 1={tif_bands[0]}"
+                  f"{', band 2=VH' if have_vh else ''}, {len(dr.content) / 1e6:.1f} MB) "
+                  f"@ {a.tif_scale} m/px")
 
     # ---- bounds.json ------------------------------------------------------------------
     (case_dir / "bounds.json").write_text(json.dumps({
