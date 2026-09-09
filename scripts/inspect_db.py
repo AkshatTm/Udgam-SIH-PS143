@@ -12,19 +12,25 @@ import argparse
 import sys
 
 
-def parse_pt(s):
-    lon, lat = s.split(",")
-    return [float(lon), float(lat)]
+def pairs(flat):
+    if flat is None:
+        return []
+    if len(flat) % 2:
+        raise SystemExit("point lists must be flat 'lon lat lon lat ...' — odd count given")
+    return [[flat[i], flat[i + 1]] for i in range(0, len(flat), 2)]
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="Sample S1 VV/VH dB at points. Pass coords as flat floats: "
+                    "--slick -118.1 33.6 -118.11 33.65  (argparse handles the leading minus).")
     ap.add_argument("--project", required=True)
     ap.add_argument("--scene", required=True)
-    ap.add_argument("--slick", nargs="+", type=parse_pt, default=[])
-    ap.add_argument("--clean", nargs="+", type=parse_pt, default=[])
+    ap.add_argument("--slick", nargs="+", type=float, default=[])
+    ap.add_argument("--clean", nargs="+", type=float, default=[])
     ap.add_argument("--radius", type=float, default=90.0, help="mean over this radius (m)")
     a = ap.parse_args()
+    a.slick, a.clean = pairs(a.slick), pairs(a.clean)
 
     import ee
     ee.Initialize(project=a.project)

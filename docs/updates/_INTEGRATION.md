@@ -8,6 +8,106 @@ log; this file is only for the joins.
 
 ---
 
+## [2026-09-10] Phase 1 — Huntington Beach confirmed (hero); Golden Ray + Ennore show no SAR slick
+
+**Merge is live.** `origin/main` now carries the 4-branch merge + validator hardening + exporter
+(Akshat pushed; soum/jaiveer/anushka branches deleted). `origin/harshita` has 4 newer web
+commits (data-driven gallery reading `cases/index.json`, `verify` added to `ALL_ACTS`) —
+fast-forwarded into local `main` this session, **not yet pushed** (Akshat: `git push`, or PR).
+
+**New tooling:** `scripts/find_scenes.py` (generalised `check_ennore.py` — any bbox/window, no
+hardcoded verdict), `scripts/inspect_db.py` (VV/VH dB point sampler — committed).
+
+### Case 2 — Huntington Beach: CONFIRMED, this is the hero detection case
+
+```
+scene       S1A_IW_GRDH_1SDV_20211002T015821_20211002T015850_039934_04B9C9_2BF9
+acquired    2021-10-02T01:58:21Z   (S1A ascending, ~2.8 h after the first leak alarm)
+bounds      W -118.17  S 33.585  E -118.05  N 33.70    (bbox tight on the slick)
+bands       VV + VH + angle        vh_available: true
+```
+
+A clean, sharp-edged comma-shaped slick sits dead centre, ~8–10 dB below the surrounding sea in
+VV (dense-grid dB sampling; VH baseline near noise floor so VH depression is weak but the
+morphology is unambiguous). The anchorage (hundreds of container ships — the 2021 congestion) is
+all in frame. Short rewind: oil was only ~3 h old at the pass. `cases/case-huntington-2021/`
+holds `meta.json` (v3), `bounds.json`, `sar.png`, `thumb.png`. The 2-band `sar_vv_vh.tif` is
+running as an Earth Engine Drive export — **Akshat: when `earthengine task list` shows
+`case-huntington-2021_sar_vv_vh` COMPLETED, move it from Drive/naap_exports/ into the case dir.**
+
+**Draft announcement for the group (do not batch — send this one now):**
+> 🚩 Case locked: **Huntington Beach / San Pedro Bay Pipeline, Oct 2021**
+> scene `S1A_IW_GRDH_1SDV_20211002T015821_20211002T015850_039934_04B9C9_2BF9`
+> detection_time `2021-10-02T01:58:21Z` · bounds `[-118.17, 33.585, -118.05, 33.70]` · VV+VH
+> Clear oil slick in SAR. NTSB MIR-24-01: MSC DANIT (IMO 9404649) + "Beijing" dragged anchor
+> 25 Jan 2021, pipeline leaked 8 months later → infrastructure + exoneration case.
+> Soum: `sar.png` + `bounds.json` up now, 2-band GeoTIFF landing shortly.
+> Jaiveer: NOAA AIS for San Pedro Bay, 30 Sep – 3 Oct 2021.
+> Anushka: HYCOM/ERA5 for the box, detection_time − 30 h → detection_time.
+
+### Case 1 (Ennore) and Case 3 (Golden Ray): no SAR-visible slick — decision needed
+
+Both are enclosed/sheltered calm water imaged at low wind → dark, low-contrast SAR with no
+coherent VV+VH depression (dB sampling confirms the eyeball read on both).
+- **Ennore** `..._6D04` (2017-01-29 00:31Z, dawn): filaments near the port mouth, nothing that
+  reads as oil vs. a wind shadow or freshwater plume. Akshat is still working this one.
+- **Golden Ray** `..._C7D5` (2021-08-08 23:29Z, +9 d — the only S1 pass covering the sound, on a
+  12-day ascending repeat): sound + Atlantic uniformly dark, no slick. The wreck + VB-10000
+  salvage cluster images clearly at ~(-81.40, 31.13). `cases/case-golden-ray-2021/` has a
+  scene-only scaffold with an honest `notes` block.
+
+**The call (Akshat's):** run Golden Ray — and likely Ennore — as **trace + attribute + verify
+seeded from the documented known source**, not as detection cases. Golden Ray is a strong
+infrastructure/exoneration case even without a SAR detection (origin on the wreck, salvage fleet
+excluded as responders — exactly the D10 story). This needs one contract change:
+`validate_case.py check_meta` currently errors on `trace` without `detect`. Relax it to allow a
+`["trace","attribute","verify"]` bundle whose origin is a known fixed source (add a
+`meta.known_origin: [lon,lat]` field, documented). Small change; I did not make it — it's a
+frozen-schema decision.
+
+`cases/index.json` → `["case-huntington-2021", "case-golden-ray-2021"]`, default huntington.
+`case-000` is not in the gallery index (validator fixture only). `case-ennore-2017` is untracked
+and left alone for Akshat — add it to the index when its strategy is settled.
+
+`verification/case-huntington-2021.json` and `verification/case-golden-ray-2021.json` scaffolded:
+`official_finding` is researched and citable; `assessment.explanation` is a Phase-4 HUMAN-PROSE
+TODO and the files deliberately won't validate until written.
+
+### Cases 4 & 5 — Urooz (draft ask for Akshat to forward)
+> Urooz — case-selection research, blocks Jaiveer's AIS download. Find **two** transiting-vessel
+> oil discharges in **US waters**, **Oct 2014 – Sep 2024**, ideally different basins:
+> 1. SkyTruth Cerulean — map `cerulean.skytruth.org`, or API `api.cerulean.skytruth.org`
+>    (OGC-compliant). Filter to US waters; want a clean linear slick attributed to a named
+>    vessel with an MMSI.
+> 2. Fallbacks: NOAA Incident News archive, USCG investigation reports.
+> For each candidate give: date/time, lat-lon, vessel name + MMSI, the Cerulean/report URL.
+> Caveat to record: *"Cerulean attributed this slick to vessel X"*, never *"proven responsible"*.
+> Then Akshat runs `scripts/find_scenes.py` to confirm Sentinel-1 coverage.
+
+### Cases 6 & 7 — Soum (draft ask)
+> Soum — nominate the two detect-only demo scenes from **Zenodo Part III** (DOI
+> 10.5281/zenodo.13761290): one **look-alike** (`Lookalike/` folder) where the dark feature is
+> genuinely convincing, and one **clean ocean** (`No oil/` folder). Give the folder/scene names.
+> Correct NAAP output on both is zero oil features. We'll wrap each as a case bundle.
+
+### Part B rulings — still not broadcast (Phase 0.3). Draft for Akshat to send:
+> Rulings, all blocking someone:
+> - **B1 BitmapLayer, not HeatmapLayer** for the origin grid — HeatmapLayer renormalises per
+>   viewport so the answer changes as a judge zooms (D11). `web/CLAUDE.md` fixed; Harshita's
+>   `MapView.tsx` still imports HeatmapLayer — needs the switch.
+> - **B2 `time_window_method` is in the contract** — ships as-is; frontend renders a `bounded`
+>   bracket differently from a measurement.
+> - **B3 Jaiveer scores the origin grid, not the r50 circle** (44.7% of high-prob mass sits
+>   outside r50 on the real cloud shape).
+> - **B4 Fund the adaptive field-box pad + the loud edge guard** (Gulf Loop covers 156 km/24 h
+>   vs a fixed 55 km pad).
+> - **B5 Tug/tow are display labels only** — no `type_prior` change on a one-port sample.
+> - **B6 Approve Jaiveer's extended `suspects.json`** (source_type, per-component null,
+>   dark_vessels, infrastructure) — already in the validator and CONTRACTS pointer.
+> - **B7 2-band float32 GeoTIFF exports, committed** — done; `gee_scene.py` produces it.
+
+---
+
 ## [2026-09-09] Handoff #2 — four branches merged to main, validator hardened
 
 **The merge.** `origin/{soum, jaiveer, harshita, anushka}` all merged onto `main` (was 2 commits

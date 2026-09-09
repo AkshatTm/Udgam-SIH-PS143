@@ -168,11 +168,11 @@ def main():
                 fileFormat="GeoTIFF")
             task.start()
             print(f"GeoTIFF   {reason}")
-            print(f"          Export task '{a.case}_sar_vv_vh' STARTED. Now:")
-            print(f"            1. open https://code.earthengine.google.com/ -> Tasks tab")
-            print(f"            2. press RUN on '{a.case}_sar_vv_vh'  (nothing exports until you do)")
-            print(f"            3. when it finishes, download from Drive/naap_exports/ into")
-            print(f"               {case_dir / 'sar_vv_vh.tif'}")
+            print(f"          Export task '{a.case}_sar_vv_vh' SUBMITTED and now running")
+            print(f"          server-side (task.start() is the trigger — no Tasks-tab RUN needed).")
+            print(f"          Watch it:  earthengine task list   (or the Tasks tab)")
+            print(f"          When COMPLETED, move Drive/naap_exports/{a.case}_sar_vv_vh.tif to")
+            print(f"            {case_dir / 'sar_vv_vh.tif'}")
         else:
             durl = raw.getDownloadURL({"region": region, "scale": a.tif_scale,
                                        "crs": "EPSG:4326", "format": "GEO_TIFF"})

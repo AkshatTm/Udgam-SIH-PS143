@@ -1,6 +1,7 @@
 {
   "cases": [
-    "case-000"
+    "case-huntington-2021",
+    "case-golden-ray-2021"
   ],
-  "default": "case-000"
+  "default": "case-huntington-2021"
 }
