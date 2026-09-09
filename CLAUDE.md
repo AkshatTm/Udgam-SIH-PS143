@@ -12,7 +12,7 @@ Naap: oil spill detection → backward drift to origin → vessel attribution, f
 2. Timestamps are **UTC ISO 8601 with trailing `Z`**, timezone-aware. Naive datetimes are a bug.
 3. Units: km, km², m/s, degrees clockwise from north. Coordinates rounded to 5 dp in JSON.
 4. Python 3.11 + venv; Node 20 for `web/`. Pinned deps. **No new dependencies once the pipeline is assembling; none at all after the freeze.**
-5. File schemas live in `docs/CONTRACTS.md`. They are frozen. If something genuinely cannot be expressed, ask Akshat — do not extend a schema unilaterally.
+5. File schemas live in `docs/00_MASTER_PLAN.md` Part 6 (§6.1–6.9) — the live contract the validator enforces. `docs/CONTRACTS.md` is the v1 record, kept for history. They are frozen. If something genuinely cannot be expressed, ask Akshat — do not extend a schema unilaterally.
 
 ## Before you hand anything over
 ```bash

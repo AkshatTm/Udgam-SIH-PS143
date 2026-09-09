@@ -1,15 +1,18 @@
 # Naap
 
 **Satellite forensics that traces an oil spill back to the ship that caused it.**
-SIH 2026 · PS 26143 · Detect → Trace → Attribute.
+SIH 2026 · PS 26143 · Detect → Trace → Attribute → Verify.
 
 1. **Detect** — find oil slicks in Sentinel-1 radar (SAR) imagery, separate them from
    look-alikes (algae, calm wind, rain cells), and compute geometric properties.
 2. **Trace** — run ocean-current and wind physics *backwards in time* to reconstruct where and
    when the oil entered the water. The output is a probability cloud, never a point.
-3. **Attribute** — query historical ship-transponder (AIS) data against that origin cloud and
-   time window, and produce a ranked shortlist of suspect vessels plus at least one explicitly
-   **excluded** vessel.
+3. **Attribute** — score broadcasting vessels, dark vessels (radar sees a ship, AIS reports
+   nothing) and fixed infrastructure (pipeline, platform, wreck) against that origin cloud and
+   time window; produce a ranked shortlist plus at least one explicitly **excluded** vessel.
+4. **Verify** — compare NAAP's conclusion against the official investigation (NTSB / USCG /
+   documented press account), cited, with a `hit` / `partial` / `miss` verdict rendered as
+   confidently either way.
 
 The demo is one map screen with a scrubbable time slider. Drag it backwards and the slick
 dissolves into particles drifting back toward their origin.
@@ -32,7 +35,8 @@ Violating these is how this project dies. They are not preferences.
 5. **Python 3.11** + venv, deps pinned in `requirements.txt`. **Node 20 LTS** for `web/`.
    No new dependencies once the pipeline is assembling; none at all after the freeze.
 
-Full schemas: **[`docs/CONTRACTS.md`](docs/CONTRACTS.md)** — frozen, changes go through Akshat.
+Full schemas: **[`docs/00_MASTER_PLAN.md`](docs/00_MASTER_PLAN.md) Part 6** — the live frozen
+contract; [`docs/CONTRACTS.md`](docs/CONTRACTS.md) is the v1 record. Changes go through Akshat.
 The bugs that will actually happen: **[`docs/TRAPS.md`](docs/TRAPS.md)** — read it before
 debugging anything geospatial.
 
@@ -45,14 +49,19 @@ folder and writes files back into it. The frontend fetches static JSON and never
 
 ```
 cases/<case_id>/
-  meta.json           case info, which acts are available
-  sar.png             the radar scene rendered as an image
-  bounds.json         geographic bounds of sar.png
-  detections.geojson  Stage 1 out -> Stage 2 in
-  particles.json      Stage 2 out (the rewind animation)
-  origin.json         Stage 2 out -> Stage 3 in
-  vessels.geojson     Stage 3 out (AIS tracks)
-  suspects.json       Stage 3 out (ranked suspects, funnel, exclusions)
+  meta.json               case info, which acts are available
+  sar.png                 the radar scene rendered as an image
+  sar_vv_vh.tif           2-band float32 dB GeoTIFF — Soum's real input
+  bounds.json             geographic bounds + the dB clamp used
+  thumb.png               gallery preview
+  detections.geojson      Stage 1 out -> Stage 2 in
+  particles.json          Stage 2 out (the backward rewind animation)
+  particles_forward.json  Stage 2 out (forward prediction)
+  origin.json             Stage 2 out -> Stage 3 in
+  vessels.geojson         Stage 3 out (AIS tracks)
+  suspects.json           Stage 3 out (ranked suspects, funnel, exclusions)
+  verification.json       Stage 4 out (our answer vs the official finding)
+cases/index.json          the gallery list, strongest case first
 ```
 
 Every stage can be built and tested against fake files. Nobody ever waits for anybody.
@@ -119,7 +128,7 @@ hand-editing a bundle** — a hand-patched bundle means the same bug returns at 
 |---|---|---|
 | `docs/` | Master plan, per-person briefs, contracts, traps, runbook | Akshat |
 | `docs/updates/` | Per-person work logs — how a fresh AI chat resumes your work | everyone |
-| `scripts/` | `make_case000.py`, `validate_case.py`, `test_validator.py`, `check_ennore.py` | Akshat |
+| `scripts/` | `make_case000.py`, `validate_case.py`, `test_validator.py`, `find_scenes.py`, `inspect_db.py` | Akshat |
 | `pipeline/detect/` | Dark-spot finder → features → classifier → `detections.geojson` | Soum |
 | `pipeline/drift/` | Backward advection, 50-run ensemble → `particles.json`, `origin.json` | Anushka |
 | `pipeline/attribute/` | AIS ingest → tracks → scoring → `vessels.geojson`, `suspects.json` | Jaiveer |

@@ -3,8 +3,8 @@
 *Owner: Akshat. Must be complete before the freeze.*
 
 **Why this file exists:** a judge asks "is this real data?" and the answer has to be a scene id
-on screen within five seconds, not a story. Internals are binding — whatever we show on the 11th
-we defend in December before an NTRO panel.
+on screen within five seconds, not a story. Internals are binding — whatever we show on
+15 September we defend in December before an NTRO panel.
 
 `TODO` below means genuinely not filled in yet. Do not delete a TODO by guessing.
 
@@ -50,18 +50,26 @@ time span was pulled per case.
 
 ## Detection accuracy — the honesty slide
 
-Measured by Soum on a **scene-level** held-out split (never a row-level split — regions from one
-2048×2048 scene are correlated and a row split would flatter us).
+Measured by Soum on a **scene-level** held-out split (the Zenodo Part III designated test set —
+never a row-level split, because regions from one 2048×2048 scene are correlated and a row
+split would flatter us). See Master Plan Part 12.
 
 | Metric | Value | Split |
 |---|---|---|
-| Precision (oil) | `TODO` | held-out scenes, n=`TODO` |
-| Recall (oil) | `TODO` | held-out scenes, n=`TODO` |
+| Scene classification accuracy | `TODO` | Part III holdout, n=`TODO` scenes |
+| Look-alike rejection rate | `TODO` | Part III holdout |
+| Oil-class IoU (positives only) | `TODO` | Part III holdout |
+| Classical baseline F1 (ablation) | `TODO` | same holdout |
 | Training rows | `TODO` | `data/labels/features.csv` |
 
-Context we state alongside it: separating oil from look-alikes is an open research problem — the
-published deep-learning benchmark is around **53% IoU**, and it is 53% for everyone. That is
-precisely why the system does not rest on detection alone.
+**The two-benchmark framing (Master Plan Part 10 + Part 12).** The ~53% IoU figure that
+circulates is from the **Krestenitis** 5-class benchmark — the EMSA CleanSeaNet dataset, which
+is not openly available and is **not our dataset**. Our dataset's own authors (Trujillo-Acatitla
+et al., *Mar Pollut Bull* 204:116549, 2024) report **99% classification accuracy and 96% IoU**
+on their own designated test set. We report X on that same held-out split. The gap between 96%
+and ~53% measures **how much look-alike variety a dataset contains — not model quality**. That
+gap is our result, not our excuse. This is also why the system does not rest on detection alone:
+drift and AIS are independent evidence streams.
 
 ## AIS (NOAA Marine Cadastre)
 
