@@ -2,7 +2,7 @@
 *Claude Code reads this automatically. Antigravity/Codex users: paste it at the top of a new chat. Nested `CLAUDE.md` files in `pipeline/*/` and `web/` add role-specific rules on top of this one.*
 
 ## Project in five lines
-Naap: oil spill detection → backward drift to origin → vessel attribution, from Sentinel-1 SAR + ocean/wind fields + ship AIS. SIH 2026, PS 26143. Demo is ONE map screen with a time slider; three stages are layers on it. Two deadlines: **Wed 9 Sept** (Acts 1+2, Ennore case, HOD demo) and **Thu 10–Fri 11 Sept** (full chain, internal round). Full context: `docs/00_MASTER_PLAN.md`.
+Naap: oil spill detection → backward drift to origin → vessel attribution, from Sentinel-1 SAR + ocean/wind fields + ship AIS. SIH 2026, PS 26143. Demo is ONE map screen with a time slider; three stages are layers on it. **Final demo: 15 September, 17:00** (full chain, internal round). Work is organised in PHASES, not days — finish a phase, log it, move on. Full context: `docs/00_MASTER_PLAN.md`.
 
 ## Architecture rule that governs everything
 **No module imports another module.** Each stage is a script that reads files from `cases/<case_id>/` and writes files back into it. The frontend fetches static JSON and never calls Python. If you are about to write `from pipeline.drift import ...` in detection code, stop — you have misunderstood the design.
@@ -11,7 +11,7 @@ Naap: oil spill detection → backward drift to origin → vessel attribution, f
 1. Coordinates are **`[longitude, latitude]`**, WGS84, always. Never `[lat, lon]`.
 2. Timestamps are **UTC ISO 8601 with trailing `Z`**, timezone-aware. Naive datetimes are a bug.
 3. Units: km, km², m/s, degrees clockwise from north. Coordinates rounded to 5 dp in JSON.
-4. Python 3.11 + venv; Node 20 for `web/`. Pinned deps. **No new dependencies after Tue 8 Sept.**
+4. Python 3.11 + venv; Node 20 for `web/`. Pinned deps. **No new dependencies once the pipeline is assembling; none at all after the freeze.**
 5. File schemas live in `docs/CONTRACTS.md`. They are frozen. If something genuinely cannot be expressed, ask Akshat — do not extend a schema unilaterally.
 
 ## Before you hand anything over
@@ -34,7 +34,7 @@ Must print `PASS`. It catches lat/lon swaps, naive timestamps, unit errors, dime
 - Ask for **one file or one function** at a time, not "build the component".
 - Paste the **error text and the relevant function**, not the whole file, not the whole repo.
 - Prefer "here's the failing output, what's wrong" over "rewrite this".
-- Reserve roughly half of Claude quota for Tue–Wed (integration and debugging), where it is worth most. Use Codex/Antigravity for boilerplate and scaffolding.
+- Reserve roughly half of Claude quota for the integration and debugging phases, where it is worth most. Use Codex/Antigravity for boilerplate and scaffolding.
 - Full guidance: `docs/PROMPTING_PLAYBOOK.md`.
 
 ## After each phase

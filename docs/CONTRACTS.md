@@ -1,6 +1,6 @@
 # CONTRACTS — FROZEN
 
-**Status: FROZEN as of Sun 6 Sept 2026.** Extracted verbatim from `00_MASTER_PLAN.md` §4.
+**Status: FROZEN as of Sun 6 Sept 2026.** Extracted verbatim from `00_MASTER_PLAN.md` Part 6.
 
 Changes go through **Akshat only**, and are broadcast to the whole group the moment they are
 made. Do not extend a schema unilaterally — if something genuinely cannot be expressed in these

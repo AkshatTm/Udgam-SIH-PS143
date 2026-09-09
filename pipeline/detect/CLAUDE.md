@@ -1,7 +1,7 @@
 # Detection (Stage 1) — Soum
 
 Owns: dark-spot finder → shape features → oil/look-alike classifier → `detections.geojson`.
-Full brief: `docs/02_SOUM_DETECTION.md`. Setup: `docs/SETUP_SOUM.md`.
+Full brief: `docs/02_SOUM_DETECTION.md`.
 
 ## Non-negotiable
 - **NO deep learning this sprint.** The CNN is October work. Classical CV + RandomForest only.

@@ -54,7 +54,7 @@ Quiver plot of the current field, track plot of one particle, heatmap of the ori
 # Attribution (Stage 3) — Jaiveer
 
 Owns: AIS ingest → track reconstruction → scoring → `vessels.geojson` + `suspects.json`.
-Full brief: `docs/05_JAIVEER_AIS.md`.
+Full brief: `docs/06_JAIVEER_AIS.md`.
 
 ## Non-negotiable
 - **No ML.** Deterministic weighted score; weights are named constants at the top of the file.
