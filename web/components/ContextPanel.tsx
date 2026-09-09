@@ -268,26 +268,33 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
         </div>
       </div>
 
-      {/* Bounded estimate badge */}
-      {origin.abstain && (
-        <div className="mt-3 rounded border border-white/10 px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-white/40">
-          Bounded Estimate
+      {/* Release-window caption — the window is a bracket (earliest–latest
+          plausible entry), never a single measured release time. */}
+      <p className="mt-3 text-[10px] leading-relaxed text-white/28">
+        Earliest and latest the oil could plausibly have entered the water — a
+        bracket, not a single measured release time.
+      </p>
+
+      {/* Origin-confidence state. The two branches are genuinely distinct:
+          abstain === true  → the origin cloud is too diffuse to attribute from,
+                              and Stage 3 names no suspects (docs/CONTRACTS.md §6);
+          abstain === false → the origin is tight enough for attribution to run. */}
+      {origin.abstain ? (
+        <div className="mt-3 rounded border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] leading-relaxed text-white/55">
+          Origin cloud too diffuse — no suspects can be named.
         </div>
-      )}
-      {!origin.abstain && (
+      ) : (
         <div className="mt-3 rounded border border-white/[0.08] px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-white/30">
-          Bounded Estimate
+          Origin within attribution confidence
         </div>
       )}
 
-      {/* Interpretive note */}
+      {/* The drifting points are ONE control trajectory (particles.json); the
+          uncertainty lives in the origin field and the 50 / 90 % regions above. */}
       <p className="mt-4 text-[10px] leading-relaxed text-white/28">
-        Released between these times — the ensemble did not converge on a single
-        channel.
-      </p>
-      <p className="mt-2 text-[10px] leading-relaxed text-white/28">
-        The cloud widens with rewind depth. The further back you drift, the less
-        certain the origin.
+        The drifting points trace one representative path, not a spread. The
+        uncertainty is the origin probability field and the 50 / 90 % regions
+        above, stacked from {origin.ensembleRuns} perturbed runs.
       </p>
     </div>
   );
