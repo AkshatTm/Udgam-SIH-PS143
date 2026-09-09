@@ -64,6 +64,15 @@ def px2ll(px, py, w, h):
             r5(NORTH - (py / h) * (NORTH - SOUTH))]
 
 
+def ellipse_area_km2(a_px, b_px, w, h):
+    """Area of the ellipse ellipse_ring() draws, in km2 — so area_km2 stays
+    consistent with the polygon the validator now shoelaces."""
+    midlat = (SOUTH + NORTH) / 2
+    a_km = (a_px / w) * (EAST - WEST) * 111.32 * math.cos(math.radians(midlat))
+    b_km = (b_px / h) * (NORTH - SOUTH) * 111.32
+    return round(math.pi * a_km * b_km, 1)
+
+
 def ellipse_ring(cx, cy, a, b, ang, w, h, n=40):
     ring = []
     for i in range(n + 1):
@@ -126,7 +135,8 @@ def main():
                      "coordinates": [ellipse_ring(*slick_c, W * 0.16, H * 0.018,
                                                   math.radians(-24), W, H)]},
         "properties": {"id": "det-01", "classification": "oil", "confidence": 0.87,
-                       "area_km2": 12.4, "elongation": 8.2, "edge_gradient": 0.34,
+                       "area_km2": ellipse_area_km2(W * 0.16, H * 0.018, W, H),
+                       "elongation": 8.2, "edge_gradient": 0.34,
                        "contrast_db": -6.2, "shape_class": "linear",
                        "centroid": px2ll(*slick_c, W, H)}
     }, {
@@ -135,7 +145,8 @@ def main():
                      "coordinates": [ellipse_ring(W * 0.27, H * 0.70, W * 0.075, H * 0.065,
                                                   0.0, W, H)]},
         "properties": {"id": "det-02", "classification": "lookalike", "confidence": 0.71,
-                       "area_km2": 7.9, "elongation": 1.4, "edge_gradient": 0.11,
+                       "area_km2": ellipse_area_km2(W * 0.075, H * 0.065, W, H),
+                       "elongation": 1.4, "edge_gradient": 0.11,
                        "contrast_db": -3.1, "shape_class": "blob",
                        "centroid": px2ll(W * 0.27, H * 0.70, W, H)}
     }]

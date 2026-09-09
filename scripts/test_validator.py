@@ -26,18 +26,39 @@ VALIDATOR = REPO / "scripts" / "validate_case.py"
 GOLDEN = REPO / "cases" / "case-000"
 
 
-def run_validator(case_dir):
-    r = subprocess.run([sys.executable, str(VALIDATOR), str(case_dir)],
-                       capture_output=True, text=True)
+def run_validator(case_dir, strict=False):
+    cmd = [sys.executable, str(VALIDATOR), str(case_dir)]
+    if strict:
+        cmd.append("--strict")
+    r = subprocess.run(cmd, capture_output=True, text=True)
     return r.returncode, r.stdout + r.stderr
 
 
 def read(d, name):
-    return json.loads((d / name).read_text())
+    return json.loads((d / name).read_text(encoding="utf-8"))
 
 
 def write(d, name, obj):
-    (d / name).write_text(json.dumps(obj))
+    (d / name).write_text(json.dumps(obj), encoding="utf-8")
+
+
+VALID_VERIFICATION = {
+    "official_finding": {
+        "summary": "Test finding.", "responsible_parties": [{"name": "X", "mmsi": None}],
+        "source_name": "Test", "source_url": "https://example.gov/report",
+        "source_type": "official_investigation", "volume_reported": "1 bbl", "caveat": "none",
+    },
+    "naap_result": {"origin_summary": "Test.", "top_suspects": [], "abstained": False},
+    "assessment": {"verdict": "not_applicable", "explanation": "Test prose.",
+                   "what_would_have_helped": "n/a"},
+}
+
+
+def add_verify_act(d):
+    m = read(d, "meta.json")
+    if "verify" not in m["acts_available"]:
+        m["acts_available"].append("verify")
+    write(d, "meta.json", m)
 
 
 # ---------------------------------------------------------------- mutations
@@ -98,14 +119,76 @@ def suspect_not_in_ais(d):
     return "no track in vessels.geojson"
 
 
+def detection_not_polygon(d):
+    """A detection geometry that isn't a Polygon — a LineString slick can't be measured."""
+    g = read(d, "detections.geojson")
+    f = g["features"][0]
+    f["geometry"] = {"type": "LineString", "coordinates": f["geometry"]["coordinates"][0]}
+    write(d, "detections.geojson", g)
+    return "Polygon"
+
+
+def area_km2_wrong(d):
+    """area_km2 that disagrees with the polygon it belongs to — a units or axis slip."""
+    g = read(d, "detections.geojson")
+    g["features"][0]["properties"]["area_km2"] = 0.2
+    write(d, "detections.geojson", g)
+    return "area_km2"
+
+
+def verify_verdict_invalid(d):
+    """verification.json with a verdict outside hit|partial|miss|not_applicable."""
+    add_verify_act(d)
+    v = json.loads(json.dumps(VALID_VERIFICATION))
+    v["assessment"]["verdict"] = "correct"
+    write(d, "verification.json", v)
+    return "verdict"
+
+
+def verify_missing_source_url(d):
+    """'verify' act with an empty source_url — the 'is this real?' link is the whole point."""
+    add_verify_act(d)
+    v = json.loads(json.dumps(VALID_VERIFICATION))
+    v["official_finding"]["source_url"] = ""
+    write(d, "verification.json", v)
+    return "source_url"
+
+
+def dark_vessel_has_mmsi(d):
+    """A dark vessel is radar-only — giving it an MMSI invents an AIS identity."""
+    s = read(d, "suspects.json")
+    s["dark_vessels"] = [{"source_type": "dark_vessel", "name": "Radar contact",
+                          "lon": 80.4, "lat": 13.2, "score": 0.6, "mmsi": "123456789"}]
+    write(d, "suspects.json", s)
+    return "mmsi must be null"
+
+
 MUTATIONS = [
-    ("detection polygon written as [lat, lon]", swap_detection_lonlat, "swapped"),
-    ("particles.t0 missing its trailing Z",     naive_timestamp,       "naive"),
-    ("particle drift mis-scaled (x100)",        hycom_misscaled,       "units"),
-    ("funnel counts increasing",                funnel_increases,      "funnel"),
-    ("origin values shorter than shape",        origin_grid_size_lies, "shape"),
-    ("suspect MMSI absent from vessels.geojson", suspect_not_in_ais,   "vessels.geojson"),
+    ("detection polygon written as [lat, lon]", swap_detection_lonlat,   "swapped",  False),
+    ("particles.t0 missing its trailing Z",     naive_timestamp,         "naive",    False),
+    ("particle drift mis-scaled (x100)",        hycom_misscaled,         "units",    False),
+    ("funnel counts increasing",                funnel_increases,        "funnel",   False),
+    ("origin values shorter than shape",        origin_grid_size_lies,   "shape",    False),
+    ("suspect MMSI absent from vessels.geojson", suspect_not_in_ais,     "vessels.geojson", False),
+    ("detection geometry is not a Polygon",     detection_not_polygon,   "Polygon",  False),
+    ("area_km2 disagrees with its polygon",     area_km2_wrong,          "area_km2", True),
+    ("verification verdict not in the 4 values", verify_verdict_invalid, "verdict",  False),
+    ("verification source_url empty",           verify_missing_source_url, "source_url", False),
+    ("dark vessel carries an invented MMSI",    dark_vessel_has_mmsi,    "mmsi must be null", False),
 ]
+
+
+def test_index():
+    """cases/index.json that lists a case with no meta.json on disk."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "cases"
+        shutil.copytree(GOLDEN, root / "case-000")
+        (root / "index.json").write_text(
+            json.dumps({"cases": ["case-000", "case-ghost"], "default": "case-000"}))
+        rc, out = run_validator(root)
+        ok = rc != 0 and "case-ghost" in out
+        print(f"  {'caught' if ok else 'MISSED'}  cases/index.json lists a case that isn't on disk")
+        return ok
 
 
 def main():
@@ -120,12 +203,12 @@ def main():
     print(f"golden bundle {GOLDEN.name} passes\n")
 
     passed = 0
-    for label, mutate, expect in MUTATIONS:
+    for label, mutate, expect, strict in MUTATIONS:
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp) / "case-mutant"
             shutil.copytree(GOLDEN, d)
             mutate(d)
-            rc, out = run_validator(d)
+            rc, out = run_validator(d, strict=strict)
 
             if rc == 0:
                 print(f"  MISSED  {label}")
@@ -138,8 +221,12 @@ def main():
                 print(f"  caught  {label}")
                 passed += 1
 
-    print(f"\n{passed}/{len(MUTATIONS)} mutations correctly caught and named")
-    if passed != len(MUTATIONS):
+    total = len(MUTATIONS) + 1
+    if test_index():
+        passed += 1
+
+    print(f"\n{passed}/{total} mutations correctly caught and named")
+    if passed != total:
         print("The validator is not the safety net it is being trusted as. Fix it before "
               "anyone relies on a PASS.")
         return 1
