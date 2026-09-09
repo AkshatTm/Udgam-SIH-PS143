@@ -28,8 +28,9 @@ __pycache__/
 # Intermediate stage outputs — regenerable, the bundle in cases/ is the artefact
 pipeline/*/out/
 
-# Throwaway end-to-end smoke bundle (scripts/make_case000.py --scene-only)
+# Throwaway end-to-end smoke / dry-run bundles (scripts/make_case000.py --scene-only)
 cases/case-smoke/
+cases/case-dry/
 
 # Frontend build
 web/.next/
