@@ -60,6 +60,9 @@ export default function CaseWorkspace() {
   const setActiveCase = useAppStore((s) => s.setActiveCase);
   const loadActiveCase = useAppStore((s) => s.loadActiveCase);
   const setStage = useAppStore((s) => s.setStage);
+  const particlesStatus = useAppStore((s) => s.particlesStatus);
+  const originStatus = useAppStore((s) => s.originStatus);
+  const initTrace = useAppStore((s) => s.initTrace);
 
   // URL case → store. setActiveCase() no-ops when the id already matches, so kick off the
   // first load explicitly when the store is still idle for that id.
@@ -92,6 +95,14 @@ export default function CaseWorkspace() {
       router.replace(`/case/${caseId}/${meta.acts_available[0]}`);
     }
   }, [meta, caseId, activeCaseId, stage, router]);
+
+  // Slice 1 — Trace arrival is self-demonstrating: once particles + origin are ready, turn
+  // those layers on and autoplay the rewind from T−0. initTrace() is guarded per case inside
+  // the store, so calling it on a revisit or after a user layer toggle is a no-op.
+  useEffect(() => {
+    if (stage !== "trace" || caseId === null || activeCaseId !== caseId) return;
+    if (particlesStatus === "ready" && originStatus === "ready") initTrace();
+  }, [stage, caseId, activeCaseId, particlesStatus, originStatus, initTrace]);
 
   const acts = meta?.acts_available;
   const nextStage = adjacentStage(stage, acts, 1);
