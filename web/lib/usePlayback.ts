@@ -14,6 +14,12 @@ import { normFromT, tFromNorm } from "./timestep";
 // one knob — raise it for a faster scrub, lower it to linger. Retune at the Monday checkpoint.
 export const PLAYBACK_STEPS_PER_SEC = 8;
 
+// The one-time Trace arrival rewind runs faster so it reads as a quick "here is where it
+// came from" flourish rather than a slow scrub the judge has to wait out: 24 steps/s puts
+// the 96-step / 24-hour case-000 rewind at ~4 s. Any manual play afterwards uses
+// PLAYBACK_STEPS_PER_SEC. Selected via the store's `autoPlaying` flag, set by initTrace().
+export const AUTOPLAY_STEPS_PER_SEC = 24;
+
 export function usePlayback(): void {
   const playing = useAppStore((s) => s.playing);
   const nSteps = useAppStore((s) => s.particles?.nSteps ?? 0);
@@ -21,7 +27,13 @@ export function usePlayback(): void {
   useEffect(() => {
     if (!playing || nSteps < 2) return;
 
-    const stepMs = 1000 / PLAYBACK_STEPS_PER_SEC;
+    // Read the autoplay flag once at loop start (not as an effect dependency): it only ever
+    // flips together with `playing`, so the effect already re-runs when it matters and the
+    // rAF loop never restarts mid-pass.
+    const stepsPerSec = useAppStore.getState().autoPlaying
+      ? AUTOPLAY_STEPS_PER_SEC
+      : PLAYBACK_STEPS_PER_SEC;
+    const stepMs = 1000 / stepsPerSec;
     let raf = 0;
     let last = performance.now();
     let acc = 0;

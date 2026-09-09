@@ -28,6 +28,11 @@ export interface AppState {
   particlesStatus: LoadStatus;
   particlesError: string | null;
   playing: boolean;
+  // Slice 2 — true only while the one-time Trace arrival rewind is running. It lets
+  // usePlayback pick the fast AUTOPLAY_STEPS_PER_SEC clock for that first pass and the
+  // slower PLAYBACK_STEPS_PER_SEC for every manual play. Set by initTrace(); cleared by
+  // every path that stops playback (setPlaying(false) / togglePlaying → paused / case load).
+  autoPlaying: boolean;
   // Slice 1 — which case has run its one-time Trace arrival init (particle + origin layers
   // on, autoplay the rewind from T−0). In memory only: a page reload is a fresh session and
   // re-inits. `null` until a case's first Trace visit; reset on every case load.
@@ -107,6 +112,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   particlesStatus: "idle",
   particlesError: null,
   playing: false,
+  autoPlaying: false,
   traceInitFor: null,
 
   origin: null,
@@ -150,6 +156,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       particlesStatus: "idle",
       particlesError: null,
       playing: false,
+      autoPlaying: false,
       traceInitFor: null,
       tNorm: 1,
       // Reset the origin cloud for the incoming case.
@@ -285,8 +292,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ layers: { ...s.layers, [id]: !s.layers[id] } })),
 
   setTNorm: (t) => set({ tNorm: Math.min(1, Math.max(0, t)) }),
-  setPlaying: (p) => set({ playing: p }),
-  togglePlaying: () => set((s) => ({ playing: !s.playing })),
+  // Stopping playback always clears the autoplay flag, so a resumed play is manual speed.
+  setPlaying: (p) => set(p ? { playing: true } : { playing: false, autoPlaying: false }),
+  togglePlaying: () =>
+    set((s) => (s.playing ? { playing: false, autoPlaying: false } : { playing: true })),
 
   initTrace: () => {
     const s = get();
@@ -297,6 +306,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       layers: { ...st.layers, particles: true, origin: true },
       tNorm: 1, // T−0 / positions[0]
       playing: true, // existing usePlayback rewinds T−0 → T−24h once, then stops
+      autoPlaying: true, // Slice 2 — run that first rewind at AUTOPLAY_STEPS_PER_SEC
     }));
   },
 }));
