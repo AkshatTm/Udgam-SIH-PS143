@@ -1,7 +1,7 @@
 // Types mirroring docs/CONTRACTS.md. The contract file, not the sample bundle, is the
 // source of truth for what a field means. Coordinates are always [longitude, latitude].
 
-export type Act = "detect" | "trace" | "attribute";
+export type Act = "detect" | "trace" | "attribute" | "verify";
 
 export type LonLat = [number, number];
 
@@ -155,11 +155,12 @@ export interface RawSuspectsBundle {
   excluded: RawExcludedVessel[];
 }
 
-/** The three stages, in fixed rail order. */
-export const ALL_ACTS: Act[] = ["detect", "trace", "attribute"];
+/** The four in-case stages, in fixed flow order (Gallery is a route of its own). */
+export const ALL_ACTS: Act[] = ["detect", "trace", "attribute", "verify"];
 
 export const ACT_LABELS: Record<Act, string> = {
   detect: "Detect",
   trace: "Trace",
   attribute: "Attribute",
+  verify: "Verify",
 };

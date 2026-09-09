@@ -28,6 +28,10 @@ export interface AppState {
   particlesStatus: LoadStatus;
   particlesError: string | null;
   playing: boolean;
+  // Slice 1 — which case has run its one-time Trace arrival init (particle + origin layers
+  // on, autoplay the rewind from T−0). In memory only: a page reload is a fresh session and
+  // re-inits. `null` until a case's first Trace visit; reset on every case load.
+  traceInitFor: string | null;
 
   // Phase 3 origin cloud. Same discipline as particles: fetched + parsed once per case, then
   // only read from memory — never re-fetched or re-parsed while the slider moves. MapView
@@ -67,6 +71,27 @@ export interface AppState {
   setTNorm: (t: number) => void;
   setPlaying: (p: boolean) => void;
   togglePlaying: () => void;
+  /** One-time Trace-stage arrival: enable the particle + origin layers and autoplay the
+   *  rewind from T−0. No-ops unless particles + origin are both `ready` and this case has not
+   *  been initialised yet, so it is safe to call on every render. */
+  initTrace: () => void;
+}
+
+/** The `id` of the highest-confidence `"oil"` detection (first in file order on a tie), or
+ *  `null` when the scene has no oil features. Reads the collection only — never mutates it. */
+function bestOilDetectionId(d: DetectionCollection): string | null {
+  let bestId: string | null = null;
+  let bestConf = -Infinity;
+  for (const f of d.features) {
+    const p = f.properties;
+    if (p.classification !== "oil") continue;
+    const conf = Number.isFinite(p.confidence) ? p.confidence : -Infinity;
+    if (bestId === null || conf > bestConf) {
+      bestId = p.id;
+      bestConf = conf;
+    }
+  }
+  return bestId;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -82,6 +107,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   particlesStatus: "idle",
   particlesError: null,
   playing: false,
+  traceInitFor: null,
 
   origin: null,
   originStatus: "idle",
@@ -124,6 +150,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       particlesStatus: "idle",
       particlesError: null,
       playing: false,
+      traceInitFor: null,
       tNorm: 1,
       // Reset the origin cloud for the incoming case.
       origin: null,
@@ -144,7 +171,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       const activeStage: Act = meta.acts_available.includes(get().activeStage)
         ? get().activeStage
         : meta.acts_available[0];
-      set({ status: "ready", meta, bounds, detections, activeStage });
+      set({
+        status: "ready",
+        meta,
+        bounds,
+        detections,
+        activeStage,
+        // Detect arrives with the best oil detection already selected (docs/04 C1).
+        selectedDetectionId: bestOilDetectionId(detections),
+      });
       // Fetch the trace-stage bundles in the background — they must not block the map /
       // detections. Both files are required whenever the `trace` act is available (CONTRACTS §1).
       if (meta.acts_available.includes("trace")) {
@@ -252,4 +287,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   setTNorm: (t) => set({ tNorm: Math.min(1, Math.max(0, t)) }),
   setPlaying: (p) => set({ playing: p }),
   togglePlaying: () => set((s) => ({ playing: !s.playing })),
+
+  initTrace: () => {
+    const s = get();
+    if (s.traceInitFor === s.activeCaseId) return; // already initialised this case
+    if (s.particlesStatus !== "ready" || s.originStatus !== "ready") return; // wait for data
+    set((st) => ({
+      traceInitFor: s.activeCaseId,
+      layers: { ...st.layers, particles: true, origin: true },
+      tNorm: 1, // T−0 / positions[0]
+      playing: true, // existing usePlayback rewinds T−0 → T−24h once, then stops
+    }));
+  },
 }));

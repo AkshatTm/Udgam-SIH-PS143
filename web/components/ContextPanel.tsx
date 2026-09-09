@@ -11,6 +11,7 @@ import {
 import { useAppStore } from "@/lib/store";
 import type { DetectionProperties } from "@/lib/contracts";
 import type { OriginBundle } from "@/lib/origin";
+import type { ExcludedVessel, Funnel, Suspect, SuspectsBundle } from "@/lib/suspects";
 
 // Classification colours — same hex as the map detection polygons.
 const OIL_COLOR = "#ff4d4d";
@@ -267,27 +268,230 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
         </div>
       </div>
 
-      {/* Bounded estimate badge */}
-      {origin.abstain && (
-        <div className="mt-3 rounded border border-white/10 px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-white/40">
-          Bounded Estimate
+      {/* Release-window caption — the window is a bracket (earliest–latest
+          plausible entry), never a single measured release time. */}
+      <p className="mt-3 text-[10px] leading-relaxed text-white/28">
+        Earliest and latest the oil could plausibly have entered the water — a
+        bracket, not a single measured release time.
+      </p>
+
+      {/* Origin-confidence state. The two branches are genuinely distinct:
+          abstain === true  → the origin cloud is too diffuse to attribute from,
+                              and Stage 3 names no suspects (docs/CONTRACTS.md §6);
+          abstain === false → the origin is tight enough for attribution to run. */}
+      {origin.abstain ? (
+        <div className="mt-3 rounded border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] leading-relaxed text-white/55">
+          Origin cloud too diffuse — no suspects can be named.
         </div>
-      )}
-      {!origin.abstain && (
+      ) : (
         <div className="mt-3 rounded border border-white/[0.08] px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-white/30">
-          Bounded Estimate
+          Origin within attribution confidence
         </div>
       )}
 
-      {/* Interpretive note */}
+      {/* The drifting points are ONE control trajectory (particles.json); the
+          uncertainty lives in the origin field and the 50 / 90 % regions above. */}
       <p className="mt-4 text-[10px] leading-relaxed text-white/28">
-        Released between these times — the ensemble did not converge on a single
-        channel.
+        The drifting points trace one representative path, not a spread. The
+        uncertainty is the origin probability field and the 50 / 90 % regions
+        above, stacked from {origin.ensembleRuns} perturbed runs.
       </p>
-      <p className="mt-2 text-[10px] leading-relaxed text-white/28">
-        The cloud widens with rewind depth. The further back you drift, the less
-        certain the origin.
-      </p>
+    </div>
+  );
+}
+
+// ─── Attribute stage card ──────────────────────────────────────────────────────
+
+// The contract's exact abstain-state wording (docs/CONTRACTS.md §6) — reused verbatim, not
+// rewritten, so the frontend never claims something the pipeline didn't measure.
+const ABSTAIN_MESSAGE = "Attribution not possible at acceptable confidence.";
+
+/** Static 4-step bar — "no animation needed" per docs/04 Phase 5. Steps only ever shrink or
+ * hold, left to right (CONTRACTS §8: funnel counts are non-increasing), so the bar length
+ * itself carries the funnel's shape. */
+function FunnelBar({ funnel }: { funnel: Funnel }) {
+  const steps: { label: string; value: number }[] = [
+    { label: "In Region", value: funnel.inRegion },
+    { label: "In Window", value: funnel.inWindow },
+    { label: "Plausible", value: funnel.plausible },
+    { label: "Scored", value: funnel.scored },
+  ];
+  const max = Math.max(1, funnel.inRegion);
+  return (
+    <div className="space-y-2.5">
+      {steps.map((s) => {
+        const pct = funnel.inRegion > 0 ? Math.max(2, Math.min(100, (s.value / max) * 100)) : 0;
+        return (
+          <div key={s.label}>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[10px] text-white/45">{s.label}</span>
+              <span className="font-mono text-[11px] text-white/85 tabular-nums">
+                {s.value}
+              </span>
+            </div>
+            <div className="mt-1 h-1 rounded-full bg-white/[0.06]">
+              <div
+                className="h-1 rounded-full bg-[#f97316]"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
+  return (
+    <div className="rounded border border-white/[0.08] p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+            Suspect {String(rank).padStart(2, "0")}
+          </div>
+          <div className="mt-0.5 text-[14px] font-semibold leading-tight text-white/90">
+            {s.name}
+          </div>
+          <div className="mt-0.5 font-mono text-[10px] text-white/40">
+            MMSI {s.mmsi}
+            {s.vesselType ? ` · ${s.vesselType}` : ""}
+          </div>
+        </div>
+        <div className="shrink-0 font-mono text-[15px] font-semibold text-[#f97316]">
+          {fmt(s.score * 100, 0)}%
+        </div>
+      </div>
+
+      <div className="mt-2 space-y-0.5">
+        <Row label="Closest approach" value={`${fmt(s.closestKm, 1)} km`} />
+        {s.closestTime && (
+          <Row
+            label="Closest time"
+            value={`${fmtDay(s.closestTime)} ${fmtTime(s.closestTime)} UTC`}
+          />
+        )}
+        {s.headingConsistent !== undefined && (
+          <Row
+            label="Heading"
+            value={s.headingConsistent ? "Consistent" : "Inconsistent"}
+          />
+        )}
+        {s.aisGapMinutes !== undefined && (
+          <Row
+            label="AIS gap"
+            value={s.aisGapMinutes > 0 ? `${s.aisGapMinutes} min` : "None"}
+          />
+        )}
+      </div>
+
+      <ul className="mt-2 space-y-1">
+        {s.reasons.map((r, i) => (
+          <li key={i} className="flex gap-1.5 text-[10px] leading-snug text-white/50">
+            <span className="shrink-0 text-white/25">–</span>
+            <span>{r}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Visually "ruled out" per docs/06 — muted + strikethrough on the name. The map's vessel
+ * layer conveys the same role with reduced opacity/width (see MapView.tsx); this is the card
+ * half of that motif. */
+function ExcludedCard({ e }: { e: ExcludedVessel }) {
+  return (
+    <div className="rounded border border-white/[0.06] bg-white/[0.02] p-3">
+      <div className="text-[13px] font-medium text-white/45 line-through decoration-white/25">
+        {e.name ?? e.mmsi}
+      </div>
+      <div className="mt-0.5 font-mono text-[10px] text-white/30">
+        MMSI {e.mmsi}
+        {e.closestKm !== undefined ? ` · ${fmt(e.closestKm, 1)} km` : ""}
+      </div>
+      <p className="mt-1.5 text-[10px] leading-relaxed text-white/40">{e.reason}</p>
+    </div>
+  );
+}
+
+/**
+ * `gate` decides whether the suspect/exclusion lists render:
+ *  - "loading"  — origin.json hasn't resolved yet; abstain status is unknown. Show the funnel
+ *                 only, never the suspect list, even though suspects.json may already be here.
+ *  - "unknown"  — origin.json failed to load. Same caution as "loading" — we cannot confirm
+ *                 abstain is false, so no suspect is named.
+ *  - "abstain"  — origin.abstain === true. CONTRACTS §6/§8: suspects must be empty; the frontend
+ *                 does not render one even if the file somehow contained one.
+ *  - "clear"    — origin.abstain === false, confirmed. Render suspects.json as given.
+ */
+function AttributeCard({
+  suspects,
+  gate,
+}: {
+  suspects: SuspectsBundle;
+  gate: "loading" | "unknown" | "abstain" | "clear";
+}) {
+  return (
+    <div className="flex flex-col">
+      <div>
+        <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+          Stage 03 — Attribute
+        </div>
+        <div className="mt-1 text-[22px] font-semibold leading-tight tracking-tight text-white">
+          Vessel Attribution
+        </div>
+      </div>
+
+      <Divider />
+
+      <SectionLabel>Attribution Funnel</SectionLabel>
+      <div className="mt-2">
+        <FunnelBar funnel={suspects.funnel} />
+      </div>
+
+      <Divider />
+
+      {gate === "loading" && (
+        <p className="text-[11px] text-white/35">Confirming attribution status…</p>
+      )}
+
+      {gate === "unknown" && (
+        <div className="rounded border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-relaxed text-white/50">
+          Origin estimate unavailable — the suspect list is withheld until abstain status can be
+          confirmed.
+        </div>
+      )}
+
+      {gate === "abstain" && (
+        <div className="rounded border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-relaxed text-white/55">
+          {ABSTAIN_MESSAGE}
+        </div>
+      )}
+
+      {gate === "clear" && (
+        <>
+          <SectionLabel>Suspects</SectionLabel>
+          <div className="mt-2 space-y-2">
+            {suspects.suspects.length === 0 ? (
+              <p className="text-[11px] text-white/35">No suspects scored.</p>
+            ) : (
+              suspects.suspects.map((s, i) => (
+                <SuspectCard key={s.mmsi} s={s} rank={i + 1} />
+              ))
+            )}
+          </div>
+
+          <Divider />
+
+          <SectionLabel>Excluded</SectionLabel>
+          <div className="mt-2 space-y-2">
+            {suspects.excluded.map((e) => (
+              <ExcludedCard key={e.mmsi} e={e} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -301,6 +505,9 @@ export default function ContextPanel() {
   const origin = useAppStore((s) => s.origin);
   const originStatus = useAppStore((s) => s.originStatus);
   const originError = useAppStore((s) => s.originError);
+  const suspects = useAppStore((s) => s.suspects);
+  const suspectsStatus = useAppStore((s) => s.suspectsStatus);
+  const suspectsError = useAppStore((s) => s.suspectsError);
 
   const oilCount =
     detections?.features.filter((f) => f.properties.classification === "oil")
@@ -350,10 +557,50 @@ export default function ContextPanel() {
         ))}
 
       {/* ── Attribute ── */}
-      {activeStage === "attribute" && (
-        <p className="text-[10px] text-white/30">
-          Attribute — available in a later phase.
-        </p>
+      {activeStage === "attribute" &&
+        (suspectsStatus === "error" ? (
+          <div className="rounded border border-[#ff4d4d]/30 bg-[#ff4d4d]/[0.08] p-3">
+            <div className="text-[11px] font-semibold text-[#ff8a8a]">
+              Suspects bundle failed to load
+            </div>
+            <p className="mt-1 whitespace-pre-wrap text-[10px] text-[#ffb0b0]/70">
+              {suspectsError}
+            </p>
+            <p className="mt-2 text-[10px] text-[#ffb0b0]/50">
+              This is a contract bug — tell Akshat. The frontend does not patch
+              bundle data.
+            </p>
+          </div>
+        ) : suspects ? (
+          <AttributeCard
+            suspects={suspects}
+            gate={
+              origin === null
+                ? originStatus === "error"
+                  ? "unknown"
+                  : "loading"
+                : origin.abstain
+                  ? "abstain"
+                  : "clear"
+            }
+          />
+        ) : (
+          <p className="text-[11px] text-white/35">Loading attribution…</p>
+        ))}
+
+      {/* ── Verify ── */}
+      {/* Phase 1.1 skeleton placeholder. The two-column comparison of NAAP's conclusion
+          against the official finding (verification.json) is built in Phase 4. */}
+      {activeStage === "verify" && (
+        <div className="rounded border border-white/[0.08] bg-white/[0.03] p-3">
+          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+            Stage 04 — Verify
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-white/45">
+            The side-by-side of what NAAP concluded against the official
+            investigation is built in a later phase.
+          </p>
+        </div>
       )}
     </aside>
   );

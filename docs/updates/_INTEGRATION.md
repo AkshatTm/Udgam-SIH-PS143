@@ -31,9 +31,11 @@ A clean, sharp-edged comma-shaped slick sits dead centre, ~8–10 dB below the s
 VV (dense-grid dB sampling; VH baseline near noise floor so VH depression is weak but the
 morphology is unambiguous). The anchorage (hundreds of container ships — the 2021 congestion) is
 all in frame. Short rewind: oil was only ~3 h old at the pass. `cases/case-huntington-2021/`
-holds `meta.json` (v3), `bounds.json`, `sar.png`, `thumb.png`. The 2-band `sar_vv_vh.tif` is
-running as an Earth Engine Drive export — **Akshat: when `earthengine task list` shows
-`case-huntington-2021_sar_vv_vh` COMPLETED, move it from Drive/naap_exports/ into the case dir.**
+holds `meta.json` (v3), `bounds.json`, `sar.png`, `thumb.png`. The 2-band `sar_vv_vh.tif` has
+finished as an Earth Engine Drive export (task SUCCEEDED). **Akshat: two tasks ran (an early
+wide-box attempt + the final tight box) — take the NEWER file from Drive/naap_exports/, the one
+matching `bounds.json` (west −118.17), into `cases/case-huntington-2021/sar_vv_vh.tif`. Then
+`gdalinfo -stats` it: 2 bands, dB ranges ~−30..0.**
 
 **Draft announcement for the group (do not batch — send this one now):**
 > 🚩 Case locked: **Huntington Beach / San Pedro Bay Pipeline, Oct 2021**

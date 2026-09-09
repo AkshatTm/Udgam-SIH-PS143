@@ -1,5 +1,5 @@
-import AppShell from "@/components/AppShell";
+import Gallery from "@/components/Gallery";
 
 export default function Home() {
-  return <AppShell />;
+  return <Gallery />;
 }
