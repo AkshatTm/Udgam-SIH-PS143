@@ -19,8 +19,10 @@ we defend in December before an NTRO panel.
 | no-spill case | `TODO` | — | — | — | a Zenodo Part III look-alike scene, Soum picks |
 
 Export settings actually used (these must match what `bounds.json` records):
-- band **VV**, dB clamp **[-25, 0]**, scaled to 8-bit, **`TODO` m/px**
-- command: `python pipeline/export/gee_scene.py --project <id> --scene <index> --case <id>`
+- `sar_vv_vh.tif`: **2-band float32 GeoTIFF, dB, unclamped**, `TODO` m/px (target 10) — Soum's real input
+- `sar.png` / `thumb.png`: band **VV**, dB clamp **[-25, 0]**, 8-bit, `TODO` m/px — display only
+- `bounds.json` also records `vh_available` per case
+- command: `python pipeline/export/gee_scene.py --project <id> --scene <index> --case <id> --bbox W S E N`
 
 ## Ocean and atmosphere (Google Earth Engine)
 

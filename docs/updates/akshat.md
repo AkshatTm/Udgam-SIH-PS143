@@ -4,6 +4,54 @@
 
 ---
 
+## [2026-09-09] Phase 0 + 3 — merged all four branches, hardened the validator, 2-band exporter
+
+**Done:** Merged `origin/{soum,jaiveer,harshita,anushka}` onto `main` on a local `integration`
+branch (was the top catastrophic risk — 2 commits on main, 4 branches holding the project).
+soum/jaiveer/harshita clean; anushka 2 trivial conflicts. Dropped Soum's two force-added
+label CSVs (stay local); kept `classifier.pkl`. Anushka's ÷100→÷1000 fix (repo-wide, verified
+2026-09-07) adopted as canonical; fixed one leftover contradictory sentence.
+
+Hardened `validate_case.py`: `check_verification` (verdict enum, non-empty `source_url`),
+`check_index` (`validate_case.py cases/` now validates the index + each listed case),
+`origin.bounds` sanity + off-scene renderability warning (Harshita D2), `area_km2` vs polygon
+shoelace, extended `suspects.json` (`source_type`, `components` null, `dark_vessels[]` with
+`mmsi: null`, `infrastructure[]`), `verify` act, Box pad 2.0→0.5°, utf-8. `test_validator.py`
+now 12/12. `build_case.py` gathers `verification.json` + optional trace/scene files, `--reindex`.
+`gee_scene.py` rewritten for the 4-artefact 2-band float32 GeoTIFF export (D14). Ran the full
+stub chain end to end (first time the pipeline has actually been run) → PASS, 0 warnings.
+
+**Files touched:** `scripts/validate_case.py`, `scripts/test_validator.py`, `scripts/make_case000.py`
+· `pipeline/export/{build_case,gee_scene,CLAUDE}.py|md` · `pipeline/detect/run.py` (stub area_km2)
+· `pipeline/drift/check_gee.py` · `cases/index.json` (new) · `verification/{TEMPLATE.json,README.md}`
+(new) · `docs/{CONTRACTS,receipts,PER_DIRECTORY_CLAUDE}.md` · `web/CLAUDE.md` · `.gitignore`
+· `docs/updates/_INTEGRATION.md`
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000     # PASS, 0 warnings
+python scripts/validate_case.py cases/             # index + all listed cases
+python scripts/test_validator.py                   # 12/12 caught and named
+python pipeline/export/build_case.py --case case-000
+```
+
+**Open issues:**
+- **`integration` branch is not pushed.** Fast-forward `main` to it and `git push`, then
+  `git push origin --delete` the four feature branches. This is the one thing blocking everyone
+  from a single source of truth.
+- **Harshita, routed:** `MapView.tsx` uses `HeatmapLayer` for the origin — must be `BitmapLayer`
+  (D11). `web/lib/contracts.ts` needs `"verify"` in `ALL_ACTS`/`Act` for screen 4.
+- **GEE still untouched.** `check_ennore.py` + `gee_scene.py` unrun. Auth → confirm the Ennore
+  slick is visible → `receipts.md` → export. First real run of `gee_scene.py` will need fixing.
+- `verification.json` tooling is in (`verification/TEMPLATE.json`, validator, `build_case`) but
+  no case has real prose yet — Phase 4.
+- Frontend `contracts.ts`/`loadCase.ts` predate the v3 `suspects.json`/`origin.json` fields;
+  Harshita renders them for screens 3–4.
+
+**Next:** push `main` → broadcast Part B → GEE auth → Ennore confirm → case selection.
+
+---
+
 ## [2026-09-06] Phase 1 — repo skeleton, frozen contracts, case-000, stubs for every stage
 
 **Done:** Turned 22 loose documents into the repo layout the docs describe. Contracts extracted
