@@ -145,9 +145,14 @@ def main():
     # ---- particles.json : seeded along the slick axis, drifting back NE
     n, steps = a.particles, a.steps
     c = np.array(px2ll(*slick_c, W, H))
-    ang = math.radians(-24)
+    # The polygon (ellipse_ring) and SAR image (make_sar) tilt the slick -24 deg in PIXEL
+    # space; px2ll then flips pixel-y (which points south), so the slick's axis is +24 deg
+    # in lon/lat. Seed along +24 deg here so the cloud lies ALONG the slick at T-0 — seeding
+    # at -24 deg mirrors it and the cloud crosses the slick in an X (bounds are square, so
+    # deg/px is equal on both axes and this angle maps 1:1).
+    axis = math.radians(24)
     t = rng.uniform(-1, 1, n)
-    seed = c + np.stack([t * 0.052 * math.cos(ang), t * 0.052 * math.sin(ang)], 1) \
+    seed = c + np.stack([t * 0.052 * math.cos(axis), t * 0.052 * math.sin(axis)], 1) \
              + rng.normal(0, 0.0016, (n, 2))
     drift = np.array([0.0022, 0.0016])                      # deg per 15-min step
     pos, cur = [], seed.copy()

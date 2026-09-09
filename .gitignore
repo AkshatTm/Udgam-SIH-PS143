@@ -35,6 +35,8 @@ cases/case-smoke/
 web/.next/
 web/dist/
 web/public/cases/
+# vendored maplibre worker + shared chunk, copied from node_modules by predev/prebuild
+web/public/maplibre/
 
 # Credentials — never, under any circumstances
 .env
