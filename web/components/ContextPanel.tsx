@@ -588,20 +588,8 @@ export default function ContextPanel() {
           <p className="text-[11px] text-white/35">Loading attribution…</p>
         ))}
 
-      {/* ── Verify ── */}
-      {/* Phase 1.1 skeleton placeholder. The two-column comparison of NAAP's conclusion
-          against the official finding (verification.json) is built in Phase 4. */}
-      {activeStage === "verify" && (
-        <div className="rounded border border-white/[0.08] bg-white/[0.03] p-3">
-          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
-            Stage 04 — Verify
-          </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-white/45">
-            The side-by-side of what NAAP concluded against the official
-            investigation is built in a later phase.
-          </p>
-        </div>
-      )}
+      {/* Verify has its own full-screen view (VerifyScreen), rendered by CaseWorkspace in
+          place of the map + this panel — nothing for the ContextPanel to show on that stage. */}
     </aside>
   );
 }

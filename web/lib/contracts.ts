@@ -22,7 +22,8 @@ export type AisSource = "noaa_dense" | "gfw_hourly";
 
 /** A documented fixed source the trace stage seeds from when there is no SAR-visible slick
  *  (D16). When present the Trace screen must say the origin was SEEDED FROM A DOCUMENTED
- *  SOURCE, never presented as a NAAP detection. No case in the current library uses it. */
+ *  SOURCE, never presented as a NAAP detection. No case in the current library uses it. Only
+ *  the label is used on the Verify screen (P1.1). */
 export type KnownOrigin =
   | LonLat
   | { lon: number; lat: number; label?: string; source_url?: string };
@@ -43,7 +44,7 @@ export interface CaseMeta {
   detection_time: string; // UTC ISO 8601, trailing Z
   acts_available: Act[];
   ais_source?: AisSource; // required whenever `attribute` is available
-  known_origin?: KnownOrigin;
+  known_origin?: KnownOrigin; // optional, D16 — already flows through loadCase untouched
   gallery?: CaseGallery;
   notes?: string;
 }
@@ -288,31 +289,48 @@ export interface RawSuspectsBundle {
   abstain_reason?: string | null;
 }
 
-/** verification.json — Stage 4 → frontend (Master §6.8). Hand-authored, never generated.
- *  A `miss` is styled as confidently as a `hit`. */
+/**
+ * verification.json exactly as it sits on disk (docs/00_MASTER_PLAN.md §6.8, validator
+ * `check_verification`). Stage 4 is hand-authored research prose, not a pipeline output — the
+ * frontend renders it verbatim and NEVER generates or edits the `explanation`. Unknown keys
+ * (e.g. a scaffold's `_status`) are ignored, never rejected. A `miss` is styled as confidently
+ * as a `hit` — see `VerdictBadge`.
+ */
 export type Verdict = "hit" | "partial" | "miss" | "not_applicable";
 
-export interface RawVerificationBundle {
-  official_finding: {
-    summary: string;
-    responsible_parties: { name: string; mmsi?: string | null; imo?: string | null; role?: string }[];
-    source_name: string;
-    source_url: string;
-    /** Cerulean is `algorithmic_attribution`, never `official_investigation`. */
-    source_type: string;
-    volume_reported?: string;
-    caveat?: string;
-  };
-  naap_result: {
-    origin_summary: string;
-    top_suspects: string[];
-    abstained: boolean;
-  };
-  assessment: {
-    verdict: Verdict;
-    explanation: string;
-    what_would_have_helped?: string;
-  };
+export interface RawResponsibleParty {
+  name: string;
+  mmsi: string | null; // null is valid and expected — never an invented identity
+  imo?: string | null;
+  role?: string;
+}
+
+export interface RawOfficialFinding {
+  summary: string;
+  responsible_parties: RawResponsibleParty[];
+  source_name: string;
+  source_url: string; // required, non-empty; scheme-checked before it ever becomes an href
+  source_type: string;
+  volume_reported?: string;
+  caveat?: string;
+}
+
+export interface RawNaapResult {
+  origin_summary: string;
+  top_suspects: string[]; // MMSI strings, may be empty; rendered as provided (no cross-bundle enrichment)
+  abstained: boolean;
+}
+
+export interface RawAssessment {
+  verdict: Verdict;
+  explanation: string; // required, non-empty, human-written
+  what_would_have_helped?: string;
+}
+
+export interface RawVerification {
+  official_finding: RawOfficialFinding;
+  naap_result: RawNaapResult;
+  assessment: RawAssessment;
 }
 
 /** The four in-case stages, in fixed flow order (Gallery is a route of its own). */

@@ -1,14 +1,15 @@
 {
   "case_id": "case-000",
-  "title": "FAKE bundle \u2014 contract reference only",
+  "title": "FAKE bundle — contract reference only",
   "satellite": "Sentinel-1A (fake)",
   "scene_id": "FAKE-000",
   "detection_time": "2017-01-29T00:14:00Z",
   "acts_available": [
     "detect",
     "trace",
-    "attribute"
+    "attribute",
+    "verify"
   ],
   "ais_source": "noaa_dense",
-  "notes": "Synthetic. Never shown to a judge. Regenerate with scripts/make_case000.py."
+  "notes": "Synthetic. Never shown to a judge, and not listed in cases/index.json. Regenerate with scripts/make_case000.py (note: the 'verify' act + verification.json here are a hand-added frontend fixture for the P1.1 Verify screen and a regen would drop them)."
 }

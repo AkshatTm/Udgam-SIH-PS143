@@ -8,6 +8,7 @@ import { loadParticleBundle, type ParticleBundle } from "./particles";
 import { loadOriginBundle, type OriginBundle } from "./origin";
 import { loadVesselBundle, type VesselBundle } from "./vessels";
 import { loadSuspectsBundle, type SuspectsBundle } from "./suspects";
+import { loadVerificationBundle, type VerificationBundle } from "./verification";
 
 export type LayerId = "sar" | "detections" | "particles" | "origin" | "vessels";
 
@@ -62,6 +63,13 @@ export interface AppState {
   suspectsStatus: LoadStatus;
   suspectsError: string | null;
 
+  // Phase 4 (P1.1) verification. Same discipline as origin/suspects: fetched + parsed once per
+  // case, then read from memory. Feeds the Verify screen only. Loaded in the background when
+  // `verify` is in acts_available — never blocks the shell.
+  verification: VerificationBundle | null;
+  verificationStatus: LoadStatus;
+  verificationError: string | null;
+
   activeStage: Act;
   selectedDetectionId: string | null;
 
@@ -74,6 +82,7 @@ export interface AppState {
   loadOrigin: () => Promise<void>;
   loadVessels: () => Promise<void>;
   loadSuspects: () => Promise<void>;
+  loadVerification: () => Promise<void>;
   setStage: (stage: Act) => void;
   selectDetection: (id: string | null) => void;
   toggleLayer: (id: LayerId) => void;
@@ -133,6 +142,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   suspectsStatus: "idle",
   suspectsError: null,
 
+  verification: null,
+  verificationStatus: "idle",
+  verificationError: null,
+
   activeStage: "detect",
   selectedDetectionId: null,
 
@@ -180,6 +193,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       suspects: null,
       suspectsStatus: "idle",
       suspectsError: null,
+      // Reset verification for the incoming case.
+      verification: null,
+      verificationStatus: "idle",
+      verificationError: null,
     });
     try {
       const { meta, bounds, detections, detectionsPending } = await loadCase(id);
@@ -210,6 +227,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (meta.acts_available.includes("attribute")) {
         void get().loadVessels();
         void get().loadSuspects();
+      }
+      // Fetch the Verify bundle in the background. CONTRACTS §6.1: `verify` in acts_available
+      // guarantees verification.json exists (the validator enforces it).
+      if (meta.acts_available.includes("verify")) {
+        void get().loadVerification();
       }
     } catch (err) {
       if (get().activeCaseId !== id) return;
@@ -288,6 +310,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (err) {
       if (get().activeCaseId !== id) return;
       set({ suspects: null, suspectsStatus: "error", suspectsError: (err as Error).message });
+    }
+  },
+
+  loadVerification: async () => {
+    const id = get().activeCaseId;
+    if (get().verificationStatus === "loading") return;
+    set({ verificationStatus: "loading", verificationError: null });
+    try {
+      const bundle = await loadVerificationBundle(id);
+      // A different case was selected while this bundle was in flight — drop it.
+      if (get().activeCaseId !== id) return;
+      set({ verification: bundle, verificationStatus: "ready" });
+    } catch (err) {
+      if (get().activeCaseId !== id) return;
+      set({
+        verification: null,
+        verificationStatus: "error",
+        verificationError: (err as Error).message,
+      });
     }
   },
 

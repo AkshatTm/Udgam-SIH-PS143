@@ -21,6 +21,7 @@ import TimeSlider from "./TimeSlider";
 import LayerToggles from "./LayerToggles";
 import FlowBar from "./FlowBar";
 import PrimaryAction from "./PrimaryAction";
+import VerifyScreen from "./VerifyScreen";
 
 // MapLibre touches `window` — never render it on the server.
 const MapView = dynamic(() => import("./MapView"), {
@@ -140,6 +141,11 @@ export default function CaseWorkspace() {
           <StageRail />
           <div className="relative min-w-0">
             <MapView />
+            {/* Verify replaces the map+panel view but keeps MapView mounted underneath so it
+                is never torn down on stage navigation. ContextPanel and the footer controls
+                are suppressed for this stage; PrimaryAction stays (it is "Try another case →"
+                here, wired the same as every other stage). */}
+            {stage === "verify" && <VerifyScreen />}
             {status === "loading" && (
               <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded border border-white/[0.08] bg-black/50 px-3 py-1">
                 <span className="font-mono text-[10px] text-white/50">Loading…</span>
@@ -147,11 +153,11 @@ export default function CaseWorkspace() {
             )}
             <PrimaryAction label={primaryActionLabel(stage, acts)} onClick={onPrimary} />
           </div>
-          <ContextPanel />
+          {stage !== "verify" && <ContextPanel />}
         </div>
       )}
 
-      {meta && !error && (
+      {meta && !error && stage !== "verify" && (
         <footer className="flex flex-col bg-[#0b0f14]">
           <TimeSlider />
           <div className="flex items-center border-t border-white/[0.06] px-4 py-1.5">

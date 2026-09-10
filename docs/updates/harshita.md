@@ -12,6 +12,95 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-10 15:20] P1.1 / Phase 4 — Screen 4 Verify: two-column finding comparison + verdict
+
+**Done:** Built the missing Verify screen. `verification.json` (Master §6.8) now loads:
+`RawVerification` + sub-types + `Verdict` in `contracts.ts`; a new `web/lib/verification.ts`
+loader/validator (same discipline as `origin.ts`/`suspects.ts` — descriptive throws, never
+patches, ignores unknown keys like a scaffold's `_status`); a `verification /
+verificationStatus / verificationError` slice in `store.ts` with `loadVerification()` fetched
+in the background when `verify` is in `acts_available`. New `web/components/VerifyScreen.tsx`
+renders two equal columns (What NAAP concluded | What the investigation found), a `VerdictBadge`
+(HIT/PARTIAL/MISS/NOT APPLICABLE — identical box, only the colour token differs, MISS is a calm
+slate not an error), responsible parties (`mmsi: null` → "MMSI —"), the `explanation` verbatim,
+and optional rows that hide when absent. `source_url` goes through a new `ExternalLink` that
+only becomes a real `<a target=_blank rel="noopener noreferrer">` for `http(s)` — anything else
+(a `javascript:` scheme, a scaffold's "TODO — real URL") renders as text + a "malformed URL"
+note, never an href. `CaseWorkspace` renders `VerifyScreen` as a full-cover layer over the
+still-mounted `MapView` and suppresses `ContextPanel` + the footer slider/toggles on `verify`;
+the bottom-right primary action ("Try another case →") is unchanged. D16: when
+`meta.known_origin` is present the NAAP column shows "Origin seeded from a documented source,
+not a NAAP detection" — `known_origin` already flows through `loadCase` untouched, so this
+needed only a `CaseMeta` type field, no new data path and no `loadCase.ts` change.
+
+QA'd against a **synthetic `case-000` fixture** (`cases/case-000/verification.json` + `verify`
+added to its `acts_available`) because the three real verify-capable cases don't load through
+the frontend yet (see open issues). The fixture is explicitly synthetic, ASCII-only, and
+passes the current validator.
+
+**Files touched:** `web/lib/contracts.ts` (+`RawVerification`/sub-types/`Verdict`, +optional
+`CaseMeta.known_origin`) · `web/lib/verification.ts` (new) · `web/lib/store.ts` (+verification
+slice + `loadVerification` + gated background fetch) · `web/components/VerifyScreen.tsx` (new) ·
+`web/components/VerdictBadge.tsx` (new) · `web/components/ExternalLink.tsx` (new) ·
+`web/components/CaseWorkspace.tsx` (render `VerifyScreen`, hide panel+footer on `verify`) ·
+`web/components/ContextPanel.tsx` (removed the obsolete Verify placeholder) ·
+`cases/case-000/verification.json` (new — synthetic fixture) · `cases/case-000/meta.json`
+(+`"verify"`). No producer/pipeline/validator/real-case files touched.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000     # PASS (acts now include verify)
+robocopy cases\case-000 web\public\cases\case-000 /MIR
+cd web && npm run dev
+```
+Expected: `http://localhost:3000/case/case-000/verify` — two equal columns, a PARTIAL badge,
+the synthetic explanation prose, a working external source link, and "Try another case →"
+bottom-right. Full flow: `/case/case-000/detect` → Trace → Attribute → "Check our answer" →
+Verify.
+
+**Checkpoint artefact:**
+- Static (all PASS): `python scripts/validate_case.py cases/case-000` → PASS ·
+  `python scripts/test_validator.py` → 14/14, golden `case-000` still passes ·
+  `npm run lint` → 0 warnings · `npx tsc --noEmit` → clean · `npm run build` → compiled, 5/5
+  pages.
+- Browser (Playwright MCP, dev server): direct `/verify` URL ✓ · full case-000 flow to Verify
+  ✓ · all four verdicts render with an identical badge, MISS not an error style ✓ ·
+  `source_url` = `javascript:alert(1)` and a "TODO — real URL" string → plain text + note, no
+  href, no dialog ✓ · corrupt bundle (missing `explanation`) → red "contract bug — tell Akshat"
+  card, no crash ✓ · optional fields dropped + empty parties + `abstained:true` → rows hide,
+  "NAAP named no vessel", no throw ✓ · `meta.known_origin` present → "seeded from a documented
+  source" line appears ✓ · Back from Verify → Attribute rebuilds cleanly, footer/panel restored
+  ✓ · "Try another case →" → gallery ✓ · console clean · `verification.json` fetched once. All
+  temporary QA edits to the served copy were restored.
+
+**Open issues:**
+- **D16 `loadCase.ts` gap (separate prerequisite, NOT fixed here, routed to Harshita in
+  `docs/updates/_INTEGRATION.md`):** `web/lib/loadCase.ts` fetches `detections.geojson`
+  unconditionally, so `case-ennore-2017` / `case-golden-ray-2021` (no `detect` act, D16) throw
+  on load — Verify is unreachable on the only real cases that carry the `verify` act. Fix:
+  gate the `detections.geojson` fetch on `"detect" in acts_available`.
+- **All three real `verification/case-*.json` are Akshat's Phase-4 scaffolds** —
+  `assessment.explanation` and `naap_result.origin_summary` are `"TODO — HUMAN PROSE"`, and
+  Ennore's `source_url` is a "TODO" string. `build_case.py` has not copied any of them into
+  `cases/<id>/verification.json`.
+- **Contract conflict (Akshat's to reconcile):** `case-ennore-2017` and `case-golden-ray-2021`
+  `meta.json` list `"verify"` in `acts_available` but have no `cases/<id>/verification.json`
+  → `validate_case.py` fails them; the scaffold files' own `_status` says not to add `verify`
+  until the prose is real.
+- **`case-huntington-2021`** (gallery default / hero) has `acts_available: ["detect"]` — no
+  `verify` act. If Verify must be in the default demo path, Akshat needs to add the act +
+  prose.
+- **`scripts/make_case000.py`** regeneration would drop the hand-added `verify` act +
+  `verification.json` from `case-000` (noted in the fixture's `notes`).
+- **Same-case re-selection** after "Try another case" keeps stale transient state — the C8
+  idle-reset gap (backlog P1.2), deliberately not fixed here.
+- Not committed / not pushed.
+
+**Next:** the `loadCase.ts` D16 gate (small, unblocks real-case Verify + Trace), then P1.1's
+real-data pass once Akshat lands a real `verification.json` via `build_case.py`.
+
+---
+
 ## [2026-09-10 13:46] W1 / Phase 5.1 — origin visualization: HeatmapLayer → BitmapLayer (ruling D11)
 
 **Done:** The origin probability field now renders through a deck.gl `BitmapLayer`, never a
