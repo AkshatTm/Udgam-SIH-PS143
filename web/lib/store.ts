@@ -93,6 +93,13 @@ export interface AppState {
    *  rewind from T−0. No-ops unless particles + origin are both `ready` and this case has not
    *  been initialised yet, so it is safe to call on every render. */
   initTrace: () => void;
+  /** Return to a clean Gallery state (docs/04 C8, Master §2.1). Clears only the transient
+   *  session state the next judge must not inherit — slider, selection, stage, layers,
+   *  playback, the Trace-arrival guard — and re-seeds the best-oil detection. When the case is
+   *  fully loaded (`status === "ready"`) every bundle stays in memory, so re-picking the same
+   *  case is instant with no re-fetch; otherwise the incomplete load is dropped and re-entry
+   *  retries. Navigation to "/" is the caller's job (the store never touches the router). */
+  resetToGallery: () => void;
 }
 
 /** The `id` of the highest-confidence `"oil"` detection (first in file order on a tie), or
@@ -360,5 +367,58 @@ export const useAppStore = create<AppState>((set, get) => ({
       playing: true, // existing usePlayback rewinds T−0 → T−24h once, then stops
       autoPlaying: true, // Slice 2 — run that first rewind at AUTOPLAY_STEPS_PER_SEC
     }));
+  },
+
+  resetToGallery: () => {
+    const s = get();
+    // The transient session state Judge B must never inherit (docs/04 C8, Master §2.1).
+    const transient = {
+      tNorm: 1,
+      activeStage: "detect" as Act,
+      layers: {
+        sar: true,
+        detections: true,
+        particles: false,
+        origin: false,
+        vessels: false,
+      },
+      playing: false,
+      autoPlaying: false,
+      traceInitFor: null,
+      error: null,
+      // Re-seed the best-oil pick so Detect is never blank on re-entry (docs/04 C1).
+      selectedDetectionId: s.detections ? bestOilDetectionId(s.detections) : null,
+    };
+    if (s.status === "ready") {
+      // Case fully loaded — keep every bundle (and its ready/error status) in memory. Re-picking
+      // the same case between judges is then instant, with no re-fetch.
+      set(transient);
+    } else {
+      // Never loaded cleanly (idle / loading / error) — drop the incomplete state so re-entry
+      // runs loadActiveCase() fresh.
+      set({
+        ...transient,
+        status: "idle",
+        selectedDetectionId: null,
+        meta: null,
+        bounds: null,
+        detections: null,
+        particles: null,
+        particlesStatus: "idle",
+        particlesError: null,
+        origin: null,
+        originStatus: "idle",
+        originError: null,
+        vessels: null,
+        vesselsStatus: "idle",
+        vesselsError: null,
+        suspects: null,
+        suspectsStatus: "idle",
+        suspectsError: null,
+        verification: null,
+        verificationStatus: "idle",
+        verificationError: null,
+      });
+    }
   },
 }));

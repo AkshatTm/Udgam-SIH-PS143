@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useAppStore } from "@/lib/store";
+import { useIdleReset } from "@/lib/useIdleReset";
 import { adjacentStage, isStage, primaryActionLabel } from "@/lib/flow";
 import type { Act } from "@/lib/contracts";
 import Header from "./Header";
@@ -64,6 +65,11 @@ export default function CaseWorkspace() {
   const particlesStatus = useAppStore((s) => s.particlesStatus);
   const originStatus = useAppStore((s) => s.originStatus);
   const initTrace = useAppStore((s) => s.initTrace);
+  const resetToGallery = useAppStore((s) => s.resetToGallery);
+
+  // C8 — after ~90 s of no interaction, return to the Gallery in a clean state. Mounted here
+  // so the timer/listeners exist only while a case is open; unmounts (and cleans up) on "/".
+  useIdleReset();
 
   // URL case → store. setActiveCase() no-ops when the id already matches, so kick off the
   // first load explicitly when the store is still idle for that id.
@@ -108,8 +114,13 @@ export default function CaseWorkspace() {
   const acts = meta?.acts_available;
   const nextStage = adjacentStage(stage, acts, 1);
   const onPrimary = () => {
-    if (nextStage) router.push(`/case/${caseId}/${nextStage}`);
-    else router.push("/");
+    if (nextStage) {
+      router.push(`/case/${caseId}/${nextStage}`);
+    } else {
+      // Terminal stage → "Try another case": same clean-state reset as idle / Start over.
+      resetToGallery();
+      router.push("/");
+    }
   };
 
   return (

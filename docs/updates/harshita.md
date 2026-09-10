@@ -12,6 +12,83 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-10 16:35] P1.2 / C8 — idle reset to a clean Gallery after ~90 s
+
+**Done:** Implemented the C8 self-guiding requirement (Master §2.1, `docs/04:278`): after ~90 s
+of no interaction the app returns to the Gallery in a clean state so the next judge never
+inherits the previous one's slider / selection / stage / layers / playback. New store action
+`resetToGallery()` (`store.ts`) clears **only the transient session state** — `tNorm → 1`,
+`activeStage → "detect"`, `layers →` initial, `playing`/`autoPlaying → false`,
+`traceInitFor → null`, `error → null` — and re-seeds `selectedDetectionId` to the best-oil pick
+(C1). When `status === "ready"` it **keeps `activeCaseId` + every loaded bundle in memory**, so
+re-picking the same case between judges is instant with **no re-fetch**; a case that never
+loaded cleanly is dropped to `status: "idle"` so re-entry retries. This also fixes the P1.1
+audit's stale-state bug (`setActiveCase` no-ops on the same id) — on re-entry `CaseWorkspace`'s
+mount effect sees `status !== "idle"` and doesn't reload, rendering instantly from kept data,
+now clean. New hook `web/lib/useIdleReset.ts` (`IDLE_MS = 90_000`), mounted once from
+`CaseWorkspace`: one `useEffect([router])` attaching `["pointerdown","pointermove","keydown",
+"wheel"]` on `window` (`{capture:true, passive:true}`) to a bare `last = Date.now()` bump, plus
+a self-rescheduling `setTimeout` that fires `resetToGallery(); router.push("/")` once (a
+`fired` guard) when idle ≥ `IDLE_MS`. Cleanup on unmount removes every listener and clears the
+timeout — the Gallery has no timer, and repeat mount/unmount leaks nothing. `FlowBar` "Start
+over" and the first-stage "Cases" button, and `CaseWorkspace`'s terminal "Try another case →"
+primary action, all route through the same `resetToGallery()`. Forward stage navigation is
+untouched. The listeners only observe input — never `preventDefault` / `stopPropagation`. No
+new dependency; no localStorage.
+
+**Files touched:** `web/lib/store.ts` (modified — `resetToGallery` action + interface) ·
+`web/lib/useIdleReset.ts` (new — the hook) · `web/components/CaseWorkspace.tsx` (modified —
+`useIdleReset()` + `resetToGallery()` in the terminal primary action) ·
+`web/components/FlowBar.tsx` (modified — `toGallery()` for "Start over" + the "Cases" branch).
+No producer / pipeline / doc / data / routing / camera / MapView / TimeSlider changes.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000      # PASS (no data change — standard gate)
+cd web && npm run dev                                # http://localhost:3000/case/case-000/detect
+```
+Expected: enter a case, scrub the slider / toggle layers, then leave it alone for ~90 s → the
+app returns to the Gallery; re-pick the same case → slider rested, layers default, best
+detection selected, stage = Detect, no network re-fetch of the bundle. "Start over" / "Cases" /
+"Try another case →" do the same clean reset immediately.
+
+**Checkpoint artefact:**
+- Static (all PASS): `python scripts/validate_case.py cases/case-000` → PASS ·
+  `npm run lint` → 0 warnings · `npx tsc --noEmit` → clean · `npm run build` → compiled, 5/5
+  pages. Final `IDLE_MS` value in the tree: **90_000**.
+- Browser (Playwright MCP, dev server; QA run with `IDLE_MS` temporarily 3 000 / 15 000 /
+  120 000, then restored to 90 000 for a real-time check):
+  - **Idle → Gallery** fires reliably once idle exceeds `IDLE_MS`; real-time run with
+    `IDLE_MS = 90_000` fired at ~85–90 s of no interaction ✓
+  - **Activity prevents reset** — `pointermove` every 1 s held the session open for 22 s past a
+    15 s `IDLE_MS` ✓
+  - **Clean re-entry, no re-fetch** — after "Start over" with Origin+Vessels toggled on and the
+    slider at 0.4: re-picking case-000 → slider back to `T − 0h 0m`, Origin/Vessels/Particles
+    OFF, best-oil detection selected, stage = Detect; network shows **no** new
+    `bounds/detections/particles/origin/vessels/suspects/verification` fetch (only MapView's
+    cached `sar.png` on remount) ✓
+  - **Trace auto-play re-initialises** on the next Trace visit (`traceInitFor` was reset) ✓
+  - **"Start over" / "Cases" / "Try another case →"** each → `/` with the same clean reset ✓
+  - **Forward stage nav** (detect→trace→attribute→verify, and Back) never resets ✓
+  - **Gallery has no timer** — 20 s idle on `/` → nothing, no console error ✓
+  - **No leak** — 5× enter/leave cycles → zero console warnings/errors, no "setState on
+    unmounted" ✓  · console clean throughout.
+
+**Open issues:**
+- A judge who reads a screen for 90 s without any pointer move / wheel / keypress gets bounced
+  to the Gallery mid-read — C8's deliberate trade-off; the docs fix the value at ~90 s.
+- A backgrounded browser tab throttles `setTimeout`, so the reset fires late there — fine for a
+  foreground kiosk demo; not handled.
+- Programmatic `element.click()` does **not** count as activity (it emits no `pointerdown`) —
+  irrelevant to real use (a real click fires real pointer events); noted only because it
+  affected test scripting.
+- Not committed / not pushed.
+
+**Next:** backlog P2 — union / per-stage camera (Phase 5.2, "W5"), which needs Akshat's D4
+ruling; or wire the real verification prose once Akshat runs `build_case.py`.
+
+---
+
 ## [2026-09-10 15:20] P1.1 / Phase 4 — Screen 4 Verify: two-column finding comparison + verdict
 
 **Done:** Built the missing Verify screen. `verification.json` (Master §6.8) now loads:
