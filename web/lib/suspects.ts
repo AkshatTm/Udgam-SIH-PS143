@@ -42,6 +42,11 @@ export interface SuspectsBundle {
   /** Sorted by descending score, exactly as the file provides — never re-sorted here. */
   suspects: Suspect[];
   excluded: ExcludedVessel[];
+  /** docs/04 D2 — Stage 3 deliberately refused to attribute. When true, `suspects` is empty. */
+  abstained: boolean;
+  /** The case's stated reason for abstaining, exactly as supplied. `null` when not abstaining
+   *  or when the bundle carries no reason. */
+  abstainReason: string | null;
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -162,8 +167,36 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
   }
 
   raw.excluded.forEach((e, i) => validateExcluded(e, i, id));
-  if (raw.excluded.length === 0) {
-    throw new Error(`${where}: "excluded" is empty — at least one exclusion with a stated reason is required`);
+  // A scored case must rule at least one vessel out (docs/04 Screen 3 + validator warn). An
+  // abstaining / no-vessel case (suspects empty) legitimately has none — CONTRACTS §8's
+  // invariant is only "abstained ⇒ suspects empty", not "always ≥1 excluded".
+  if (raw.excluded.length === 0 && raw.suspects.length > 0) {
+    throw new Error(
+      `${where}: a scored case must list at least one excluded vessel with a stated reason`,
+    );
+  }
+
+  // Abstention (docs/04 D2, CONTRACTS §8). Optional fields, but a malformed one is a contract
+  // bug — surfaced, never coerced or guessed around.
+  if ("abstained" in raw && typeof raw.abstained !== "boolean") {
+    throw new Error(`${where}: "abstained" must be a boolean when present`);
+  }
+  const abstained = raw.abstained === true;
+  if (
+    "abstain_reason" in raw &&
+    raw.abstain_reason !== null &&
+    typeof raw.abstain_reason !== "string"
+  ) {
+    throw new Error(`${where}: "abstain_reason" must be a string or null when present`);
+  }
+  const abstainReason =
+    typeof raw.abstain_reason === "string" && raw.abstain_reason.trim().length > 0
+      ? raw.abstain_reason
+      : null;
+  if (abstained && raw.suspects.length > 0) {
+    throw new Error(
+      `${where}: "abstained" is true but ${raw.suspects.length} suspect(s) are listed — an abstaining bundle names none`,
+    );
   }
 
   return {
@@ -190,5 +223,7 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
       closestKm: e.closest_km,
       reason: e.reason,
     })),
+    abstained,
+    abstainReason,
   };
 }

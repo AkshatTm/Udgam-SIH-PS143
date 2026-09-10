@@ -1,0 +1,7 @@
+{
+  "funnel": { "in_region": 412, "in_window": 63, "plausible": 12, "scored": 0 },
+  "suspects": [],
+  "excluded": [],
+  "abstained": true,
+  "abstain_reason": "Synthetic fixture: the 90% origin region spans 45 km, beyond the 40 km limit. The 50-run ensemble cannot separate the candidate vessels, so Stage 3 names none."
+}

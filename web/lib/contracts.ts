@@ -283,9 +283,10 @@ export interface RawSuspectsBundle {
   infrastructure?: RawInfrastructure[];
   natural_seep?: RawNaturalSeep;
   excluded: RawExcludedVessel[];
-  /** Designed refusal when confidence is insufficient — a feature, not a failure. When true,
-   *  `suspects` is empty and the screen says why. */
+  /** §6.7 — Stage 3's deliberate refusal to attribute (docs/04 D2). `true` ⇒ `suspects` empty,
+   *  a feature not a failure — the screen says why. */
   abstained?: boolean;
+  /** The human "why" for the abstention. `null` / absent when not abstaining. */
   abstain_reason?: string | null;
 }
 

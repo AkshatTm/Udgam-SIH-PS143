@@ -421,9 +421,10 @@ function ExcludedCard({ e }: { e: ExcludedVessel }) {
  *                 only, never the suspect list, even though suspects.json may already be here.
  *  - "unknown"  — origin.json failed to load. Same caution as "loading" — we cannot confirm
  *                 abstain is false, so no suspect is named.
- *  - "abstain"  — origin.abstain === true. CONTRACTS §6/§8: suspects must be empty; the frontend
- *                 does not render one even if the file somehow contained one.
- *  - "clear"    — origin.abstain === false, confirmed. Render suspects.json as given.
+ *  - "abstain"  — origin.abstain === true (diffuse origin) OR suspects.abstained === true
+ *                 (Stage 3's deliberate refusal for any reason). docs/04 D2: a maturity signal,
+ *                 not a failure — funnel + headline + the case's abstain reason; no suspect.
+ *  - "clear"    — neither abstains, confirmed. Render suspects.json as given.
  */
 function AttributeCard({
   suspects,
@@ -464,8 +465,19 @@ function AttributeCard({
       )}
 
       {gate === "abstain" && (
-        <div className="rounded border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-relaxed text-white/55">
-          {ABSTAIN_MESSAGE}
+        // docs/04 D2 — style as a deliberate decision, never a failure. No red, no ✗.
+        <div className="rounded border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+            Deliberate abstention
+          </div>
+          <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-white/75">
+            {ABSTAIN_MESSAGE}
+          </p>
+          {suspects.abstainReason && (
+            <p className="mt-2 text-[10px] leading-relaxed text-white/45">
+              {suspects.abstainReason}
+            </p>
+          )}
         </div>
       )}
 
@@ -597,7 +609,7 @@ export default function ContextPanel() {
                 ? originStatus === "error"
                   ? "unknown"
                   : "loading"
-                : origin.abstain
+                : origin.abstain || suspects.abstained
                   ? "abstain"
                   : "clear"
             }

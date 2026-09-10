@@ -12,6 +12,101 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-10 23:05] P1.4 / D2 — abstain state (deliberate attribution refusal)
+
+**Done:** Completed the D2 abstain state on the Attribute screen (docs/04 Part D). It was
+~70% built (the `AttributeCard` `gate === "abstain"` branch already showed the funnel + the
+verbatim headline `"Attribution not possible at acceptable confidence."` in a neutral box).
+Added: the D2 trigger now fires on **`origin.abstain === true` OR `suspects.abstained === true`**
+(Stage 3 can abstain for reasons other than a diffuse origin — e.g. >40 vessels in the
+window); the case's **`abstain_reason`** is now parsed and rendered as supplied (nothing
+invented, nothing shown when null); a "Deliberate abstention" label frames it as a decision,
+not a gap. `RawSuspectsBundle` gains optional `abstained?` / `abstain_reason?`; `suspects.ts`
+parses them into `SuspectsBundle.abstained` / `.abstainReason` and **throws a contract error
+on a malformed value** (`abstained` not a boolean, `abstain_reason` not string|null,
+`abstained: true` with a non-empty suspect list) — never coerced or silently ignored.
+
+**Fixed a pre-existing blocker:** `suspects.ts` threw on `excluded: []`, but the validator
+only *warns*. A genuine abstain bundle (origin too diffuse → nobody ruled in *or* out) has
+`excluded: []`, so it would have rendered the **red "Suspects bundle failed to load — contract
+bug"** card — the opposite of D2. The empty-`excluded` throw is now scoped to
+`suspects.length > 0` (a scored case still needs ≥1 exclusion; an abstaining / no-vessel case
+does not) — aligning the frontend with the validator without loosening it for normal cases.
+
+**D1 vs D2:** orthogonal — an abstain case *has* oil (`isNoSpill` false), so `NoSpillBanner`
+and the "nothing to trace" tooltips never appear. **No P1.3 code touched.** Attribute stays
+**available** (no greying) — the D1/D2 distinction. `MapView` already renders every vessel
+track "plain" under abstain; `TraceCard` already shows "Origin cloud too diffuse — no suspects
+can be named."; `VerifyScreen` already handles `naap_result.abstained` (P1.1). None touched.
+
+QA'd against a synthetic **`cases/case-000-abstain/`** — a full `detect+trace+attribute` case
+(`origin.abstain: true`, `radius_90_km: 45`, `suspects: []`, `abstained: true` + a synthetic
+`abstain_reason`; 1 oil detection so `isNoSpill` stays false). Assets copied from `case-000`.
+**Not** in `cases/index.json`.
+
+**Files touched:** `web/lib/contracts.ts` (+`RawSuspectsBundle.abstained?` / `abstain_reason?`) ·
+`web/lib/suspects.ts` (parse + throw-on-malformed; scope the empty-`excluded` throw) ·
+`web/components/ContextPanel.tsx` (gate `|| suspects.abstained`; abstain branch renders the
+reason + label) · `cases/case-000-abstain/` (new synthetic fixture). No producer / validator /
+MapView / store / flow / StageRail / FlowBar / VerifyScreen / real-case / index.json changes.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000-abstain   # PASS (1 benign "no excluded vessels" warning)
+robocopy cases\case-000-abstain web\public\cases\case-000-abstain /MIR
+cd web && npm run dev
+```
+Expected: `http://localhost:3000/case/case-000-abstain/attribute` — the funnel
+(412 → 63 → 12 → **0**), then "Deliberate abstention / Attribution not possible at acceptable
+confidence." + the case's reason, in a neutral box. No suspect cards, no fabricated vessel, no
+red. Detect/Trace are normal; StageRail shows all acts enabled.
+
+**Checkpoint artefact:**
+- Static (all PASS): `validate_case.py` on `case-000` (0 warn, unchanged), `case-000-nospill`
+  (1 warn, unchanged), `case-000-abstain` (1 warn) · `test_validator.py` 14/14 ·
+  `npm run lint` 0 warnings · `npx tsc --noEmit` clean · `npm run build` compiled.
+- Browser (Playwright MCP, dev server):
+  - Abstain fixture Attribute: **no** red error card; funnel with `Scored 0`; "DELIBERATE
+    ABSTENTION" + headline + the fixture's `abstain_reason`; **no** suspect cards / fabricated
+    name ✓
+  - Abstain fixture Detect: oil card, **no** `NoSpillBanner`, "Trace this slick back →" ✓
+  - Abstain fixture Trace: `TraceCard`, `90% region 45.0 km`, "Origin cloud too diffuse — no
+    suspects can be named." ✓
+  - StageRail: Detect/Trace/Attribute **enabled** (standard tooltips, not "nothing to
+    trace"); Verify greyed with the existing D3 string ✓ · primary action "Try another case →"
+  - Edge A — `abstain_reason` absent → headline + label only, no crash ✓
+  - Edge B — `abstained: "yes"` (malformed) → **contract-error card** `"abstained" must be a
+    boolean`, abstention UI **not** shown ✓ (the mandatory correction)
+  - Edge C — `abstained: true` + a suspect listed → contract-error card, no abstention UI, no
+    fabricated suspect ✓
+  - Edge D — `suspects.json` missing → contract-error card (HTTP 404), no abstention UI ✓
+  - Regression — `case-000`: 3 suspect cards, `Scored 3`, exclusions, **no** abstention text ✓
+  - Regression — `case-000-nospill`: banner + "nothing to trace" tooltip unchanged ✓
+  - Case switching (abstain → gallery → case-000 → nospill): no state leak ✓
+  - Console clean (the only error was the deliberate Edge-D 404, since restored).
+  - All temporary QA edits to the served fixture restored.
+
+**Open issues:**
+- **Real-data dependency (Anushka):** the real abstain bundle does not exist (Master §8
+  "Anushka: abstain bundle ──▶ Harshita: refusal screen"; `docs/04:307`, `docs/05:137,140`).
+  Final "abstain screen against the real bundle" sign-off is deferred; the code lights up
+  unchanged when Anushka's bundle lands in `cases/` + `index.json`.
+- **Behaviour change for a hypothetical case shape:** a *normal* case with
+  `suspects.length === 0 && excluded === []` (currently non-existent) now renders "No suspects
+  scored." instead of erroring — matching the validator (`warn`), but noted.
+- `origin.abstain === false` + `suspects.abstained === true` (a >40-vessel abstain): the
+  Attribute screen abstains correctly, but `TraceCard` still says "Origin within attribution
+  confidence" — true (the origin geometry *is* fine); the abstention is downstream. Left as-is
+  per scope.
+- Fixture cosmetic: `origin.json` grid copied from `case-000` (a tight blob) while
+  `radius_90_km: 45` — the rendered cloud won't *look* 45 km diffuse. D2 UI is flag-driven.
+- Not committed / not pushed.
+
+**Next:** backlog P2 — union / per-stage camera (Phase 5.2 "W5", needs Akshat's D4 ruling), or
+the D16 `loadCase.ts` gate (small, unblocks real-case Trace/Verify).
+
+---
+
 ## [2026-09-10 19:20] P1.3 / D1 — no-spill designed state
 
 **Done:** Built the D1 "No spill detected" state (docs/04 Part D; Master §2.2, §6.3) — a
