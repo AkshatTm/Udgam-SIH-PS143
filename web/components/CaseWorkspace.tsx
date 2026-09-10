@@ -150,6 +150,16 @@ export default function CaseWorkspace() {
         <div className="flex items-center justify-center">
           <span className="font-mono text-[11px] text-white/30">Loading case…</span>
         </div>
+      ) : !meta.acts_available.includes(stage) ? (
+        // D3 — a direct URL to an act this case does not expose. The reconcile effect above
+        // redirects to the first available stage on the next tick; until it lands, show a
+        // neutral placeholder rather than flashing the map + a stale ContextPanel. Not an
+        // error state — no red, no "failed".
+        <div className="flex items-center justify-center">
+          <span className="font-mono text-[11px] text-white/30">
+            Not part of this case — taking you to the first stage…
+          </span>
+        </div>
       ) : (
         <div className="grid min-h-0 grid-cols-[auto_1fr_auto]">
           <StageRail />
@@ -174,7 +184,7 @@ export default function CaseWorkspace() {
         </div>
       )}
 
-      {meta && !error && stage !== "verify" && (
+      {meta && !error && stage !== "verify" && meta.acts_available.includes(stage) && (
         <footer className="flex flex-col bg-[#0b0f14]">
           <TimeSlider />
           <div className="flex items-center border-t border-white/[0.06] px-4 py-1.5">

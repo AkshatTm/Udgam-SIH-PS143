@@ -12,6 +12,63 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-11 00:05] P1.5 / D3 — act-unavailable state (a stage missing from acts_available)
+
+**Done:** Closed D3 (docs/04 Part D). The greyed-stage machinery already existed from Phase 1
+(StageRail greys a disabled act + tooltip; FlowBar dims the step + tooltip; `flow.ts`
+`adjacentStage` / `primaryActionLabel` skip a missing act so Trace's primary action becomes
+"See what really happened →" when `attribute` is absent; `CaseWorkspace` reconciles a URL that
+points at a missing act to `acts_available[0]`; `store.setStage` refuses one). D3 had **never
+been exercised at runtime** — every loadable case exposed all four acts. P1.5 (a) built a
+synthetic fixture that actually has a gap and verified the whole path end-to-end, and (b) fixed
+one flash: a direct URL to a missing act (`/case/<id>/attribute`) briefly rendered the map + a
+stale ContextPanel + the Trace footer before the redirect effect fired. `CaseWorkspace` now
+renders a neutral one-line placeholder ("Not part of this case — taking you to the first
+stage…") for that frame and suppresses the footer while `stage` is not in `acts_available`.
+**No copy changed** (the four `STAGE_UNAVAILABLE_REASON` strings stay frozen); **`loadCase` /
+D16 untouched** (the detect-gap D3 path — real Ennore — stays deferred, see open issues);
+**no D1 / D2 code touched** (both regressed clean).
+
+**Files touched:** `web/components/CaseWorkspace.tsx` (modified — direct-nav placeholder guard +
+footer guard, ~2 conditionals) · `cases/case-000-d3/` (new synthetic fixture:
+`acts_available: ["detect","trace","verify"]`, one oil detection so D1 never fires,
+`origin.abstain: false` so D2 never fires; bounds/sar/detections/particles/origin/verification
+copied from `case-000`). **Not** in `cases/index.json`.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000-d3     # PASS (0 warnings)
+robocopy cases web\public\cases /MIR                  # or: cp -r cases/case-000-d3 web/public/cases/
+cd web && npm run lint && npm run build && npm run dev
+```
+Expected: `http://localhost:3000/case/case-000-d3/detect` — Detect + Trace + Verify live in the
+rail, **ATTRIBUTE greyed + `cursor-not-allowed`**, FlowBar "Find" dot dimmed with tooltip
+"no free historical AIS is published for these waters"; Trace's primary action reads
+**"See what really happened →"** and lands on `/verify`, skipping Attribute; typing
+`/case/case-000-d3/attribute` redirects to `/detect` with no error and no content flash.
+
+**Checkpoint artefact:** screenshots (D3 detect / trace / verify + no-spill regression) sent to
+Harshita 2026-09-11. `npm run lint` clean, `npm run build` clean, Playwright pass across
+D3 + case-000 + case-000-nospill (D1) + case-000-abstain (D2) with **0 console errors / warnings**.
+D1 tooltips still "nothing to trace — no oil was detected in this scene" / "no oil origin to
+attribute"; D2 keeps Attribute **enabled** with the abstention card.
+
+**Open issues:**
+- **Detect-gap D3 is still unverified.** Real Ennore & Golden Ray omit `detect` (decision D16),
+  but `loadCase()` fetches `detections.geojson` unconditionally, so they throw on load. Out of
+  P1.5 scope by instruction. Fix when it's scheduled: gate the `detections.geojson` fetch on
+  `"detect" in acts_available` and make `store` / `isNoSpill` / the ContextPanel detect branch
+  tolerate `detections === null`.
+- **No real case exercises D3 yet.** `case-ennore-2017`, `case-golden-ray-2021`,
+  `case-huntington-2021` are all scaffolds missing their bundle files — blocked on
+  Akshat / Anushka / Soum. D3 is verified only against the synthetic fixture (same footing as
+  D1 / D2).
+- `web/public/cases/` is a gitignored copy — refresh it before running.
+
+**Next:** the D16 `loadCase` gate (its own small task), then wire real Ennore when its
+`particles.json` / `origin.json` / `verification.json` land and add its greyed-Attribute path to
+the Part B QA checklist (docs/05 Phase 4.3).
+
 ## [2026-09-10 23:05] P1.4 / D2 — abstain state (deliberate attribution refusal)
 
 **Done:** Completed the D2 abstain state on the Attribute screen (docs/04 Part D). It was
