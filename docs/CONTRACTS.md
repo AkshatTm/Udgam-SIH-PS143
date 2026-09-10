@@ -1,6 +1,12 @@
-# CONTRACTS — FROZEN
+# CONTRACTS — FROZEN (v1 — superseded by Master Plan §6)
 
-**Status: FROZEN as of Sun 6 Sept 2026.** Extracted verbatim from `00_MASTER_PLAN.md` §4.
+> **Read `00_MASTER_PLAN.md` Part 6 (§6.1–6.9) for the live contract.** This file is the v1
+> record and is missing the v3 additions the validator now enforces: `verification.json`,
+> `cases/index.json`, the `verify` act, extended `suspects.json` (`source_type`, `components`
+> with `null`, `dark_vessels[]`, `infrastructure[]`), and the v3 `meta.json` / `origin.json`
+> fields. Where the two disagree, Master §6 wins. Kept for history, not extended further.
+
+**Status: FROZEN as of Sun 6 Sept 2026.** Extracted verbatim from `00_MASTER_PLAN.md` Part 6.
 
 Changes go through **Akshat only**, and are broadcast to the whole group the moment they are
 made. Do not extend a schema unilaterally — if something genuinely cannot be expressed in these

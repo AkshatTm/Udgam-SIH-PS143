@@ -30,4 +30,4 @@ geospatial plumbing is done — everything after it is layers on the same projec
 
 Read `CLAUDE.md` in this directory before writing code, and `docs/CONTRACTS.md` for what every
 field in a bundle means. `cases/case-000/` is fake data in exactly the real shape; build the
-whole app against it and swap in the real Ennore bundle on Wednesday as a data change only.
+whole app against it and swap in the real Ennore bundle when it lands, as a data change only.

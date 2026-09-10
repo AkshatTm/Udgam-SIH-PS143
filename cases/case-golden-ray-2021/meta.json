@@ -1,0 +1,22 @@
+{
+  "case_id": "case-golden-ray-2021",
+  "title": "Golden Ray — St Simons Sound",
+  "short_location": "St Simons Sound, Glynn County, Georgia",
+  "case_type": "spill",
+  "satellite": "Sentinel-1A",
+  "scene_id": "S1A_IW_GRDH_1SDV_20210808T232953_20210808T233018_039145_049EAB_C7D5",
+  "detection_time": "2021-08-08T23:29:53Z",
+  "acts_available": ["trace", "attribute", "verify"],
+  "known_origin": {
+    "lon": -81.40,
+    "lat": 31.13,
+    "label": "M/V Golden Ray wreck, mid-channel St Simons Sound",
+    "source_url": "https://www.ntsb.gov/investigations/AccidentReports/Reports/MAR2101.pdf"
+  },
+  "gallery": {
+    "thumbnail": "thumb.png",
+    "blurb": "Oil kept flushing out of a shipwreck being cut apart. Who is responsible for a wreck?",
+    "difficulty": "hard"
+  },
+  "notes": "NO SAR-VISIBLE SLICK — known-source case (decision D16), trace seeded from meta.known_origin, not a NAAP detection. Fixed-wreck infrastructure case. Oil began flushing from the Golden Ray wreck on 31 Jul 2021 during salvage lifting of Section Six; tidal flows carried it out of the environmental protection barrier onto St Simons and Jekyll Island beaches and marsh through August. This S1A pass (+9 d) is the closest Sentinel-1 coverage of the sound — S1 only images here on a 12-day ascending repeat. The wreck + salvage cluster (VB-10000 crane barge, containment barrier) is the bright knot at the sound mouth (~-81.40, 31.13). St Simons Sound is enclosed, sheltered, calm water: the weathered sheen does not show in SAR (dB sampling: no coherent VV+VH depression). Expect the origin on the wreck and the salvage fleet excluded as pollution responders, not suspects. Source: USCG / St Simons Sound Incident Response Unified Command; SkyTruth published (optical) imagery; NTSB MAR-21/01 (capsizing cause)."
+}

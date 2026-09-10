@@ -35,7 +35,7 @@ def load(path):
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         err(f"{path.name}: not valid JSON — {e}")
         return None
@@ -73,8 +73,10 @@ class Box:
     def __init__(self, b):
         self.w, self.s = float(b["west"]), float(b["south"])
         self.e, self.n = float(b["east"]), float(b["north"])
-        # generous pad: drift particles and vessel tracks legitimately leave the scene
-        self.pad = max(2.0, 0.5 * max(self.e - self.w, self.n - self.s))
+        # pad: drift particles and vessel tracks legitimately leave the scene, but a
+        # 2 deg floor (~220 km) made the "well outside" warning unreachable — keep it
+        # generous enough for a 24 h drift excursion, tight enough to still fire.
+        self.pad = max(0.5, 0.5 * max(self.e - self.w, self.n - self.s))
 
     def check(self, lon, lat, where):
         if not (-180 <= lon <= 180):
@@ -123,6 +125,55 @@ def walk_coords(geom, box, where, limit=400):
             return
 
 
+def known_origin_coords(ko, where):
+    """A known_origin is either [lon, lat] or {"lon":..., "lat":..., "label":...}.
+    Return (lon, lat) as floats, or None if absent or malformed (malformed appends
+    an error). This is the documented fixed source a trace-without-detect case seeds
+    from — Golden Ray's wreck, Ennore's collision position (Master §6.1, decision D16)."""
+    if ko is None:
+        return None
+    if isinstance(ko, dict):
+        if "lon" not in ko or "lat" not in ko:
+            err(f"{where}: known_origin object needs 'lon' and 'lat'")
+            return None
+        lon, lat = ko["lon"], ko["lat"]
+    elif isinstance(ko, (list, tuple)) and len(ko) == 2:
+        lon, lat = ko[0], ko[1]
+    else:
+        err(f"{where}: known_origin must be [lon, lat] or an object with lon/lat")
+        return None
+    try:
+        return float(lon), float(lat)
+    except (TypeError, ValueError):
+        err(f"{where}: known_origin lon/lat must be numbers, got {lon!r}, {lat!r}")
+        return None
+
+
+def check_known_origin(m, box):
+    """Shape-check meta.known_origin and, via box.check, catch a [lat, lon] swap in it."""
+    coords = known_origin_coords(m.get("known_origin"), "meta.json/known_origin")
+    if coords and box:
+        box.check(coords[0], coords[1], "meta.json/known_origin")
+
+
+def polygon_area_km2(geom):
+    """Rough planar area of a GeoJSON Polygon's outer ring, cos-lat scaled at its
+    centroid. Good to a few % at slick scale — enough to catch an area_km2 that is
+    off by a factor, not a rounding difference."""
+    if geom.get("type") != "Polygon" or not geom.get("coordinates"):
+        return None
+    ring = geom["coordinates"][0]
+    if len(ring) < 4:
+        return None
+    lat0 = sum(p[1] for p in ring) / len(ring)
+    kx = 111.32 * math.cos(math.radians(lat0))
+    ky = 111.32
+    s = 0.0
+    for (x1, y1), (x2, y2) in zip(ring, ring[1:]):
+        s += (x1 * kx) * (y2 * ky) - (x2 * kx) * (y1 * ky)
+    return abs(s) / 2.0
+
+
 # ---------------------------------------------------------------- validators
 
 def check_meta(d):
@@ -137,13 +188,26 @@ def check_meta(d):
     if not isinstance(acts, list) or not acts:
         err("meta.json/acts_available: must be a non-empty list")
         return None
-    bad = [a for a in acts if a not in ("detect", "trace", "attribute")]
+    bad = [a for a in acts if a not in ("detect", "trace", "attribute", "verify")]
     if bad:
         err(f"meta.json/acts_available: unknown act(s) {bad}")
-    if "trace" in acts and "detect" not in acts:
-        err("meta.json: 'trace' without 'detect' — trace needs a slick to seed from")
+    if "trace" in acts and "detect" not in acts and m.get("known_origin") is None:
+        err("meta.json: 'trace' without 'detect' requires meta.known_origin (a documented "
+            "fixed source to seed from) — got neither a detection nor a known origin")
     if "attribute" in acts and "trace" not in acts:
         err("meta.json: 'attribute' without 'trace' — attribution needs an origin cloud")
+    if "verify" in acts and not (d / "verification.json").exists():
+        err("meta.json: 'verify' in acts_available but verification.json is missing")
+
+    # v3 meta fields — validated only if present (Master §6.1); case selection authors them
+    ct = m.get("case_type")
+    if ct is not None and ct not in ("spill", "lookalike", "nospill"):
+        err(f"meta.json/case_type: must be spill|lookalike|nospill, got {ct!r}")
+    gal = m.get("gallery")
+    if isinstance(gal, dict):
+        diff = gal.get("difficulty")
+        if diff is not None and diff not in ("easy", "medium", "hard"):
+            err(f"meta.json/gallery.difficulty: must be easy|medium|hard, got {diff!r}")
     return m
 
 
@@ -206,9 +270,18 @@ def check_detections(d, box):
         declared = (p["shape_class"] == "linear")
         if declared != (p["elongation"] > 3):
             warn(f"{w}: shape_class {p['shape_class']!r} disagrees with elongation {p['elongation']}")
+        geom = f.get("geometry", {})
+        if geom.get("type") not in ("Polygon", "MultiPolygon"):
+            err(f"{w}: detection geometry must be Polygon, got {geom.get('type')!r}")
+        computed = polygon_area_km2(geom)
+        if computed and p.get("area_km2", 0) > 0:
+            ratio = computed / p["area_km2"]
+            if ratio > 2 or ratio < 0.5:
+                warn(f"{w}: area_km2 is {p['area_km2']} but the polygon measures "
+                     f"~{computed:.1f} km2 ({ratio:.1f}x) — one of them is wrong")
         if box:
             box.check(float(p["centroid"][0]), float(p["centroid"][1]), w + "/centroid")
-            walk_coords(f.get("geometry", {}), box, w + "/geometry")
+            walk_coords(geom, box, w + "/geometry")
     if oil == 0:
         warn("detections.geojson: zero 'oil' features — correct for a no-spill case, "
              "an error for any case with 'trace' in acts_available")
@@ -276,6 +349,24 @@ def check_origin(d, box):
                          "radius_90_km", "time_window", "ensemble_runs", "abstain"],
                      "origin.json"):
         return None
+    ob = o["bounds"]
+    if not need_keys(ob, ["west", "south", "east", "north"], "origin.json/bounds"):
+        return None
+    if ob["west"] >= ob["east"] or ob["south"] >= ob["north"]:
+        err("origin.json/bounds: west<east and south<north required (this is the grid's "
+            "own rectangle, not bounds.json)")
+    elif box:
+        # renderability hint (Harshita's point): a PASS should say whether the frontend
+        # can frame this. A real origin cloud legitimately sits mostly off-scene, so this
+        # is a warning, never an error — it only flags a rectangle so far out it reads
+        # like a units or hemisphere bug rather than a long rewind.
+        ow, oh = ob["east"] - ob["west"], ob["north"] - ob["south"]
+        overshoot = max(box.w - ob["east"], ob["west"] - box.e,
+                        box.s - ob["north"], ob["south"] - box.n)
+        if overshoot > 3 * max(ow, oh):
+            warn(f"origin.json/bounds sits {overshoot:.2f} deg beyond the scene on one side "
+                 f"(> 3x its own {max(ow, oh):.2f} deg span) — check the rewind isn't running "
+                 "the wrong direction or in the wrong longitude convention")
     sh = o["shape"]
     if not (isinstance(sh, list) and len(sh) == 2):
         err("origin.json/shape: must be [rows, cols]")
@@ -334,7 +425,7 @@ def check_vessels(d, box):
     return seen
 
 
-def check_suspects(d, known_mmsi, origin):
+def check_suspects(d, known_mmsi, origin, box=None):
     s = load(d / "suspects.json")
     if s is None:
         err("suspects.json: missing (required whenever 'attribute' is available)")
@@ -359,6 +450,15 @@ def check_suspects(d, known_mmsi, origin):
                 "every named vessel must come from the real AIS file")
         if not sus["reasons"]:
             warn(f"{w}: no reasons given; judge-facing cards need plain-language justification")
+        st = sus.get("source_type")
+        if st is not None and st not in ("vessel", "dark_vessel", "infrastructure"):
+            err(f"{w}: source_type must be vessel|dark_vessel|infrastructure, got {st!r}")
+        comps = sus.get("components")
+        if isinstance(comps, dict):
+            for cname, cval in comps.items():
+                # null is meaningful — a not-applicable component, never rendered as 0
+                if cval is not None and not (isinstance(cval, (int, float)) and 0 <= cval <= 1):
+                    err(f"{w}: components.{cname} must be null or in 0–1, got {cval!r}")
     scores = [x.get("score", 0) for x in s["suspects"]]
     if scores != sorted(scores, reverse=True):
         err("suspects.json: suspects are not sorted by descending score")
@@ -372,6 +472,78 @@ def check_suspects(d, known_mmsi, origin):
         warn("suspects.json: no excluded vessels; at least one exclusion is a demo requirement")
     if origin and origin.get("abstain") and s["suspects"]:
         err("suspects.json: origin.json has abstain=true, so suspects must be empty")
+    if s.get("abstained") and s["suspects"]:
+        err("suspects.json: abstained=true, so suspects must be empty")
+
+    # v3 extended source types (Master §6.7) — optional arrays, checked if present
+    for i, dv in enumerate(s.get("dark_vessels", []) or []):
+        w = f"suspects.json/dark_vessels[{i}]"
+        if not need_keys(dv, ["lon", "lat", "score"], w):
+            continue
+        if dv.get("mmsi") is not None:
+            err(f"{w}: a dark vessel has no AIS identity — mmsi must be null, got {dv['mmsi']!r}")
+        if not 0 <= dv["score"] <= 1:
+            err(f"{w}: score {dv['score']} outside 0–1")
+        if box:
+            box.check(float(dv["lon"]), float(dv["lat"]), w)
+    for i, inf in enumerate(s.get("infrastructure", []) or []):
+        w = f"suspects.json/infrastructure[{i}]"
+        if not need_keys(inf, ["name", "lon", "lat", "score"], w):
+            continue
+        if not 0 <= inf["score"] <= 1:
+            err(f"{w}: score {inf['score']} outside 0–1")
+        if box:
+            box.check(float(inf["lon"]), float(inf["lat"]), w)
+
+
+def check_verification(d):
+    v = load(d / "verification.json")
+    if v is None:
+        err("verification.json: missing (required whenever 'verify' is available)")
+        return
+    if not need_keys(v, ["official_finding", "naap_result", "assessment"], "verification.json"):
+        return
+    of = v["official_finding"]
+    if need_keys(of, ["summary", "responsible_parties", "source_name", "source_url",
+                      "source_type"], "verification.json/official_finding"):
+        if not isinstance(of["responsible_parties"], list):
+            err("verification.json/official_finding/responsible_parties: must be a list")
+        if not str(of["source_url"]).strip():
+            err("verification.json/official_finding/source_url: must be present and non-empty — "
+                "this is the 'is this real?' link")
+        for opt in ("volume_reported", "caveat"):
+            if not of.get(opt):
+                warn(f"verification.json/official_finding: no {opt} — recommended for the Verify screen")
+    nr = v["naap_result"]
+    if need_keys(nr, ["origin_summary", "top_suspects", "abstained"], "verification.json/naap_result"):
+        if not isinstance(nr["top_suspects"], list):
+            err("verification.json/naap_result/top_suspects: must be a list (may be empty)")
+    a = v["assessment"]
+    if need_keys(a, ["verdict", "explanation"], "verification.json/assessment"):
+        if a["verdict"] not in ("hit", "partial", "miss", "not_applicable"):
+            err(f"verification.json/assessment/verdict: must be hit|partial|miss|not_applicable, "
+                f"got {a['verdict']!r}")
+        if not str(a["explanation"]).strip():
+            err("verification.json/assessment/explanation: human-written prose, must not be empty")
+
+
+def check_index(cases_root):
+    idx = load(cases_root / "index.json")
+    if idx is None:
+        err("cases/index.json: missing")
+        return []
+    if not need_keys(idx, ["cases", "default"], "cases/index.json"):
+        return []
+    listed = idx["cases"]
+    if not isinstance(listed, list) or not listed:
+        err("cases/index.json/cases: must be a non-empty list, strongest case first")
+        return []
+    for cid in listed:
+        if not (cases_root / cid / "meta.json").exists():
+            err(f"cases/index.json: lists {cid!r} but cases/{cid}/meta.json does not exist")
+    if idx["default"] not in listed:
+        err(f"cases/index.json: default {idx['default']!r} is not in the cases list")
+    return listed
 
 
 # ---------------------------------------------------------------------- main
@@ -387,11 +559,36 @@ def main():
         print(f"FAIL  {d} is not a directory")
         return 1
 
+    # Pointed at cases/ (an index, not a bundle): validate the index and every case it lists.
+    if (d / "index.json").exists() and not (d / "meta.json").exists():
+        listed = check_index(d)
+        index_errors = list(ERRORS)
+        for e in index_errors:
+            print(f"  ERROR  {e}")
+        rc = 1 if index_errors else 0
+        for cid in listed:
+            print(f"\n=== {cid} ===")
+            if _run_bundle(d / cid, strict) != 0:
+                rc = 1
+        print("-" * 58)
+        print("PASS   cases/index.json + all listed cases\n" if rc == 0
+              else "FAIL   cases/ did not fully validate\n")
+        return rc
+
+    return _run_bundle(d, strict)
+
+
+def _run_bundle(d, strict=False):
+    del ERRORS[:]
+    del WARNINGS[:]
     print(f"\nValidating {d}\n" + "-" * 58)
     meta = check_meta(d)
     acts = meta["acts_available"] if meta else []
     b = check_bounds(d)
     box = Box(b) if b else None
+
+    if meta:
+        check_known_origin(meta, box)
 
     if "detect" in acts:
         check_detections(d, box)
@@ -402,7 +599,9 @@ def main():
         origin = None
     if "attribute" in acts:
         known = check_vessels(d, box)
-        check_suspects(d, known, origin)
+        check_suspects(d, known, origin, box)
+    if "verify" in acts:
+        check_verification(d)
 
     for w in WARNINGS:
         print(f"  WARN   {w}")

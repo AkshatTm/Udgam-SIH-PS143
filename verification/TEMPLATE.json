@@ -1,0 +1,27 @@
+{
+  "_help": "Copy to verification/<case-id>.json and fill by hand. Master Plan §6.8. build_case.py --stage verify copies it to cases/<case-id>/verification.json. The explanation and caveat are HUMAN PROSE — never generated. Delete this _help key in the real file.",
+
+  "official_finding": {
+    "summary": "One or two sentences: what the official investigation concluded, in plain language.",
+    "responsible_parties": [
+      { "name": "VESSEL OR ENTITY NAME", "mmsi": null, "imo": "IMO number if known", "role": "e.g. initiating anchor strike / discharging vessel / salvage operator" }
+    ],
+    "source_name": "e.g. NTSB Marine Investigation Report MIR-24-01",
+    "source_url": "https://... (must be present and non-empty — this is the 'is this real?' link)",
+    "source_type": "official_investigation | press_account | algorithm_attribution",
+    "volume_reported": "e.g. 588 barrels",
+    "caveat": "The single most important qualifier. e.g. the anchor strike preceded the release by eight months, so no vessel was the proximate source at detection time."
+  },
+
+  "naap_result": {
+    "origin_summary": "Filled from the actual output files AFTER the stages run. Where the origin cloud landed, distance to the reported leak location, key radii.",
+    "top_suspects": ["mmsi or source name, as it appears in suspects.json"],
+    "abstained": false
+  },
+
+  "assessment": {
+    "verdict": "hit | partial | miss | not_applicable",
+    "explanation": "HUMAN-WRITTEN PROSE. Why this verdict. A miss with an honest explanation of why reads as engineering; only-hits reads as marketing.",
+    "what_would_have_helped": "What extra data or a finer model would have changed the result. Optional but recommended."
+  }
+}

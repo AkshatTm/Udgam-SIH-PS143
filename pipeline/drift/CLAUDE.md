@@ -1,7 +1,7 @@
 # Drift (Stage 2) — Anushka
 
 Owns: backward particle advection through real current+wind fields, 50-run ensemble, origin probability cloud.
-Full brief: `docs/03_ANUSHKA_DRIFT.md`. Setup: `docs/SETUP_ANUSHKA.md`.
+Full brief: `docs/03_ANUSHKA_DRIFT.md`.
 
 ## Non-negotiable
 - **No ML here.** Pure physics: `velocity = current + 0.03 * wind`, RK2, dt = 15 min, vectorised NumPy.

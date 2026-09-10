@@ -54,6 +54,12 @@ def ellipse_ring(clon, clat, a_deg, b_deg, rot_rad, n=48):
     return ring
 
 
+def ellipse_km2(a_deg_lon, b_deg_lat):
+    """Ground area of the ellipse ellipse_ring() draws — keeps area_km2 consistent with the
+    polygon so the validator's shoelace check stays quiet on the stub bundle."""
+    return round(math.pi * (a_deg_lon * 111.32) * (b_deg_lat * 111.32), 1)
+
+
 def stub_detections(b):
     """Two invented regions placed by fraction of the scene: one elongated 'oil', one round
     'lookalike'. DELETE THIS FUNCTION when the real detector lands."""
@@ -73,7 +79,8 @@ def stub_detections(b):
                      "coordinates": [ellipse_ring(olon, olat, dlon * 0.16, dlat * 0.018,
                                                   math.radians(-24))]},
         "properties": {"id": "det-01", "classification": "oil", "confidence": 0.87,
-                       "area_km2": 12.4, "elongation": 8.2, "edge_gradient": 0.34,
+                       "area_km2": ellipse_km2(dlon * 0.16, dlat * 0.018),
+                       "elongation": 8.2, "edge_gradient": 0.34,
                        "contrast_db": -6.2, "shape_class": "linear",
                        "centroid": [r5(olon), r5(olat)]},
     })
@@ -84,7 +91,8 @@ def stub_detections(b):
         "geometry": {"type": "Polygon",
                      "coordinates": [ellipse_ring(llon, llat, dlon * 0.075, dlat * 0.065, 0.0)]},
         "properties": {"id": "det-02", "classification": "lookalike", "confidence": 0.71,
-                       "area_km2": 7.9, "elongation": 1.4, "edge_gradient": 0.11,
+                       "area_km2": ellipse_km2(dlon * 0.075, dlat * 0.065),
+                       "elongation": 1.4, "edge_gradient": 0.11,
                        "contrast_db": -3.1, "shape_class": "blob",
                        "centroid": [r5(llon), r5(llat)]},
     })

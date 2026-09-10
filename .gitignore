@@ -19,6 +19,9 @@ __pycache__/
 # Big raw formats — nothing over ~20 MB belongs in this repo
 *.tif
 *.tiff
+# ...except the case bundle's 2-band SAR GeoTIFF: Stage 1 reads it from cases/<id>/ and the
+# no-imports architecture needs it to travel with the repo (~8-10 MB/case at 10 m, tight box).
+!cases/*/sar_vv_vh.tif
 *.7z
 *.zip
 *.npz
@@ -28,19 +31,25 @@ __pycache__/
 # Intermediate stage outputs — regenerable, the bundle in cases/ is the artefact
 pipeline/*/out/
 
-# Throwaway end-to-end smoke bundle (scripts/make_case000.py --scene-only)
+# Throwaway end-to-end smoke / dry-run bundles (scripts/make_case000.py --scene-only)
 cases/case-smoke/
+cases/case-dry/
 
 # Frontend build
 web/.next/
 web/dist/
 web/public/cases/
+# vendored maplibre worker + shared chunk, copied from node_modules by predev/prebuild
+web/public/maplibre/
 
 # Credentials — never, under any circumstances
 .env
 *.pem
 .earthengine/
 credentials.json
+
+# Per-teammate handoff briefs — shared by hand (WhatsApp), never pushed
+HANDOFF_*.md
 
 # OS noise
 .DS_Store

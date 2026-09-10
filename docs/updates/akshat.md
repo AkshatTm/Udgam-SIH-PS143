@@ -4,6 +4,162 @@
 
 ---
 
+## [2026-09-10] Phase 1/3 — D16 ruling: trace-without-detect via `meta.known_origin`; Golden Ray + Ennore scaffolded as known-source cases
+
+**Done:** Ruled and implemented the trace-without-detect contract change the last entry left
+open. New optional `meta.json` field **`known_origin`** (`[lon,lat]` or `{lon,lat,label,source_url}`):
+a documented fixed source the trace stage seeds from when there is no SAR-visible slick. A bundle
+with `known_origin` may carry `trace`/`attribute`/`verify` without `detect`, and
+`detections.geojson` is no longer required. Master Plan §6.1 + Part 3 (Ennore row) + Part 9
+(**D16**) updated; `docs/CONTRACTS.md` left frozen (Master wins). Validator relaxed to match:
+new `check_known_origin` (shape + reuses the lon/lat-swap detector on the pin), `check_meta`
+gate now accepts `known_origin` in place of `detect`. `test_validator.py` 12→**14/14** (added a
+"trace, no detect, no known_origin" mutation and a "known_origin as [lat,lon]" mutation).
+
+Scaffolded both no-slick cases on the new shape:
+- **`cases/case-golden-ray-2021/meta.json`** → acts `["trace","attribute","verify"]`,
+  `known_origin` = wreck at `[-81.40, 31.13]` (inside bounds). Validates cleanly except for the
+  not-yet-produced stage outputs — the "trace without detect" error is gone.
+- **`cases/case-ennore-2017/meta.json`** → acts `["trace","verify"]` (no attribute: no public
+  Indian AIS), `known_origin` = collision position **APPROX `[80.36, 13.235]`** — flagged in
+  `notes` for Akshat to pin from the DG Shipping / INCOIS report. Was untracked; `git add` it.
+- **`verification/case-ennore-2017.json`** (new) — `official_finding` drafted from widely-reported
+  facts with explicit TODO markers on `source_url`, IMO numbers, and the volume figure (do not
+  ship until checked); `assessment.explanation` left as Phase-4 human prose.
+- **`cases/index.json`** → `["case-huntington-2021", "case-ennore-2017", "case-golden-ray-2021"]`,
+  default huntington. Order is a proposal — change if you want Golden Ray second.
+
+**Files touched:** `scripts/validate_case.py`, `scripts/test_validator.py` (modified) ·
+`cases/case-golden-ray-2021/meta.json`, `cases/case-ennore-2017/meta.json`, `cases/index.json` ·
+`verification/case-ennore-2017.json` (new), `verification/README.md` ·
+`docs/00_MASTER_PLAN.md` (§6.1, Part 3, Part 9) · `docs/updates/_INTEGRATION.md`
+
+**Run command:**
+```bash
+python scripts/test_validator.py                          # 14/14 caught and named
+python scripts/validate_case.py cases/case-golden-ray-2021  # FAIL only on missing stage outputs — NOT "trace without detect"
+python scripts/validate_case.py cases/case-ennore-2017      # same
+```
+
+**Open issues / for you:**
+- **Pin the Ennore collision coordinate** and add `source_url` + IMO numbers to
+  `verification/case-ennore-2017.json` and `cases/case-ennore-2017/meta.json`. Current pin is a
+  guess off the port entrance.
+- **Confirm the Ennore oil-volume figure** and its revision history before that case ships.
+- **Phase 4 prose** still owed by hand for all three verify cases (Huntington, Golden Ray,
+  Ennore) — after the stages run.
+- **Route to Harshita:** `web/lib/loadCase.ts` fetches `detections.geojson` unconditionally —
+  must be gated on `"detect" in acts_available` or known-source cases 404 on load. Trace origin
+  card needs a "seeded from documented source" state. `contracts.ts` `CaseMeta` wants optional
+  `known_origin`.
+- **Route to Anushka:** drift stage must seed from `meta.known_origin` when `detections.geojson`
+  is absent (Golden Ray, Ennore).
+- **Route to Jaiveer:** Golden Ray needs NOAA AIS for St Simons Sound ~31 Jul–9 Aug 2021; salvage
+  fleet → `excluded[]`, wreck → `infrastructure[]`.
+- Broadcast D16 + the `known_origin` shape to the group (draft in `_INTEGRATION.md`).
+
+**Next:** send the routed messages + D16 broadcast → then Anushka/Jaiveer can produce the
+Golden Ray + Ennore stage outputs and the first real known-source bundle can be wired.
+
+---
+
+## [2026-09-10] Phase 1 — Huntington Beach confirmed as hero; Golden Ray + Ennore have no SAR slick
+
+**Done:** GEE auth working (project `quizzer-dev-487316`). Wrote `scripts/find_scenes.py`
+(generalised finder) and committed `scripts/inspect_db.py`. Ran the scene search + export +
+dB-confirmation loop for the two US spill cases.
+
+- **Huntington Beach — CONFIRMED.** `S1A_..._20211002T015821..._2BF9`, 2021-10-02 01:58:21Z,
+  ~3 h after the pipeline started leaking. Clean sharp comma-shaped slick, ~8–10 dB VV
+  depression. `cases/case-huntington-2021/` scaffolded (meta v3, bounds, sar.png, thumb);
+  2-band `sar_vv_vh.tif` running as a Drive export. This is the hero detection case.
+- **Golden Ray — no SAR slick.** `S1A_..._20210808T232953..._C7D5` (+9 d; only S1 pass over the
+  sound). Enclosed calm water, nothing visible. Wreck + VB-10000 cluster images clearly.
+  Scaffold + honest notes in `cases/case-golden-ray-2021/`.
+- **Ennore** (yours) — recap: same problem, dawn low-wind, no clean slick.
+- `verification/case-huntington-2021.json` + `case-golden-ray-2021.json` — `official_finding`
+  researched (NTSB MIR-24-01, MAR-21/01), `assessment` left as Phase-4 human-prose TODO.
+- `cases/index.json` → `[huntington, golden-ray]`, default huntington (case-000 dropped from the
+  gallery — it stays a validator fixture only; `case-ennore-2017` left for you to add when you
+  finish it — it's untracked and I didn't touch it). `receipts.md` SAR + incident tables filled
+  for all three; "Ayushmaan" → "Urooz".
+
+**Files touched:** `scripts/find_scenes.py`, `scripts/inspect_db.py` (new) ·
+`pipeline/export/gee_scene.py` (fixed the stale "press RUN" message — `task.start()` is the
+trigger) · `cases/case-huntington-2021/*`, `cases/case-golden-ray-2021/*`, `cases/index.json` ·
+`verification/case-{huntington,golden-ray}-2021.json` (new) · `docs/receipts.md` ·
+`docs/updates/_INTEGRATION.md`
+
+**Run command:**
+```bash
+python scripts/find_scenes.py --project quizzer-dev-487316 --bbox -118.35 33.50 -117.75 33.85 --start 2021-09-30 --end 2021-10-08 --incident 2021-10-01
+python scripts/validate_case.py cases/case-huntington-2021   # FAIL only on detections.geojson (Soum's stage) — correct
+```
+
+**Open issues / decisions for you:**
+- **Push local `main`** — it's ahead of origin by this session + the `origin/harshita` FF
+  (data-driven gallery + `verify` act). `git push origin main`.
+- **Trace-without-detect contract change** — Golden Ray (and probably Ennore) run as
+  trace+attribute+verify from a known source. `validate_case.py` errors on `trace` without
+  `detect`. Needs a small relax + a `meta.known_origin` field. Your call — frozen schema.
+- **Move the Huntington GeoTIFF** from Drive/naap_exports/ when the task completes.
+- **Send** the three drafted messages in `_INTEGRATION.md` (Huntington announcement now; Urooz
+  cases 4/5 ask; Soum cases 6/7 ask) + the Part B broadcast.
+- Precise Huntington rupture coordinate still `~4.5 nm offshore` — pin from MIR-24-01 for Phase 4.
+
+**Next:** your push + trace-without-detect ruling → then I can scaffold Golden Ray/Ennore as
+trace cases and wire the first real Huntington bundle once Soum + Anushka + Jaiveer deliver.
+
+---
+
+## [2026-09-09] Phase 0 + 3 — merged all four branches, hardened the validator, 2-band exporter
+
+**Done:** Merged `origin/{soum,jaiveer,harshita,anushka}` onto `main` on a local `integration`
+branch (was the top catastrophic risk — 2 commits on main, 4 branches holding the project).
+soum/jaiveer/harshita clean; anushka 2 trivial conflicts. Dropped Soum's two force-added
+label CSVs (stay local); kept `classifier.pkl`. Anushka's ÷100→÷1000 fix (repo-wide, verified
+2026-09-07) adopted as canonical; fixed one leftover contradictory sentence.
+
+Hardened `validate_case.py`: `check_verification` (verdict enum, non-empty `source_url`),
+`check_index` (`validate_case.py cases/` now validates the index + each listed case),
+`origin.bounds` sanity + off-scene renderability warning (Harshita D2), `area_km2` vs polygon
+shoelace, extended `suspects.json` (`source_type`, `components` null, `dark_vessels[]` with
+`mmsi: null`, `infrastructure[]`), `verify` act, Box pad 2.0→0.5°, utf-8. `test_validator.py`
+now 12/12. `build_case.py` gathers `verification.json` + optional trace/scene files, `--reindex`.
+`gee_scene.py` rewritten for the 4-artefact 2-band float32 GeoTIFF export (D14). Ran the full
+stub chain end to end (first time the pipeline has actually been run) → PASS, 0 warnings.
+
+**Files touched:** `scripts/validate_case.py`, `scripts/test_validator.py`, `scripts/make_case000.py`
+· `pipeline/export/{build_case,gee_scene,CLAUDE}.py|md` · `pipeline/detect/run.py` (stub area_km2)
+· `pipeline/drift/check_gee.py` · `cases/index.json` (new) · `verification/{TEMPLATE.json,README.md}`
+(new) · `docs/{CONTRACTS,receipts,PER_DIRECTORY_CLAUDE}.md` · `web/CLAUDE.md` · `.gitignore`
+· `docs/updates/_INTEGRATION.md`
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000     # PASS, 0 warnings
+python scripts/validate_case.py cases/             # index + all listed cases
+python scripts/test_validator.py                   # 12/12 caught and named
+python pipeline/export/build_case.py --case case-000
+```
+
+**Open issues:**
+- **`integration` branch is not pushed.** Fast-forward `main` to it and `git push`, then
+  `git push origin --delete` the four feature branches. This is the one thing blocking everyone
+  from a single source of truth.
+- **Harshita, routed:** `MapView.tsx` uses `HeatmapLayer` for the origin — must be `BitmapLayer`
+  (D11). `web/lib/contracts.ts` needs `"verify"` in `ALL_ACTS`/`Act` for screen 4.
+- **GEE still untouched.** `check_ennore.py` + `gee_scene.py` unrun. Auth → confirm the Ennore
+  slick is visible → `receipts.md` → export. First real run of `gee_scene.py` will need fixing.
+- `verification.json` tooling is in (`verification/TEMPLATE.json`, validator, `build_case`) but
+  no case has real prose yet — Phase 4.
+- Frontend `contracts.ts`/`loadCase.ts` predate the v3 `suspects.json`/`origin.json` fields;
+  Harshita renders them for screens 3–4.
+
+**Next:** push `main` → broadcast Part B → GEE auth → Ennore confirm → case selection.
+
+---
+
 ## [2026-09-06] Phase 1 — repo skeleton, frozen contracts, case-000, stubs for every stage
 
 **Done:** Turned 22 loose documents into the repo layout the docs describe. Contracts extracted
