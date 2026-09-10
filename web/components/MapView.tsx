@@ -8,10 +8,10 @@
 // deck.gl rides on top through a single MapboxOverlay control (created once, next to the map).
 // The layer list is composed from two memoised pieces and pushed via one effect:
 //   - the particle ScatterplotLayer (Phase 2) — the only layer that changes every playback tick;
-//   - the origin HeatmapLayer + 50/90 % radius rings (Phase 3) — built ONCE per origin bundle,
+//   - the origin BitmapLayer + 50/90 % radius rings (Phase 3) — built ONCE per origin bundle,
 //     mounted as soon as the bundle loads and kept mounted for the life of the case, with the
-//     T−24h→T−0 fade (and the Origin toggle) driven purely by `opacity`. deck.gl never re-runs
-//     the expensive heatmap aggregation on a scrub — only the fully-faded pixels change.
+//     T−24h→T−0 fade (and the Origin toggle) driven purely by `opacity`. The BitmapLayer does
+//     no aggregation at all — a scrub only updates the layer's opacity uniform.
 // The timestep only ever updates deck layers, never the map.
 
 import { useEffect, useMemo, useRef } from "react";
@@ -27,11 +27,10 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { PathLayer, ScatterplotLayer } from "@deck.gl/layers";
-import { HeatmapLayer } from "@deck.gl/aggregation-layers";
+import { BitmapLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
-import { buildOriginPointCloud, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
+import { buildOriginImage, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
 import { sceneAndVesselExtent } from "@/lib/extent";
 import type { Bounds, LonLat } from "@/lib/contracts";
 
@@ -57,28 +56,18 @@ const LOOKALIKE_COLOR = "#9aa4b2";
 // image and distinguishes particles from the vessel layer (cool blue, future). V3 palette.
 const PARTICLE_FILL: [number, number, number, number] = [251, 146, 60, 210];
 
-// Origin heatmap fade. Rewind fraction (0 at T−0, 1 at T−24h) is run through a smoothstep so
-// the cloud is fully hidden near the detection time and eases in only as the slider approaches
+// Origin cloud fade. Rewind fraction (0 at T−0, 1 at T−24h) is run through a smoothstep so the
+// cloud is fully hidden near the detection time and eases in only as the slider approaches
 // maximum rewind — "the origin becomes knowable the further back you drift" (docs/04 §Phase 3).
+// This is the ONLY thing about the origin layer that changes on a scrub: a pure `opacity` prop,
+// which the BitmapLayer applies without re-uploading its texture. The colour ramp and the
+// alpha-proportional mapping live in lib/origin.ts (buildOriginImage); Urooz owns the palette.
 const ORIGIN_FADE_IN_START = 0.2; // rewind fraction at which the cloud starts to appear
 const ORIGIN_FADE_IN_FULL = 0.9; // rewind fraction at which it reaches full opacity
-// The origin grid has a long low-probability tail (~90 % of cells are non-zero), so keep the
-// blur radius tight and push the transparency threshold up — that concentrates the visible
-// cloud near the actual mass instead of blooming across the whole scene. The precise
-// 50 % / 90 % extent is carried by the rings below; Urooz owns the final colour tokens.
-const ORIGIN_RADIUS_PIXELS = 28;
-const ORIGIN_INTENSITY = 0.6;
-const ORIGIN_THRESHOLD = 0.18;
-// HeatmapLayer aggregates its weighted points into a square GPU texture and then does a
-// point-per-texel max-reduction pass. The default size is 2048 → a 4.2 M-vertex reduction
-// that stalls integrated GPUs for ~1.6 s the first time it runs (measured on Intel UHD). The
-// origin grid is only 120×120 over ~0.6°, so 512 is already finer than the data — it cuts
-// that one-time cost ~16× while leaving the cloud visually identical.
-const ORIGIN_WEIGHTS_TEXTURE_SIZE = 512;
 
-// 50 % / 90 % origin-probability rings — warm amber-yellow outlines over the heatmap. The inner
-// (50 %) ring is brighter; the outer (90 %) ring is softer but still readable. Both complement
-// the warm heatmap colour ramp rather than clashing with a white outline. V3 palette.
+// 50 % / 90 % origin-probability rings — warm amber-yellow outlines over the origin cloud. The
+// inner (50 %) ring is brighter; the outer (90 %) ring is softer but still readable. Both
+// complement the warm origin-cloud colour ramp rather than clashing with a white outline. V3 palette.
 const ORIGIN_RING_50: [number, number, number, number] = [251, 191, 36, 230];
 const ORIGIN_RING_90: [number, number, number, number] = [251, 191, 36, 140];
 const ORIGIN_RING_WIDTH_PX = 1.5;
@@ -92,7 +81,7 @@ const originRingColor = (d: OriginRing): [number, number, number, number] =>
 // Vessel tracks (Phase 5) — cool blue family, distinct from the amber particle/origin palette
 // and from the red/grey detection colours, so all three layers stay readable together. Role is
 // conveyed by emphasis (opacity + width), not a hue change, to avoid inventing a new colour
-// that could collide with an existing token the way the amber particle/heatmap colours did.
+// that could collide with an existing token the way the amber particle/origin-cloud colours did.
 //
 // IMPORTANT: role is only ever assigned when `origin.abstain` has been confirmed `false`. While
 // abstain is `true`, or origin hasn't loaded yet, every track renders as "plain" — the map must
@@ -185,12 +174,13 @@ export default function MapView() {
   const t = tFromNorm(tNorm, particles?.nSteps ?? 0);
 
   // Phase 3 origin cloud. Step 1 parsed origin.json once into the store; here the row-major
-  // grid is expanded once into a weighted [lon,lat] point cloud and memoised on the bundle
-  // identity — it is never rebuilt on a scrub, and origin.json is never re-fetched.
+  // probability grid is rasterised once into a 120×120 RGBA image (one texel per cell) and
+  // memoised on the bundle identity — never rebuilt on a scrub, and origin.json is never
+  // re-fetched.
   const origin = useAppStore((s) => s.origin);
   const originVisible = useAppStore((s) => s.layers.origin);
-  const originCloud = useMemo(
-    () => (origin ? buildOriginPointCloud(origin) : null),
+  const originImage = useMemo(
+    () => (origin ? buildOriginImage(origin) : null),
     [origin],
   );
   // 50 % / 90 % rings around origin.centroid, using radius_50_km / radius_90_km. Built once
@@ -371,7 +361,7 @@ export default function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Origin opacity — this is the ONLY thing about the origin layers that changes on a scrub.
+  // Origin opacity — this is the ONLY thing about the origin layer that changes on a scrub.
   // 0 when Origin is toggled off. Otherwise the rewind fraction (0 at T−0, 1 at T−24h) run
   // through a smoothstep, so the cloud is hidden near the detection time and eases in only as
   // the slider nears maximum rewind ("the origin becomes knowable the further back you drift",
@@ -384,28 +374,32 @@ export default function MapView() {
     return smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind);
   }, [originVisible, t, particles]);
 
-  // Origin heatmap + 50/90 % rings — the backdrop the particles rewind into, drawn UNDERNEATH
-  // them. Everything expensive about these layers is done ONCE, up front, and never on a scrub:
-  //   - `originCloud` / `originRings` (grid → weighted points, km → ring polygons) are memoised
+  // Origin cloud + 50/90 % rings — the backdrop the particles rewind into, drawn UNDERNEATH
+  // them. Ruling D11: a BitmapLayer, never a HeatmapLayer. HeatmapLayer aggregates its points
+  // and renormalises colour in screen space, so the cloud's shape changes as a judge zooms —
+  // indefensible for an uncertainty visual. The BitmapLayer samples a fixed 120×120 texture
+  // through a fixed bilinear filter, so the cloud is identical at every zoom.
+  //
+  // Everything expensive is done ONCE and never on a scrub:
+  //   - `originImage` (grid → RGBA texels) and `originRings` (km → ring polygons) are memoised
   //     on the bundle identity above;
-  //   - the HeatmapLayer aggregates its points into a GPU texture and compiles three shader
-  //     programs the first time it is drawn. That cost (~1 s wall, mostly async, on integrated
-  //     GPUs) is paid as soon as the origin bundle loads, because the layers mount then and are
-  //     kept mounted and drawn for the life of the case.
+  //   - the BitmapLayer uploads that one 120×120 texture when the bundle loads and keeps it for
+  //     the life of the case — no aggregation, no per-texel reduction pass.
   // The T−24h → T−0 fade is therefore a pure `opacity` change, which deck.gl applies WITHOUT
-  // re-aggregating or re-tessellating. Removing the layers from the list on fade-out instead
-  // made deck.gl re-mount + re-aggregate on every re-entry — the 0.3–1.8 s "slider freeze"
-  // this file used to have.
+  // re-uploading the texture. `origin` is read for `origin.bounds` — the origin grid's own
+  // rectangle, NOT bounds.json (CONTRACTS §6, Master §5.6).
   const originLayerList = useMemo(() => {
-    if (!originCloud) return [] as (HeatmapLayer | PathLayer<OriginRing>)[];
-    const list: (HeatmapLayer | PathLayer<OriginRing>)[] = [
-      new HeatmapLayer({
+    if (!originImage || !origin) return [] as (BitmapLayer | PathLayer<OriginRing>)[];
+    const list: (BitmapLayer | PathLayer<OriginRing>)[] = [
+      new BitmapLayer({
         id: "origin",
-        data: originCloud,
-        radiusPixels: ORIGIN_RADIUS_PIXELS,
-        intensity: ORIGIN_INTENSITY,
-        threshold: ORIGIN_THRESHOLD,
-        weightsTextureSize: ORIGIN_WEIGHTS_TEXTURE_SIZE,
+        image: originImage,
+        bounds: [
+          origin.bounds.west,
+          origin.bounds.south,
+          origin.bounds.east,
+          origin.bounds.north,
+        ],
         opacity: originOpacity,
         pickable: false,
       }),
@@ -428,7 +422,7 @@ export default function MapView() {
       );
     }
     return list;
-  }, [originCloud, originRings, originOpacity]);
+  }, [originImage, origin, originRings, originOpacity]);
 
   // Particle cloud — one pre-built binary position frame per timestep (Phase 2). This is the
   // only deck layer that is rebuilt on every playback tick; `frames[t]` is a pre-computed view,
@@ -452,8 +446,8 @@ export default function MapView() {
     });
   }, [particles, particlesVisible, t]);
 
-  // Push the composed list into the deck overlay. Order is bottom→top: heatmap, rings, vessel
-  // tracks, particles. Runs only when one of the memoised pieces actually changes — never on a
+  // Push the composed list into the deck overlay. Order is bottom→top: origin bitmap, rings,
+  // vessel tracks, particles. Runs only when one of the memoised pieces actually changes — never on a
   // bare animation frame — and never re-renders the map container.
   useEffect(() => {
     overlayRef.current?.setProps({ layers: [...originLayerList, vesselLayer, particleLayer] });

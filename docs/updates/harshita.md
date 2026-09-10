@@ -12,6 +12,72 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-10 13:46] W1 / Phase 5.1 — origin visualization: HeatmapLayer → BitmapLayer (ruling D11)
+
+**Done:** The origin probability field now renders through a deck.gl `BitmapLayer`, never a
+`HeatmapLayer` (ruling D11 — HeatmapLayer re-smooths in screen pixels and renormalises colour
+per viewport, so the cloud changed shape/colour as a judge zoomed). `origin.ts` drops
+`buildOriginPointCloud` / `OriginPointCloud`; `buildOriginImage(origin)` rasterises the
+row-major 120×120 grid onto an `OffscreenCanvas` (grid row `r` → canvas row `r`, row 0 =
+NORTH, no flip) and returns its `ImageBitmap` — a single fixed amber hue in every texel with
+**alpha alone** carrying probability, `alpha = v**0.7 · 0.85 · 255`: proportional, gamma not
+linear, no hard cutoff (docs/04 Phase 5.1 — a threshold left a just-above-cutoff fringe reading
+as a phantom second cloud). `MapView` builds the image once per bundle, mounts one
+`BitmapLayer` (id `origin`) georeferenced with **`origin.bounds`** (not bounds.json), and the
+T−24h→T−0 fade + Origin toggle stay a pure `opacity` change with the layer kept mounted (the
+slider-freeze fix is preserved). `originOpacity` smoothstep, the 50/90 % ring `PathLayer`,
+camera, store, `ContextPanel`, `LayerToggles` and the particle layer are untouched.
+
+**Files touched:** `web/lib/origin.ts` (modified — `buildOriginImage` via OffscreenCanvas,
+removed `buildOriginPointCloud` + `OriginPointCloud`) · `web/components/MapView.tsx` (modified —
+`BitmapLayer` replaces `HeatmapLayer`, removed the `@deck.gl/aggregation-layers` import and the
+`ORIGIN_RADIUS_PIXELS` / `_INTENSITY` / `_THRESHOLD` / `_WEIGHTS_TEXTURE_SIZE` constants). No
+data / case / schema / pipeline change. `@deck.gl/aggregation-layers` is now unused in
+`web/package.json` — left in place (also a transitive dep of `deck.gl@9.4`), not touched.
+
+**Run command:**
+```bash
+robocopy cases web\public\cases /MIR     # bundle copy (unchanged)
+cd web && npm run dev                     # open http://localhost:3000/case/case-000/trace
+```
+Expected: enter Trace (Particles + Origin auto-on); at full rewind a soft amber cloud sits
+concentric with the two amber rings; zooming in/out does not change the cloud's shape or colour
+relative to the rings; dragging T−0→T−24h eases the cloud in with no hard edge and no slider
+stall.
+
+**Checkpoint artefact:**
+- **Static (all PASS):** `npm run lint` → 0 warnings · `npx tsc --noEmit` → clean ·
+  `npm run build` → `✓ Compiled successfully`, types + lint pass, 5/5 pages, `/` 11.2 kB /
+  99.1 kB first load (dev server stopped first so `.next` was free).
+- **Browser (Playwright MCP, Chromium on the dev server):** D11 zoom test — cloud shape and
+  colour *relative to the 50/90 % rings* unchanged across zoom in +3 / out to −2. Fade at
+  T−9h 30m: edges dissolve smoothly, no fringe / phantom second cloud. `origin.json` fetched
+  **once**, not re-fetched on scrub / zoom / stage change. Console clean — the old
+  `luma.gl: Binding weightsTexture not set` warning (HeatmapLayer-only) is gone. Origin toggle
+  off/on drops and restores the cloud **and** rings together; particles unaffected. Trace card
+  still shows centroid `80.64695, 13.46316`, radii `4.2 km` / `11.8 km`, window, `50` runs.
+- `python scripts/validate_case.py cases/case-000` → `PASS`. Screenshots in the session
+  scratchpad, not committed.
+
+**Open issues:**
+- Row-0-is-north can't be *proved* on case-000 — its origin blob is near-radially-symmetric, so
+  a vertical flip renders identically. Verified only as concentric-with-rings. The definitive
+  check is the real Ennore bundle (docs/04 §7.1: origin must be NE of and above the slick); if
+  it renders flipped there, reverse the row index in `buildOriginImage`
+  (`i → (rows-1-r)*cols + c`).
+- `@deck.gl/aggregation-layers` is now an unused dependency in `web/package.json` — drop it
+  after the freeze, not now.
+- Display constants (`ORIGIN_RGB`, `ORIGIN_ALPHA_GAMMA`, `ORIGIN_ALPHA_MAX`) are fitted to
+  case-000's in-frame blob and are first-to-retune against the real bundle (docs/04 §7.2);
+  Urooz owns the final palette tokens.
+- This entry is written but **not committed** — no commit / push was performed for W1.
+
+**Next:** W5 — union / per-stage camera (docs/04 §5.2): extend `lib/extent.ts` to
+`bounds.json ∪ particle extent ∪ origin.bounds` so the cloud and particles are not framed
+off-screen on real data.
+
+---
+
 ## [2026-09-08 15:55] Phase 3 — origin heatmap + rings, Detect object card + feature bars, Trace card
 
 **Done:** Phase 3 of the frontend is complete on `case-000`. Seven files:

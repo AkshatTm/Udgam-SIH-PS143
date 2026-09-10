@@ -1,6 +1,8 @@
 // Phase 3 origin-bundle loader. Fetches /cases/<id>/origin.json ONCE, validates the fields the
-// frontend consumes against CONTRACTS.md §6, and flattens the probability grid into a
-// Float32Array so a later HeatmapLayer can read it without re-parsing.
+// frontend consumes against CONTRACTS.md §6, and keeps the probability grid as a Float32Array.
+// `buildOriginImage` then rasterises that grid into a BitmapLayer texture — ruling D11: never a
+// HeatmapLayer, which re-smooths in screen pixels and renormalises per viewport so the cloud
+// changes shape as a judge zooms.
 //
 // Like loadCase.ts / particles.ts: on a missing or malformed file it throws a descriptive
 // Error which the shell surfaces as a visible banner. It never silently patches data — a bad
@@ -26,62 +28,60 @@ export interface OriginBundle {
   abstain: boolean;
 }
 
-/**
- * A weighted geographic point cloud in deck.gl's binary-attribute form, derived once from a
- * parsed OriginBundle and fed straight to a HeatmapLayer's `data` prop. Positions are
- * `[lon, lat]` (EPSG:4326); one entry per non-empty grid cell.
- */
-export interface OriginPointCloud {
-  length: number;
-  attributes: {
-    getPosition: { value: Float32Array; size: 2 };
-    getWeight: { value: Float32Array; size: 1 };
-  };
-}
+// Origin-cloud display curve. Hue is a single amber (the 50/90 % rings' family, V3 palette);
+// ALPHA alone carries probability, so colour never implies a magnitude. The mapping is a mild
+// gamma, NOT linear and NOT a hard cutoff: case-000's median non-zero cell is ~0.011, so linear
+// alpha renders the cloud invisible, and a hard threshold leaves a fringe of just-above-cutoff
+// cells reading as a second, non-existent cloud (docs/04 Phase 5.1). These three constants are
+// display-only — they never change a probability, only how visible one is — and are the first
+// things to retune against the real Ennore bundle (docs/04 Phase 7.2). Urooz owns the final
+// palette; `ORIGIN_ALPHA_GAMMA = 1` reverts to strictly-linear alpha.
+const ORIGIN_RGB: readonly [number, number, number] = [251, 176, 59];
+const ORIGIN_ALPHA_GAMMA = 0.7;
+const ORIGIN_ALPHA_MAX = 0.85;
 
 /**
- * Expand the row-major probability grid into one weighted point at each non-empty cell's
- * centre. CONTRACTS §6: `values` is row-major from the top-left, so **row 0 is the NORTH edge**
- * and latitude DECREASES as the row index grows. Longitude increases west→east with the column
- * index. Cells with weight <= 0 are dropped (they add nothing to the heatmap).
+ * Rasterise the row-major probability grid onto an `OffscreenCanvas` and hand back its
+ * `ImageBitmap` for a deck.gl `BitmapLayer` (ruling D11 — never a `HeatmapLayer`; docs/04
+ * Phase 5.1). One texel per grid cell, so the image is `cols × rows` (120 × 120 for case-000).
  *
- * Pure: reads `origin.values` (the stored Float32Array) but never mutates it, and allocates
- * its output arrays exactly once per call — callers memoise on the bundle identity so nothing
- * here runs on a slider tick.
+ * Orientation: CONTRACTS §6 says `values` is row-major from the top-left, i.e. **row 0 is the
+ * NORTH edge**. The grid is written straight into the canvas (grid row `r` → canvas row `r`,
+ * top row = north) and `BitmapLayer`'s mesh maps texture row 0 to the `bounds` top edge — so
+ * north stays at north with no vertical flip. (Verify by eye anyway, TRAPS #8: the bright core
+ * must sit concentric with the 50/90 % rings, and NE of the slick on real Ennore.)
+ *
+ * The colour ramp is authored here in the same pass: a single fixed amber hue in EVERY texel
+ * (including the fully-transparent ones, so bilinear edge samples blend to transparent-amber,
+ * never transparent-black — no dark fringe), with **alpha alone** carrying probability. The
+ * alpha curve is a mild gamma, never linear and never a hard cutoff (see the constants above).
+ *
+ * Pure and browser-only (`OffscreenCanvas` + `ImageBitmap`). Allocates once; the only caller
+ * is `MapView`, a client-only (`ssr: false`) dynamic import that memoises on the bundle
+ * identity — so this runs once per case, never on a slider tick.
  */
-export function buildOriginPointCloud(origin: OriginBundle): OriginPointCloud {
-  const { rows, cols, values, bounds } = origin;
-  const lonSpan = bounds.east - bounds.west;
-  const latSpan = bounds.north - bounds.south;
-
-  let count = 0;
+export function buildOriginImage(origin: OriginBundle): ImageBitmap {
+  const { rows, cols, values } = origin;
+  const canvas = new OffscreenCanvas(cols, rows);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error(
+      "origin.json: could not acquire a 2D context to rasterise the origin grid",
+    );
+  }
+  const img = ctx.createImageData(cols, rows);
+  const [r, g, b] = ORIGIN_RGB;
   for (let i = 0; i < values.length; i++) {
-    if (values[i] > 0) count++;
+    const v = values[i];
+    const o = i * 4;
+    img.data[o] = r;
+    img.data[o + 1] = g;
+    img.data[o + 2] = b;
+    img.data[o + 3] =
+      v > 0 ? Math.round(v ** ORIGIN_ALPHA_GAMMA * ORIGIN_ALPHA_MAX * 255) : 0;
   }
-
-  const positions = new Float32Array(count * 2);
-  const weights = new Float32Array(count);
-
-  let p = 0;
-  for (let r = 0; r < rows; r++) {
-    const lat = bounds.north - ((r + 0.5) / rows) * latSpan;
-    for (let c = 0; c < cols; c++) {
-      const w = values[r * cols + c];
-      if (w <= 0) continue;
-      positions[p * 2] = bounds.west + ((c + 0.5) / cols) * lonSpan;
-      positions[p * 2 + 1] = lat;
-      weights[p] = w;
-      p++;
-    }
-  }
-
-  return {
-    length: count,
-    attributes: {
-      getPosition: { value: positions, size: 2 },
-      getWeight: { value: weights, size: 1 },
-    },
-  };
+  ctx.putImageData(img, 0, 0);
+  return canvas.transferToImageBitmap();
 }
 
 // Mean Earth radius (km) — WGS84 authalic sphere. At the case scales here (radii < ~15 km)
