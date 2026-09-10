@@ -127,10 +127,13 @@ def main():
         return 0
     out.parent.mkdir(parents=True, exist_ok=True)
 
+    # Resolve the case BEFORE touching Earth Engine. A typo'd or not-yet-created case should
+    # fail in a second, not after an auth round trip -- and it must never get far enough to
+    # write a cache under a name it does not belong to.
+    bbox, t0, origin = load_case_window(a.case, REPO / "cases")
+
     import ee
     ee.Initialize(project=a.project)
-
-    bbox, t0, origin = load_case_window(a.case, REPO / "cases")
     print("=" * 78)
     print(f"  case    {a.case}  ({origin})")
     print(f"  region  [W {bbox[0]}, S {bbox[1]}, E {bbox[2]}, N {bbox[3]}]")

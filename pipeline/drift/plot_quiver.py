@@ -40,8 +40,12 @@ def slick_outline(case_id):
     if not path.exists():
         return None
     fc = json.loads(path.read_text())
+    # The property is "classification", not "class" (docs/CONTRACTS.md). This read the wrong
+    # key until 2026-09-07: `.get("class", "oil")` returned the default for EVERY feature, so
+    # the filter passed look-alikes too and the plot outlined whichever feature happened to
+    # have the highest confidence. On case-000 that is the oil one, so it looked correct.
     oil = [f for f in fc.get("features", [])
-           if f.get("properties", {}).get("class", "oil") == "oil"] or fc.get("features", [])
+           if (f.get("properties") or {}).get("classification") == "oil"]
     if not oil:
         return None
     best = max(oil, key=lambda f: f.get("properties", {}).get("confidence", 0))
