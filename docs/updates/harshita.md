@@ -12,6 +12,98 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-10 19:20] P1.3 / D1 — no-spill designed state
+
+**Done:** Built the D1 "No spill detected" state (docs/04 Part D; Master §2.2, §6.3) — a
+*result*, never an error. New `web/lib/detections.ts` `isNoSpill(detections)` = `detections
+!= null && no feature is classification "oil"` (the authoritative signal — the actual
+`classification` field, not `meta.case_type`, and guarded so a missing/malformed
+`detections.geojson` stays the existing contract-error path). New
+`web/components/NoSpillBanner.tsx` — an over-the-map banner ("No spill detected in this
+scene." + a **count-derived** sub-line: "We checked N dark patches — none match oil…" /
+"The scene is clear…"), `pointer-events-none` so clicks pass through to the grey look-alike
+polygons; `CaseWorkspace` renders it only when `stage === "detect" && !error &&
+isNoSpill(detections)`. `flow.ts` gains `stageUnavailableReason(act, { noSpill })` — on a
+no-spill scene Trace → "nothing to trace — no oil was detected in this scene", Attribute →
+"no oil origin to attribute"; every other case (Ennore's D3 "no free historical AIS…"
+included) keeps the static `STAGE_UNAVAILABLE_REASON` string, which is preserved verbatim as
+the fallback. `StageRail` + `FlowBar` read `store.detections`, compute `noSpill`, and pass it
+through (`flowSteps(acts, ctx?)`). `ContextPanel`'s Detect `oilCount === 0` sub-branch is now
+a titled block ("No oil in this scene" + the count line + "click a grey patch to see why it
+was rejected") followed by the existing `{selected && <DetectionCard/>}` — the oil-case and
+Trace/Attribute/Verify branches are untouched, `DetectionCard` is untouched (its "Why this
+classification" feature bars already carry the why-not-oil evidence), and `bestOilDetectionId`
+still returns `null` for a zero-oil scene so `selectedDetectionId` stays `null` — no look-alike
+is auto-selected. MapView is not touched (its `det-outline-lookalike` grey-dashed + `det-fill`
+click already handle look-alikes).
+
+QA'd against a synthetic **`cases/case-000-nospill/`** fixture (2 look-alike features, zero
+oil, `acts_available: ["detect"]`, `case_type: "nospill"`). **Not** in `cases/index.json` —
+never shown to a judge, reachable by direct URL only. SAR raster copied from `case-000`.
+
+**Files touched:** `web/lib/detections.ts` (new) · `web/lib/flow.ts` (modified —
+`stageUnavailableReason`, `flowSteps(acts, ctx?)`) · `web/components/StageRail.tsx` (modified —
+context-aware reason) · `web/components/FlowBar.tsx` (modified — pass `noSpill`) ·
+`web/components/NoSpillBanner.tsx` (new) · `web/components/CaseWorkspace.tsx` (modified — render
+the banner) · `web/components/ContextPanel.tsx` (modified — the Detect no-oil sub-branch only) ·
+`cases/case-000-nospill/` (new synthetic fixture). No producer / validator / MapView /
+store.ts / loadCase.ts / contracts.ts / Gallery / real-case changes.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000-nospill   # PASS (1 benign "zero 'oil' features" warning)
+robocopy cases\case-000-nospill web\public\cases\case-000-nospill /MIR
+cd web && npm run dev
+```
+Expected: `http://localhost:3000/case/case-000-nospill/detect` — SAR + 2 grey dashed
+look-alike polygons, an over-map "No spill detected in this scene." banner, a "No oil in this
+scene" panel block, Trace/Attribute/Verify greyed, "Try another case →" primary action, no
+error card. Click a grey patch → its look-alike `DetectionCard`.
+
+**Checkpoint artefact:**
+- Static (all PASS): `validate_case.py cases/case-000` → PASS (unchanged) ·
+  `validate_case.py cases/case-000-nospill` → PASS (1 benign warning) · `npm run lint` → 0
+  warnings · `npx tsc --noEmit` → clean · `npm run build` → compiled.
+- Browser (Playwright MCP, dev server):
+  - Fixture loads with **no** contract-error card ✓
+  - Over-map banner + "We checked 2 dark patches…" copy; `pointer-events-none` ✓
+  - `ContextPanel` "No oil in this scene" block, **no** "Select a detection…" prompt ✓
+  - Click a look-alike → `DetectionCard`: "Look-alike", 68 %, Area 15.0 km², "Blob / Radial",
+    centroid, the feature bars ✓
+  - StageRail Trace tooltip = "nothing to trace — no oil was detected in this scene";
+    Attribute = "no oil origin to attribute"; Verify = unchanged "no official finding to
+    compare against yet" ✓ — FlowBar dots carry the same strings ✓
+  - Primary action = "Try another case →"; click → Gallery ✓
+  - Direct `/trace` and `/attribute` URLs → redirect to `/detect` ✓
+  - Empty `FeatureCollection` → "The scene is clear…", no crash ✓
+  - Malformed `detections.geojson` (bad `classification`) → the contract-error card, **not**
+    the no-spill banner ✓
+  - `case-000` oil case unchanged: "Oil Slick" 87 %, "Trace this slick back →", Trace/Attribute
+    enabled, no no-spill banner ✓
+  - Case switching (Try another case → Gallery → case-000) ✓
+  - Console clean (0 errors / 0 warnings) throughout.
+  - All temporary QA edits to the served fixture restored.
+
+**Open issues:**
+- **Real-data dependency (Soum):** the real no-spill case (Master §3 case 7, Zenodo Part 3) does
+  not exist. Final "against the real bundle" sign-off (`docs/05:139`) is deferred. The code
+  lights up unchanged when Soum's bundle lands in `cases/` + `index.json`.
+- **Fixture SAR artefact:** `case-000-nospill/sar.png` is copied from `case-000`, whose raster
+  has a painted elongated dark streak baked in — so the fixture shows an obvious dark feature
+  with no detection polygon on it. Cosmetic only (the D1 UI is driven by the detection
+  classifications, not the raster); the real Zenodo scene won't have this. A clean fixture SAR
+  would need a producer-side asset.
+- **Ennore D3 attribute string** could not be exercised end-to-end (`case-ennore-2017` is a
+  D16 scaffold with no `detections.geojson` → it errors before the rail renders). Verified
+  instead by code (the `STAGE_UNAVAILABLE_REASON` record is untouched and only overridden when
+  `ctx.noSpill` is true) + the Verify-tooltip fallthrough test.
+- Not committed / not pushed.
+
+**Next:** backlog P2 — union / per-stage camera (Phase 5.2 "W5", needs Akshat's D4 ruling), or
+the D16 `loadCase.ts` gate (small, unblocks real-case Trace/Verify).
+
+---
+
 ## [2026-09-10 16:35] P1.2 / C8 — idle reset to a clean Gallery after ~90 s
 
 **Done:** Implemented the C8 self-guiding requirement (Master §2.1, `docs/04:278`): after ~90 s

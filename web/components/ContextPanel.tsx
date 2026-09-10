@@ -512,6 +512,10 @@ export default function ContextPanel() {
   const oilCount =
     detections?.features.filter((f) => f.properties.classification === "oil")
       .length ?? 0;
+  const lookalikeCount =
+    detections?.features.filter(
+      (f) => f.properties.classification === "lookalike",
+    ).length ?? 0;
   const selected = detections?.features.find(
     (f) => f.properties.id === selectedDetectionId,
   );
@@ -521,10 +525,24 @@ export default function ContextPanel() {
       {/* ── Detect ── */}
       {activeStage === "detect" &&
         (oilCount === 0 ? (
+          // D1 — a designed result, not an error (docs/04 Part D). Guide the judge to the
+          // rejected look-alikes; their DetectionCard carries the "why not oil" evidence.
           <>
-            <p className="rounded border border-white/[0.08] bg-white/[0.03] p-3 text-[11px] text-white/55">
-              No spill detected in this scene.
-            </p>
+            <div className="rounded border border-white/[0.08] bg-white/[0.03] p-3">
+              <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                Stage 01 — Detect
+              </div>
+              <div className="mt-1 text-[15px] font-semibold leading-tight text-white/90">
+                No oil in this scene
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-white/55">
+                {lookalikeCount === 0
+                  ? "The scene is clear — no dark features to assess."
+                  : `We checked ${lookalikeCount} dark patch${
+                      lookalikeCount === 1 ? "" : "es"
+                    } — none match oil. Click a grey patch on the map to see why it was rejected.`}
+              </p>
+            </div>
             {selected && <DetectionCard p={selected.properties} />}
           </>
         ) : selected ? (

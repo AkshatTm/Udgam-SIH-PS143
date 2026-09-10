@@ -14,6 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useAppStore } from "@/lib/store";
 import { useIdleReset } from "@/lib/useIdleReset";
+import { isNoSpill } from "@/lib/detections";
 import { adjacentStage, isStage, primaryActionLabel } from "@/lib/flow";
 import type { Act } from "@/lib/contracts";
 import Header from "./Header";
@@ -23,6 +24,7 @@ import LayerToggles from "./LayerToggles";
 import FlowBar from "./FlowBar";
 import PrimaryAction from "./PrimaryAction";
 import VerifyScreen from "./VerifyScreen";
+import NoSpillBanner from "./NoSpillBanner";
 
 // MapLibre touches `window` — never render it on the server.
 const MapView = dynamic(() => import("./MapView"), {
@@ -58,6 +60,7 @@ export default function CaseWorkspace() {
   const status = useAppStore((s) => s.status);
   const error = useAppStore((s) => s.error);
   const meta = useAppStore((s) => s.meta);
+  const detections = useAppStore((s) => s.detections);
   const activeCaseId = useAppStore((s) => s.activeCaseId);
   const setActiveCase = useAppStore((s) => s.setActiveCase);
   const loadActiveCase = useAppStore((s) => s.loadActiveCase);
@@ -152,6 +155,9 @@ export default function CaseWorkspace() {
           <StageRail />
           <div className="relative min-w-0">
             <MapView />
+            {/* D1 — a valid zero-oil scene is a *result*, not an error: an over-map banner
+                while the SAR + grey look-alike polygons stay visible below it. */}
+            {stage === "detect" && !error && isNoSpill(detections) && <NoSpillBanner />}
             {/* Verify replaces the map+panel view but keeps MapView mounted underneath so it
                 is never torn down on stage navigation. ContextPanel and the footer controls
                 are suppressed for this stage; PrimaryAction stays (it is "Try another case →"

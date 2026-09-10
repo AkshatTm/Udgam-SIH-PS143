@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { ALL_ACTS, type Act } from "@/lib/contracts";
-import { STAGE_UNAVAILABLE_REASON } from "@/lib/flow";
+import { stageUnavailableReason } from "@/lib/flow";
+import { isNoSpill } from "@/lib/detections";
 
 const STAGE_NUMBERS: Record<Act, string> = {
   detect: "01",
@@ -25,6 +26,9 @@ export default function StageRail() {
   const activeStage = useAppStore((s) => s.activeStage);
   const activeCaseId = useAppStore((s) => s.activeCaseId);
   const setStage = useAppStore((s) => s.setStage);
+  // docs/04 D1 — a no-spill scene greys Trace/Attribute with a specific "nothing to trace"
+  // reason; every other case keeps the default STAGE_UNAVAILABLE_REASON string.
+  const noSpill = isNoSpill(useAppStore((s) => s.detections));
 
   return (
     <nav className="flex w-[52px] shrink-0 flex-col gap-px border-r border-white/[0.08] bg-[#0b0f14] pt-3 pb-2">
@@ -45,7 +49,7 @@ export default function StageRail() {
             title={
               available
                 ? STAGE_LABELS[act]
-                : `${STAGE_LABELS[act]} — ${STAGE_UNAVAILABLE_REASON[act]}`
+                : `${STAGE_LABELS[act]} — ${stageUnavailableReason(act, { noSpill })}`
             }
             className={`
               relative flex flex-col items-center gap-1.5 py-4 text-center

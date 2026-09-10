@@ -51,7 +51,7 @@ export function primaryActionLabel(stage: Act, acts: Act[] | undefined): string 
   }
 }
 
-/** Why a stage is unavailable for a case — shown as a tooltip on the disabled rail item and
+/** Why a stage is unavailable for a case — the default tooltip on the disabled rail item and
  *  progress step (docs/04 Part D, D3). Ennore hits the `attribute` case. */
 export const STAGE_UNAVAILABLE_REASON: Record<Act, string> = {
   detect: "no detection output for this case",
@@ -59,6 +59,21 @@ export const STAGE_UNAVAILABLE_REASON: Record<Act, string> = {
   attribute: "no free historical AIS is published for these waters",
   verify: "no official finding to compare against yet",
 };
+
+/** The tooltip for a greyed act, given case context. On a no-spill scene (docs/04 Part D, D1)
+ *  the Trace / Attribute reasons are specific — "nothing to trace"; every other case keeps the
+ *  static STAGE_UNAVAILABLE_REASON string above (Ennore's D3 "no free historical AIS…"
+ *  included). */
+export function stageUnavailableReason(
+  act: Act,
+  ctx?: { noSpill?: boolean },
+): string {
+  if (ctx?.noSpill) {
+    if (act === "trace") return "nothing to trace — no oil was detected in this scene";
+    if (act === "attribute") return "no oil origin to attribute";
+  }
+  return STAGE_UNAVAILABLE_REASON[act];
+}
 
 /** One dot in the five-step progress indicator (docs/04 Part C, C3). */
 export interface FlowStep {
@@ -69,12 +84,15 @@ export interface FlowStep {
   reason?: string;
 }
 
-export function flowSteps(acts: Act[] | undefined): FlowStep[] {
+export function flowSteps(
+  acts: Act[] | undefined,
+  ctx?: { noSpill?: boolean },
+): FlowStep[] {
   const stage = (key: Act, label: string): FlowStep => ({
     key,
     label,
     available: acts?.includes(key) ?? false,
-    reason: STAGE_UNAVAILABLE_REASON[key],
+    reason: stageUnavailableReason(key, ctx),
   });
   return [
     { key: "pick", label: "Pick", available: true },

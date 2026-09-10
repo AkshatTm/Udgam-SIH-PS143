@@ -7,16 +7,19 @@ import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import type { Act } from "@/lib/contracts";
 import { adjacentStage, flowSteps } from "@/lib/flow";
+import { isNoSpill } from "@/lib/detections";
 
 export default function FlowBar({ stage }: { stage: Act }) {
   const router = useRouter();
   const meta = useAppStore((s) => s.meta);
   const activeCaseId = useAppStore((s) => s.activeCaseId);
   const resetToGallery = useAppStore((s) => s.resetToGallery);
+  const noSpill = isNoSpill(useAppStore((s) => s.detections));
   const acts = meta?.acts_available;
 
   const prev = adjacentStage(stage, acts, -1);
-  const steps = flowSteps(acts);
+  // docs/04 D1 — greyed dots get the "nothing to trace" reason on a no-spill scene.
+  const steps = flowSteps(acts, { noSpill });
 
   // Any path back to the Gallery goes through the same clean-state reset as the idle timer
   // (docs/04 C8) — going forward through a stage never does.
