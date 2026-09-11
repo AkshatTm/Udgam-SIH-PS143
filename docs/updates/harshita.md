@@ -12,6 +12,124 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-11 01:00] P1.6 — C4/C5 plain-language labels + InfoDot affordances + Screen-1 headline
+
+**Done:** Implemented P1.6 in full. Three interlocking changes:
+
+1. **`InfoDot` component (new `web/components/InfoDot.tsx`)** — a tiny inline "i" button
+   that shows a one-sentence plain-language tooltip on hover and keyboard focus. No external
+   library. Accessibility: native `<button>` (no `role` override — the tooltip role lives on
+   the `<span>`, not the button); tooltip `<span>` carries `role="tooltip"` and a stable `id`;
+   button has `aria-describedby` pointing to that id at all times; tooltip is **always in the
+   DOM** (`aria-hidden={!visible}` + CSS opacity) so `aria-describedby` is never a dangling
+   reference; `tabIndex` omitted (native button is natively focusable). Keyboard: Tab reaches
+   the button; focus/hover opens the tooltip; Escape closes it without blurring; Tab-away
+   (blur) closes it too. Tooltip is `absolute bottom-full w-48 pointer-events-none` —
+   never causes layout shifts.
+   **Positioning (fixed during QA, see below):** the tooltip anchors to the nearest
+   `relative` ANCESTOR, not to the 14 px button itself. The button's own x-position drifts
+   with label length (inline text before it), so anchoring to the button overflowed the
+   panel for the three longer Detect labels. Anchoring to the caller's row — a fixed,
+   panel-width box (`MetricRow`'s root div, and the two bespoke `TraceCard` rows, all now
+   carry `relative`) — makes every tooltip's position independent of label length. `align`
+   ("left" default / "right") then just picks which edge of that row the tooltip hangs from.
+
+2. **`DetectionCard` re-labelled (C4 + C5):** the Geometry/Shape-class section is replaced
+   by a "Measurements" block using a new `MetricRow` helper that renders the plain-language
+   primary label, an optional muted technical secondary (`text-white/35`, `text-[9px]`), and
+   an `InfoDot`. Required labels: "How big" (area) · "How stretched" (elongation) · "How
+   sharp-edged" (edge gradient) · "How much darker" (contrast) · "Shape" (shape class). All
+   measured values unchanged. The "Why this classification" Recharts bar chart (`featureRows` /
+   `BarChart`) is completely unchanged — labels, values, bar heights all preserved verbatim.
+
+3. **`TraceCard` re-labelled (C4 + C5):** plain-language section headers and `MetricRow` /
+   `InfoDot` per metric. "Best estimate" (centroid with InfoDot) · "Half the runs land within"
+   (50 % radius) · "Nine in ten within" (90 % radius) · "Released between" (time window with
+   InfoDot). Header changed to "Where the Oil Came From" / "{n} simulations". Both verbatim
+   captions preserved exactly: the bracket note and the particle-vs-uncertainty note.
+
+4. **Screen-1 oil detection headline:** in the `oilCount > 0` detect branch, a headline above
+   the DetectionCard reads "We found N dark patches. M is oil." Counts derive directly from
+   `detections.features`. Grammar handled: "1 dark patch" / "2 dark patches" / "1 is oil" /
+   "N are oil". NOT shown in the `oilCount === 0` D1 branch (that branch keeps its existing
+   "No oil in this scene" messaging unchanged).
+
+D1 / D2 / D3 branches untouched. Attribute and Verify sections untouched.
+
+**Files touched:** `web/components/InfoDot.tsx` (new) · `web/components/ContextPanel.tsx`
+(modified — `InfoDot` import; `MetricRow` component; `DetectionCard` Measurements section;
+`TraceCard` all sections; detect-branch oil headline) · `docs/updates/harshita.md` (this entry)
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000
+robocopy cases web\public\cases /MIR
+cd web && npm run lint && npm run build && npm run dev
+```
+Expected: PASS (0 warnings) · 0 lint warnings · Compiled successfully 5/5 pages.
+Navigate to `/case/case-000/detect` — "We found 2 dark patches. 1 is oil." headline · plain-language labels with muted technical terms · every metric has an "i" dot tooltip. Navigate to `/trace` — "Where the Oil Came From" / "Best estimate" / "Half the runs land within" / "Nine in ten within" / "Released between" all with InfoDots.
+
+**Checkpoint artefact — static:**
+- `python scripts/validate_case.py cases/case-000` → PASS (0 warnings) ✓
+- `npm run lint` → 0 ESLint warnings or errors ✓ (re-run after the positioning fix, still clean)
+- `npx tsc --noEmit` → clean (exit 0, no output) ✓ (re-run after the fix, still clean)
+- `npm run build` → ✓ Compiled successfully, 5/5 pages ✓ (clean `.next` rebuild, re-run after
+  the fix, still clean; two transient `PageNotFoundError` / stale-`.next`-types build failures
+  during this session were a Windows file-lock/cache artefact — reproduced on a from-scratch
+  `rm -rf .next && npm run build`, not on the code, and did not recur on retry)
+- `git diff --check` → 0 whitespace errors ✓
+
+**Checkpoint artefact — manual QA on the dev server (Playwright MCP), this session:**
+- **`case-000` Detect:** headline "We found 2 dark patches. 1 is oil." exact ✓ · all 5
+  Measurements rows plain-language-first with the muted technical term beneath ✓ · every
+  metric has a working InfoDot ✓ · "Why this classification" bars + values byte-identical to
+  before (8.2 / 0.34 / −6.2 dB) ✓ · Centroid / Detection ID unchanged ✓
+- **`case-000` Trace:** "Where the Oil Came From" / "50 simulations" · "Best estimate" +
+  InfoDot · "Half the runs land within" 4.2 km + InfoDot · "Nine in ten within" 11.8 km +
+  InfoDot · "Released between" + InfoDot — all values unchanged from pre-P1.6 · bracket
+  caption **verbatim** ("Earliest and latest… a bracket, not a single measured release
+  time.") ✓ · particle-vs-uncertainty caption **verbatim** ("The drifting points trace one
+  representative path… stacked from 50 perturbed runs.") ✓ · abstain-false line "Origin
+  within attribution confidence" unchanged ✓
+- **InfoDot interaction, verified directly on the DOM (not just visually):** mouse hover
+  opens (`aria-hidden` false while `:hover`) ✓ · keyboard focus opens ✓ · Escape closes
+  without blurring (focus stays on the button) ✓ · Tab-away blurs and closes the previous
+  tooltip while opening the next one's ✓ · **zero layout shift** — row `top` positions
+  identical with a tooltip open vs. closed, measured via `getBoundingClientRect()` ✓
+- **🔴 Bug found and fixed this session — tooltip overflow.** Measuring every tooltip's
+  `getBoundingClientRect()` against the `<aside>` panel's showed **3 of 5 Detect metrics
+  overflowing the panel's right edge by 3–20 px** ("How stretched", "How sharp-edged", "How
+  much darker" — the longer labels) and the two `TraceCard` trailing dots ("Best estimate",
+  "Released between") overflowing by **~155 px**. Root cause: the tooltip was anchored to the
+  14 px button, whose x-position depends on inline label length / row layout — not a fixed
+  point. **Fix:** re-anchor to the row instead of the button (see the `InfoDot` entry above).
+  Re-measured after the fix: **all 9 InfoDot instances across Detect + Trace now sit fully
+  inside the panel bounds**, confirmed by `getBoundingClientRect()`, not just eyeballed.
+- **D1 regression (`case-000-nospill`):** NoSpillBanner + "No oil in this scene" block +
+  count-derived sub-line unchanged ✓ · **no** "N is oil" headline shown (correctly suppressed
+  in the `oilCount === 0` branch) ✓ · Trace/Attribute tooltips still "nothing to trace…" /
+  "no oil origin to attribute" ✓ · Verify tooltip unchanged ✓
+- **D2 regression (`case-000-abstain`):** Attribute stays **enabled** (not greyed) ✓ ·
+  "Deliberate abstention" / "Attribution not possible at acceptable confidence." + the
+  synthetic `abstain_reason` unchanged ✓ · funnel unchanged ✓ · on Trace, abstain-true line
+  "Origin cloud too diffuse — no suspects can be named." unchanged, with the new
+  plain-language TraceCard labels applied consistently around it ✓ · Verify still greyed ✓
+- **D3 regression (`case-000-d3`):** ATTRIBUTE still greyed with the AIS tooltip ✓ · Trace
+  primary action still reads **"See what really happened →"** and skips to Verify ✓ ·
+  headline + plain-language labels present on Detect there too, no interaction with the D3
+  gating ✓
+- **Console:** 0 errors, 0 warnings across every page/interaction in this QA pass (checked
+  with `all: true`, i.e. since session start, not just since last navigation).
+
+**Open issues:**
+- None outstanding from this QA pass. The tooltip-overflow bug found during QA is fixed and
+  re-verified (above).
+- Not committed / not pushed.
+
+**Next:** hand off diff + `git status` + validation evidence to the user for commit/push.
+
+---
+
 ## [2026-09-11 00:05] P1.5 / D3 — act-unavailable state (a stage missing from acts_available)
 
 **Done:** Closed D3 (docs/04 Part D). The greyed-stage machinery already existed from Phase 1

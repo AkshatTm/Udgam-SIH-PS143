@@ -12,6 +12,7 @@ import { useAppStore } from "@/lib/store";
 import type { DetectionProperties } from "@/lib/contracts";
 import type { OriginBundle } from "@/lib/origin";
 import type { ExcludedVessel, Funnel, Suspect, SuspectsBundle } from "@/lib/suspects";
+import InfoDot from "@/components/InfoDot";
 
 // Classification colours — same hex as the map detection polygons.
 const OIL_COLOR = "#ff4d4d";
@@ -104,6 +105,41 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * MetricRow — plain-language label first, muted technical term second,
+ * optional InfoDot affordance (C4 + C5).
+ */
+function MetricRow({
+  primary,
+  technical,
+  value,
+  tip,
+}: {
+  primary: string;
+  technical?: string;
+  value: string;
+  tip: string;
+}) {
+  return (
+    // `relative` — the InfoDot's tooltip anchors to this row (see InfoDot.tsx), not to the
+    // button itself, so it stays inside the panel regardless of how long `primary` is.
+    <div className="relative flex items-start justify-between gap-3 py-[3px]">
+      <span className="flex flex-col gap-0">
+        <span className="flex items-center gap-1 text-[11px] text-white/80">
+          {primary}
+          <InfoDot tip={tip} />
+        </span>
+        {technical && (
+          <span className="text-[9px] text-white/35">{technical}</span>
+        )}
+      </span>
+      <span className="font-mono text-[11px] text-white/85 tabular-nums shrink-0">
+        {value}
+      </span>
+    </div>
+  );
+}
+
 // ─── Detect stage card ────────────────────────────────────────────────────────
 
 function DetectionCard({ p }: { p: DetectionProperties }) {
@@ -136,15 +172,38 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
 
       <Divider />
 
-      {/* ── Geometry ── */}
-      <SectionLabel>Geometry</SectionLabel>
-      <div className="mt-1.5 space-y-0.5">
-        <Row label="Area" value={`${fmt(p.area_km2, 1)} km²`} />
-        <Row
-          label="Shape class"
-          value={
-            p.shape_class === "linear" ? "Linear / Elongated" : "Blob / Radial"
-          }
+      {/* ── Measurements — plain-language first (C4 + C5) ── */}
+      <SectionLabel>Measurements</SectionLabel>
+      <div className="mt-1.5 space-y-1">
+        <MetricRow
+          primary="How big"
+          technical="area"
+          value={`${fmt(p.area_km2, 1)} km²`}
+          tip="Total surface area of the dark patch measured from the satellite outline."
+        />
+        <MetricRow
+          primary="How stretched"
+          technical="elongation"
+          value={fmt(p.elongation, 1)}
+          tip="Length divided by width. Oil from a moving ship is long and thin; algae and wind slicks are usually round."
+        />
+        <MetricRow
+          primary="How sharp-edged"
+          technical="edge gradient"
+          value={fmt(p.edge_gradient, 2)}
+          tip="Strength of the brightness change at the patch border. Oil films produce a sharper edge than most natural look-alikes."
+        />
+        <MetricRow
+          primary="How much darker"
+          technical="contrast"
+          value={`${fmt(p.contrast_db, 1)} dB`}
+          tip="How much darker the patch is than the surrounding sea in radar backscatter. Oil dampens waves, reducing the return signal."
+        />
+        <MetricRow
+          primary="Shape"
+          technical="shape class"
+          value={p.shape_class === "linear" ? "Linear / Elongated" : "Blob / Radial"}
+          tip="Overall outline shape derived from the patch geometry. Linear patches are consistent with a moving vessel discharge."
         />
       </div>
 
@@ -226,46 +285,70 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
           Stage 02 — Trace
         </div>
         <div className="mt-1 text-[22px] font-semibold leading-tight tracking-tight text-white">
-          Origin Probability
+          Where the Oil Came From
         </div>
         <div className="mt-0.5 font-mono text-[11px] text-white/40">
-          {origin.ensembleRuns} ensemble runs
+          {origin.ensembleRuns} simulations
         </div>
       </div>
 
       <Divider />
 
-      {/* ── Centroid ── */}
-      <SectionLabel>Centroid</SectionLabel>
-      <div className="mt-1.5">
-        <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
-          {fmt(origin.centroid[1], 5)}° N
+      {/* ── Best estimate ── */}
+      <SectionLabel>Best estimate</SectionLabel>
+      {/* `relative` — see InfoDot.tsx: the tooltip anchors to this row, not the button. */}
+      <div className="relative mt-1.5 flex items-start gap-1">
+        <div className="flex-1">
+          <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
+            {fmt(origin.centroid[1], 5)}° N
+          </div>
+          <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
+            {fmt(origin.centroid[0], 5)}° E
+          </div>
         </div>
-        <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
-          {fmt(origin.centroid[0], 5)}° E
-        </div>
+        <InfoDot
+          align="right"
+          tip="The centroid of the origin probability field — where the ensemble of backwards-drift runs most agree the oil entered the water."
+        />
       </div>
 
       <Divider />
 
-      {/* ── Uncertainty regions ── */}
-      <SectionLabel>Uncertainty Regions</SectionLabel>
-      <div className="mt-1.5 space-y-0.5">
-        <Row label="50% region" value={`${fmt(origin.radius50Km, 1)} km`} />
-        <Row label="90% region" value={`${fmt(origin.radius90Km, 1)} km`} />
+      {/* ── Uncertainty regions — plain-language first (C4 + C5) ── */}
+      <SectionLabel>Uncertainty</SectionLabel>
+      <div className="mt-1.5 space-y-1">
+        <MetricRow
+          primary="Half the runs land within"
+          technical="50 % radius"
+          value={`${fmt(origin.radius50Km, 1)} km`}
+          tip="Radius of the circle that contains half of the 50 backwards-drift simulations. Smaller means the origin is more certain."
+        />
+        <MetricRow
+          primary="Nine in ten within"
+          technical="90 % radius"
+          value={`${fmt(origin.radius90Km, 1)} km`}
+          tip="Radius of the circle that contains nine out of ten simulations. The true release point is almost certainly inside this circle."
+        />
       </div>
 
       <Divider />
 
-      {/* ── Release window ── */}
-      <SectionLabel>Release Window</SectionLabel>
-      <div className="mt-1.5">
-        <div className="font-mono text-[13px] font-semibold text-white/90">
-          {fmtDay(start)}
+      {/* ── Release window — plain-language first (C4 + C5) ── */}
+      <SectionLabel>Released between</SectionLabel>
+      {/* `relative` — see InfoDot.tsx: the tooltip anchors to this row, not the button. */}
+      <div className="relative mt-1.5 flex items-start gap-1">
+        <div className="flex-1">
+          <div className="font-mono text-[13px] font-semibold text-white/90">
+            {fmtDay(start)}
+          </div>
+          <div className="font-mono text-[11px] text-white/70">
+            {fmtTime(start)} – {fmtTime(end)} UTC
+          </div>
         </div>
-        <div className="font-mono text-[11px] text-white/70">
-          {fmtTime(start)} – {fmtTime(end)} UTC
-        </div>
+        <InfoDot
+          align="right"
+          tip="The time window during which the oil most plausibly entered the water, derived from backwards-drift timing across all simulations."
+        />
       </div>
 
       {/* Release-window caption — the window is a bracket (earliest–latest
@@ -534,7 +617,6 @@ export default function ContextPanel() {
 
   return (
     <aside className="flex w-72 shrink-0 flex-col overflow-y-auto border-l border-white/[0.08] bg-[#0b0f14] px-5 py-5">
-      {/* ── Detect ── */}
       {activeStage === "detect" &&
         (oilCount === 0 ? (
           // D1 — a designed result, not an error (docs/04 Part D). Guide the judge to the
@@ -557,13 +639,32 @@ export default function ContextPanel() {
             </div>
             {selected && <DetectionCard p={selected.properties} />}
           </>
-        ) : selected ? (
-          <DetectionCard p={selected.properties} />
         ) : (
-          <p className="text-[11px] text-white/35">
-            Select a detection on the map.
-          </p>
+          <>
+            {/* Screen-1 oil-detection headline (docs/04 Screen 1).
+                Shown only when oilCount > 0 — D1 (oilCount === 0) has its own messaging above. */}
+            <div className="mb-4">
+              <p className="text-[13px] font-semibold leading-snug text-white/85">
+                We found{" "}
+                {(oilCount + lookalikeCount) === 1
+                  ? "1 dark patch"
+                  : `${oilCount + lookalikeCount} dark patches`}
+                .{" "}
+                <span style={{ color: OIL_COLOR }}>
+                  {oilCount === 1 ? "1 is oil" : `${oilCount} are oil`}.
+                </span>
+              </p>
+            </div>
+            {selected ? (
+              <DetectionCard p={selected.properties} />
+            ) : (
+              <p className="text-[11px] text-white/35">
+                Select a detection on the map.
+              </p>
+            )}
+          </>
         ))}
+
 
       {/* ── Trace ── */}
       {activeStage === "trace" &&
