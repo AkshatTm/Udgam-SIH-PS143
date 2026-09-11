@@ -10,6 +10,8 @@
 
 import type { GeoBounds } from "./contracts";
 import type { VesselBundle } from "./vessels";
+import type { ParticleBundle } from "./particles";
+import type { OriginBundle } from "./origin";
 
 /** Returns `a` unchanged if it already contains `b`; otherwise the smallest box containing both. */
 function unionBounds(a: GeoBounds, b: GeoBounds): GeoBounds {
@@ -49,4 +51,49 @@ export function sceneAndVesselExtent(scene: GeoBounds, vessels: VesselBundle | n
   if (!vessels) return scene;
   const ve = vesselExtent(vessels);
   return ve ? unionBounds(scene, ve) : scene;
+}
+
+/** The bounding box of every [lon, lat] point across every frame and particle. Returns null if empty. */
+function particleExtent(particles: ParticleBundle | null): GeoBounds | null {
+  if (!particles) return null;
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  let any = false;
+
+  for (const frame of particles.frames) {
+    for (let i = 0; i < frame.length; i += 2) {
+      const lon = frame[i];
+      const lat = frame[i + 1];
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+      any = true;
+      if (lon < west) west = lon;
+      if (lon > east) east = lon;
+      if (lat < south) south = lat;
+      if (lat > north) north = lat;
+    }
+  }
+
+  return any ? { west, south, east, north } : null;
+}
+
+/**
+ * The union of the scene bounds, every particle position across every timestep, and the
+ * origin bounds. Returns scene unchanged if particles and origin are both absent.
+ */
+export function sceneParticleOriginExtent(
+  scene: GeoBounds,
+  particles: ParticleBundle | null,
+  origin: OriginBundle | null,
+): GeoBounds {
+  let result = scene;
+  const pe = particleExtent(particles);
+  if (pe) {
+    result = unionBounds(result, pe);
+  }
+  if (origin) {
+    result = unionBounds(result, origin.bounds);
+  }
+  return result;
 }

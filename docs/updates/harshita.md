@@ -12,6 +12,51 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-11 23:10] B6 — Union camera + per-stage camera framing
+
+**Done:** Implemented B6 union camera + per-stage camera framing in full per the approved Claude plan.
+
+1. **`web/lib/extent.ts`:**
+   - Imported `ParticleBundle` from `./particles` and `OriginBundle` from `./origin`.
+   - Added private helper `particleExtent(particles: ParticleBundle | null): GeoBounds | null` following the existing `vesselExtent` pattern. Scans all frames in `particles.frames` and every `[lon, lat]` pair within each frame, computing min/max longitude and latitude. Returns `null` if `particles` is null or contains zero particles.
+   - Added exported function `sceneParticleOriginExtent(scene: GeoBounds, particles: ParticleBundle | null, origin: OriginBundle | null): GeoBounds`. Starts with `scene`, unions `particleExtent(particles)` via `unionBounds` if non-null, and unions `origin.bounds` via `unionBounds` if `origin` is non-null. Returns `scene` unchanged if both are absent.
+   - Existing `unionBounds`, `vesselExtent`, and `sceneAndVesselExtent` functions preserved completely untouched.
+
+2. **`web/components/MapView.tsx`:**
+   - Imported `sceneParticleOriginExtent` alongside `sceneAndVesselExtent` from `@/lib/extent`.
+   - Updated the camera effect to select target by stage:
+     `activeStage === "attribute" ? sceneAndVesselExtent(bounds, vessels) : activeStage === "trace" ? sceneParticleOriginExtent(bounds, particles, origin) : bounds`.
+   - Extended the effect dependency array from `[activeStage, bounds, vessels]` to `[activeStage, bounds, vessels, particles, origin]`.
+   - Maintained `{ padding: 40, animate: false }` verbatim.
+   - Did not alter the Map creation effect, SAR raster source effect, layer composition, visibility/selection syncing, or deck.gl layers.
+
+3. **Pre-existing issue explicitly left untouched:**
+   - `styleReadyRef` ordering risk: setting `styleReadyRef.current = true` inside `map.on("load")` uses a `useRef` rather than React state, meaning if `styleReadyRef.current` is false when the camera effect first evaluates on a cold reload, it does not re-trigger on its own until a dependency changes. Observed during testing that transitioning into Trace (`Detect -> Trace`) reliably triggers the stage-aware camera refit. Left strictly untouched per B6 scope instructions.
+
+**Files touched:**
+- `web/lib/extent.ts` (modified — added `particleExtent` and `sceneParticleOriginExtent`)
+- `web/components/MapView.tsx` (modified — imported `sceneParticleOriginExtent` and updated stage camera effect)
+- `docs/updates/harshita.md` (this entry)
+
+**Validation commands:**
+- `cd web && npm run lint` → PASS (0 ESLint warnings or errors)
+- `cd web && npx tsc --noEmit` → PASS (clean exit 0, 0 type errors)
+- `cd web && npm run build` → PASS (Compiled successfully, 5/5 static pages generated)
+- `python scripts/validate_case.py cases/case-000` → PASS (0 warnings)
+- `python scripts/validate_case.py cases/case-000-d3` → PASS (0 warnings)
+
+**Browser QA results (objective MapLibre inspection via Playwright Chrome):**
+- **Test 1 (`case-000` Detect):** Camera fits scene bounds `[80.10, 12.95, 80.70, 13.55]`. Center `lng=80.4000, lat=13.2502`, zoom `9.309`. Center diff from scene centroid `< 0.001°`. PASS.
+- **Test 2 (`case-000` Trace):** Camera fits union target `[80.10, 12.95, 80.94695, 13.76316]`. Center `lng=80.5235, lat=13.3569`, zoom `8.870`. Viewport bounds `[79.817, 12.891, 81.230, 13.822]` fully enclose target union. Origin cloud and rings are completely in view with margin and no longer clipped. PASS.
+- **Test 3 (Trace layer toggles):** Toggling Origin and Particles produces `center diff = 0, zoom diff = 0`. Camera does not refit on layer toggles. PASS.
+- **Test 4 (Trace scrub):** Scrubbing slider through timeline (`0 -> 0.5 -> 1`) produces `center diff = 0, zoom diff = 0`. No camera movement during playback/scrubbing. PASS.
+- **Test 5 (Stage round trip):** Transitioning `Detect -> Trace -> Attribute -> Trace -> Detect` returns to byte-identical camera center and zoom targets (diff `< 1e-12`). PASS.
+- **Test 6 (Attribute framing):** Attribute stage zoom is `8.761` (wider than Detect's `9.309`), correctly framing `sceneAndVesselExtent(bounds, vessels)` including tracks extending outside scene. PASS.
+- **Test 7 (`case-000-d3` Trace):** Transitioning to Trace on D3 widens camera to union target `[80.10, 12.95, 80.94695, 13.76316]` with zoom `8.870`. Viewport encloses union. PASS.
+- **Test 8 (Console):** 0 errors captured across entire browser QA run. PASS.
+
+---
+
 ## [2026-09-11 01:00] P1.6 — C4/C5 plain-language labels + InfoDot affordances + Screen-1 headline
 
 **Done:** Implemented P1.6 in full. Three interlocking changes:

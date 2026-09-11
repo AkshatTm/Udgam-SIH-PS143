@@ -32,6 +32,7 @@ import { useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
 import { buildOriginImage, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
 import { sceneAndVesselExtent } from "@/lib/extent";
+import { sceneAndVesselExtent, sceneParticleOriginExtent } from "@/lib/extent";
 import type { Bounds, LonLat } from "@/lib/contracts";
 
 // maplibre-gl v6 loads its GeoJSON/vector tiler in a separate ESM worker. Its built-in worker
@@ -482,6 +483,12 @@ export default function MapView() {
     const map = mapRef.current;
     if (!map || !styleReadyRef.current || !bounds) return;
     const target = activeStage === "attribute" ? sceneAndVesselExtent(bounds, vessels) : bounds;
+    const target =
+      activeStage === "attribute"
+        ? sceneAndVesselExtent(bounds, vessels)
+        : activeStage === "trace"
+          ? sceneParticleOriginExtent(bounds, particles, origin)
+          : bounds;
     map.fitBounds(
       [
         [target.west, target.south],
@@ -490,6 +497,7 @@ export default function MapView() {
       { padding: 40, animate: false },
     );
   }, [activeStage, bounds, vessels]);
+  }, [activeStage, bounds, vessels, particles, origin]);
 
   // Detection features follow the store.
   useEffect(() => {
