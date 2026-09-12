@@ -8,23 +8,24 @@ log; this file is only for the joins.
 
 ---
 
-# ▶ START HERE — state of the world, 2026-09-12
+# ▶ START HERE — state of the world, 2026-09-13 (post Soum-merge)
 
 *Written for whoever picks integration up next, including a fresh AI session. Read this section
 first; everything below it is history.*
 
-## Nobody is blocked on Akshat any more
+## Soum's Stage 1 landed — Anushka and Jaiveer are now the critical path
 
 | Person | Has what they need? | Next move |
 |---|---|---|
-| **Soum** | ✅ 7 scenes: `sar_vv_vh.tif` (2-band float32, 10 m), `sar.png`, `bounds.json` with the per-case dB clamp | Run Stage 1 on `case-jacksonville-2024` |
-| **Anushka** | ✅ real `detection_time` + bounds on all 7; age estimation + adaptive pad/edge guard + plot guards merged; **A1–A5 ratified 2026-09-13** | Fetch fields; seeding waits on Soum's polygons. **Her coastline/stranding commit (`b4d280a`) is held, not merged — pins a new dependency, needs planning-account confirmation** |
-| **Jaiveer** | ✅ dates, boxes, `ais_source`; D27–D31 ruled; GFW confirmed working | Phase 8 curve **with the per-component ablation** |
-| **Harshita** | ✅ frontend loads all 7 cases; `sync_web_cases.py` feeds the browser | Detect screen's "stage pending" state |
+| **Soum** | ✅ merged `origin/soum` → `main` (`cea049d`). Real 3-layer detector; `detections.geojson` on all 7 live cases, PASS with 0 warnings. Also nominated + built `case-nospill-zenodo` and `case-lookalike-zenodo` (Zenodo Part III benchmark bundles, PASS, not in `index.json`) | `discharge_class` landed; `contrast_centre_db`/`contrast_edge_db` (for Anushka's C3.4 weathering flag) still outstanding |
+| **Anushka** | ✅ real `detection_time` + bounds + now real `detections.geojson` on all 7 — seeding is fully unblocked | Seed drift from Soum's polygons, starting with `case-jacksonville-2024`. **Her coastline/stranding commit (`b4d280a`) is still held, not merged — pins a new dependency, needs planning-account confirmation** |
+| **Jaiveer** | ✅ dates, boxes, `ais_source`, D27–D31 ruled, GFW confirmed working, and now real `detections.geojson` per case | Attribution waits on Anushka's `origin.json` per case, starting with Jacksonville |
+| **Harshita** | ✅ frontend loads all 7 cases; `sync_web_cases.py` feeds the browser | Detect screen can now render real detections instead of "stage pending" |
 | **Urooz** | ✅ never blocked | Research |
 
-**The critical path now runs between teammates, not through Akshat:** Soum's detections gate
-Anushka's seeding, and her `origin.json` gates Jaiveer's scoring.
+**The critical path now runs entirely between teammates:** Anushka's `origin.json` gates
+Jaiveer's scoring, and both gate `build_case.py` + validate + Harshita's QA, per case, in library
+order (Jacksonville → Farallones → Huntington → Alaska → Mumbai → Jamnagar → Ennore).
 
 ## The loop, per case
 
@@ -68,13 +69,19 @@ python scripts/sync_web_cases.py                           # then Harshita QAs i
 - ~~A1–A5 in `docs/STAGE2_AGE_DECISION_BRIEF.md`~~ — **ratified 2026-09-13** by the planning
   account (all three physics departures accepted; the four-case age-validation claim withdrawn to
   zero cases until a real detection exists). Nothing further needed here.
-- **Ask routed to Soum, reordered** (not yet sent): `discharge_class` per detection is now #1
-  (already in the frozen contract, and C3.3 is inert without it), then `contrast_centre_db` /
-  `contrast_edge_db`, then Huntington's real slick major axis as soon as it exists.
+- ~~`discharge_class` per detection~~ — **done, landed in `72064c8`**, present on every feature.
+- **Ask routed to Soum, remaining**: `contrast_centre_db` / `contrast_edge_db` (Anushka's C3.4
+  weathering flag is inert without them — currently only combined `contrast_db` is written), then
+  Huntington's real slick major axis (derivable now from `detections.geojson`'s `area_km2` +
+  `elongation`, worth confirming with Soum which detection is the slick vs. a ship echo).
 - **Ask routed to Urooz** (downgraded, not yet sent): the Fay-constant citation is no longer
   blocking — A3's ruling means Fay ships as an uncited regime verdict, not a derived number.
-- **Soum owes the no-spill scene** (`case-nospill-zenodo` is scaffolded and deliberately held out
-  of `index.json` until it lands).
+- ~~Soum owes the no-spill scene~~ — **done**: `case-nospill-zenodo` (Gulf of İskenderun clean
+  ocean, P(oil) 0.0003) and `case-lookalike-zenodo` (Mississippi Delta look-alike, P(oil) 0.0020)
+  both landed as full bundles in `cea049d`, both PASS. **Still deliberately held out of
+  `cases/index.json`** — they're framed as benchmark/provenance bundles for Soum's held-out
+  numbers, not live gallery cases; Akshat's call whether either goes into the gallery before the
+  freeze.
 - **Three questions to Jaiveer** are in the reply drafted below — the "eleven of 52" one affects a
   slide number.
 - **`verification.json` for all six spill cases** — Akshat's, by hand, after each bundle validates.
@@ -84,6 +91,66 @@ python scripts/sync_web_cases.py                           # then Harshita QAs i
   confirming its identity now would be the same mistake as verifying its AIS density would have
   been for case 1.
 - ~~GFW Arabian Sea coverage for cases 5–6~~ — **done 2026-09-12**, see below.
+
+---
+
+## [2026-09-13] Merged `origin/soum` — the critical-path unblock, every live case now PASSes past `detect`
+
+**Context:** Soum messaged that he'd pushed. `git fetch origin soum` found the branch 3 commits
+ahead of `main` (`e74f0c4`, `72064c8`, `cea049d`) — real Stage 1 work, not yet merged, so nothing
+on disk had changed for anyone else. This closes the single blocking gap that every one of the 7
+live cases had been sitting on since 2026-09-12 (see that entry below): `detections.geojson`.
+
+**Reviewed before merging, not merged blind** (43 files / ~53k insertions is large enough to
+warrant it): no new dependency files (`requirements.txt` untouched), no data leaked out of
+`pipeline/detect/`. Two things worth flagging on purpose:
+- **`.gitignore` had a real bug Soum found and fixed.** `models/*` is a slash-anchored pattern, so
+  it only ever matched a top-level `models/` directory — which doesn't exist. The real path is
+  `pipeline/detect/models/`, so none of it was actually ignored and the push would have been
+  rejected by GitHub for size. Fixed to `**/models/*` (+ the `!**/models/*.json` /
+  `!**/models/scene_classifier.pt` allowlist exceptions), matching the comment's stated intent —
+  code and metrics are evidence and stay in git, an unbounded RandomForest (`classifier.pkl`,
+  5.4 MB, now correctly ignored) does not.
+- **Model weight files in the diff are the small, allowlisted ones** (`scene_classifier.pt`,
+  273 KB) plus their metric JSONs — consistent with the existing policy, nothing new smuggled in.
+
+**Merged clean**, `git merge origin/soum --no-edit`, no conflicts.
+
+**Verified independently:**
+```bash
+python scripts/validate_case.py cases/
+```
+All 7 live cases: **PASS, `acts=['detect']`, 0 warnings** (Ennore-lookalike shows 1 expected WARN —
+zero `oil` features, which is the correct rejection result, not an error). The two new benchmark
+bundles also individually PASS with the same expected warning.
+
+**Bonus beyond the diffstat: Phase 1.6 (the no-spill nomination) is now closed too.** Soum's
+`docs/updates/soum_case_nominations.md` picked the Zenodo Part III scenes on detector evidence
+only (darkest/largest/most-elongated candidates, not cherry-picked for a confident rejection) and
+built full bundles for both:
+- `case-nospill-zenodo` — Gulf of İskenderun clean ocean, rejected at P(oil) 0.0003 (threshold
+  0.143). Real georeference (`bounds.json` from the TIFF's actual EPSG:4326 tag), no acquisition
+  timestamp on the tile so `detection_time` is a deliberate `1970-01-01T00:00:00Z` sentinel — the
+  `meta.json` `notes` field says both halves out loud ("we show you where, we do not know when").
+- `case-lookalike-zenodo` — Mississippi Delta, 47 km², −9.05 dB, elongation 21.2 (reads exactly
+  like a chronic discharge), rejected at P(oil) 0.0020. Distinct from `case-ennore-lookalike-2023`
+  (which stays the *live* look-alike case per D18/D25) — this one is framed as a benchmark/
+  provenance bundle for Soum's held-out numbers.
+
+Both are **still deliberately out of `cases/index.json`** pending Akshat's call on whether either
+belongs in the demo gallery, or stays purely as a benchmark artefact backing Soum's held-out
+figures on the honesty slide.
+
+**Also present in `docs/updates/soum.md` (503 lines, not yet distilled here):** 0.951 scene-
+classifier accuracy, 0.435 U-Net IoU, `discharge_class` calibration (`STRAIGHTNESS_MIN` 0.80→0.60),
+a land-mask fix that took Ennore's false-positive vessel count from 1,377→18, and two open items —
+no local Python 3.11 to verify `torch`/`torchvision` resolution, and the Gulf of Alaska scene
+still returns zero detections even after the threshold fix (flagged, not tuned away).
+
+**State after this pass:** critical path moves to Anushka (seed drift from real polygons,
+Jacksonville first) and Jaiveer (attribution, gated on Anushka's `origin.json` per case). No
+schema changes. `docs/updates/soum.md` and `soum_case_nominations.md` are now on `main` and no
+longer need distilling from a branch.
 
 ---
 
