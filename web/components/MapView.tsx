@@ -31,7 +31,6 @@ import { BitmapLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
 import { buildOriginImage, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
-import { sceneAndVesselExtent } from "@/lib/extent";
 import { sceneAndVesselExtent, sceneParticleOriginExtent } from "@/lib/extent";
 import type { Bounds, LonLat } from "@/lib/contracts";
 
@@ -482,7 +481,6 @@ export default function MapView() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !styleReadyRef.current || !bounds) return;
-    const target = activeStage === "attribute" ? sceneAndVesselExtent(bounds, vessels) : bounds;
     const target =
       activeStage === "attribute"
         ? sceneAndVesselExtent(bounds, vessels)
@@ -496,7 +494,6 @@ export default function MapView() {
       ],
       { padding: 40, animate: false },
     );
-  }, [activeStage, bounds, vessels]);
   }, [activeStage, bounds, vessels, particles, origin]);
 
   // Detection features follow the store.
