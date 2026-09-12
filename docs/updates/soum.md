@@ -15,6 +15,124 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-13 20:30] Phase 6.6 — the 0.435-vs-96% gap decomposed, and it is not what I predicted
+
+**Done:** Plan items 3, 4 and 5. `evaluate.py` now prints every IoU variant **with its definition
+named**, on the same 450-scene Part III holdout, same model, same pixels. No retraining.
+
+**Files:** `pipeline/detect/evaluate.py`, `pipeline/detect/eval_part3.json`, all nine
+`scratch/check_*.png`. **Run:** `python pipeline/detect/evaluate.py --report`
+
+Headline rows are unchanged by any of this: gated **0.4349**, ungated **0.4485**.
+
+### Item 3 — the decomposition
+
+| metric | value | definition |
+|---|---|---|
+| `iou_oil_pooled` | **0.4349** | oil class only, pooled over positive scenes, background excluded both sides. **What we report.** |
+| `iou_background_pooled` | 0.9392 | background as a class, same pooling |
+| `miou_pooled` | **0.6871** | mean IoU over {background, oil} — the authors' likely definition |
+| `pixel_accuracy_positives` | 0.9419 | over the 150 positive scenes |
+| `pixel_accuracy_all450` | **0.9800** | over all 450 — the likelier match for their "99%" |
+| `dice_oil_pooled` | 0.6061 | Dice/F1 on the oil class |
+| `iou_oil_macro_scene` | **0.6825** | per-scene IoU averaged over 150 scenes |
+| `iou_oil_macro_tile` | 0.4944 | per-tile over the 2,807 tiles containing oil |
+| `invalid_px_fraction` | 0.0184 | land/NaN share, so nobody wonders if background is inflated |
+
+**The gap splits three ways, and only the third is a defect:**
+
+1. **Definition — about half.** 0.4349 → **0.6871** is the same predictions scored two ways.
+   Pixel accuracy over all 450 is **0.980** against their quoted 99%: close enough that accuracy
+   is roughly comparable, which is the evidence that the *IoU* definitions are not.
+2. **Pooling — most of the rest.** 0.4349 pooled → **0.6825** per-scene, again identical
+   predictions. Pooling weights each scene by its slick size.
+3. **A real defect, and it is narrow.**
+
+| oil coverage | n | mean per-scene IoU |
+|---|---|---|
+| 0–1% | 18 | 0.6685 |
+| 1–3% | 39 | 0.7566 |
+| 3–10% | 52 | 0.7826 |
+| 10–30% | 29 | 0.6595 |
+| **30–101%** | **12** | **0.0848** |
+
+**138 of 150 scenes sit at 0.66–0.78. Twelve scenes where oil covers more than 30% of the frame
+score 0.085.** Those twelve hold a large share of all oil pixels, which is exactly why the *pooled*
+number collapses while the per-scene mean does not. The cause is already known and is mechanical:
+**per-scene MAD normalisation lets a slick that large become its own median**, erasing the contrast
+the model depends on. The model is not broadly weak — it fails on one identifiable class of scene.
+
+**⚠️ This falsifies a hypothesis I put in the plan.** I wrote that part of the gap was *split
+hardness* — "our validation IoU is 0.679 on same-population data; Part III is a different slick
+population." **Wrong.** Part III per-scene macro is **0.6825** against validation **0.6793** —
+statistically the same. Part III is **not** harder scene-for-scene. The whole pooled gap is
+pooling plus those twelve scenes. I also predicted mean IoU ≈ 0.71 by assuming background IoU
+0.99; it is 0.9392, so the real figure is 0.687.
+
+**We keep reporting 0.4349.** The others exist so a comparison is like-for-like, not so we can
+pick the flattering number (B2). Anyone quoting 0.687 must say "mean IoU over both classes" in
+the same breath.
+
+**Also fixed: `--limit` used to overwrite the authoritative results file.** A 10-scene smoke run
+silently replaced the 450-scene `eval_part3.json` and it had to be restored from git. Partial runs
+now write `eval_part3_smoke.json`, print `PARTIAL RUN — these numbers are NOT the Part III result`,
+and stamp `"partial": true` and `"n_scenes"` into the JSON.
+
+### Item 4 — all nine plotted and eyeballed, and it earned its place
+
+Plots were **stale** (01:21 vs detections at 02:30); regenerated all nine first. Then looked at
+every one.
+
+| case | verdict |
+|---|---|
+| jacksonville | ribbon tracked along its long axis; the 3 oil features are visibly one ~31 km ribbon with real breaks; over-extent visible as perpendicular fronds |
+| farallones | textbook — one ruler-straight filament, polygon hugging it |
+| huntington | comma slick outlined tightly; 43 contacts sit on bright cross/sidelobe vessel signatures |
+| gulf-alaska | **explains its own 0.165** — det-01 is on the real slick, det-02/03 sit in a large diffuse dark band Cerulean did not call oil. 0 contacts, as reported |
+| mumbai | +72 E / +18 N correct, polygons tight on dark features |
+| jamnagar | 21 km hook tracked; filament continues past the north end toward the swath edge, consistent with recall 0.916 |
+| ennore | 0 oil — correct |
+| lookalike-zenodo | delta, 0 oil, the single edge contact visible exactly where Akshat described |
+| **nospill-zenodo** | **FAILED — was farmland. Replaced.** See `6a6f4cc` |
+
+**The one defect, and it is mine.** `P3_No oil_00091` was not clean ocean; it was the Ghab plain —
+fields, roads, a settlement, the Orontes river — ~150 km inland from the "Gulf of İskenderun" the
+bundle's own `meta.json` named, and its 31 "radar contacts" were buildings. I had nominated it on
+**statistics alone** (deepest dark feature, most candidate regions, therefore "hardest") and never
+opened the image. Classifier correct, validator PASS, JSON strict-clean — **no automated gate in
+this repo can catch "the ocean is a field."** Replaced with `P3_No oil_00027`, verified as water
+rather than assumed: median −26.9 dB, MAD 0.47, 1–99th spread 3.6 dB, zero pixels above −5 dB,
+zero contacts, and the plot shows open water with swell banding. 65 of 150 Part III no-oil scenes
+qualify, so there was never a shortage — I picked on the wrong axis.
+
+**One suspicion checked and withdrawn.** Ennore's plot *looked* like contacts were sitting on the
+port and river. Measured instead of assumed: **0 of 72 on land**, 32 within 15 px (~130 m) of the
+land-mask edge, which in a working port is the quayside — where berthed vessels are. Land masking
+is doing its job (it had cut 1,377 → 72).
+
+### Item 5 — reporting closed out
+
+- **`features_test.csv` committed** (`fd4021e`), 4,085 rows, 1.0 MB — the evidence behind the
+  classical numbers. While adding it, the gitignore un-ignore rule was pointing at `features.csv`,
+  the **old contaminated-split** table; an un-ignore is an invitation, so it is ignored again on
+  purpose with the reason in the rule. Same class as the root-anchored `models/*`.
+- **Margin distribution** — delivered and corrected (Phase 6.3): 12 detections, median 0.645,
+  bands 7 clear / 5 marginal.
+- **VH sentence** — the defensible wording is in Phase 6.5; VH raises precision 5.8× at
+  *identical* recall, so it is a discriminator, not a detector.
+- **Zenodo DOI `10.5281/zenodo.13761290`** — verified already present in `docs/receipts.md`,
+  `docs/updates/_INTEGRATION.md` and `docs/01_AKSHAT_INTEGRATION.md`. Nothing to add.
+
+**Open for Akshat:** the `case-nospill-zenodo` gallery blurb. His "No oil — but not empty water /
+does the system tell traffic from a spill?" was written for 31 contacts that were never vessels.
+Set to "Open ocean, nothing on it. Does the system say so?" pending his call.
+
+**Next:** nothing left in the plan. Remaining time is best spent on the 12 large-slick scenes if
+anything, and that is a retrain — which the Layer 2 ruling puts behind a Monday 12:00 bar it does
+not need to clear.
+
+---
+
 ## [2026-09-13 19:40] Phase 6.5 — answering Akshat's handoff: §1 confirmed, §6 named, three stale numbers caught
 
 **This entry is written to be quoted from.** Every number below carries its metric, its split and
