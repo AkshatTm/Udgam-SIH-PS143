@@ -4,7 +4,13 @@
 
 These are Zenodo Part III scenes. They are **benchmark-provenance**, so `run.py --path auto`
 routes them to Layer 1 + Layer 2 — which is where the networks are strongest (look-alike
-rejection 0.960, clean-ocean rejection 0.987 on the Part III holdout).
+rejection 0.940, clean-ocean rejection 0.987 on the Part III holdout, 150 scenes each).
+
+> **Corrected 13 Sept.** This line read **0.960** for look-alike rejection. That was the
+> pre-domain-augmentation classifier. The shipped model is **0.940**: the augmentation traded
+> rejection 0.960 → 0.940 for oil recall 0.893 → 0.927 and scene accuracy 0.947 → 0.951. Net
+> positive, but a trade — and quoting the old rejection beside the new accuracy would overstate
+> both. Use 0.940.
 
 ## How they were chosen — and why that matters
 
