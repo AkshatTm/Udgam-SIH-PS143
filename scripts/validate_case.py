@@ -31,13 +31,29 @@ def warn(msg):
     WARNINGS.append(msg)
 
 
+def _reject_constant(name):
+    """json.loads accepts bare Infinity / -Infinity / NaN. The JSON spec does not, and neither
+    does the browser's JSON.parse — so a bundle that loads fine here dies in the frontend with
+    'Unexpected token I'. Python writes those tokens the moment a non-finite float reaches
+    json.dumps, which is one np.nanmean() over an array containing -inf away at all times
+    (nanmean ignores NaN but propagates -inf; TRAPS #22 nodata is -inf). Fail loudly instead."""
+    raise ValueError(
+        f"bare {name} — not valid JSON and the browser will refuse to parse this file. "
+        f"A non-finite float reached json.dumps; find it in the PRODUCING code (a statistic "
+        f"over nodata, most likely — mask on np.isfinite() first, see TRAPS #22) and never "
+        f"patch the bundle by hand")
+
+
 def load(path):
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"), parse_constant=_reject_constant)
     except json.JSONDecodeError as e:
         err(f"{path.name}: not valid JSON — {e}")
+        return None
+    except ValueError as e:
+        err(f"{path.name}: {e}")
         return None
 
 
@@ -215,6 +231,14 @@ def check_meta(d):
     ct = m.get("case_type")
     if ct is not None and ct not in ("spill", "lookalike", "nospill"):
         err(f"meta.json/case_type: must be spill|lookalike|nospill, got {ct!r}")
+
+    # provenance (Master §6.1, D33) — which corpus the pixels came from, and therefore which of
+    # Stage 1's two detection paths runs. Absent means "satellite", so the existing library needs
+    # no backfill. This replaces a CRS sniff that never worked: Zenodo Part III tiles carry
+    # EPSG:4326 like a GEE export, so "no CRS => benchmark" matched nothing it was meant to.
+    prov = m.get("provenance")
+    if prov is not None and prov not in ("satellite", "benchmark"):
+        err(f"meta.json/provenance: must be satellite|benchmark, got {prov!r}")
     gal = m.get("gallery")
     if isinstance(gal, dict):
         diff = gal.get("difficulty")

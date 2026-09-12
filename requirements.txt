@@ -12,7 +12,11 @@
 # NO NEW DEPENDENCIES AFTER TUE 8 SEPT in the pipeline; none anywhere after the freeze.
 # Adding one late means six laptops silently disagree at the worst possible moment.
 #
-# Nothing here needs a GPU. Not one component of this project does.
+# Nothing in THIS file needs a GPU, and installing it is all five of you have to do.
+#
+# Stage 1's networks need torch — pinned separately in requirements-detect.txt, which only Soum
+# installs. It is separate because torch ships from its own index and --index-url would repoint
+# every package above it; the reasoning is written out in that file. Do not merge the two.
 
 # --- core numerics, used by everyone
 numpy==2.4.6
@@ -28,7 +32,8 @@ scikit-image==0.26.0
 shapely==2.1.2
 geopandas==1.1.4
 
-# --- classifier (Soum, Stage 1). RandomForest only — the CNN is October work.
+# --- classifier (Soum, Stage 1). The classical path: RandomForest over the ten features.
+#     The CNN/U-Net path is real and shipping too — see requirements-detect.txt.
 scikit-learn==1.9.0
 
 # --- Google Earth Engine: SAR scenes, HYCOM currents, ERA5 winds

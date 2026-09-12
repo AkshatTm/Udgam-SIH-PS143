@@ -53,28 +53,9 @@ Then you did the thing that actually matters: **you corroborated the fix physica
 
 **Only the `linear` seeding branch has run on real fields.** Blob, no-spill and abstain are untested paths. "Never executed" is never "known good."
 
-**The case library is locked, and it changes two things for you.** Six spill cases across four ocean basins and both hemispheres:
+**~~You now have ground truth for age.~~ — CORRECTED 13 Sept 2026, and this paragraph was wrong.** It assumed the four US cases each carry a documented release time. Checked against the live library at ratification: **one** case has a documented release time (Huntington, true age ≈ 2.8 h), no live case carries it in `meta.json`, and none has a `detections.geojson` to measure an age from. So age cannot be *validated* across four incidents — at best across one, and only once Soum's detection lands. Build the estimators to be right, not to hit a validation table. See `docs/STAGE2_AGE_DECISION_BRIEF.md` §4a and §5/A5.
 
-| # | Case | Position | Current regime to expect |
-|---|---|---|---|
-| 1 | **Menuett** 2024-07-30 | 30.38 N −79.63 W | Atlantic, off Jacksonville — **Gulf Stream influence, fast** |
-| 2 | **Panagia** 2023-03-17 | 37.81 N −123.89 W | Pacific, off San Francisco — California Current |
-| 3 | **Huntington** 2021-10-02 | 33.6 N −118.1 W | San Pedro Bay — **enclosed, coastline matters** |
-| 4 | **Alaska** 2023-05-16 | 59.56 N −142.71 W | Gulf of Alaska — **highest latitude, `cos(lat)` corrections bite** |
-| 5 | **Mumbai** 2023-09-03 | 18.52 N 72.20 E | Arabian Sea, **positive longitude** |
-| 6 | **Jamnagar** 2024-02-23 | 20.15 N 71.90 E | Arabian Sea, positive longitude |
-
-**Menuett is the Gulf Stream side of the Atlantic.** Your R1 worry about the fixed 0.5° pad was specifically about fast currents: the Gulf Stream at 2.0 m/s covers 173 km in 24 h against a 55 km pad. **This is the case that breaks it.** Phase 3.1 is no longer optional and it is no longer hypothetical.
-
-**Alaska at 59.6 N** is the highest latitude you will run. A degree of longitude is about half as wide there as at 30 N, so any `cos(lat)` term you got away with elsewhere will show up.
-
-**Ennore 2017 is archived (D18) and Golden Ray is dropped (D17).** The INCOIS benchmark goes with Ennore for now — do not build it.
-
-**You have ground truth for age on four cases.** Cerulean records a detection timestamp for each, and for Menuett, Panagia, Alaska and Mumbai there is an attributed source with timing. That means you can *validate* an age estimator instead of merely producing one. Nobody in this competition will have an age validation number.
-
-**Blind evaluation, and it applies to you.** Akshat holds the documented answers in a sealed file. You get the case list, `detection_time` and bounds; you do **not** get the documented origin or release time. If you knew where the origin was, you would read a wrong cloud as close enough — that is what anyone does when the target is visible, and it collapses *"our reconstruction found it"* into *"we accepted it because it looked near."* He will not answer *"is this right?"* during the week. That is deliberate.
-
-**Your coastline handling is the weakest part of the physics, and the library now exercises it hard.** Huntington Beach sits inside San Pedro Bay and Mumbai sits on a complex, heavily-indented coast — HYCOM's 9 km cells are partly land in both, and your land mask is derived from the velocity field's own validity rather than from a real shoreline dataset. Phase 4 fixes this cheaply.
+**Your coastline handling is the weakest part of the physics, and two of our cases sit in enclosed water.** Golden Ray is inside St Simons Sound; Huntington Beach is inside San Pedro Bay. HYCOM's 9 km cells there are partly land, and your land mask is derived from the velocity field's own validity rather than from a real shoreline dataset. Phase 4 fixes this cheaply.
 
 ---
 
@@ -199,13 +180,21 @@ Backscatter is lower in the centre of a slick than at its edges, reflecting the 
 
 Ship the per-estimator breakdown — it lets the frontend show *why* the band is what it is, and lets a judge see the agreement rather than being asked to trust it.
 
-## C5. The validation that turns this into a claim
+## C5. The validation that turns this into a claim — **withdrawn 13 Sept 2026**
 
-The four US cases have documented release times and known scene timestamps, so you know the true age. Run all four:
+**This section promised a four-case validation that the case library cannot support.** Ratified in `docs/STAGE2_AGE_DECISION_BRIEF.md` §5/A5; the evidence is §4a. Superseded text:
 
-> *"Across four independent incidents with documented release times, our age band contained the true value in N of 4, with a median band width of X hours."*
+> ~~The four US cases have documented release times and known scene timestamps, so you know the true age. Run all four: *"Across four independent incidents with documented release times, our age band contained the true value in N of 4, with a median band width of X hours."*~~
 
-**Report a miss as readily as a hit.** A 2-of-4 with an honest explanation is far stronger than a claimed 4-of-4 nobody can check.
+**Why it went.** Exactly one case has a documented release time. None of the seven indexed cases has a `detections.geojson`, and every estimator reads age off the observed slick, so as of ratification the estimators fire on **zero** cases. `discharge_class` is unset everywhere, which additionally makes C3.3 inert. The claim failed on missing inputs, not on physics.
+
+**What replaces it.** `age_hours` ships as an output with `age_method` and the per-estimator breakdown, and no numeric accuracy claim. If Huntington's detection lands and C3.1 fires, the claim becomes an explicit **N = 1**:
+
+> *"On the one incident in our library with a documented release time, our band was [x, y] h against a true age of 2.8 h."*
+
+— stated with its weakness attached: a 2.8 h slick sits squarely in C3.1's documented **overestimate** regime, since gravity-viscous spreading dominates the first hours and the model omits it (F8). On the one case with ground truth we are in the estimator's known weak regime. **That is a result to state, not a surprise to absorb on stage.**
+
+**Report a miss as readily as a hit**, and report the honest N. A stated N = 1 with its caveat is far stronger than a 4-of-4 nobody can check — and these numbers are binding in December.
 
 ---
 
@@ -244,7 +233,7 @@ You assert nothing you cannot demonstrate, you get a validation claim on every c
 
 The near-shore gap is the **coastline dataset**, not the model. OpenDrift uses GSHHG, a proper high-resolution global shoreline. That is available directly in Python — `global-land-mask` is the simplest option, cartopy/GSHHG the fuller one — and dropping it into your existing model is a couple of hours.
 
-**Do this regardless of what happens with OpenDrift.** It matters concretely: Huntington Beach is inside San Pedro Bay and Mumbai is on a complex coast, both places where 9 km cells are partly land and a real shoreline changes the answer.
+**Do this regardless of what happens with OpenDrift.** It matters concretely: Golden Ray is inside St Simons Sound and Huntington Beach is inside San Pedro Bay, both enclosed water where 9 km cells are partly land.
 
 ## D4. The tiers
 
@@ -255,7 +244,7 @@ The near-shore gap is the **coastline dataset**, not the model. OpenDrift uses G
 | **3 — spare time only** | 50-member OpenDrift ensemble so both clouds are like-for-like (~30 s per 66 h run × 50 ≈ 25 min compute; the cost is wiring time, not machine time) | only with real slack |
 | **dropped** | The switch rule | do not build |
 
-**Check before building the long-rewind path at all:** does any case actually exceed 48 hours? Huntington Beach was imaged +2.8 h after the first leak alarm. The four Cerulean cases are transiting-vessel discharges, where the slick is typically hours old when the satellite passes. If none of the six exceeds 48 h, a long-rewind branch is engineering for a situation the demo never reaches — and that hour is better spent on age validation.
+**Check before building the long-rewind path at all:** does any case actually exceed 48 hours? Ennore is roughly 24 h from collision to pass. Huntington Beach is short. Golden Ray was a continuous release. If cases 4 and 5 are also short, a >48 h branch is engineering for a situation the demo never reaches.
 
 ---
 
@@ -272,8 +261,8 @@ The near-shore gap is the **coastline dataset**, not the model. OpenDrift uses G
 1.3 Elongation-under-shear estimator (C3.3), gated on `discharge_class == "acute"`.
 1.4 Weathering flag (C3.4), with wind speed and the out-of-range `unknown`.
 1.5 Combine per C4; emit `age_hours`, `age_method`, `age_weathering`, `age_estimators`.
-1.6 **Validate against known release times** (C5).
-> 🚩 Akshat releases the documented timings **only after** your estimator has produced its bands, per the blind-evaluation rule. Produce first, compare second — otherwise the validation number means nothing.
+1.6 **~~Validate against the four known release times~~ — descoped 13 Sept 2026 (C5).** There is one documented release time, not four, and no detections to measure against yet. Run the N = 1 Huntington check if and when its detection lands; otherwise age ships with no accuracy claim.
+> 🚩 1.6 no longer gates the deck. It still needs Akshat's US case list with documented incident times before even the N = 1 check can run.
 
 **Checkpoint:** post the four-case validation table.
 
@@ -285,9 +274,7 @@ The near-shore gap is the **coastline dataset**, not the model. OpenDrift uses G
 This is what lets us say the same pipeline serves **enforcement and response**, and it connects to what the Indian Coast Guard actually does under NOSDCP.
 
 ## PHASE 3 — Robustness
-3.1 **Adaptive field-box pad. This is now urgent rather than precautionary.** Replace the fixed 0.5° with `pad ≈ p99_speed × rewind_hours × safety_factor`, converted to degrees at mid-latitude, floored at 0.5°. Add a **guard that fails loudly** if any particle finishes within ~10 km of the box edge.
-
-Your Ennore run survived with 11.6 km to spare. **Menuett sits in the Gulf Stream system**, where 2.0 m/s covers 173 km in 24 h against a 55 km pad — particles would slide along the wall and produce a perfectly plausible wrong cloud on the hero case. The Gulf Loop at 1.8 m/s covers 156 km. Your R1 was right and the library now contains the case that proves it.
+3.1 **Adaptive field-box pad.** Replace the fixed 0.5° with `pad ≈ p99_speed × rewind_hours × safety_factor`, converted to degrees at mid-latitude, floored at 0.5°. Add a **guard that fails loudly** if any particle finishes within ~10 km of the box edge. Ennore survived with 11.6 km to spare; Gulf Loop at 1.8 m/s covers 156 km in 24 h and the Gulf Stream at 2.0 m/s covers 173 km. Against a 55 km pad, particles slide along the wall and produce a plausible, wrong cloud.
 3.2 **Negative-longitude test.** Ennore at 80°E is identical in both conventions, so a 0–360 leak stays invisible until California at −118°E. Add a constant-current test seeded at −118°, 33° that lands the expected distance east.
 3.3 **Exercise the untested branches:** a blob slick end to end on real fields; the no-spill path; and force `abstain: true` once to produce a **real abstaining bundle**. Harshita cannot build the refusal screen against a state that has never existed, and that screen is one of the better things we have to show.
 3.4 **Chronic vs acute seeding.** `chronic` → the vessel was moving and the origin is a **line segment**; seed along the principal axis and expect an elongated backward cloud. `acute` → seed from the centroid.
@@ -304,16 +291,9 @@ Your Ennore run survived with 11.6 km to spare. **Menuett sits in the Gulf Strea
 
 5.1 **Check the HYCOM window first.** The GEE archive ends **2024-09-05**. A case after that has no current field and must be rejected at selection time, not discovered here.
 5.2 `fetch_fields.py --case <id>`, then control + 50-member ensemble + age + forward.
-5.3 **Look at the quiver and heatmap for every case before believing any number.** Work out the expected direction *beforehand* — write it down, then run, then compare. This is the single most effective check you have, because a wrong origin looks exactly like a right one.
-
-Per case, the prevailing regime to check against:
-- **Menuett** — Gulf Stream system, generally north-eastward flow. Origin should sit **south-west** of the slick. Also the case most likely to trip your box-edge guard.
-- **Panagia** — California Current, generally southward. Origin should sit **north** of the slick.
-- **Huntington** — Southern California Bight, weak and variable, strongly steered by coastline. Do not expect a clean answer; this is where the GSHHG upgrade (Phase 4) earns its place.
-- **Alaska** — Alaska Current, generally westward/counter-clockwise in the Gulf. Origin should sit **east** of the slick. Cross-check against the dark-vessel position Akshat will give you **only after** you have run it.
-- **Mumbai and Jamnagar** — Arabian Sea, and September versus February are **different monsoon regimes**. Look them up per case rather than assuming one answer covers both.
-
-**If the origin lands downstream, something is flipped. Stop and find it.**
+5.3 **Look at the quiver and heatmap for every case before believing any number.** Work out the expected direction *beforehand*:
+- **Ennore** — coastal current runs south under the January NE monsoon, so the origin must be **north-east**. It is, at bearing 025°.
+- For each US case, look up the prevailing current and write down the expected upstream direction **before** you run it. If the origin lands downstream, something is flipped.
 5.4 Validator PASS, hand to Akshat with the run command.
 5.5 **Remember your own finding:** `case-000` taught a *shape*, not just values. The real cloud is a 4.4:1 streak sitting ~98% outside the SAR scene. Every case has its own geometry, and assumptions baked in against the last one may not hold for the next.
 
@@ -341,7 +321,7 @@ Useful confirmations from MET Norway's documentation:
 ## PHASE 8 — The numbers
 8.1 Integrator exactness — 18.0000 vs 18.0 km; round trip 0.0001 km.
 8.2 **Measured ensemble spread** — r50 and r90 as **precision**, not accuracy. Say: *"across the 50 runs of our uncertainty budget, half the endpoints landed within 8.8 km of the cloud's centre."* **Never** *"accurate to 8.8 km"* — there is no ground truth for origin position and we will not imply one.
-8.3 **Age validation** from C5 — this is your one real accuracy claim.
+8.3 **Age** from C5 — present the band, the method and the per-estimator breakdown, plus the 0.8–1.3 km reachability ceiling as a stated limit. **Not an accuracy claim** (withdrawn 13 Sept 2026); at most an explicit N = 1 with its overestimate caveat.
 8.4 **OpenDrift agreement** from 7.2.
 8.5 **The error budget** (B2), with HYCOM's daily 9 km resolution named as the dominant term and stated as the floor on what anyone can do from free data.
 8.6 **The ÷1000 story.** How the tests caught a 10× error before a single particle moved. Thirty seconds of narrative, and the best evidence in the project that this team tests properly.
@@ -357,9 +337,7 @@ Useful confirmations from MET Norway's documentation:
 
 **F2. Fast currents pin particles to the box edge *(HIGH, silent)*.** Phase 3.1. The adaptive pad lowers the probability; **the loud guard is the half that matters**, because otherwise the failure is invisible.
 
-**F3. Negative-longitude leak *(MEDIUM, silent until it is not)*.** Phase 3.2. Four of six cases are negative longitude and two are positive, so a convention leak will surface — but possibly only after four cases have worked, which is the worst time to find it. Add the test before the first run, not after the fourth.
-
-**F3b. Fast currents at Menuett *(HIGH, and now concrete)*.** The Gulf Stream is the specific reason Phase 3.1 exists. A 55 km pad against 173 km of travel means particles pile against an invisible wall and produce a perfectly plausible wrong cloud. The **loud edge guard** is the half that matters.
+**F3. Negative-longitude leak *(MEDIUM, silent until the first US case)*.** Phase 3.2. The danger is precisely that Ennore cannot reveal it.
 
 **F4. First contact with real detections *(MEDIUM, probably loud)*.** Phase 6.1. Look at the pictures before believing any number.
 
@@ -423,7 +401,7 @@ GEE auth or quota · a case date outside the HYCOM archive · `detections.geojso
 ## G6. Definition of done
 - [ ] Five files pushed; both images posted; `data/fields/` cleaned
 - [ ] Three age estimators implemented, combined, emitted
-- [ ] Age validated against four known release times; hit rate reported
+- [ ] Age band, method and per-estimator breakdown emitted, with the reachability ceiling stated (four-case validation withdrawn 13 Sept 2026; N = 1 only if Huntington's detection lands)
 - [ ] Forward drift + coastal impact shipping as `particles_forward.json`
 - [ ] Adaptive field pad + loud edge guard
 - [ ] Negative-longitude test in the suite

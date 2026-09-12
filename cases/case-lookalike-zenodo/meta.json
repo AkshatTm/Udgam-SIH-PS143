@@ -1,0 +1,17 @@
+{
+  "case_id": "case-lookalike-zenodo",
+  "title": "Mississippi Delta — a slick that isn't",
+  "short_location": "Mississippi Delta, Gulf of Mexico",
+  "case_type": "lookalike",
+  "provenance": "benchmark",
+  "satellite": "Sentinel-1",
+  "scene_id": "P3_Lookalike_00134",
+  "detection_time": "1970-01-01T00:00:00Z",
+  "acts_available": ["detect"],
+  "gallery": {
+    "thumbnail": "thumb.png",
+    "blurb": "47 km² of dark water, 9 dB below the sea around it, twenty times longer than it is wide. Is it oil?",
+    "difficulty": "medium"
+  },
+  "notes": "Zenodo Part III look-alike scene (DOI 10.5281/zenodo.13761290, CC-BY — the attribution is mandatory and must appear on a slide). This case exists to be REJECTED, and it pays for the whole detection stage: by every geometric feature the detector measures it looks like a spill — 47 km², -9.05 dB contrast, elongation 21.2 — and it is not one. LOCATION IS REAL: the tile carries EPSG:4326 and a real geotransform, so bounds.json holds its true box (W -89.6488 S 29.1688 E -89.4649 N 29.3527). That location is itself the explanation — the Mississippi Delta is full of natural seeps and rigs, which is exactly why this is a convincing look-alike rather than an arbitrary dark patch. TIME IS NOT KNOWN: the TIFF carries no acquisition timestamp (the only tag is AREA_OR_POINT), so detection_time is a deliberate 1970 epoch sentinel. provenance is 'benchmark', so the CNN scene classifier scored this scene and its confidence is a model probability, not a rule margin (Master §6.3). Rejected at P(oil) 0.0020, threshold 0.143. Expected Stage 1 output: a FeatureCollection with zero features classified 'oil' — the dark region may legitimately appear as a 'lookalike' feature. Still awaiting the bundle artefacts from Soum; NOT in cases/index.json until they land and the validator prints PASS."
+}

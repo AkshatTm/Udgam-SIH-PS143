@@ -24,7 +24,24 @@ on screen within five seconds, not a story. Internals are binding — whatever w
 | 5 | case-mumbai-2023 | `S1A_IW_GRDH_1SDV_20230903T010333_20230903T010358_050156_06095B_9215` | 2023-09-03 01:03:33Z | IW / VV+VH / DESC, rel. orbit 34 | Dark slick with broad head + long tail, plus **bright point targets** (ships/platforms). Cerulean slick 3612640 (20.55 km, 7.74 km²). |
 | 6 | case-jamnagar-2024 | `S1A_IW_GRDH_1SDV_20240223T011114_20240223T011139_052679_065FA4_546D` | 2024-02-23 01:11:14Z | IW / VV+VH / DESC, rel. orbit 107 | **Hook-shaped slick**, found independently in GEE. Measured: slick VV −25.41 / VH −47.36; clean water VV −17.24 / VH −33.12 → ~8 dB VV depression. Cerulean also logged it (3477622). |
 | 7 | case-ennore-lookalike-2023 | `S1A_IW_GRDH_1SDV_20231130T003201_20231130T003226_051439_06353D_343D` | 2023-11-30 00:32:01Z | IW / VV+VH / DESC | **−3.98 d before** the 4 Dec 2023 CPCL spill. `find_scenes.py` over 2023-11-20..12-10 returned **exactly one pass** in twenty days. Chennai coast, anchored vessels, dark low-wind patches that cannot be oil. |
-| 8 | case-nospill-zenodo | `TODO — Soum` | — | — | Zenodo Part III `No oil/` folder. Held out of `cases/index.json` until nominated. |
+| 8 | case-lookalike-zenodo | `P3_Lookalike_00134` | **none — see below** | — | Zenodo Part III `Lookalike/`. **Georeferenced: W −89.6488 S 29.1688 E −89.4649 N 29.3527** — Mississippi Delta, Gulf of Mexico. Natural seeps and rigs, which is *why* it is a convincing look-alike. 47 km², −9.05 dB, elongation 21.2. Rejected at P(oil) 0.0020. |
+| 9 | case-nospill-zenodo | `P3_No oil_00091` | **none — see below** | — | Zenodo Part III `No oil/`. **Georeferenced: W 36.5090 S 35.1392 E 36.6930 N 35.3232** — Gulf of İskenderun, eastern Mediterranean. Rejected at P(oil) 0.0003. |
+
+**On rows 8 and 9 — location yes, time no.** Both tiles carry **EPSG:4326 and a real
+geotransform**, so `bounds.json` holds their true boxes and nothing about their placement on the
+map is invented. They carry **no acquisition timestamp** — the only TIFF tag is `AREA_OR_POINT` —
+so `detection_time` stays the deliberate `1970-01-01T00:00:00Z` sentinel and `meta.notes` says so
+outright. If asked: *we show you where, we do not know when, and we do not guess.*
+
+This also killed a design assumption. `pipeline/export/benchmark_scene.py` was written believing
+these scenes were ungeoreferenced and wrote a Null Island placeholder box for them; that is fixed
+(13 Sept) and it now reads the transform. The **same** false premise was load-bearing in Stage
+1's `scene_provenance()`, which routed to the networks on "this file has no CRS" — a test that
+matched every scene in both corpora and therefore discriminated nothing. Replaced by the explicit
+`meta.provenance` field (Master §6.1, D33).
+
+**dB clamps for these two are per-scene from their own P2/P98**, like every other case, and
+neither is the default: `case-lookalike-zenodo` `[-31, -16]` · `case-nospill-zenodo` `[-28, -14]`.
 
 **Archived:** `case-ennore-2017` — `S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04`,
 2017-01-29 00:31:32Z, +1.0 d, dawn low-wind, **no clear slick in GRD**. Moved to `cases/_archive/`
@@ -34,7 +51,25 @@ Export settings actually used (these must match what `bounds.json` records):
 - `sar_vv_vh.tif`: **2-band float32 GeoTIFF, dB, unclamped**, `--tif-scale 10` m/px on every case — Soum's real input. Band 1 = VV, band 2 = VH, labelled in the file. **Nodata is `-inf`, not a low dB value** — Jamnagar and Farallones have scene-edge nodata (86% and 82% coverage); treating it as backscatter would read as a huge false slick.
 - `sar.png` / `thumb.png`: band **VV**, dB-clamped 8-bit, `--png-scale 25` m/px — display only.
 - **The dB clamp is per case and derived, not guessed.** Each was taken from that box's own VV percentiles sampled in GEE at 60 m, then rounded: jacksonville `[-32, -19]` · farallones `[-28, -14]` · huntington `[-25, -5]` · gulf-alaska `[-29, -14]` · mumbai `[-28, -15]` · jamnagar `[-26, -13]` · ennore-lookalike `[-27, 0]` (wider because the box contains the Chennai coast, where land runs to +4 dB). Recorded per case in `bounds.json` as `db_min`/`db_max`. **Changing one is a broadcast, not a silent edit.**
-- `bounds.json` also records `vh_available` — `true` on all seven.
+- `bounds.json` also records `vh_available` — `true` on all seven. **`vh_available` means the
+  band is present, NOT that it carries signal.** See the VH note below; do not read that `true`
+  as evidence the dual-pol method fired.
+
+**VH is below the sensor noise floor on all seven live cases** (Soum, 13 Sept). Measured sea VH
+runs **−27.0 to −38.5 dB** against an IW noise-equivalent sigma-zero of **≈ −24 dB** — so what is
+in band 2 on those scenes is thermal noise, not ocean backscatter. This is a property of IW mode
+over calm water at C-band, not a fault in our export: it is **universal, not per-case**, and no
+choice of scene from GEE would have avoided it.
+
+**Consequence for the deck — the VH slide must be reframed, not deleted.** The dual-pol novelty
+is real and measurable **on the Zenodo corpus** (sea VH −20.7 dB, and both newly accepted scenes
+are usable at −21.9 and −11.6 dB) and **inoperative on every scene we will actually show**. That
+contrast is what makes this a finding rather than a retreat: we can state precisely where the
+method works, where it does not, and why — which is a stronger claim than an unqualified one, and
+it is the version that survives a question from someone who knows what NESZ is. Urooz: the slide
+says *"VH adds discrimination where VH clears the noise floor; on IW over calm sea it does not,
+and we show you the numbers."* **Do not let a slide imply VH contributed to the seven live
+detections.** It did not.
 - Export boxes are the Cerulean slick polygon's own bbox padded 0.03–0.05°, then adjusted where the scene footprint cut into the box. They are recorded in each `meta.json`.
 - **GEE's direct-download ceiling is 50,331,648 bytes (48 MiB)**, and the request is billed at **5 bytes per band-pixel** (float32 + a 1-byte validity mask). A GeoTIFF exported in EPSG:4326 has **no cos(lat) term** — the degree step is `scale / 111320` on both axes — so a high-latitude box is ~1/cos(lat) larger than a ground-square estimate suggests. `gee_scene.py` now predicts the exact raster.
 - command: `python pipeline/export/gee_scene.py --project quizzer-dev-487316 --scene <index> --case <id> --bbox W S E N --png-scale 25 --db-min <m> --db-max <M>`
@@ -105,11 +140,42 @@ split would flatter us). See Master Plan Part 12.
 
 | Metric | Value | Split |
 |---|---|---|
-| Scene classification accuracy | `TODO` | Part III holdout, n=`TODO` scenes |
-| Look-alike rejection rate | `TODO` | Part III holdout |
+| Decision threshold | **0.143** | chosen on validation, never on Part III |
+| Scene classification accuracy | **0.951** | all 450 Part III scenes |
+| Look-alike rejection rate | **0.940** | all 450 Part III scenes |
+| Clean-ocean rejection rate | **0.987** | all 450 Part III scenes |
+| Oil recall | **0.927** | all 450 Part III scenes |
 | Oil-class IoU (positives only) | `TODO` | Part III holdout |
 | Classical baseline F1 (ablation) | `TODO` | same holdout |
 | Training rows | `TODO` | `data/labels/features.csv` |
+
+**Provenance of these five numbers** (Soum, 13 Sept). Trained on Parts I+II with an 85/15
+by-scene validation split; evaluated on all 450 Part III scenes. **Both the threshold and the
+architecture were chosen on validation, never on Part III** — that is what makes the row above a
+held-out number and not a tuned one. Layers 1 and 2 are evaluated on the scene cache
+(`data/cache/scenes_P3.npy` + `manifest_P3.json`).
+
+**Two corrections, recorded because the wrong versions circulated first and may be in a draft
+deck.** Both are on us to catch, not the judges.
+
+- **0.960 / 0.987 / 0.434 are dead.** They are the pre-domain-augmentation classifier. The
+  shipped model is the table above; in particular the **threshold is 0.143, not 0.434**. If a
+  slide still says 0.434, it is describing a model we are not running.
+- **These did not come from `features_test.csv`.** That CSV is the *classical* RandomForest's
+  row-level feature table. It is a different artefact from the scene cache, and the two must not
+  be conflated in the deck even though both are Part III, both scene-level, and neither was
+  trained on. Two models, two evidence files; say which one a number came from.
+
+**Reproducibility, stated at its real boundary.** A clean checkout **cannot** reproduce these,
+and never will: the inputs are 40+ GB of Zenodo archives and `data/` is gitignored. What ships is
+the code, the eval JSONs (`eval_part3.json`, `scene_classifier_meta.json`, `model_meta.json`) and
+the small weights. The 204 MB / 121 MB artefacts are deliberately not in the repo — over GitHub's
+100 MB blob limit, and a 300-tree unbounded RandomForest is cheaper to retrain than to store.
+This is the same rule as everywhere else in the project: **outputs move, inputs stay put.** Say
+it in exactly those terms if asked; it is a design decision, not a gap.
+
+**Live check on the two accepted Zenodo cases**, at threshold 0.143: `00134` → P(oil) **0.0020**,
+`00091` → P(oil) **0.0003**. Both correctly rejected.
 
 **The two-benchmark framing (Master Plan Part 10 + Part 12).** The ~53% IoU figure that
 circulates is from the **Krestenitis** 5-class benchmark — the EMSA CleanSeaNet dataset, which

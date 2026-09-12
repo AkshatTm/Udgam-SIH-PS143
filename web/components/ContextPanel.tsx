@@ -9,7 +9,12 @@ import {
   YAxis,
 } from "recharts";
 import { useAppStore } from "@/lib/store";
-import type { AisSource, DetectionProperties, DischargeClass } from "@/lib/contracts";
+import type {
+  AisSource,
+  DetectionProperties,
+  DischargeClass,
+  Provenance,
+} from "@/lib/contracts";
 import type { AgeMethod, OriginBundle } from "@/lib/origin";
 import type {
   DarkVessel,
@@ -171,10 +176,33 @@ function DischargeBadge({ value }: { value: DischargeClass }) {
 
 // ─── Detect stage card ────────────────────────────────────────────────────────
 
+/**
+ * `confidence` is [0,1] on every case — and it is NOT the same quantity on every case.
+ * Master §6.3 / D33: on `provenance: "benchmark"` the CNN scene classifier produced it and it is
+ * a calibrated probability, so a percentage is honest. On `satellite` (our seven GEE cases, i.e.
+ * everything we show on stage) the classical rule path produced it, and it is a MARGIN from the
+ * decision boundary. Printing "87% confidence" there asserts a calibration nobody has measured.
+ *
+ * So: percentage for benchmark, qualitative band for satellite. Same number, different claim.
+ */
+function confidenceLabel(
+  confidence: number,
+  provenance: Provenance | undefined,
+): string {
+  if (!Number.isFinite(confidence)) return "— confidence";
+  if (provenance === "benchmark") {
+    return `${Math.round(confidence * 100)}% confidence`;
+  }
+  const band =
+    confidence >= 0.75 ? "strong" : confidence >= 0.45 ? "moderate" : "weak";
+  return `${band} rule margin`;
+}
+
 function DetectionCard({ p }: { p: DetectionProperties }) {
   const isOil = p.classification === "oil";
   const rows = featureRows(p);
   const accentColor = isOil ? OIL_COLOR : LOOKALIKE_COLOR;
+  const provenance = useAppStore((s) => s.meta?.provenance);
 
   // Object number from id: "det-01" → "01"
   const objNum = p.id.replace(/^det-?/i, "").padStart(2, "0").toUpperCase();
@@ -193,9 +221,7 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
           {isOil ? "Oil Slick" : "Look-alike"}
         </div>
         <div className="mt-0.5 font-mono text-[11px] text-white/50">
-          {Number.isFinite(p.confidence)
-            ? `${Math.round(p.confidence * 100)}% confidence`
-            : "— confidence"}
+          {confidenceLabel(p.confidence, provenance)}
         </div>
         {p.discharge_class && <DischargeBadge value={p.discharge_class} />}
       </div>
