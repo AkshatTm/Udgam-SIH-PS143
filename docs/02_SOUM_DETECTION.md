@@ -21,7 +21,17 @@ That is a real diagnosis, not a guess, and most people would have tuned paramete
 
 **Globally-unique scene ids** (`Oil_00007`, not `00007`) because `Oil/00007` and `Lookalike/00007` are different scenes sharing a number. That collision would have silently corrupted every scene-level grouping operation.
 
-**The VH discovery — the single most valuable finding anyone on this team has made.**
+**The dual-pol discovery — still the most valuable finding on the team, but it names the wrong
+channel.**
+
+> ⚠ **CORRECTED 13 Sept (Soum).** Zenodo tiles are **band 1 = VH, band 2 = VV**. Band 1 is
+> **8.15 dB darker** than band 2 across 297 Part III scenes and darker in **290 of 297**, and
+> cross-pol is always below co-pol over ocean. `make_labels.py` and `build_cache.py` read band 1
+> as VV, so **the channel labels in the table below are swapped**: `vh_mean_depth_db` is a
+> **co-pol** statistic. The ablation is unaffected and still real — adding the *second*
+> polarisation nearly doubled validation F1 and lifted precision 5.8× at identical recall — but
+> "VH is the discriminator" is not something our data shows. The Marangoni physics below is
+> standard and citable; what we cannot claim is to have measured it.
 
 ```
 vh_mean_depth_db   importance 0.3155   <- rank 1, 2x any VV feature
@@ -31,7 +41,7 @@ max_depth_db       importance 0.1483
 vh_contrast_db     importance 0.0727   <- rank 6
 ```
 
-F1 went 0.086 -> 0.276 on two features. Your physical explanation is correct and it is the reason this works: ocean clutter — upwelling, rain cells, wind shadow — damps the **VV** channel. Real oil damps capillary waves through Marangoni effects, which suppresses **both** polarisations. So dark-in-VV-but-normal-in-VH is a look-alike; dark-in-both is oil. **VH is the discriminator, and it is the physics of the problem.**
+F1 went 0.086 -> 0.276 on two features. Your physical explanation is correct and it is the reason this works: ocean clutter — upwelling, rain cells, wind shadow — damps the **VV** channel. Real oil damps capillary waves through Marangoni effects, which suppresses **both** polarisations. So dark-in-VV-but-normal-in-VH is a look-alike; dark-in-both is oil. That physics is standard and citable. **What our numbers actually support is narrower: a second polarisation nearly doubles F1. Which one carries the signal, we cannot say — see the correction above.**
 
 This gets its own slide, and it is the answer when a judge asks what is novel about your detection.
 
@@ -424,7 +434,7 @@ Run your pipeline on both — **the correct output is zero oil features.** That 
 ### 7.2 The ablation paragraph
 "Our classical baseline achieves X. Adding a scene classifier lifts look-alike rejection from A to B. Adding U-Net segmentation lifts IoU from C to D. The classical layer is retained because it produces the per-detection feature explanation that neither network can."
 
-### 7.3 The VH slide
+### 7.3 The dual-pol slide  *(was "The VH slide" — renamed 13 Sept, see the correction in A1)*
 Feature importances, the F1 jump, and the physics: clutter damps VV, oil damps both. This is your novelty claim.
 
 ### 7.4 The honesty paragraph

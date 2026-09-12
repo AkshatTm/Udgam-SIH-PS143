@@ -86,7 +86,7 @@ saw it, even named candidates, and **nothing happened.** Never say "no record an
 
 **Nobody but you can write `verification.json`.** It is the strongest new idea in the project, it is pure research and writing, and it is invisible until the last screen. The `official_finding` blocks are researched; the `assessment.explanation` for every case is still owed, by hand, after the stages run. The validator fails the bundle until it exists — that is deliberate.
 
-**VV-only exports would cripple Soum.** His single strongest feature is `vh_mean_depth_db`, at twice the weight of any VV feature. Every export is a 2-band float32 GeoTIFF and the PNG is display only. Check `bandNames()` on every scene as it exports and name the case immediately if one comes back VV-only.
+**VV-only exports would cripple Soum.** ~~His single strongest feature is `vh_mean_depth_db`, at twice the weight of any VV feature.~~ **Corrected 13 Sept:** that feature was computed from Zenodo band 2, which is VV, not VH — the Zenodo band order is the reverse of ours. The rank-1 feature is real but is a *co-pol* statistic. **Keep checking `bandNames()` anyway:** the measured win comes from having a *second* polarisation at all (val F1 0.346 → 0.643), so a VV-only export still costs it. Every export is a 2-band float32 GeoTIFF and the PNG is display only. Check `bandNames()` on every scene as it exports and name the case immediately if one comes back VV-only.
 
 **You have now run the pipeline, once, on stubs and on one real export.** You have never run it on a case that went all the way through four stages. Jacksonville is where that happens, and it will be slower than you expect for reasons that have nothing to do with bugs.
 
