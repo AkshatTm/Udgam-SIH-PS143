@@ -9,13 +9,14 @@ import {
   YAxis,
 } from "recharts";
 import { useAppStore } from "@/lib/store";
-import type { DetectionProperties, DischargeClass } from "@/lib/contracts";
+import type { AisSource, DetectionProperties, DischargeClass } from "@/lib/contracts";
 import type { AgeMethod, OriginBundle } from "@/lib/origin";
 import type {
   DarkVessel,
   ExcludedVessel,
   Funnel,
   Infrastructure,
+  NaturalSeep,
   Suspect,
   SuspectComponents,
   SuspectsBundle,
@@ -468,6 +469,37 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
 // rewritten, so the frontend never claims something the pipeline didn't measure.
 const ABSTAIN_MESSAGE = "Attribution not possible at acceptable confidence.";
 
+// D20 — which AIS archive scored this case, and therefore which sampling regime the funnel and
+// every gap/slowdown "n/a" downstream of it are honest about. No fabricated label for a value
+// the loader didn't recognize (only these two exist in the frozen contract).
+const AIS_SAMPLING_LABEL: Record<AisSource, string> = {
+  noaa_dense: "AIS: 71-second sampling (NOAA)",
+  gfw_hourly: "AIS: hourly sampling (Global Fishing Watch)",
+};
+
+/** D19 — geological seepage is contextual evidence about the scene, never a suspect: it is
+ * rendered above the ranked list, in its own caution tone (the same amber family as
+ * VerdictBadge's "partial" — distinct from the orange suspect-score accent and the red
+ * contract-error styling), and it is never added to `suspects` or scored/ranked. */
+function NaturalSeepNotice({ seep }: { seep: NaturalSeep }) {
+  return (
+    <div className="rounded border border-[#fbbf24]/30 bg-[#fbbf24]/[0.08] p-3">
+      <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#fcd34d]/80">
+        Documented natural seepage in this area
+      </div>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-[#fde68a]/80">
+        Some or all of this feature may be geological rather than a discharge.
+      </p>
+      {seep.note && (
+        <p className="mt-1.5 text-[10px] leading-relaxed text-[#fde68a]/55">{seep.note}</p>
+      )}
+      {seep.source && (
+        <p className="mt-1 text-[9px] text-[#fde68a]/40">Source: {seep.source}</p>
+      )}
+    </div>
+  );
+}
+
 /** Static 4-step bar — "no animation needed" per docs/04 Phase 5. Steps only ever shrink or
  * hold, left to right (CONTRACTS §8: funnel counts are non-increasing), so the bar length
  * itself carries the funnel's shape. */
@@ -735,9 +767,11 @@ function InfrastructureCard({ f }: { f: Infrastructure }) {
 function AttributeCard({
   suspects,
   gate,
+  aisSource,
 }: {
   suspects: SuspectsBundle;
   gate: "loading" | "unknown" | "abstain" | "clear";
+  aisSource?: AisSource;
 }) {
   return (
     <div className="flex flex-col">
@@ -748,6 +782,11 @@ function AttributeCard({
         <div className="mt-1 text-[22px] font-semibold leading-tight tracking-tight text-white">
           Vessel Attribution
         </div>
+        {/* Absent only when the bundle predates this field or the case has no attribution act
+            yet — no guessed regime is ever shown in its place. */}
+        {aisSource && (
+          <div className="mt-1 text-[10px] text-white/40">{AIS_SAMPLING_LABEL[aisSource]}</div>
+        )}
       </div>
 
       <Divider />
@@ -797,6 +836,14 @@ function AttributeCard({
 
       {gate === "clear" && (
         <>
+          {/* D19 — contextual evidence about the scene, rendered ABOVE the ranked list and
+              never inside it: natural_seep is not a suspect and carries no rank/score. */}
+          {suspects.naturalSeep?.flagged && (
+            <div className="mb-3">
+              <NaturalSeepNotice seep={suspects.naturalSeep} />
+            </div>
+          )}
+
           <SectionLabel>Suspects</SectionLabel>
           <div className="mt-2 space-y-2">
             {suspects.suspects.length === 0 ? (
@@ -858,6 +905,7 @@ function AttributeCard({
 
 export default function ContextPanel() {
   const activeStage = useAppStore((s) => s.activeStage);
+  const meta = useAppStore((s) => s.meta);
   const detections = useAppStore((s) => s.detections);
   const detectionsPending = useAppStore((s) => s.detectionsPending);
   const selectedDetectionId = useAppStore((s) => s.selectedDetectionId);
@@ -986,6 +1034,7 @@ export default function ContextPanel() {
         ) : suspects ? (
           <AttributeCard
             suspects={suspects}
+            aisSource={meta?.ais_source}
             gate={
               origin === null
                 ? originStatus === "error"

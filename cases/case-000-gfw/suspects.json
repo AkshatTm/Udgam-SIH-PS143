@@ -1,0 +1,106 @@
+{
+  "funnel": {
+    "in_region": 412,
+    "in_window": 63,
+    "plausible": 12,
+    "scored": 3
+  },
+  "suspects": [
+    {
+      "mmsi": "367000101",
+      "name": "FAKE ATLAS",
+      "vessel_type": "tanker",
+      "score": 0.78,
+      "components": {
+        "proximity": 0.91,
+        "parity": 0.6,
+        "temporality": 0.72,
+        "trajectory": 0.65,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 0.55
+      },
+      "component_notes": {
+        "gap": "gfw_hourly gives one position per vessel per hour — a transponder gap is not measurable at this sampling rate",
+        "slowdown": "gfw_hourly is too coarse to resolve a speed change against this vessel's track"
+      },
+      "closest_km": 3.1,
+      "closest_time": "2017-01-28T10:14:00Z",
+      "heading_consistent": true,
+      "reasons": [
+        "inside the 50% origin radius during the window",
+        "tanker on a course consistent with the origin",
+        "gap and slowdown are not scoreable under hourly AIS sampling"
+      ]
+    },
+    {
+      "mmsi": "367000104",
+      "name": "FAKE CORAL",
+      "vessel_type": "cargo",
+      "score": 0.41,
+      "components": {
+        "proximity": 0.5,
+        "parity": 0.4,
+        "temporality": 0.48,
+        "trajectory": 0.35,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 0.3
+      },
+      "component_notes": {
+        "gap": "gfw_hourly gives one position per vessel per hour — a transponder gap is not measurable at this sampling rate",
+        "slowdown": "gfw_hourly is too coarse to resolve a speed change against this vessel's track"
+      },
+      "closest_km": 8.7,
+      "closest_time": "2017-01-28T07:14:00Z",
+      "heading_consistent": true,
+      "reasons": [
+        "inside the 90% origin radius"
+      ]
+    },
+    {
+      "mmsi": "367000102",
+      "name": "FAKE MERIDIAN",
+      "vessel_type": "cargo",
+      "score": 0.24,
+      "components": {
+        "proximity": 0.3,
+        "parity": 0.35,
+        "temporality": 0.2,
+        "trajectory": 0.18,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 0.3
+      },
+      "component_notes": {
+        "gap": "gfw_hourly gives one position per vessel per hour — a transponder gap is not measurable at this sampling rate",
+        "slowdown": "gfw_hourly is too coarse to resolve a speed change against this vessel's track"
+      },
+      "closest_km": 11.2,
+      "closest_time": "2017-01-28T13:14:00Z",
+      "heading_consistent": false,
+      "reasons": [
+        "at the edge of the 90% origin radius"
+      ]
+    }
+  ],
+  "natural_seep": {
+    "flagged": true,
+    "source": "Phase 5.4 QA fixture — synthetic citation, not a real SkyTruth/Cerulean record",
+    "note": "Detection falls in an area with documented natural seepage in this synthetic fixture."
+  },
+  "excluded": [
+    {
+      "mmsi": "367000103",
+      "name": "FAKE PELICAN",
+      "closest_km": 6.4,
+      "reason": "heading away from the origin throughout the window"
+    },
+    {
+      "mmsi": "367000105",
+      "name": "FAKE VESPER",
+      "closest_km": 9.9,
+      "reason": "left the region before the origin time window opened"
+    }
+  ]
+}

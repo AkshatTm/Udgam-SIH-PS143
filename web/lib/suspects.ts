@@ -14,6 +14,7 @@ import type {
   RawInfrastructure,
   RawExcludedVessel,
   RawFunnel,
+  RawNaturalSeep,
   RawRepeatOffender,
   RawSuspect,
   RawSuspectComponents,
@@ -99,6 +100,17 @@ export interface Infrastructure {
   reasons: string[];
 }
 
+/** Master §6.7, D19 — geological seepage, the fourth source class. `flagged: true` is a
+ *  citable claim, never a bare flag: `source`/`note` are guaranteed non-null whenever
+ *  `flagged` is true (validated below), matching the validator's own `check_suspects` rule.
+ *  This is contextual evidence about the *scene*, not a suspect — it is never added to
+ *  `suspects` and carries no `score`/`mmsi`/rank. */
+export interface NaturalSeep {
+  flagged: boolean;
+  source: string | null;
+  note: string | null;
+}
+
 export interface SuspectsBundle {
   funnel: Funnel;
   /** Sorted by descending score, exactly as the file provides — never re-sorted here. */
@@ -109,6 +121,9 @@ export interface SuspectsBundle {
   darkVessels: DarkVessel[];
   /** Always an array, same convention as darkVessels. */
   infrastructure: Infrastructure[];
+  /** `null` when the bundle carries no `natural_seep` block at all — distinct from a present
+   *  block with `flagged: false`. Either way, nothing renders unless `flagged` is true. */
+  naturalSeep: NaturalSeep | null;
   /** docs/04 D2 — Stage 3 deliberately refused to attribute. When true, `suspects` is empty. */
   abstained: boolean;
   /** The case's stated reason for abstaining, exactly as supplied. `null` when not abstaining
@@ -326,6 +341,27 @@ function validateInfrastructure(inf: RawInfrastructure, i: number, id: string): 
   }
 }
 
+// Mirrors validate_case.py's check_suspects natural_seep rule exactly: a flag raised without
+// a named source is the same unsubstantiated claim Mumbai's own meta.json warns against — a
+// citable seep claim needs both source and note, never a bare boolean.
+function validateNaturalSeep(ns: RawNaturalSeep, id: string): void {
+  const where = `${id}/suspects.json/natural_seep`;
+  if (!ns || typeof ns !== "object") {
+    throw new Error(`${where}: must be an object when present`);
+  }
+  if (typeof ns.flagged !== "boolean") {
+    throw new Error(`${where}.flagged: must be true or false`);
+  }
+  if (ns.flagged) {
+    if (typeof ns.source !== "string" || ns.source.trim().length === 0) {
+      throw new Error(`${where}.source: required non-empty string when flagged is true`);
+    }
+    if (typeof ns.note !== "string" || ns.note.trim().length === 0) {
+      throw new Error(`${where}.note: required non-empty string when flagged is true`);
+    }
+  }
+}
+
 export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
   const raw = await fetchJson<RawSuspectsBundle>(`/cases/${id}/suspects.json`);
   const where = `${id}/suspects.json`;
@@ -346,6 +382,9 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
     throw new Error(`${where}: "infrastructure" must be an array when present`);
   }
   (raw.infrastructure ?? []).forEach((inf, i) => validateInfrastructure(inf, i, id));
+  if (raw.natural_seep !== undefined) {
+    validateNaturalSeep(raw.natural_seep, id);
+  }
 
   validateFunnel(raw.funnel, id);
   if (raw.funnel.scored !== raw.suspects.length) {
@@ -450,6 +489,13 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
       score: inf.score,
       reasons: inf.reasons ?? [],
     })),
+    naturalSeep: raw.natural_seep
+      ? {
+          flagged: raw.natural_seep.flagged,
+          source: raw.natural_seep.source ?? null,
+          note: raw.natural_seep.note ?? null,
+        }
+      : null,
     abstained,
     abstainReason,
   };

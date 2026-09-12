@@ -12,6 +12,95 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-12 18:15] Phase 5.4 — natural_seep caution panel + AIS sampling label
+
+**Done:** Closed the two Phase 5.4 gaps identified by a reality check first (per instructions,
+no code before the check): `contracts.ts` already had `AisSource`/`RawNaturalSeep`/D20's
+null-gap/slowdown honesty rendering — but `suspects.ts` never parsed `natural_seep` off the
+wire (silently dropped), and nothing anywhere rendered it or the AIS sampling regime. Added
+`NaturalSeep`/`validateNaturalSeep` to `suspects.ts` (same descriptive-throw discipline as every
+other field there: `flagged: true` requires non-empty `source`+`note`, mirroring
+`validate_case.py`'s own rule) and threaded it into `SuspectsBundle`. In `ContextPanel.tsx`:
+a new amber-toned `NaturalSeepNotice` (reusing `VerdictBadge`'s "partial" `#fbbf24` tone — not
+the orange suspect-score accent, not error-red) renders **above** `SectionLabel("Suspects")`
+inside the `gate === "clear"` branch only when `naturalSeep.flagged` is true — never added to
+`suspects[]`, never ranked. `AttributeCard` gained an optional `aisSource` prop rendered as a
+one-line caption under the "Vessel Attribution" title via a frozen `AIS_SAMPLING_LABEL` map
+(`noaa_dense` → "AIS: 71-second sampling (NOAA)", `gfw_hourly` → "AIS: hourly sampling (Global
+Fishing Watch)"); `ContextPanel` now reads `meta` from the store and passes
+`meta?.ais_source` through — absent renders nothing, never a guessed regime. The null→"n/a"
+`gap`/`slowdown` rendering in `ComponentBars` was **already correct** before this phase; nothing
+there needed to change.
+
+No real case in the library exercises either feature yet (`case-mumbai-2023` /
+`case-jamnagar-2024` are `gfw_hourly` but `acts_available: ["detect"]` only — no
+`suspects.json` exists for them; Mumbai's own `meta.json` notes explicitly forbid claiming
+`natural_seep` there without a real source). Built a new synthetic **`cases/case-000-gfw/`**
+(assets cloned from `case-000`; `ais_source: "gfw_hourly"`, all three suspects carry
+`components` with `gap`/`slowdown` explicitly `null` + `component_notes` explaining why, and a
+`natural_seep: {flagged: true, source, note}` block) to verify both end-to-end. **Not** in
+`cases/index.json`.
+
+**Files touched:** `web/lib/suspects.ts` (modified — `NaturalSeep` type, `validateNaturalSeep`,
+parsed into `SuspectsBundle.naturalSeep`) · `web/components/ContextPanel.tsx` (modified —
+`AIS_SAMPLING_LABEL`, `NaturalSeepNotice`, `AttributeCard` gains `aisSource` prop + renders the
+notice/label, `ContextPanel` reads `meta` from the store) · `cases/case-000-gfw/` (new synthetic
+fixture — meta.json + suspects.json hand-written, other assets copied from `case-000`) ·
+`docs/updates/harshita.md` (this entry). No `contracts.ts`, validator, producer, MapView,
+store.ts (beyond reading the existing `meta` slice), or real-case changes.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000-gfw   # PASS (0 warnings)
+robocopy cases web\public\cases /MIR                  # PowerShell — git-bash mangles /MIR
+cd web && npm run dev
+```
+Expected: `http://localhost:3000/case/case-000-gfw/attribute` — "AIS: hourly sampling (Global
+Fishing Watch)" under the title; an amber "Documented natural seepage in this area" panel above
+Suspects; every suspect's Score Breakdown shows **Gap: n/a** / **Slowdown: n/a** with no bar.
+`http://localhost:3000/case/case-000/attribute` (unrelated `noaa_dense` fixture) shows "AIS:
+71-second sampling (NOAA)" and no seepage panel, suspects/scores unchanged from before this
+phase.
+
+**Checkpoint artefact:**
+- Static (all PASS): `python scripts/validate_case.py cases/case-000-gfw` → PASS (0 warnings) ·
+  `cd web && npx tsc --noEmit` → clean · `npm run lint` → 0 warnings · `npm run build` →
+  compiled, 5/5 pages.
+- Browser (Playwright, dev server):
+  - `case-000-gfw` Attribute: sampling label + amber natural-seep panel (title, plain-language
+    line, the fixture's note, the fixture's source) render above Suspects, not inside the
+    ranked list ✓ · every suspect card's Score Breakdown shows `Gap n/a` / `Slowdown n/a`, no
+    bar underneath, other components (Proximity/Parity/Temporality/Trajectory/Type prior) show
+    normal numeric bars ✓
+  - `case-000` (regression, `noaa_dense`, no `natural_seep`): "AIS: 71-second sampling (NOAA)"
+    label present, no seepage panel, 3 suspect cards / scores / AIS gap row byte-identical to
+    pre-phase behaviour ✓
+  - `case-000-abstain` (regression): unaffected — no sampling label (fixture predates
+    `ais_source`, correctly renders nothing rather than a guess), "Deliberate abstention" card
+    unchanged (the seep notice only lives in the `gate === "clear"` branch, so it's a no-op here
+    by design — natural_seep isn't part of this fixture anyway) ✓
+  - `case-000-d3` Detect (regression): ATTRIBUTE still correctly greyed, Phase 5.3 Measurements
+    panel + headline unchanged ✓
+  - `case-000-nospill` Detect (regression): D1 banner + "No oil in this scene" block unchanged ✓
+  - Console clean (0 errors/warnings) across every page in this pass.
+- Discovered while refreshing the fixture mirror: `web/public/cases/case-000/meta.json` was
+  stale (missing `ais_source` — predated that field being added to the source bundle). Not a
+  regression I introduced; `robocopy cases web\public\cases /MIR` from PowerShell (not git-bash,
+  which mangles the `/MIR` flag into a path argument) re-synced it correctly.
+
+**Open issues:**
+- Real-data dependency (Jaiveer/Anushka): neither `gfw_hourly` nor `natural_seep` can be
+  verified against a real bundle yet — Mumbai/Jamnagar have no `suspects.json`, and Akshat's own
+  notes say not to claim `natural_seep` on Mumbai until a real source is substantiated. Code
+  lights up unchanged once a real bundle lands with either field.
+- Not committed / not pushed.
+
+**Next:** wire the real `gfw_hourly` suspects bundle once Jaiveer's Mumbai/Jamnagar attribution
+output lands, and re-verify this exact UI against it (no code change expected, just a real-data
+confirmation pass).
+
+---
+
 ## [2026-09-12 17:05] Build-break revert — MapView.tsx
 
 **Done:** Working tree (uncommitted) `web/components/MapView.tsx` had the same additive-duplication
