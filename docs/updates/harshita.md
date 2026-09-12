@@ -12,6 +12,87 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-12 17:05] Build-break revert — MapView.tsx
+
+**Done:** Working tree (uncommitted) `web/components/MapView.tsx` had the same additive-duplication
+pattern as the earlier `ed7defa` bug re-introduced on top of clean `HEAD` (`1be8009`) —  a stale
+duplicate `sceneAndVesselExtent` import, duplicate `getColor`/`getWidth` in the vessel `PathLayer`,
+a duplicate camera-effect dependency array, a duplicate `target` ternary, and a duplicate overlay
+`useEffect` sitting next to their correct post-Phase-3 versions, with no unique content of its own.
+This is what broke `npx tsc --noEmit` (9 syntax errors, all in this file). `git diff` confirmed
+`HEAD:web/components/MapView.tsx` was already clean — the corruption existed only in the working
+copy, never committed. Fix: `git checkout -- web/components/MapView.tsx`, discarding the bad
+uncommitted edit and restoring the clean committed version. No feature code lost — every removed
+line was a duplicate of a line still present.
+
+**Files touched:** `web/components/MapView.tsx` (reverted to `HEAD`, no net change vs. last commit).
+
+**Validation commands:**
+- `cd web && npx tsc --noEmit` → clean (0 errors)
+- `cd web && npm run lint` → 0 warnings
+- `python scripts/validate_case.py cases/case-000` → PASS (0 warnings)
+
+**Open issues:**
+- `ContextPanel.tsx` was also reported broken by an audit earlier today but compiles clean now
+  with no uncommitted diff — already fixed outside this change, not touched here.
+- Not committed / not pushed.
+
+**Next:** commit this revert before building anything else on top of `MapView.tsx`; see
+`docs/REALITY_CHECK_2026-09-12.md` for the rest of the outstanding backlog (real-case pipeline
+outputs, the v3 `suspects.json` fields, the doc-rename hygiene issue in `docs/`).
+
+---
+
+## [2026-09-12 00:10] B2 — origin time_window_method
+
+**Done:** Implemented B2 `origin.time_window_method` schema extension, validation, bundle mapping, and honest UI rendering per the approved decisions.
+
+1. **`web/lib/contracts.ts`:**
+   - Added optional `time_window_method?: string` to `RawOriginBundle`.
+
+2. **`web/lib/origin.ts`:**
+   - Added `timeWindowMethod: "bounded" | "convergence" | null` to parsed `OriginBundle`.
+   - In `validate(raw, id)`: validated that when `time_window_method` is present and non-null, it must be strictly `"bounded"` or `"convergence"`, throwing a descriptive `Error` otherwise. Missing or null is accepted cleanly. No type coercion or heuristic inference from time window timestamps or other fields.
+   - In `loadOriginBundle`: mapped `"bounded"` → `"bounded"`, `"convergence"` → `"convergence"`, and absent/null → `null`.
+
+3. **`web/components/ContextPanel.tsx`:**
+   - In `TraceCard`, replaced the hardcoded release-window caption with conditional rendering keyed strictly on `origin.timeWindowMethod`:
+     - `"bounded"` → displays `"Search bracket (not a measured release time)"`
+     - `"convergence"` → displays `"Measured estimate"`
+     - `null` → displays no method-specific claim or caption
+   - Retained the existing "Released between" time values, date formatting, and InfoDot affordance verbatim.
+   - Left all other Trace card sections (Best estimate, Uncertainty, abstain banner, particles control-path note) completely unaltered.
+
+4. **Scope adherence:**
+   - B6 files (`web/lib/extent.ts`, `web/components/MapView.tsx`) left untouched from `HEAD`.
+   - All `cases/` fixtures preserved untouched (temporary QA edits verified and reverted; `git diff cases` clean).
+   - No validator changes.
+   - B3 age fields not implemented.
+   - No commits or pushes performed.
+
+**Files touched:**
+- `web/lib/contracts.ts` (modified — added `time_window_method?: string` to `RawOriginBundle`)
+- `web/lib/origin.ts` (modified — added `timeWindowMethod` to `OriginBundle`, validation, and bundle mapping)
+- `web/components/ContextPanel.tsx` (modified — conditional method label/caption in `TraceCard`)
+- `docs/updates/harshita.md` (this entry)
+
+**Validation commands:**
+- `python scripts/validate_case.py cases/case-000` → PASS (0 warnings)
+- `python scripts/validate_case.py cases/case-000-abstain` → PASS (1 warning: no excluded vessels, expected for fixture)
+- `python scripts/validate_case.py cases/case-000-d3` → PASS (0 warnings)
+- B2 unit test suite (`scratch/test_b2_unit.js`) → PASS (5/5 suites: absent→null, null→null, bounded→bounded, convergence→convergence, 8 invalid values rejected with descriptive error)
+
+**Browser QA results (automated Playwright Chromium):**
+1. **Existing fixtures (field absent):** Case loads cleanly; time window values (`28 Jan 2017`, `04:14 – 16:14 UTC`) remain clearly visible; neither "Search bracket (not a measured release time)" nor "Measured estimate" appears; old hardcoded caption is gone. PASS.
+2. **Temporary local QA — `bounded`:** Setting `time_window_method: "bounded"` displays exact project wording `"Search bracket (not a measured release time)"` beneath time values. PASS.
+3. **Temporary local QA — `convergence`:** Setting `time_window_method: "convergence"` displays exact wording `"Measured estimate"`. PASS.
+4. **Temporary local QA — invalid value:** Setting `time_window_method: "invalid_heuristic"` triggers the origin contract-error banner with descriptive error. PASS.
+5. **Reversion confirmed:** Fixtures restored to original state; `git diff cases` completely empty. PASS.
+6. **B6 camera regression check:** Trace union camera framing verified intact (`[80.10, 12.95, 80.94695, 13.76316]`). PASS.
+7. **Console:** 0 errors during standard case loading. PASS.
+
+---
+
 ## [2026-09-11 23:10] B6 — Union camera + per-stage camera framing
 
 **Done:** Implemented B6 union camera + per-stage camera framing in full per the approved Claude plan.
