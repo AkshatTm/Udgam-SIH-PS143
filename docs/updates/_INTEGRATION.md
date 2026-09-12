@@ -18,7 +18,7 @@ first; everything below it is history.*
 | Person | Has what they need? | Next move |
 |---|---|---|
 | **Soum** | ✅ 7 scenes: `sar_vv_vh.tif` (2-band float32, 10 m), `sar.png`, `bounds.json` with the per-case dB clamp | Run Stage 1 on `case-jacksonville-2024` |
-| **Anushka** | ✅ real `detection_time` + bounds on all 7; age estimation + adaptive pad/edge guard merged (2026-09-13) | Fetch fields; seeding waits on Soum's polygons. **A1–A5 in `STAGE2_AGE_DECISION_BRIEF.md` await planning-account ratification** |
+| **Anushka** | ✅ real `detection_time` + bounds on all 7; age estimation + adaptive pad/edge guard + plot guards merged; **A1–A5 ratified 2026-09-13** | Fetch fields; seeding waits on Soum's polygons. **Her coastline/stranding commit (`b4d280a`) is held, not merged — pins a new dependency, needs planning-account confirmation** |
 | **Jaiveer** | ✅ dates, boxes, `ais_source`; D27–D31 ruled; GFW confirmed working | Phase 8 curve **with the per-component ablation** |
 | **Harshita** | ✅ frontend loads all 7 cases; `sync_web_cases.py` feeds the browser | Detect screen's "stage pending" state |
 | **Urooz** | ✅ never blocked | Research |
@@ -59,14 +59,20 @@ python scripts/sync_web_cases.py                           # then Harshita QAs i
 
 ## Open, in priority order
 
-- **Planning-account ratification needed: `docs/STAGE2_AGE_DECISION_BRIEF.md` A1–A5.** Merged
-  2026-09-13, code-complete and tested (7/7, 48/48), but five methodology calls are explicitly
-  routed to Akshat and not decided by this account — see the dated entry below for the full list.
-  Two of them (A2, A5) change what an age number on a slide would say.
-- **Ask routed to Soum** (not yet sent): `contrast_centre_db` / `contrast_edge_db` per detection,
-  and Huntington's real slick major axis as soon as it exists — see the entry below for the
-  ready-to-send text.
-- **Ask routed to Urooz** (not yet sent): primary citation for the Fay gravity-viscous constant.
+- **Dependency-freeze exception needed: `global-land-mask==1.0.0`.** Anushka's coastline/
+  stranding commit (`origin/anushka` @ `b4d280a`, Stage 2 Phase 4, decision D7's implementation)
+  is tested (8/8, 54/54 on her branch) but held **un-merged** — it pins a new package dated after
+  `requirements.txt`'s own "NO NEW DEPENDENCIES AFTER TUE 8 SEPT" line. She named it herself and
+  asked for confirmation before Phase 4 counts as landed. See the dated entry below for the full
+  case (2.6 MB pure numpy vs. cartopy's GEOS/PROJ) and what happens if it's declined.
+- ~~A1–A5 in `docs/STAGE2_AGE_DECISION_BRIEF.md`~~ — **ratified 2026-09-13** by the planning
+  account (all three physics departures accepted; the four-case age-validation claim withdrawn to
+  zero cases until a real detection exists). Nothing further needed here.
+- **Ask routed to Soum, reordered** (not yet sent): `discharge_class` per detection is now #1
+  (already in the frozen contract, and C3.3 is inert without it), then `contrast_centre_db` /
+  `contrast_edge_db`, then Huntington's real slick major axis as soon as it exists.
+- **Ask routed to Urooz** (downgraded, not yet sent): the Fay-constant citation is no longer
+  blocking — A3's ruling means Fay ships as an uncited regime verdict, not a derived number.
 - **Soum owes the no-spill scene** (`case-nospill-zenodo` is scaffolded and deliberately held out
   of `index.json` until it lands).
 - **Three questions to Jaiveer** are in the reply drafted below — the "eleven of 52" one affects a
@@ -78,6 +84,66 @@ python scripts/sync_web_cases.py                           # then Harshita QAs i
   confirming its identity now would be the same mistake as verifying its AIS density would have
   been for case 1.
 - ~~GFW Arabian Sea coverage for cases 5–6~~ — **done 2026-09-12**, see below.
+
+---
+
+## [2026-09-13, later] Integration-account pass — cherry-picked the safe half of Anushka's next branch push, held the dependency-bearing half
+
+**Context:** picking back up as the integration account after the planning account ratified
+A1–A5 (see next entry down, and `docs/updates/akshat.md`). User's instruction: keep going, but
+anything gated on Soum's still-missing `detections.geojson` waits.
+
+**Found on `git fetch`:** `origin/anushka` had advanced two more commits (`c1b250b..b4d280a`)
+since the last merge. `origin/jaiveer-phase2` and `origin/harshita` unchanged (already fully
+merged). Still no `origin/soum` branch — nothing moved on the critical path.
+
+**First, ruled out a false alarm.** A raw `git diff main..origin/anushka` shows large changes
+across the Master Plan, the integration doc, every per-person doc, and both update logs — which
+looks exactly like the `626acce` regression pattern from two sessions ago. It is not one: checked
+directly, and neither of her two new commits touches any of those files. It's ordinary
+divergence — her branch forked before this session's A1–A5 ratification commit (`3663d69`)
+landed on `main`, so a two-tip diff shows everything `main` gained since. Worth stating for
+whoever reads this next: **a scary-looking `main`-vs-branch diff on shared docs is not proof of a
+regression — check which commits actually touched which files before assuming the worst.**
+
+**Merged `88f8eef` ("plot guards")** — refuses to plot a cross-case origin, fixes per-case
+direction, adds a loud warning for a missing slick outline. Touches only
+`pipeline/drift/plot_heatmap.py` / `plot_quiver.py`, no new dependency, no test files. Cherry-
+picked rather than merged (her branch tip also carries the commit below, which is being held), so
+this landed as a new commit (`f399250`) rather than a fast-forward. Verified independently:
+```bash
+python pipeline/drift/tests.py           # 7/7, 48/48 -- unchanged, as expected (no tests touched)
+python scripts/test_validator.py         # 21/21
+python scripts/validate_case.py cases/   # still only detections.geojson missing, x7
+```
+All matched. Pushed (`3663d69..f399250`).
+
+**Held back `b4d280a` ("Stage 2 Phase 4: GSHHG coastline + stranding, decision D7")** —
+deliberately, per the user's explicit call this session. The physics and tests are real (suite
+now 8/8, 54/54 on her branch: land/ocean classification, all seven case centres verified in
+water, particle stranding at last-wet-position, edge-guard clearance unaffected). But it pins
+**`global-land-mask==1.0.0`** in `requirements.txt`, dated 2026-09-12 — after the file's own
+stated "NO NEW DEPENDENCIES AFTER TUE 8 SEPT" line. She flagged this herself, by name, in the
+file: *"AKSHAT: confirm this one, or Phase 4 comes back out."* Her stated reasoning: 2.6 MB of
+pure numpy versus cartopy's GEOS/PROJ system-dependency footprint, needed because the existing
+land mask (derived from the velocity field's own validity) is wrong inside San Pedro Bay
+(`case-huntington-2021`) and off Mumbai (`case-mumbai-2023`). **This account does not rule on
+dependency-freeze exceptions** — routing to the planning account. `git log --oneline
+main..origin/anushka` still shows exactly this one commit, confirmed after the cherry-pick.
+
+**One nuance for whoever merges `b4d280a` later:** since `88f8eef` was cherry-picked (new commit
+hash) rather than fast-forwarded, a plain `git merge origin/anushka` at that point will diff from
+the old merge-base (`c1b250b`) and re-present `88f8eef`'s changes — but since `b4d280a` doesn't
+touch `plot_heatmap.py`/`plot_quiver.py`, the three-way merge should converge on identical content
+with no conflict. Worth a `git merge-tree` check before trusting that, same as always.
+
+**Noticed, not touched:** an untracked file, `pipeline/export/benchmark_scene.py` (246 lines,
+header says "Owner: Akshat") — a Zenodo-tif counterpart to `gee_scene.py`, relevant to the
+still-pending no-spill/lookalike case work. Not committed anywhere, not written by this session.
+Flagging its existence rather than acting on it, since its state is unknown.
+
+**State after this pass:** critical path unchanged — still waiting on Soum for
+`case-jacksonville-2024`'s `detections.geojson`.
 
 ---
 

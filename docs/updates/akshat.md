@@ -4,6 +4,54 @@
 
 ---
 
+## [2026-09-13, later] Integration-account pass — merged Anushka's plot guards, held her coastline commit on a dependency question
+
+**Done:** Back as the integration account. `git fetch` found `origin/anushka` had pushed two more
+commits since the last merge. Checked each independently before touching `main`: `88f8eef` (plot
+guards) touches only `plot_heatmap.py`/`plot_quiver.py`, no new dependency — safe. `b4d280a`
+(GSHHG coastline + stranding, decision D7) is real, tested work (8/8, 54/54 on her branch) but
+pins `global-land-mask==1.0.0` after `requirements.txt`'s own no-new-dependencies date; she
+flagged it herself and asked for confirmation. Asked the user how to handle it rather than
+deciding unilaterally — chose to merge the safe commit and hold the dependency-bearing one.
+Cherry-picked `88f8eef` (not a full merge, since `b4d280a` stays behind on her branch), verified
+independently (`drift/tests.py` 7/7·48/48 unchanged, `test_validator.py` 21/21,
+`validate_case.py cases/` still only missing `detections.geojson` × 7), pushed
+(`3663d69..f399250`).
+
+Also ruled out a false alarm before doing anything: a raw `main`-vs-`origin/anushka` diff touches
+the Master Plan and every shared doc, which looks like the `626acce` regression pattern. Checked
+directly — neither of her new commits touches those files; it's just that her branch forked
+before this session's A1–A5 ratification landed on `main`. Worth remembering next time a branch
+diff looks alarming: check which commits actually touched which files first.
+
+**Files touched:** `pipeline/drift/plot_heatmap.py`, `pipeline/drift/plot_quiver.py` (Anushka's,
+cherry-picked) · `docs/updates/_INTEGRATION.md`, `docs/updates/akshat.md` (this entry)
+
+**Run command:**
+```bash
+git fetch --all && git log --oneline main..origin/anushka   # see what's new before touching anything
+git cherry-pick 88f8eef
+python pipeline/drift/tests.py            # 7/7, 48/48
+python scripts/test_validator.py          # 21/21
+python scripts/validate_case.py cases/    # fails only on detections.geojson x7
+```
+
+**Open issues / for the planning account:**
+- **Confirm or decline `global-land-mask==1.0.0`.** If confirmed, merge `origin/anushka`'s
+  `b4d280a` (predicted clean against current `main`, but re-check with `git merge-tree` first).
+  If declined, tell Anushka Phase 4 needs a zero-dependency coastline source.
+- Noticed but did not touch: untracked `pipeline/export/benchmark_scene.py` on disk, "Owner:
+  Akshat" in its header, not committed anywhere. Not part of this session's work — flagging it in
+  case it's mid-edit from another session and shouldn't be lost.
+- Unchanged: Soum's `detections.geojson` on `case-jacksonville-2024` is still the critical-path
+  item; no `origin/soum` branch exists. The reordered three asks to Soum and the downgraded ask
+  to Urooz (both drafted in `_INTEGRATION.md`) are still not sent.
+
+**Next:** planning account rules on the dependency → Soum delivers detections → first real
+four-stage bundle.
+
+---
+
 ## [2026-09-13] Ratified A1–A5 on Stage 2 age — all three physics departures accepted, the four-case age claim withdrawn
 
 **Done:** Ruled on the five decisions the integration pass routed here (previous entry). Verified
