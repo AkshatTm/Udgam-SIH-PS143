@@ -36,7 +36,8 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 from check_gee import (CURRENTS, CURRENT_BANDS, WINDS, WIND_BANDS, LOOKBACK_HOURS,
-                       DEFAULT_PROJECT, load_case_window)
+                       DEFAULT_PROJECT, load_case_window, required_pad_km,
+                       pad_degrees, DEFAULT_VMAX_MS)
 
 # Native resolutions. HYCOM is 1/12 deg (~9 km); ERA5 is 0.25 deg (~28 km). Asking for finer
 # than native just makes GEE resample and the download bigger for no extra information.
@@ -119,6 +120,13 @@ def main():
     ap.add_argument("--hours", type=int, default=LOOKBACK_HOURS)
     ap.add_argument("--out", default=None, help="default data/fields/<case>.npz")
     ap.add_argument("--force", action="store_true", help="refetch even if the cache exists")
+    ap.add_argument("--rewind-hours", type=float, default=24.0,
+                    help="how far back run.py will rewind; the pad is sized from this")
+    ap.add_argument("--vmax-ms", type=float, default=DEFAULT_VMAX_MS,
+                    help="worst-case surface current for the pad. Use 2.0 for the Gulf Stream "
+                         "(case-jacksonville-2024) and anywhere else fast (Phase 3.1)")
+    ap.add_argument("--pad-km", type=float, default=None,
+                    help="override the computed pad entirely, in km")
     a = ap.parse_args()
 
     out = Path(a.out) if a.out else REPO / "data" / "fields" / f"{a.case}.npz"
@@ -130,13 +138,20 @@ def main():
     # Resolve the case BEFORE touching Earth Engine. A typo'd or not-yet-created case should
     # fail in a second, not after an auth round trip -- and it must never get far enough to
     # write a cache under a name it does not belong to.
-    bbox, t0, origin = load_case_window(a.case, REPO / "cases")
+    bbox, t0, origin = load_case_window(a.case, REPO / "cases",
+                                        rewind_hours=a.rewind_hours,
+                                        vmax_ms=a.vmax_ms, pad_km=a.pad_km)
+    pad_km_used = a.pad_km if a.pad_km else required_pad_km(a.rewind_hours, a.vmax_ms)
 
     import ee
     ee.Initialize(project=a.project)
     print("=" * 78)
     print(f"  case    {a.case}  ({origin})")
-    print(f"  region  [W {bbox[0]}, S {bbox[1]}, E {bbox[2]}, N {bbox[3]}]")
+    print(f"  region  [W {bbox[0]:.3f}, S {bbox[1]:.3f}, E {bbox[2]:.3f}, N {bbox[3]:.3f}]")
+    _dlon, _dlat = pad_degrees(pad_km_used, bbox[1], bbox[3])
+    print(f"  pad     {pad_km_used:.0f} km  =  {_dlon:.3f} deg lon x {_dlat:.3f} deg lat "
+          f"(converted at the poleward edge, {max(abs(bbox[1]), abs(bbox[3])):.1f} deg)")
+    print(f"          sized for {a.rewind_hours:.0f} h of rewind at up to {a.vmax_ms:.1f} m/s")
     print(f"  window  {(t0 - timedelta(hours=a.hours)):%Y-%m-%dT%H:%MZ}  ->  {t0:%Y-%m-%dT%H:%MZ}")
     print("=" * 78)
 
@@ -171,6 +186,22 @@ def main():
         print(f"  WARNING  median current {c_med:.2f} m/s is high for a coastal shelf.")
     else:
         print(f"  Current field looks like an ocean: median {c_med:.2f} m/s, max {c_max:.2f} m/s.")
+    # Phase 3.1: the pad was sized from an ASSUMED worst-case speed. Now that the field is
+    # here, check that assumption against the field's own p99 -- this is the only moment the
+    # two numbers can be compared, and a pad that is too small is silent afterwards.
+    needed_km = required_pad_km(a.rewind_hours, max(c_p99, 0.01))
+    if needed_km > pad_km_used * 1.001:
+        print(f"  !! PAD TOO SMALL  the field's 99th-percentile current is {c_p99:.2f} m/s, which "
+              f"reaches {c_p99 * a.rewind_hours * 3.6:.0f} km in {a.rewind_hours:.0f} h.")
+        print(f"                    With safety that needs a {needed_km:.0f} km pad; this cache "
+              f"has {pad_km_used:.0f} km.")
+        print(f"                    Particles can reach the box edge, slide along it, and produce "
+              f"a plausible WRONG cloud.")
+        print(f"                    Refetch:  python pipeline/drift/fetch_fields.py --case "
+              f"{a.case} --vmax-ms {max(c_p99, a.vmax_ms) + 0.2:.1f} --force")
+    else:
+        print(f"  Pad check: p99 {c_p99:.2f} m/s needs {needed_km:.0f} km, cache has "
+              f"{pad_km_used:.0f} km. OK.")
     print("  Next: python pipeline/drift/plot_quiver.py --case " + a.case)
     print("=" * 78)
     return 0

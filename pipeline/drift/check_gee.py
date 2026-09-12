@@ -54,7 +54,8 @@ def report(ok, name, detail):
     return ok
 
 
-def load_case_window(case_id, cases_root):
+def load_case_window(case_id, cases_root, rewind_hours=24.0,
+                     vmax_ms=None, pad_km=None):
     """Take the box and time from a real case bundle. A NAMED case must exist.
 
     This used to fall back to the Ennore defaults when the bundle was missing, which is how
@@ -87,9 +88,61 @@ def load_case_window(case_id, cases_root):
     bbox = ENNORE_BBOX
     if bounds_path.exists():
         b = json.loads(bounds_path.read_text())
-        pad = 0.5                                   # fields must cover where particles drift TO
-        bbox = [b["west"] - pad, b["south"] - pad, b["east"] + pad, b["north"] + pad]
+        bbox = padded_bbox(b, rewind_hours=rewind_hours,
+                           vmax_ms=vmax_ms or DEFAULT_VMAX_MS, pad_km=pad_km)
     return bbox, t0.astimezone(timezone.utc), f"from cases/{case_id}"
+
+
+# ---------------------------------------------------------------------------------------
+# The adaptive field-box pad (brief Phase 3.1, risk F2/F3b)
+#
+# The fields must cover where the particles drift TO, not just where the slick is. This used
+# to be a flat 0.5 degrees, which is about 55 km at mid-latitude -- and the Gulf Stream at
+# 2.0 m/s covers 173 km in 24 h. On case-jacksonville-2024 that is not a near miss.
+#
+# Two things the brief's spec gets wrong for this library, both the same root cause:
+#
+#   1. It says convert the pad "at mid-latitude". A degree of longitude at Gulf of Alaska
+#      (59.6 N) is HALF as wide as at 30 N, so converting at mid-latitude silently halves the
+#      pad in kilometres exactly where the box is hardest to get right. We convert at the
+#      box edge FURTHEST from the equator, which is the worst case inside the box.
+#   2. It says pad = p99_speed x rewind x safety. p99 is a property of the field we have not
+#      fetched yet, so it cannot be an input to the fetch. Instead we pad from a stated
+#      worst-case speed, and fetch_fields.py then MEASURES p99 and says loudly if the box it
+#      just downloaded is too small for it. The guard in step.assert_inside_field_box is the
+#      backstop that makes a wall-hugging cloud impossible to ship.
+#
+# The pad is cheap: HYCOM is 0.08 degrees, so even a 2-degree pad is ~25 cells per side. The
+# GEE size ceiling that bit the export side is a 10 m SAR problem, not a 9 km field problem.
+# ---------------------------------------------------------------------------------------
+
+KM_PER_DEG_LAT = 111.32
+PAD_FLOOR_KM = 55.0          # the old 0.5 deg at mid-latitude; never pad less than this
+DEFAULT_VMAX_MS = 1.0        # a generous surface current for most of the ocean
+PAD_SAFETY = 1.3
+
+
+def required_pad_km(rewind_hours=24.0, vmax_ms=DEFAULT_VMAX_MS, safety=PAD_SAFETY,
+                    floor_km=PAD_FLOOR_KM):
+    """How far can a particle travel in the rewind, plus margin. Never below the floor."""
+    reach_km = float(vmax_ms) * float(rewind_hours) * 3.6
+    return max(float(floor_km), reach_km * float(safety))
+
+
+def pad_degrees(pad_km, south, north):
+    """(lon_pad_deg, lat_pad_deg) for a km pad, converted at the box's most poleward edge."""
+    import math
+    lat_ref = max(abs(float(south)), abs(float(north)))
+    coslat = max(math.cos(math.radians(lat_ref)), 1e-6)
+    return (float(pad_km) / (KM_PER_DEG_LAT * coslat),
+            float(pad_km) / KM_PER_DEG_LAT)
+
+
+def padded_bbox(b, rewind_hours=24.0, vmax_ms=DEFAULT_VMAX_MS, pad_km=None):
+    """[W, S, E, N] for the scene bounds `b`, padded so particles cannot run out of field."""
+    km = float(pad_km) if pad_km else required_pad_km(rewind_hours, vmax_ms)
+    dlon, dlat = pad_degrees(km, b["south"], b["north"])
+    return [b["west"] - dlon, b["south"] - dlat, b["east"] + dlon, b["north"] + dlat]
 
 
 def check_collection(ee, cid, bands, bbox, t0, hours, unit_note):

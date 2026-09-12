@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""
+Stage 2 age-estimation known-answer tests (suite 6). Owner: Anushka.
+
+Run through the main suite -- these are not meant to be run standalone:
+
+    python pipeline/drift/tests.py
+
+Same principle as tests 1-5: every assertion has an answer known in advance from a field whose
+shear we chose, so a wrong-but-running estimator has nowhere to hide. Three of these exist
+specifically to pin down the two places where the implementation had to DEPART from the brief,
+so the departure is testable rather than a comment nobody reads:
+
+  6c  a 2D incompressible flow PRESERVES cloud area   -> which is why C3.1 matches on the
+                                                          major axis and not on area_km2
+  6d  the exact patch-aspect inversion recovers a known age in a known shear
+  6e  the brief's C3.3 line-stretch formula would have been ~3x high on the same slick
+"""
+import math
+from datetime import datetime, timezone
+
+import numpy as np
+
+from age import (combine_bands, deformation_rate_s, elongation_age, fay_age,
+                 fay_predicted_area_km2, fay_radius_km, invert_curve, observed_major_axis_km,
+                 pca_extent, seed_cloud, shear_dispersion_age, shear_extent_curve,
+                 weathering_flag)
+from step import integrate
+
+T0 = datetime(2017, 1, 29, 0, 14, 0, tzinfo=timezone.utc)
+ENNORE = [80.35, 13.25]
+
+# Strong but physically plausible coastal shear. At 5e-5 1/s the shear timescale is 5.6 h, so
+# a 6 h old patch is visibly stretched and the aspect ratio is well clear of measurement noise.
+TEST_SHEAR_S = 5.0e-5
+M_PER_DEG_LAT = 111320.0
+
+
+class LinearShearField:
+    """u = S * (northward offset from lat0), v = 0, no wind. Pure incompressible simple shear.
+
+    Chosen because everything about it is known in closed form: the deformation rate is exactly
+    S, a material patch's area is exactly preserved, and an initially isotropic patch's aspect
+    ratio after time t is exactly lambda_max of F F^T with F = [[1, S t], [0, 1]].
+    """
+
+    def __init__(self, lat0, shear_s=TEST_SHEAR_S):
+        self.lat0 = float(lat0)
+        self.shear_s = float(shear_s)
+
+    def get_uv(self, lons, lats, when):
+        lats = np.asarray(lats, dtype=np.float64)
+        dy_m = (lats - self.lat0) * M_PER_DEG_LAT
+        return self.shear_s * dy_m, np.zeros_like(dy_m)
+
+    def get_wind(self, lons, lats, when):
+        z = np.zeros_like(np.asarray(lats, dtype=np.float64))
+        return z, z.copy()
+
+    def __repr__(self):
+        return f"LinearShearField(S={self.shear_s:.1e} 1/s)"
+
+
+def exact_aspect(gamma):
+    """Aspect ratio of an initially isotropic patch after simple shear strain gamma = S*t.
+
+    Singular values of F = [[1, gamma], [0, 1]]: aspect = lambda_max of F F^T, and since
+    det = 1, lambda_min = 1 / lambda_max.
+    """
+    return 1.0 + gamma ** 2 / 2.0 + gamma * math.sqrt(1.0 + gamma ** 2 / 4.0)
+
+
+def run(check):
+    """Suite 6. `check` is tests.py's assertion recorder."""
+    print("\nTest 6 - age estimation (Part C): shear dispersion, Fay, elongation, combine")
+    ok = True
+
+    field = LinearShearField(ENNORE[1])
+    rng = np.random.default_rng(143)
+
+    # --- 6a  the shear rate we built is the shear rate we measure ------------------------
+    s_measured = deformation_rate_s(field, ENNORE[0], ENNORE[1], T0)
+    ok &= check("6a  deformation rate recovers a known shear",
+                abs(s_measured - TEST_SHEAR_S) / TEST_SHEAR_S < 0.01,
+                f"built S = {TEST_SHEAR_S:.3e} 1/s, measured {s_measured:.3e} 1/s "
+                f"({abs(s_measured - TEST_SHEAR_S) / TEST_SHEAR_S * 100:.2f}% error); "
+                f"shear timescale {1.0 / s_measured / 3600.0:.1f} h")
+
+    # --- 6b  filament length grows monotonically with age -------------------------------
+    candidates = [2.0, 6.0, 12.0, 18.0, 24.0, 30.0, 36.0]
+    areas, majors, minors = shear_extent_curve(
+        field, ENNORE[0], ENNORE[1], T0, candidates, n_particles=2000,
+        rng=np.random.default_rng(7))
+    lengths = 4.0 * majors
+    grows = bool(np.all(np.diff(lengths) > 0))
+    ok &= check("6b  modelled filament LENGTH grows monotonically with candidate age",
+                grows,
+                f"major axis {lengths[0]:.3f} -> {lengths[-1]:.3f} km across "
+                f"{candidates[0]:g}-{candidates[-1]:g} h, strictly increasing at every step")
+
+    # --- 6c  ...but AREA does not. This is why C3.1 cannot match on area. ---------------
+    area_ratio = float(areas[-1] / areas[0])
+    ok &= check("6c  cloud AREA is preserved (so area carries no age signal)",
+                abs(area_ratio - 1.0) < 0.15,
+                f"area {areas[0]:.4f} -> {areas[-1]:.4f} km2 over 34 h = x{area_ratio:.3f}. "
+                f"An incompressible flow has det F = 1: it stretches and thins, it does not "
+                f"inflate. Matching Soum's area_km2 against this would be fitting noise -- "
+                f"hence C3.1 matches the major axis instead (departure from the brief)")
+
+    # --- 6d  the elongation estimator recovers a known age ------------------------------
+    t_true_h = 6.0
+    n_steps = int(round(t_true_h * 60.0 / 15.0)) + 1
+    start = seed_cloud(ENNORE[0], ENNORE[1], 4000, rng=rng)
+    history, _ = integrate(start, T0, field, n_steps, 15, direction="forward")
+    sd1, sd2, _ = pca_extent(history[-1])
+    aspect = sd1 / sd2
+    aspect_theory = exact_aspect(TEST_SHEAR_S * t_true_h * 3600.0)
+
+    band, diag = elongation_age(aspect, s_measured, "acute")
+    contains = band is not None and band[0] <= t_true_h <= band[1]
+    ok &= check("6d  elongation inversion recovers a known age in a known shear",
+                contains,
+                f"cloud sheared for {t_true_h:g} h reached aspect {aspect:.3f} "
+                f"(closed form {aspect_theory:.3f}); inverted to "
+                f"{diag.get('central_hours', float('nan')):.2f} h, band "
+                f"[{band[0]:.2f}, {band[1]:.2f}] h contains the true {t_true_h:g} h"
+                if band else f"no band returned: {diag.get('skipped')}")
+
+    # --- 6e  the brief's formula, on the same slick, would have been ~3x high -----------
+    band82, diag82 = elongation_age(8.2, 1.0e-5, "acute")
+    ratio = (diag82["brief_formula_hours"] / diag82["central_hours"]
+             if diag82.get("central_hours") else float("nan"))
+    ok &= check("6e  the brief's C3.3 line-stretch formula is ~3x too long, as documented",
+                band82 is not None and 3.0 < ratio < 3.6,
+                f"at the contract's example elongation 8.2 with S = 1e-5 1/s: patch-aspect "
+                f"inversion {diag82['central_hours']:.2f} h vs the brief's "
+                f"sqrt(a^2-1) form {diag82['brief_formula_hours']:.2f} h = x{ratio:.2f}. "
+                f"age_hours uses the former; both ship in the diagnostics")
+
+    # --- 6f  the acute gate actually gates ----------------------------------------------
+    chronic_band, chronic_diag = elongation_age(8.2, 1.0e-5, "chronic")
+    ok &= check("6f  a chronic discharge is refused, not estimated",
+                chronic_band is None and "chronic" in chronic_diag.get("skipped", ""),
+                f"discharge_class='chronic' -> None. {chronic_diag.get('skipped')}")
+
+    # --- 6g  Fay's exponent -------------------------------------------------------------
+    r1 = fay_radius_km(1.0, 1000.0, 1.3, 900.0)
+    r16 = fay_radius_km(16.0, 1000.0, 1.3, 900.0)
+    ok &= check("6g  Fay radius grows as t^(1/4) (so area as t^(1/2))",
+                abs(r16 / r1 - 2.0) < 1e-6,
+                f"r(16 h)/r(1 h) = {r16 / r1:.6f}, expected 16^(1/4) = 2 exactly "
+                f"({r1:.4f} -> {r16:.4f} km)")
+
+    # --- 6h  Fay refuses to derive its own volume from the observed area ---------------
+    fband, fdiag = fay_age(12.4, volume_m3=None)
+    ok &= check("6h  Fay declines without an independent volume (the brief's V=A*h is circular)",
+                fband is None and "circular" in fdiag.get("skipped", ""),
+                f"area 12.4 km2, no volume -> None. {fdiag.get('skipped')}")
+
+    # --- 6i  ...and at SAR scale it is a REGIME TEST, not an age estimator ------------
+    huntington_m3 = 588 * 0.159          # 588 barrels, NTSB MIR-24-01
+    fband, fdiag = fay_age(12.4, volume_m3=huntington_m3)
+    reach_24h = fay_predicted_area_km2(24.0, huntington_m3, 1.5, 850.0)
+    ok &= check("6i  a SAR-scale slick is shear-dominated, so Fay reports no age",
+                fband is None and fdiag.get("regime") == "shear_dominated",
+                f"{huntington_m3:.1f} m3 spreads to only {reach_24h:.3f} km2 in 24 h and "
+                f"{fdiag['max_predicted_area_km2_at_ceiling']:.3f} km2 at the 72 h ceiling, "
+                f"against an observed 12.4 km2 -> regime={fdiag.get('regime')}, no band. "
+                f"This is independent evidence that shear, not spreading, set the area")
+
+    # --- 6j  ...but when the slick IS in Fay's reach, the inversion round-trips --------
+    vol, t_true = 1000.0, 12.0
+    r_true_km = fay_radius_km(t_true, vol, 1.3, 900.0)
+    area_true = math.pi * r_true_km ** 2
+    fband, fdiag = fay_age(area_true, volume_m3=vol)
+    ok &= check("6j  inside the gravity-viscous regime, Fay recovers a known age",
+                fband is not None and fband[0] <= t_true <= fband[1]
+                and fdiag.get("regime") == "gravity_viscous",
+                f"{vol:g} m3 spread for {t_true:g} h -> r {r_true_km:.3f} km, "
+                f"area {area_true:.3f} km2; inverted to "
+                f"[{fband[0]:.2f}, {fband[1]:.2f}] h across {len(fdiag['corners'])} "
+                f"k/density corners, containing the true {t_true:g} h"
+                if fband else f"no band: {fdiag.get('skipped')}")
+
+    # --- 6k/6l/6m  the combine rules ---------------------------------------------------
+    band, method = combine_bands({"shear": (7.0, 18.0), "fay": (9.0, 15.0),
+                                  "elongation": None})
+    ok &= check("6k  overlapping bands -> intersection, method='combined'",
+                band == (9.0, 15.0) and method == "combined",
+                f"shear [7,18] & fay [9,15] -> {band} method={method}")
+
+    band, method = combine_bands({"shear": (2.0, 5.0), "fay": (20.0, 30.0)})
+    ok &= check("6l  disagreeing bands -> UNION, method='disagreement'",
+                band == (2.0, 30.0) and method == "disagreement",
+                f"shear [2,5] vs fay [20,30] -> {band} method={method}. A widened honest "
+                f"band beats a narrow invented one")
+
+    band, method = combine_bands({"shear": None, "fay": None, "elongation": None})
+    ok &= check("6m  nothing fires -> method='none', caller falls back to the bracket",
+                band is None and method == "none",
+                f"all three null -> {band} method={method}")
+
+    # --- 6n/6o/6p  the weathering flag refuses rather than guesses ---------------------
+    flag, wdiag = weathering_flag(1.5)
+    ok &= check("6n  wind outside 3-10 m/s -> 'unknown', never a freshness call",
+                flag == "unknown",
+                f"1.5 m/s -> {flag}: {wdiag['reason']}")
+
+    flag, wdiag = weathering_flag(6.0)
+    ok &= check("6o  no centre-vs-edge observable -> 'unknown', not a proxy guess",
+                flag == "unknown" and "contract" in wdiag["reason"],
+                f"6 m/s but the contract has no centre-vs-edge field -> {flag}. "
+                f"contrast_db and edge_gradient are NOT substitutes (C2's confounding). "
+                f"Needs contrast_centre_db + contrast_edge_db from Stage 1")
+
+    flag, wdiag = weathering_flag(6.0, contrast_centre_db=-12.0, contrast_edge_db=-8.0)
+    ok &= check("6p  a real centre-vs-edge gradient does classify",
+                flag == "fresh",
+                f"centre -12 dB vs edge -8 dB = {wdiag['gradient_db']:.1f} dB gradient "
+                f"-> {flag}")
+
+    # --- 6r  C3.1 carries the SAME acute gate as C3.3 ----------------------------------
+    # On a chronic discharge the major axis is the vessel's track, not shear stretching a
+    # patch: case-jacksonville-2024 is a 31.17 km ribbon of 4.55 km2, aspect ~170, width
+    # ~190 m. No ocean does that in 36 h; a ship at transit speed does. So an estimator that
+    # matches the major axis must refuse there, or it returns a confident wrong number.
+    gated, gdiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
+                                        n_members=2, discharge_class="chronic")
+    open_gate, odiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
+                                            n_members=2, discharge_class="acute")
+    ok &= check("6r  C3.1 refuses a chronic slick, and runs on an acute one",
+                gated is None and "not 'acute'" in gdiag.get("skipped", "")
+                and "members" in odiag,
+                f"chronic -> None ({gdiag.get('skipped', '')[:70]}...); "
+                f"acute -> ran {odiag.get('n_members')} members and reported "
+                f"{odiag.get('n_fitted')} fits against a 31.17 km axis")
+
+    # --- 6q  an age outside the modelled range is reported as absent, not clamped ------
+    out_of_range = invert_curve([2.0, 6.0, 12.0], [1.0, 2.0, 3.0], 99.0)
+    length = observed_major_axis_km(12.4, 8.2)
+    ok &= check("6q  a target outside the modelled range returns None, never a clamped edge",
+                out_of_range is None and abs(length - 11.38) < 0.05,
+                f"target 99 against a 1-3 curve -> {out_of_range}; and area 12.4 km2 with "
+                f"elongation 8.2 -> major axis {length:.2f} km")
+
+    return ok
