@@ -4,6 +4,71 @@
 
 ---
 
+## [2026-09-13] Ratified A1–A5 on Stage 2 age — all three physics departures accepted, the four-case age claim withdrawn
+
+**Done:** Ruled on the five decisions the integration pass routed here (previous entry). Verified
+each departure independently before signing, rather than accepting the brief's own derivations.
+
+**A1 / D-A — yes.** C3.1 matches major-axis length, not area. `det F = 1` in an incompressible 2D
+flow, so area is conserved and matching on it fits noise; test 6c measures area ×1.02 against
+major axis ×5.7. No contract change. Knowingly buying one assumption: the
+`2·sqrt(area × elongation / π)` observable treats the slick as an ellipse.
+
+**A2 / D-B — yes, with a correction to how it gets quoted.** Re-derived from scratch: for
+`F = [[1, γ], [0, 1]]`, `FFᵀ` has trace `2 + γ²` and det 1, so `a + 1/a = 2 + γ²`. The brief's
+`sqrt(1 + (St)²)` is the stretch of a material *line* perpendicular to the flow — a different
+quantity from a patch aspect ratio. Anushka is right. **But ×3.24 is not a conversion factor**: the
+ratio is `sqrt(a² − 1)/sqrt(a + 1/a − 2)`, which climbs with elongation (2.45× at a=2, 3.24× at
+a=8.2, 4.70× at a=20, 7.21× at a=50). No age may be corrected by dividing by 3.2 — each is
+recomputed. That warning is now in the brief, and in `age.py`'s docstring where it is likeliest to
+be copied.
+
+**A3 / D-C — yes.** The circularity is real. **Numeric-volume contract field declined** — the freeze
+holds and `--volume-m3` already carries it.
+
+**A4 — narrowed, no longer blocking.** Fay's area scales as `k²`, so closing the measured 14× gap
+would need `k ≈ 5.5` against a 1.1–1.5 literature range. The *regime verdict* is therefore robust to
+`k` and ships uncited; only a Fay-*derived number* needs the citation, and A3 means we don't want
+one. Urooz is unblocked.
+
+**A5 — the four-case age claim is withdrawn.** Checked the live library before deciding: **no**
+indexed case has a `detections.geojson`, **no** case carries a release time or volume in
+`meta.json`, and `discharge_class` is unset everywhere including case-000's own `det-01`. Since
+C3.3 is gated on `acute`, the estimator whose formula A2 corrects **currently fires on zero cases**
+— so the claim failed on missing inputs, not on physics, and the true count was 0 cases rather
+than the brief's 1. Age now ships as an output with method + breakdown and no accuracy number; if Huntington's
+detection lands and C3.1 fires it becomes an explicit **N = 1** with its overestimate caveat
+attached. Five sentences across three docs promised the four-case validation and were corrected.
+
+**Files touched:** `docs/STAGE2_AGE_DECISION_BRIEF.md` (ratification header, D-B quoting box, D-C
+`k`-robustness note, new §4a, §5 rewritten, §6 asks reordered/downgraded) ·
+`docs/00_MASTER_PLAN.md` (the claims line) · `docs/03_ANUSHKA_DRIFT.md` (§"ground truth for age",
+C5, step 1.6, 8.3, the DoD checkbox) · `pipeline/drift/age.py` (docstring warning only — **no
+behaviour change**) · `docs/updates/akshat.md` (this entry)
+
+**Run command:**
+```bash
+python pipeline/drift/tests.py             # 7/7, 48/48 — unchanged, nothing executable moved
+python scripts/validate_case.py cases/case-000
+```
+
+Expected: `7/7 tests passed (48/48 individual assertions)`, then
+`PASS acts=['detect','trace','attribute','verify'] (0 warning(s))`. Both confirmed after the edits.
+
+**Open issues:**
+- **Soum now has three asks, reordered.** `discharge_class` per detection is now #1 and outranks
+  the two contrast fields — it is already in the frozen contract (§6.2) and C3.3 is inert without
+  it. Not yet sent.
+- Still owed by me: the 3-snapshot HYCOM window decision, and the US case list with documented
+  incident times (now only gates the N = 1 check, not the deck).
+- Anushka's `combine_bands` degenerate-band edge case and the `age_hours` null-vs-`[low, high]`
+  validator question are still open from her Phase 1 entry; neither is touched by this ratification.
+
+**Next:** send Anushka the three yes-es plus the "3.2× is not a conversion factor" warning; send
+Soum the reordered three asks; tell Urooz A4 is downgraded.
+
+---
+
 ## [2026-09-13] Integration-account pass — merged Anushka's Stage 2, routed A1–A5 instead of ruling on them
 
 **Done:** Running under the integration-account role (`HANDOFF_ALT_ACCOUNT.md`): pipeline/merge/

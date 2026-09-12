@@ -53,7 +53,7 @@ Then you did the thing that actually matters: **you corroborated the fix physica
 
 **Only the `linear` seeding branch has run on real fields.** Blob, no-spill and abstain are untested paths. "Never executed" is never "known good."
 
-**You now have something you did not have before: ground truth for age.** The four US cases have documented release times and known scene times. That means you can *validate* an age estimator instead of merely producing one. Nobody in this competition will have an age validation number.
+**~~You now have ground truth for age.~~ — CORRECTED 13 Sept 2026, and this paragraph was wrong.** It assumed the four US cases each carry a documented release time. Checked against the live library at ratification: **one** case has a documented release time (Huntington, true age ≈ 2.8 h), no live case carries it in `meta.json`, and none has a `detections.geojson` to measure an age from. So age cannot be *validated* across four incidents — at best across one, and only once Soum's detection lands. Build the estimators to be right, not to hit a validation table. See `docs/STAGE2_AGE_DECISION_BRIEF.md` §4a and §5/A5.
 
 **Your coastline handling is the weakest part of the physics, and two of our cases sit in enclosed water.** Golden Ray is inside St Simons Sound; Huntington Beach is inside San Pedro Bay. HYCOM's 9 km cells there are partly land, and your land mask is derived from the velocity field's own validity rather than from a real shoreline dataset. Phase 4 fixes this cheaply.
 
@@ -180,13 +180,21 @@ Backscatter is lower in the centre of a slick than at its edges, reflecting the 
 
 Ship the per-estimator breakdown — it lets the frontend show *why* the band is what it is, and lets a judge see the agreement rather than being asked to trust it.
 
-## C5. The validation that turns this into a claim
+## C5. The validation that turns this into a claim — **withdrawn 13 Sept 2026**
 
-The four US cases have documented release times and known scene timestamps, so you know the true age. Run all four:
+**This section promised a four-case validation that the case library cannot support.** Ratified in `docs/STAGE2_AGE_DECISION_BRIEF.md` §5/A5; the evidence is §4a. Superseded text:
 
-> *"Across four independent incidents with documented release times, our age band contained the true value in N of 4, with a median band width of X hours."*
+> ~~The four US cases have documented release times and known scene timestamps, so you know the true age. Run all four: *"Across four independent incidents with documented release times, our age band contained the true value in N of 4, with a median band width of X hours."*~~
 
-**Report a miss as readily as a hit.** A 2-of-4 with an honest explanation is far stronger than a claimed 4-of-4 nobody can check.
+**Why it went.** Exactly one case has a documented release time. None of the seven indexed cases has a `detections.geojson`, and every estimator reads age off the observed slick, so as of ratification the estimators fire on **zero** cases. `discharge_class` is unset everywhere, which additionally makes C3.3 inert. The claim failed on missing inputs, not on physics.
+
+**What replaces it.** `age_hours` ships as an output with `age_method` and the per-estimator breakdown, and no numeric accuracy claim. If Huntington's detection lands and C3.1 fires, the claim becomes an explicit **N = 1**:
+
+> *"On the one incident in our library with a documented release time, our band was [x, y] h against a true age of 2.8 h."*
+
+— stated with its weakness attached: a 2.8 h slick sits squarely in C3.1's documented **overestimate** regime, since gravity-viscous spreading dominates the first hours and the model omits it (F8). On the one case with ground truth we are in the estimator's known weak regime. **That is a result to state, not a surprise to absorb on stage.**
+
+**Report a miss as readily as a hit**, and report the honest N. A stated N = 1 with its caveat is far stronger than a 4-of-4 nobody can check — and these numbers are binding in December.
 
 ---
 
@@ -253,8 +261,8 @@ The near-shore gap is the **coastline dataset**, not the model. OpenDrift uses G
 1.3 Elongation-under-shear estimator (C3.3), gated on `discharge_class == "acute"`.
 1.4 Weathering flag (C3.4), with wind speed and the out-of-range `unknown`.
 1.5 Combine per C4; emit `age_hours`, `age_method`, `age_weathering`, `age_estimators`.
-1.6 **Validate against the four known release times** (C5).
-> 🚩 1.6 needs Akshat's US case list with documented incident times.
+1.6 **~~Validate against the four known release times~~ — descoped 13 Sept 2026 (C5).** There is one documented release time, not four, and no detections to measure against yet. Run the N = 1 Huntington check if and when its detection lands; otherwise age ships with no accuracy claim.
+> 🚩 1.6 no longer gates the deck. It still needs Akshat's US case list with documented incident times before even the N = 1 check can run.
 
 **Checkpoint:** post the four-case validation table.
 
@@ -313,7 +321,7 @@ Useful confirmations from MET Norway's documentation:
 ## PHASE 8 — The numbers
 8.1 Integrator exactness — 18.0000 vs 18.0 km; round trip 0.0001 km.
 8.2 **Measured ensemble spread** — r50 and r90 as **precision**, not accuracy. Say: *"across the 50 runs of our uncertainty budget, half the endpoints landed within 8.8 km of the cloud's centre."* **Never** *"accurate to 8.8 km"* — there is no ground truth for origin position and we will not imply one.
-8.3 **Age validation** from C5 — this is your one real accuracy claim.
+8.3 **Age** from C5 — present the band, the method and the per-estimator breakdown, plus the 0.8–1.3 km reachability ceiling as a stated limit. **Not an accuracy claim** (withdrawn 13 Sept 2026); at most an explicit N = 1 with its overestimate caveat.
 8.4 **OpenDrift agreement** from 7.2.
 8.5 **The error budget** (B2), with HYCOM's daily 9 km resolution named as the dominant term and stated as the floor on what anyone can do from free data.
 8.6 **The ÷1000 story.** How the tests caught a 10× error before a single particle moved. Thirty seconds of narrative, and the best evidence in the project that this team tests properly.
@@ -393,7 +401,7 @@ GEE auth or quota · a case date outside the HYCOM archive · `detections.geojso
 ## G6. Definition of done
 - [ ] Five files pushed; both images posted; `data/fields/` cleaned
 - [ ] Three age estimators implemented, combined, emitted
-- [ ] Age validated against four known release times; hit rate reported
+- [ ] Age band, method and per-estimator breakdown emitted, with the reachability ceiling stated (four-case validation withdrawn 13 Sept 2026; N = 1 only if Huntington's detection lands)
 - [ ] Forward drift + coastal impact shipping as `particles_forward.json`
 - [ ] Adaptive field pad + loud edge guard
 - [ ] Negative-longitude test in the suite

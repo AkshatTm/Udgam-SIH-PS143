@@ -710,7 +710,7 @@ operational polygon on five real incidents. *"On the Jacksonville scene our segm
 against the polygon an operational system produced for the same slick"* is a different claim from a
 benchmark score, and a judge understands it immediately.
 
-**Drift (Anushka)** — integrator exactness (18.0000 vs 18.0 km; round trip 0.0001 km), ensemble spread as **precision not accuracy**, age validation against four documented release times, and OpenDrift agreement.
+**Drift (Anushka)** — integrator exactness (18.0000 vs 18.0 km; round trip 0.0001 km), ensemble spread as **precision not accuracy**, and OpenDrift agreement. **Age ships as an output, not an accuracy claim** — see `docs/STAGE2_AGE_DECISION_BRIEF.md` §5/A5, ratified 13 Sept 2026. The four-case validation this line used to promise does not exist: only one case in the library has a documented release time, and the detections it would be measured on have not landed. If Huntington's detection arrives and C3.1 fires, the claim is an explicit **N = 1** with its caveat attached, never "N of 4".
 > *"Across the 50 runs of our uncertainty budget, half the endpoints landed within 8.8 km of the cloud's centre."* **Never** *"accurate to 8.8 km"* — there is no ground truth for origin position.
 
 **Attribution (Jaiveer)** — the injected-offender curve with a stated operating limit:
