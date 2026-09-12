@@ -357,8 +357,29 @@ def invert_curve(candidate_hours, values, target):
 
 def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate_hours,
                          timestep_minutes=15, n_particles=SEED_PARTICLES, n_members=20,
-                         seed=143, guard=True):
+                         seed=143, guard=True, discharge_class=None):
     """C3.1. Returns (band_or_None, diagnostics).
+
+    !! GATED ON discharge_class == "acute", FOR THE SAME REASON C3.3 IS. !!
+
+    The brief gates only C3.3 on acute, because it reads age off the observed elongation. But this
+    estimator matches the observed MAJOR AXIS (see the next note), and on a chronic discharge the
+    major axis is the VESSEL'S TRACK, not the ocean stretching a patch. `case-jacksonville-2024`
+    is the worked example: a 31.17 km ribbon of 4.55 km2, an aspect ratio near 170 and a width of
+    about 190 m. No plausible ocean turns an 800 m blob into a 31 km thread in 36 h; the ship did
+    that, at transit speed. Run this on a chronic slick and it either refuses for the wrong reason
+    or, in a strongly sheared field, returns a confident wrong number.
+
+    So `acute` only, and the skip reason is recorded.
+
+    For the record, because it is the obvious next question: the physically right observable on a
+    chronic ribbon is its WIDTH, not its length -- cross-track spreading really is the ocean's
+    work, and the minor axis is derivable from the contract as sqrt(area / (pi * elongation)).
+    It is NOT implemented here, deliberately, for two reasons. The initial width is the vessel's
+    wake, which nobody measured and which would dominate the answer exactly as the thickness
+    assumption dominates Fay. And cross-track spreading at these scales is largely turbulent
+    diffusion, which this model does not carry at all (F8). Both would have to be invented. If a
+    chronic age matters for the demo, that is a conversation with Akshat, not a quiet default.
 
     !! MATCHES ON MAJOR-AXIS LENGTH, NOT AREA. The brief says area; area cannot work here. !!
 
@@ -387,6 +408,17 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
     current scale draws the origin cloud uses -- so the answer is a BAND from the same
     uncertainty budget as the rest of Stage 2, not a point dressed up with error bars.
     """
+    if discharge_class != "acute":
+        return None, {
+            "matched_on": "major_axis_length_km",
+            "discharge_class": discharge_class,
+            "skipped": (
+                f"discharge_class is {discharge_class!r}, not 'acute'. This estimator matches the "
+                f"observed major axis, and on a chronic or unclassified slick the major axis is "
+                f"the vessel's track rather than shear stretching a patch -- so the match would "
+                f"be meaningless. Same gate as C3.3, for the same physics."),
+        }
+
     rng = np.random.default_rng(seed)
     winds, scales = ens._stratified_draws(n_members, rng)
 
@@ -933,7 +965,7 @@ def main():
         shear_band, shear_diag = shear_dispersion_age(
             field, olon, olat, t0, observed_length, candidate_hours,
             timestep_minutes=a.timestep_minutes, n_particles=a.particles,
-            n_members=a.members, seed=a.seed)
+            n_members=a.members, seed=a.seed, discharge_class=discharge)
     if shear_band:
         print(f"  -> [{shear_band[0]:.1f}, {shear_band[1]:.1f}] h   "
               f"({shear_diag['n_fitted']}/{shear_diag['n_members']} members fitted)")

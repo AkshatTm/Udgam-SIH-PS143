@@ -175,6 +175,66 @@ def assert_speed_plausible(u, v, limit=MAX_PLAUSIBLE_SPEED_MS):
     return worst
 
 
+def edge_distance_km(positions, bbox):
+    """Distance from each particle to the NEAREST edge of the field box, in km.
+
+    Negative means the particle is already outside. `bbox` is [W, S, E, N] in degrees, as
+    written into the cache by fetch_fields.py and exposed as GriddedField.bbox.
+
+    Longitude distances are converted at each particle's own latitude, which is the whole point:
+    at 59.6 N a degree of longitude is half as wide as at 30 N, so a box that looks generous in
+    degrees is half as generous in kilometres.
+    """
+    p = as_positions(positions)
+    lon, lat = p[:, 0], p[:, 1]
+    w, s, e, n = (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
+    coslat = np.maximum(np.cos(np.radians(lat)), _MIN_COS_LAT)
+    km_per_deg_lon = (M_PER_DEG_LAT / 1000.0) * coslat
+    km_per_deg_lat = M_PER_DEG_LAT / 1000.0
+    return np.minimum.reduce([
+        (lon - w) * km_per_deg_lon,
+        (e - lon) * km_per_deg_lon,
+        (lat - s) * km_per_deg_lat,
+        (n - lat) * km_per_deg_lat,
+    ])
+
+
+def assert_inside_field_box(positions, bbox, margin_km=10.0, label="final positions"):
+    """THE LOUD GUARD (brief Phase 3.1, risk F2/F3b). Raises if any particle finishes within
+    `margin_km` of the field-box edge.
+
+    This is the half of Phase 3.1 that matters. The adaptive pad lowers the PROBABILITY that
+    particles reach the wall; this is what makes it impossible to ship a cloud that did.
+
+    Why it has to be loud rather than a warning: a particle that runs out of field does not
+    crash and does not look wrong. `GriddedField` clamps its interpolation indices at the grid
+    edge, so the particle keeps moving — along the wall, at whatever the edge cell says — and
+    lands somewhere entirely plausible. The Gulf Stream at 2.0 m/s covers 173 km in 24 h; the
+    old fixed 0.5-degree pad was about 55 km. On `case-jacksonville-2024` that is a wrong origin
+    cloud with nothing at all to announce it.
+    """
+    d = edge_distance_km(positions, bbox)
+    worst = float(np.min(d))
+    if worst >= margin_km:
+        return worst
+    n_touching = int(np.count_nonzero(d < margin_km))
+    n_outside = int(np.count_nonzero(d < 0.0))
+    raise FieldBoxEdge(
+        f"{n_touching} of {d.size} {label} finished within {margin_km:.0f} km of the field-box "
+        f"edge (worst {worst:.1f} km"
+        + (f", {n_outside} already OUTSIDE the box" if n_outside else "")
+        + f"). The box is [W {float(bbox[0]):.3f}, S {float(bbox[1]):.3f}, "
+          f"E {float(bbox[2]):.3f}, N {float(bbox[3]):.3f}].\n"
+        f"  These particles ran out of ocean. GriddedField clamps at the grid edge, so they did "
+        f"not fail -- they slid along the wall and produced a plausible, WRONG origin cloud.\n"
+        f"  Refetch with a bigger pad, then rerun:\n"
+        f"    python pipeline/drift/fetch_fields.py --case <id> --vmax-ms 2.0 --force")
+
+
+class FieldBoxEdge(ImplausibleDrift):
+    """Raised when particles reach the edge of the fetched field box."""
+
+
 def displacement_km(start, end):
     """Great-circle-ish distance per particle, in km, using the local-metre conversion."""
     a = as_positions(start)

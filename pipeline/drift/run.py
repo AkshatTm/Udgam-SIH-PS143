@@ -34,7 +34,8 @@ import numpy as np
 
 import ensemble as ens
 from fields import load_case_field, make_fake
-from step import assert_displacement_plausible, displacement_km, integrate
+from step import (assert_displacement_plausible, assert_inside_field_box,
+                  displacement_km, edge_distance_km, integrate)
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -217,6 +218,18 @@ def main():
 
     endpoints, conv_idx, members = ens.run_ensemble(
         seed, t0, field, a.steps, a.timestep_minutes, n_runs=a.runs, rng=nprng, progress=tick)
+
+    # ---- the loud edge guard (Phase 3.1) ----------------------------------------------
+    # Runs BEFORE anything is written. A cloud whose particles reached the wall must not be
+    # able to leave this script as a bundle -- that is the whole point of the guard. A real
+    # field has a box; the analytic and constant fields do not, so there is nothing to check.
+    box = getattr(field, "bbox", None)
+    if box is not None:
+        checked = np.vstack([history[-1], endpoints])
+        margin = assert_inside_field_box(checked, box, margin_km=10.0,
+                                         label="control + ensemble endpoints")
+        print(f"              edge guard  closest particle sits {margin:.1f} km inside the "
+              f"field box (limit 10 km)")
 
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)

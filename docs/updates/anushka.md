@@ -20,6 +20,59 @@ docs/updates/anushka.md. Read the top entry and tell me where I left off."*
 
 ---
 
+## [2026-09-13 00:00] Phase 3 — adaptive field-box pad, loud edge guard, negative-longitude/high-latitude tests, acute gate on C3.1
+
+**Done:** Four things landed together.
+
+Phase 3.1 (adaptive pad): `check_gee.py` gains `required_pad_km` / `padded_bbox` /
+`pad_degrees`. The pad is sized from rewind hours x a worst-case speed (with a 55 km floor),
+and converted to degrees at the box's **poleward edge**, not mid-latitude — converting at
+mid-latitude would have under-sized the Alaska pad by the cos(lat) ratio (1.70x at 59.56 N vs
+30.38 N). `fetch_fields.py` gains `--vmax-ms`, `--pad-km`, `--rewind-hours`, and a post-fetch
+p99 check that names the exact refetch command when the downloaded box turns out too small.
+
+Phase 3.1 (loud guard): `step.assert_inside_field_box` + `edge_distance_km` +
+`FieldBoxEdge`, wired into `run.py` **before any file is written**, so a cloud whose particles
+reached the box edge cannot ship as a bundle. `case-000` clears the guard by ~14.8 km (limit
+10 km).
+
+Phase 3.2 + high latitude: new `pipeline/drift/geo_tests.py`, suite 7, ten assertions.
+Covers negative longitude, the antimeridian wrap, `wrap_lon` against a 0-360 leak, the
+cos(lat) longitude delta at 59.56 N, the 1.70x ratio against Jacksonville, a high-latitude
+round trip, and all seven library positions checked from scratch.
+
+`age.py`: C3.1 is now gated on `discharge_class == "acute"`, the same gate C3.3 already had,
+because on a chronic slick the major axis reflects the vessel's track, not shear. New
+assertion 6r.
+
+Suite is now **7/7, 48/48**.
+
+**Files touched:** `pipeline/drift/check_gee.py` (modified) · `pipeline/drift/fetch_fields.py`
+(modified) · `pipeline/drift/step.py` (modified) · `pipeline/drift/run.py` (modified) ·
+`pipeline/drift/geo_tests.py` (new) · `pipeline/drift/tests.py` (modified) ·
+`pipeline/drift/age.py` (modified) · `pipeline/drift/age_tests.py` (modified)
+
+**Run command:**
+```bash
+python pipeline/drift/tests.py
+```
+Expected output: `7/7 tests passed (48/48 individual assertions)`.
+
+**Checkpoint artefact:** `python pipeline\drift\run.py --case case-000 --real --particles 600
+--runs 6` prints `edge guard  closest particle sits 14.8 km inside the field box (limit 10
+km)`. Pad check: `required_pad_km(24, 2.0)` = 224.64 km, `padded_bbox(...)` =
+`[-146.77, 57.48, -138.65, 61.63]` for the Gulf of Alaska box.
+
+**Open issues:**
+- Jacksonville needs `--vmax-ms 2.0` at fetch time.
+- Three Part C departures still awaiting Akshat's ratification
+  (`docs/STAGE2_AGE_DECISION_BRIEF.md`).
+
+**Next:** get Akshat's ratification on the Part C departures; rerun fetch for Jacksonville
+with the correct `--vmax-ms`.
+
+---
+
 ## [2026-09-12 00:00] Phase 1 — age estimation (Part C)
 
 **Done:** Built `pipeline/drift/age.py`, implementing Part C of the brief: C3.1 shear

@@ -23,7 +23,8 @@ import numpy as np
 
 from age import (combine_bands, deformation_rate_s, elongation_age, fay_age,
                  fay_predicted_area_km2, fay_radius_km, invert_curve, observed_major_axis_km,
-                 pca_extent, seed_cloud, shear_extent_curve, weathering_flag)
+                 pca_extent, seed_cloud, shear_dispersion_age, shear_extent_curve,
+                 weathering_flag)
 from step import integrate
 
 T0 = datetime(2017, 1, 29, 0, 14, 0, tzinfo=timezone.utc)
@@ -217,6 +218,22 @@ def run(check):
                 flag == "fresh",
                 f"centre -12 dB vs edge -8 dB = {wdiag['gradient_db']:.1f} dB gradient "
                 f"-> {flag}")
+
+    # --- 6r  C3.1 carries the SAME acute gate as C3.3 ----------------------------------
+    # On a chronic discharge the major axis is the vessel's track, not shear stretching a
+    # patch: case-jacksonville-2024 is a 31.17 km ribbon of 4.55 km2, aspect ~170, width
+    # ~190 m. No ocean does that in 36 h; a ship at transit speed does. So an estimator that
+    # matches the major axis must refuse there, or it returns a confident wrong number.
+    gated, gdiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
+                                        n_members=2, discharge_class="chronic")
+    open_gate, odiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
+                                            n_members=2, discharge_class="acute")
+    ok &= check("6r  C3.1 refuses a chronic slick, and runs on an acute one",
+                gated is None and "not 'acute'" in gdiag.get("skipped", "")
+                and "members" in odiag,
+                f"chronic -> None ({gdiag.get('skipped', '')[:70]}...); "
+                f"acute -> ran {odiag.get('n_members')} members and reported "
+                f"{odiag.get('n_fitted')} fits against a 31.17 km axis")
 
     # --- 6q  an age outside the modelled range is reported as absent, not clamped ------
     out_of_range = invert_curve([2.0, 6.0, 12.0], [1.0, 2.0, 3.0], 99.0)
