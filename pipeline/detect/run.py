@@ -53,7 +53,8 @@ if str(REPO) not in sys.path:
 
 from pipeline.detect.darkspot import detect_array                      # noqa: E402
 from pipeline.detect.features import add_shape_features_batch          # noqa: E402
-from pipeline.detect.ships import detect_ships, classify_discharge     # noqa: E402
+from pipeline.detect.ships import (detect_ships, classify_discharge,   # noqa: E402
+                                   DEFAULT_MIN_DB, DEFAULT_K_SIGMA)
 from pipeline.detect import nets                                       # noqa: E402
 
 # How far the tif bbox may drift from bounds.json before we refuse to run.
@@ -385,11 +386,15 @@ def main():
     ap.add_argument("--rule-elongation", type=float, default=2.0,
                     help="fallback rule: elongation at or above this is oil")
     ap.add_argument("--no-ships", action="store_true", help="skip the ship detector")
-    ap.add_argument("--ship-min-db", type=float, default=-10.0,
+    # Defaults come FROM ships.py, never duplicated here. They were duplicated,
+    # and the copy went stale: ships.DEFAULT_K_SIGMA was corrected 8.0 -> 4.0 but
+    # this argparse default stayed at 8.0 and silently shadowed it, so the fix was
+    # inert through the pipeline while the module looked correct in review.
+    ap.add_argument("--ship-min-db", type=float, default=DEFAULT_MIN_DB,
                     help="absolute brightness floor for a radar contact. Raising it "
                          "loses small vessels; lowering it invents them, and a false "
                          "dark-vessel claim is worse than a miss")
-    ap.add_argument("--ship-k-sigma", type=float, default=8.0,
+    ap.add_argument("--ship-k-sigma", type=float, default=DEFAULT_K_SIGMA,
                     help="scene-relative floor, in robust sigmas above the sea")
     ap.add_argument("--path", choices=("auto", "networks", "classical"), default="auto",
                     help="auto routes by provenance: Zenodo benchmark scenes to the "
