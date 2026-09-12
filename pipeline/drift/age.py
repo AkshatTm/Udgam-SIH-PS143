@@ -90,11 +90,13 @@ RHO_OIL_RANGE = (850.0, 950.0)   # crude; a light product or an emulsion sits ou
 
 # Fay's gravity-viscous constant, radius form:  r(t) = k * (dg V^2 / sqrt(nu))^(1/6) * t^(1/4)
 #
-# !! DO NOT PUT A FAY NUMBER ON A SLIDE UNTIL THIS CONSTANT IS CITED. !!
-# The brief says so explicitly (C3.2: "verify the constant against a published reference
-# before quoting it"). The 1.1-1.5 range below is what the secondary literature repeats for
-# the gravity-viscous phase; it is NOT a checked primary citation, and the whole Fay band
-# scales linearly with it. Urooz's research lane is the right place to pin it.
+# UNCITED, BY RULING (A4, 13 Sept 2026). The brief asked for a primary citation before quoting
+# this. Akshat's ruling is that it is not needed, because of what the exponent does: Fay's AREA
+# goes as k^2, so closing the measured ~14x gap between what spreading can reach and what SAR
+# actually sees would need k ~ 5.5 against a literature range of 1.1-1.5. The regime verdict is
+# robust to k; a Fay age band would not be. A3 means we never quote a Fay-derived number, so the
+# band never ships and the constant never has to carry a citation. Quote a Fay AGE and the
+# citation becomes mandatory again.
 FAY_K_RANGE = (1.1, 1.5)
 
 # There is deliberately NO thickness range here any more, and that is the fix for a
@@ -132,19 +134,122 @@ def equivalent_radius_km(area_km2):
 
 
 def observed_major_axis_km(area_km2, elongation):
-    """Full major-axis length of the ellipse with this area and this aspect ratio.
+    """Full major-axis length of the ELLIPSE with this area and this aspect ratio.
 
     area = pi*a*b and elongation = a/b  ->  a = sqrt(area * elongation / pi),  length = 2a.
 
     THIS, not area, is what the shear estimator matches against. See the note in
     shear_dispersion_age(): a 2D incompressible flow preserves a cloud's area, so area carries
     no age signal in this model, while the major axis grows.
+
+    FALLBACK ONLY -- prefer polygon_major_axis_km() when the polygon is available. The ellipse
+    assumption fails badly on a real slick, and measurably so on the hero case. Jacksonville's
+    det-01 reports area 4.479 km2 and elongation 7.93, which gives 6.72 km here; its polygon's
+    actual principal-axis extent is 17.38 km. A factor of 2.6, because a sinuous filament at
+    solidity 0.22 is not an ellipse: dividing area by the measured length gives a mean width of
+    258 m, so the true filament aspect is about 67, not 7.93. Feeding 6.72 km to an estimator
+    whose whole job is to match a length would have dated the wrong slick.
     """
     if area_km2 is None or elongation is None:
         return None
     e = max(float(elongation), 1.0)
     a = math.sqrt(max(float(area_km2), 0.0) * e / math.pi)
     return 2.0 * a
+
+
+def polygon_major_axis_km(ring):
+    """MEASURED major-axis length of a detection polygon, in km, by PCA on its vertices.
+
+    The preferred input to C3.1. A1 ruled that the shear estimator matches the observed major
+    axis rather than the area; this measures that axis from the geometry Soum actually ships
+    instead of inferring it from two scalars under an ellipse assumption that the shape does not
+    satisfy (see observed_major_axis_km for the numbers).
+
+    Projects [lon, lat] to km with cos(lat) taken at the ring's own mean latitude -- the same
+    convention as step.displacement_km -- then returns the peak-to-peak extent along the first
+    principal component. Peak-to-peak, not a standard deviation, because the quantity being
+    matched is a physical end-to-end length.
+
+    Returns (length_km, diag). `diag` carries the minor extent, the area-derived mean width and
+    the implied filament aspect, so a caller can see how far from an ellipse the shape is rather
+    than having to trust that it is one.
+    """
+    pts = np.asarray(ring, dtype=np.float64)
+    if pts.ndim != 2 or pts.shape[0] < 3:
+        return None, {"skipped": f"need at least 3 vertices, got {pts.shape}"}
+    if pts.shape[1] > 2:
+        pts = pts[:, :2]
+
+    # DROP THE CLOSING VERTEX. A GeoJSON ring repeats its first point to close the polygon
+    # (RFC 7946 3.1.6), and PCA weights vertices, so that duplicate counts one corner twice
+    # and drags the centroid off the shape's centre -- which ROTATES the principal axis. On a
+    # 10 x 1 km rectangle it read 10.015 x 1.168 km instead of 10.000 x 1.000: a 17% error on
+    # the width and a tilted axis, from one repeated point. Every real ring has one.
+    closed = pts.shape[0] > 3 and np.allclose(pts[0], pts[-1])
+    if closed:
+        pts = pts[:-1]
+
+    lat0 = float(np.mean(pts[:, 1]))
+    coslat = max(math.cos(math.radians(lat0)), 1e-9)
+    xy = np.column_stack([pts[:, 0] * coslat * KM_PER_DEG_LAT, pts[:, 1] * KM_PER_DEG_LAT])
+    centred = xy - xy.mean(axis=0)
+    try:
+        _, _, vt = np.linalg.svd(centred, full_matrices=False)
+    except np.linalg.LinAlgError as exc:
+        return None, {"skipped": f"SVD failed on the ring: {exc}"}
+    major = centred @ vt[0]
+    minor = centred @ vt[1]
+    length = float(major.max() - major.min())
+    width = float(minor.max() - minor.min())
+    return length, {
+        "measured_on": "polygon PCA (peak-to-peak along the principal axis)",
+        "length_km": round(length, 4),
+        "bbox_width_km": round(width, 4),
+        "bbox_aspect": round(length / width, 2) if width > 0 else None,
+        "mean_lat": round(lat0, 5),
+        "n_vertices": int(pts.shape[0]),
+        "closing_vertex_dropped": bool(closed),
+    }
+
+
+def slick_major_axis_km(feature):
+    """(length_km, diag) for one detection feature -- MEASURED if possible, derived if not.
+
+    One place decides, so a caller cannot accidentally take the ellipse path when the polygon is
+    right there. The diag always says which route was taken and, when both are available, what
+    the ellipse form would have said -- the discrepancy is a property of the slick's shape and
+    belongs in the output rather than in a comment.
+    """
+    props = (feature or {}).get("properties") or {}
+    geom = (feature or {}).get("geometry") or {}
+    coords = geom.get("coordinates")
+    ring = None
+    if geom.get("type") == "Polygon" and coords:
+        ring = coords[0]
+    elif geom.get("type") == "MultiPolygon" and coords and coords[0]:
+        ring = coords[0][0]
+
+    derived = observed_major_axis_km(props.get("area_km2"), props.get("elongation"))
+    if ring is None:
+        return derived, {"route": "ellipse (no polygon available)",
+                         "derived_km": derived if derived is None else round(derived, 4)}
+
+    measured, diag = polygon_major_axis_km(ring)
+    if measured is None:
+        return derived, {"route": "ellipse (polygon unusable)", **diag,
+                         "derived_km": derived if derived is None else round(derived, 4)}
+
+    diag["route"] = "measured from polygon"
+    area = props.get("area_km2")
+    if area and measured > 0:
+        mean_width_km = float(area) / measured
+        diag["mean_width_m"] = round(mean_width_km * 1000.0, 1)
+        diag["filament_aspect"] = round(measured / mean_width_km, 2) if mean_width_km > 0 else None
+    if derived is not None:
+        diag["derived_km"] = round(derived, 4)
+        diag["measured_over_derived"] = round(measured / derived, 3) if derived > 0 else None
+        diag["reported_elongation"] = props.get("elongation")
+    return measured, diag
 
 
 def pca_extent(pos):
@@ -355,6 +460,31 @@ def invert_curve(candidate_hours, values, target):
     return float(h[i - 1] + frac * (h[i] - h[i - 1]))
 
 
+
+def _gate_reason(discharge_class, estimator, physics):
+    """Why an acute-gated estimator declined -- and WHOSE problem it is.
+
+    Two very different situations produce the same refusal, and conflating them hides a blocker:
+
+      chronic          a real physical reason. The gate is doing its job and nothing is missing.
+      unknown/absent   a MISSING INPUT. Stage 1 has not emitted discharge_class -- it is in the
+                       contract and assigned to Soum, but detect/run.py has never written it, so
+                       it will not appear just because his backlog clears. Akshat's A5 audit
+                       (13 Sept 2026) found it unset on EVERY case including case-000's own
+                       det-01, which is why both acute-gated estimators currently fire on
+                       nothing. That is a data gap, not a property of any slick.
+    """
+    if discharge_class == "chronic":
+        return (f"discharge_class is 'chronic'. {estimator} {physics}, so the result would be "
+                f"meaningless. The gate is correct and nothing is missing.")
+    return (f"discharge_class is {discharge_class!r} -- NOT SET by Stage 1. {estimator} "
+            f"{physics}, so it needs to know whether the source was moving before it can run. "
+            f"This is a MISSING INPUT (Soum: detect/run.py has never emitted discharge_class, "
+            f"though it is in the contract), not a physical finding about this slick. "
+            f"A5: unset on every case in the library, so this estimator currently fires on "
+            f"nothing.")
+
+
 def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate_hours,
                          timestep_minutes=15, n_particles=SEED_PARTICLES, n_members=20,
                          seed=143, guard=True, discharge_class=None):
@@ -412,11 +542,10 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
         return None, {
             "matched_on": "major_axis_length_km",
             "discharge_class": discharge_class,
-            "skipped": (
-                f"discharge_class is {discharge_class!r}, not 'acute'. This estimator matches the "
-                f"observed major axis, and on a chronic or unclassified slick the major axis is "
-                f"the vessel's track rather than shear stretching a patch -- so the match would "
-                f"be meaningless. Same gate as C3.3, for the same physics."),
+            "skipped": _gate_reason(discharge_class, "C3.1",
+                                    "matches the observed major axis, and on a chronic slick "
+                                    "the major axis is the vessel's track rather than shear "
+                                    "stretching a patch"),
         }
 
     rng = np.random.default_rng(seed)
@@ -572,9 +701,14 @@ def fay_age(observed_area_km2, volume_m3=None, k_range=FAY_K_RANGE,
             "rho_water_kgm3": RHO_WATER,
             "nu_water_m2s": NU_WATER,
         },
-        "citation_todo": ("the Fay gravity-viscous constant k is NOT yet backed by a checked "
-                          "primary citation. The whole band scales linearly with it. Do not "
-                          "quote a Fay number on a slide until it is cited."),
+        "k_citation": (
+            "SHIPS UNCITED, and that is a ruling not an oversight (A4, Akshat 13 Sept 2026). "
+            "Fay's AREA goes as k^2, so closing the measured ~14x area gap would need k ~ 5.5 "
+            "against a literature range of 1.1-1.5. The REGIME VERDICT is therefore robust to k "
+            "-- no plausible k lets gravity-viscous spreading reach a SAR-scale slick -- even "
+            "though a Fay age BAND would not be. Since A3 means we never quote a Fay-derived "
+            "number, the constant never has to carry one. If a Fay age is ever quoted, the "
+            "citation becomes mandatory again."),
     }
 
     if volume_m3 is None or float(volume_m3) <= 0:
@@ -662,9 +796,15 @@ def elongation_age(observed_elongation, shear_rate_s, discharge_class,
 
     For a >> 1 this is gamma ~ sqrt(a), not gamma ~ a. The difference is not cosmetic: at the
     contract's example elongation of 8.2 the brief's form gives gamma = 8.2 and this one gives
-    gamma = 2.51, so the brief's age is about 3.3x too LONG. Since age is being used as a
+    gamma = 2.51, so the brief's age is about 3.2x too LONG. Since age is being used as a
     filter on Stage 3's suspect pool, and since the one case with a documented release time is
     a ~3 h old slick, a 3x bias in the wrong direction matters.
+
+    DO NOT QUOTE 3.2x AS A CONVERSION FACTOR. It is the ratio at a = 8.2 and nowhere else. The
+    ratio is sqrt(a^2 - 1) / sqrt(a + 1/a - 2), which CLIMBS with elongation: 2.45x at a = 2,
+    3.24x at a = 8.2, 4.70x at a = 20, 7.21x at a = 50. Every case carries its own elongation,
+    so an age computed under the brief's form cannot be corrected by dividing -- it has to be
+    recomputed here. Ratified by Akshat 13 Sept 2026 (docs/STAGE2_AGE_DECISION_BRIEF.md, D-B).
 
     Both are computed and both are reported in the diagnostics, so the discrepancy is visible
     rather than resolved silently. `age_hours` uses the exact form.
@@ -688,9 +828,10 @@ def elongation_age(observed_elongation, shear_rate_s, discharge_class,
             "band_frac": band_frac}
 
     if discharge_class != "acute":
-        diag["skipped"] = (f"discharge_class is {discharge_class!r}, not 'acute' -- a chronic "
-                           f"or unclassified slick is elongated by the vessel's motion, not by "
-                           f"shear, so this estimator does not apply")
+        diag["skipped"] = _gate_reason(discharge_class, "C3.3",
+                                       "reads age off the observed elongation, and a chronic "
+                                       "slick is elongated by the vessel's motion rather than "
+                                       "by shear")
         return None, diag
 
     if observed_elongation is None or shear_rate_s is None:
@@ -950,22 +1091,38 @@ def main():
             "  refetch a wider window, or lower --candidates.")
 
     # ---- C3.1 shear dispersion --------------------------------------------------------
-    observed_length = observed_major_axis_km(observed_area, observed_elong)
+    # MEASURE the major axis off the polygon; fall back to the ellipse form only if there is
+    # no usable geometry. On Jacksonville's det-01 the two disagree by 2.6x (17.38 km measured
+    # against 6.72 km derived) because the slick is a sinuous filament, not an ellipse, so
+    # which route ran is printed and recorded rather than assumed.
+    observed_length, axis_diag = slick_major_axis_km(feat)
     print(f"\nC3.1 shear dispersion  ({a.members} members x {len(candidate_hours)} candidates "
           f"x {a.particles} particles)")
     if observed_length is None:
         shear_band, shear_diag = None, {
-            "skipped": ("needs both area_km2 and elongation to derive the observed major "
-                        "axis; matching on area cannot work in a divergence-free field")}
+            "skipped": ("no usable polygon and no area_km2 x elongation to fall back on, so "
+                        "there is no observed major axis to match; matching on area cannot "
+                        "work in a divergence-free field"),
+            "axis": axis_diag}
         print(f"  -> none: {shear_diag['skipped']}")
     else:
-        print(f"  observed major axis {observed_length:.2f} km  "
-              f"(from area {observed_area:.2f} km2 x elongation {observed_elong}) "
+        print(f"  observed major axis {observed_length:.2f} km  ({axis_diag['route']}) "
               f"-- matching on LENGTH, not area")
+        if axis_diag.get("derived_km") is not None and axis_diag["route"].startswith("measured"):
+            print(f"     the ellipse form (area {observed_area:.2f} km2 x elongation "
+                  f"{observed_elong}) would have said {axis_diag['derived_km']:.2f} km, "
+                  f"a factor of {axis_diag.get('measured_over_derived')}")
+            if axis_diag.get("filament_aspect"):
+                print(f"     mean width {axis_diag['mean_width_m']:.0f} m over the measured "
+                      f"length -> filament aspect {axis_diag['filament_aspect']}, against a "
+                      f"reported elongation of {observed_elong}")
         shear_band, shear_diag = shear_dispersion_age(
             field, olon, olat, t0, observed_length, candidate_hours,
             timestep_minutes=a.timestep_minutes, n_particles=a.particles,
             n_members=a.members, seed=a.seed, discharge_class=discharge)
+        # How the matched length was obtained is part of the result, not trivia: a band read off
+        # a derived axis and one read off a measured axis are different claims.
+        shear_diag["axis"] = axis_diag
     if shear_band:
         print(f"  -> [{shear_band[0]:.1f}, {shear_band[1]:.1f}] h   "
               f"({shear_diag['n_fitted']}/{shear_diag['n_members']} members fitted)")
@@ -985,7 +1142,7 @@ def main():
         print(f"  -> [{fay_band[0]:.1f}, {fay_band[1]:.1f}] h")
     else:
         print(f"  -> none: {fay_diag.get('skipped')}")
-    print(f"  !! {fay_diag['citation_todo']}")
+    print(f"  k: {fay_diag['k_citation']}")
 
     # ---- C3.3 elongation under shear --------------------------------------------------
     print("\nC3.3 elongation under shear")
