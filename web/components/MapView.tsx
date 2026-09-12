@@ -8,10 +8,10 @@
 // deck.gl rides on top through a single MapboxOverlay control (created once, next to the map).
 // The layer list is composed from two memoised pieces and pushed via one effect:
 //   - the particle ScatterplotLayer (Phase 2) — the only layer that changes every playback tick;
-//   - the origin HeatmapLayer + 50/90 % radius rings (Phase 3) — built ONCE per origin bundle,
+//   - the origin BitmapLayer + 50/90 % radius rings (Phase 3) — built ONCE per origin bundle,
 //     mounted as soon as the bundle loads and kept mounted for the life of the case, with the
-//     T−24h→T−0 fade (and the Origin toggle) driven purely by `opacity`. deck.gl never re-runs
-//     the expensive heatmap aggregation on a scrub — only the fully-faded pixels change.
+//     T−24h→T−0 fade (and the Origin toggle) driven purely by `opacity`. The BitmapLayer does
+//     no aggregation at all — a scrub only updates the layer's opacity uniform.
 // The timestep only ever updates deck layers, never the map.
 
 import { useEffect, useMemo, useRef } from "react";
@@ -27,12 +27,11 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { PathLayer, ScatterplotLayer } from "@deck.gl/layers";
-import { HeatmapLayer } from "@deck.gl/aggregation-layers";
+import { BitmapLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
-import { buildOriginPointCloud, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
-import { sceneAndVesselExtent } from "@/lib/extent";
+import { buildOriginImage, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
+import { sceneAndVesselExtent, sceneParticleOriginExtent } from "@/lib/extent";
 import type { Bounds, LonLat } from "@/lib/contracts";
 
 // maplibre-gl v6 loads its GeoJSON/vector tiler in a separate ESM worker. Its built-in worker
@@ -57,28 +56,18 @@ const LOOKALIKE_COLOR = "#9aa4b2";
 // image and distinguishes particles from the vessel layer (cool blue, future). V3 palette.
 const PARTICLE_FILL: [number, number, number, number] = [251, 146, 60, 210];
 
-// Origin heatmap fade. Rewind fraction (0 at T−0, 1 at T−24h) is run through a smoothstep so
-// the cloud is fully hidden near the detection time and eases in only as the slider approaches
+// Origin cloud fade. Rewind fraction (0 at T−0, 1 at T−24h) is run through a smoothstep so the
+// cloud is fully hidden near the detection time and eases in only as the slider approaches
 // maximum rewind — "the origin becomes knowable the further back you drift" (docs/04 §Phase 3).
+// This is the ONLY thing about the origin layer that changes on a scrub: a pure `opacity` prop,
+// which the BitmapLayer applies without re-uploading its texture. The colour ramp and the
+// alpha-proportional mapping live in lib/origin.ts (buildOriginImage); Urooz owns the palette.
 const ORIGIN_FADE_IN_START = 0.2; // rewind fraction at which the cloud starts to appear
 const ORIGIN_FADE_IN_FULL = 0.9; // rewind fraction at which it reaches full opacity
-// The origin grid has a long low-probability tail (~90 % of cells are non-zero), so keep the
-// blur radius tight and push the transparency threshold up — that concentrates the visible
-// cloud near the actual mass instead of blooming across the whole scene. The precise
-// 50 % / 90 % extent is carried by the rings below; Urooz owns the final colour tokens.
-const ORIGIN_RADIUS_PIXELS = 28;
-const ORIGIN_INTENSITY = 0.6;
-const ORIGIN_THRESHOLD = 0.18;
-// HeatmapLayer aggregates its weighted points into a square GPU texture and then does a
-// point-per-texel max-reduction pass. The default size is 2048 → a 4.2 M-vertex reduction
-// that stalls integrated GPUs for ~1.6 s the first time it runs (measured on Intel UHD). The
-// origin grid is only 120×120 over ~0.6°, so 512 is already finer than the data — it cuts
-// that one-time cost ~16× while leaving the cloud visually identical.
-const ORIGIN_WEIGHTS_TEXTURE_SIZE = 512;
 
-// 50 % / 90 % origin-probability rings — warm amber-yellow outlines over the heatmap. The inner
-// (50 %) ring is brighter; the outer (90 %) ring is softer but still readable. Both complement
-// the warm heatmap colour ramp rather than clashing with a white outline. V3 palette.
+// 50 % / 90 % origin-probability rings — warm amber-yellow outlines over the origin cloud. The
+// inner (50 %) ring is brighter; the outer (90 %) ring is softer but still readable. Both
+// complement the warm origin-cloud colour ramp rather than clashing with a white outline. V3 palette.
 const ORIGIN_RING_50: [number, number, number, number] = [251, 191, 36, 230];
 const ORIGIN_RING_90: [number, number, number, number] = [251, 191, 36, 140];
 const ORIGIN_RING_WIDTH_PX = 1.5;
@@ -92,7 +81,7 @@ const originRingColor = (d: OriginRing): [number, number, number, number] =>
 // Vessel tracks (Phase 5) — cool blue family, distinct from the amber particle/origin palette
 // and from the red/grey detection colours, so all three layers stay readable together. Role is
 // conveyed by emphasis (opacity + width), not a hue change, to avoid inventing a new colour
-// that could collide with an existing token the way the amber particle/heatmap colours did.
+// that could collide with an existing token the way the amber particle/origin-cloud colours did.
 //
 // IMPORTANT: role is only ever assigned when `origin.abstain` has been confirmed `false`. While
 // abstain is `true`, or origin hasn't loaded yet, every track renders as "plain" — the map must
@@ -117,6 +106,42 @@ const VESSEL_WIDTH_PLAIN = 1.2;
 const VESSEL_WIDTH_SUSPECT = 1.8;
 const VESSEL_WIDTH_TOP_SUSPECT = 3;
 const VESSEL_WIDTH_EXCLUDED = 1;
+
+// docs/04 Phase 3.5 — dark vessels (Master §6.7). A radar contact with no AIS at all: a point,
+// never a track, never linked to `vessels.geojson`. Deliberately its own colour family (rose),
+// unused everywhere else in this app (blue = vessel, amber = particle/origin, red = oil,
+// grey = look-alike/excluded) — an alert marker must not read as any of those.
+interface DarkVesselMapItem {
+  position: LonLat;
+}
+const DARK_VESSEL_COLOR: [number, number, number, number] = [244, 63, 94, 235];
+const DARK_VESSEL_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
+const DARK_VESSEL_RADIUS_PX = 7;
+
+// docs/04 Phase 3.6 — infrastructure findings (Master §6.7). Also a stationary point with no
+// AIS identity, but a distinct category from a dark vessel (a named, known facility being
+// scored — not an anomaly). Its own colour (violet) — unclaimed by any other layer in this
+// app (blue = vessel, amber = particle/origin, red = oil, grey = look-alike/excluded, rose =
+// dark vessel) — so the two "no-AIS point" categories never read as the same thing on the map.
+interface InfrastructureMapItem {
+  position: LonLat;
+}
+const INFRASTRUCTURE_COLOR: [number, number, number, number] = [167, 139, 250, 235];
+const INFRASTRUCTURE_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
+const INFRASTRUCTURE_RADIUS_PX = 7;
+
+// docs/04 Phase 5.3 — ship_detections (Master §6.3). Soum's RAW radar ship contacts nested per
+// detection feature — NOT the same list as suspects.json's `dark_vessels` (Jaiveer's already
+// AIS-cross-checked "no match" subset, Phase 3.5 above). This renders every candidate contact
+// the detector found, independent of any attribution result. Its own colour (teal) — unclaimed
+// by any existing layer (blue = vessel, amber = particle/origin, red = oil, grey =
+// look-alike/excluded, rose = dark vessel, violet = infrastructure).
+interface ShipDetectionMapItem {
+  position: LonLat;
+}
+const SHIP_DETECTION_COLOR: [number, number, number, number] = [45, 212, 191, 235];
+const SHIP_DETECTION_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
+const SHIP_DETECTION_RADIUS_PX = 6;
 
 const vesselTrackPath = (d: VesselMapItem): LonLat[] => d.path;
 const vesselTrackColor = (d: VesselMapItem): [number, number, number, number] => {
@@ -185,12 +210,13 @@ export default function MapView() {
   const t = tFromNorm(tNorm, particles?.nSteps ?? 0);
 
   // Phase 3 origin cloud. Step 1 parsed origin.json once into the store; here the row-major
-  // grid is expanded once into a weighted [lon,lat] point cloud and memoised on the bundle
-  // identity — it is never rebuilt on a scrub, and origin.json is never re-fetched.
+  // probability grid is rasterised once into a 120×120 RGBA image (one texel per cell) and
+  // memoised on the bundle identity — never rebuilt on a scrub, and origin.json is never
+  // re-fetched.
   const origin = useAppStore((s) => s.origin);
   const originVisible = useAppStore((s) => s.layers.origin);
-  const originCloud = useMemo(
-    () => (origin ? buildOriginPointCloud(origin) : null),
+  const originImage = useMemo(
+    () => (origin ? buildOriginImage(origin) : null),
     [origin],
   );
   // 50 % / 90 % rings around origin.centroid, using radius_50_km / radius_90_km. Built once
@@ -205,6 +231,9 @@ export default function MapView() {
   const vessels = useAppStore((s) => s.vessels);
   const vesselsVisible = useAppStore((s) => s.layers.vessels);
   const suspects = useAppStore((s) => s.suspects);
+  // docs/04 Phase 3.3 — hover-to-highlight. Purely presentational: never touches vesselItems
+  // (the parsed track geometry), never refetches, never rebuilds the map or its camera.
+  const hoveredMmsi = useAppStore((s) => s.hoveredSuspectMmsi);
 
   // Role (top suspect / suspect / excluded) is only ever attached once origin.abstain is
   // confirmed false — see the comment on VesselRole above. `origin` is read from the store
@@ -230,19 +259,119 @@ export default function MapView() {
 
   const vesselLayer = useMemo(() => {
     if (!vesselsVisible || vesselItems.length === 0) return null;
+    // Edge case: a hovered mmsi with no matching track (shouldn't happen — Master §6.7 requires
+    // every suspect mmsi to have a track — but defended anyway) falls back to plain role styling
+    // for every track, rather than dimming everything with nothing highlighted.
+    const hoveredMmsiValid =
+      hoveredMmsi !== null && vesselItems.some((v) => v.mmsi === hoveredMmsi);
+    const getColor = (d: VesselMapItem): [number, number, number, number] => {
+      const [r, g, b, a] = vesselTrackColor(d);
+      if (!hoveredMmsiValid) return [r, g, b, a];
+      return d.mmsi === hoveredMmsi ? [r, g, b, 255] : [r, g, b, Math.round(a * 0.25)];
+    };
+    const getWidth = (d: VesselMapItem): number => {
+      const w = vesselTrackWidth(d);
+      if (!hoveredMmsiValid) return w;
+      return d.mmsi === hoveredMmsi ? w + 2 : Math.max(0.6, w * 0.6);
+    };
     return new PathLayer<VesselMapItem>({
       id: "vessels",
       data: vesselItems,
       getPath: vesselTrackPath,
-      getColor: vesselTrackColor,
-      getWidth: vesselTrackWidth,
+      getColor,
+      getWidth,
       widthUnits: "pixels",
       widthMinPixels: 1,
       capRounded: true,
       jointRounded: true,
       pickable: false,
+      updateTriggers: { getColor: [hoveredMmsi], getWidth: [hoveredMmsi] },
     });
-  }, [vesselItems, vesselsVisible]);
+  }, [vesselItems, vesselsVisible, hoveredMmsi]);
+
+  // docs/04 Phase 3.5 — dark-vessel markers. Independent of `vesselsVisible` on purpose: the
+  // whole point of the AIS-off reveal (docs/05 §3.3) is that toggling the AIS track layer off
+  // leaves this marker alone with nothing beneath it. No mmsi exists to share with the hover
+  // highlight (Phase 3.3) or the vessel PathLayer, so the two features cannot collide.
+  const darkVesselItems = useMemo(() => {
+    if (!suspects) return [] as DarkVesselMapItem[];
+    return suspects.darkVessels.map((dv) => ({ position: [dv.lon, dv.lat] as LonLat }));
+  }, [suspects]);
+
+  const darkVesselLayer = useMemo(() => {
+    if (darkVesselItems.length === 0) return null;
+    return new ScatterplotLayer<DarkVesselMapItem>({
+      id: "dark-vessels",
+      data: darkVesselItems,
+      getPosition: (d) => d.position,
+      getFillColor: DARK_VESSEL_COLOR,
+      getLineColor: DARK_VESSEL_LINE_COLOR,
+      getRadius: DARK_VESSEL_RADIUS_PX,
+      radiusUnits: "pixels",
+      lineWidthUnits: "pixels",
+      getLineWidth: 1.5,
+      stroked: true,
+      pickable: false,
+    });
+  }, [darkVesselItems]);
+
+  // docs/04 Phase 3.6 — infrastructure markers. Same independent-of-`vesselsVisible` reasoning
+  // as dark vessels doesn't apply here (no toggle-driven reveal is described for infrastructure
+  // in any doc) — it simply renders whenever the bundle has findings, like the dark-vessel layer.
+  const infrastructureItems = useMemo(() => {
+    if (!suspects) return [] as InfrastructureMapItem[];
+    return suspects.infrastructure.map((inf) => ({ position: [inf.lon, inf.lat] as LonLat }));
+  }, [suspects]);
+
+  const infrastructureLayer = useMemo(() => {
+    if (infrastructureItems.length === 0) return null;
+    return new ScatterplotLayer<InfrastructureMapItem>({
+      id: "infrastructure",
+      data: infrastructureItems,
+      getPosition: (d) => d.position,
+      getFillColor: INFRASTRUCTURE_COLOR,
+      getLineColor: INFRASTRUCTURE_LINE_COLOR,
+      getRadius: INFRASTRUCTURE_RADIUS_PX,
+      radiusUnits: "pixels",
+      lineWidthUnits: "pixels",
+      getLineWidth: 1.5,
+      stroked: true,
+      pickable: false,
+    });
+  }, [infrastructureItems]);
+
+  // docs/04 Phase 5.3 — ship_detections, flattened across every detection feature's own
+  // `ship_detections` list (Master §6.3). Independent of `selectedDetectionId` and of
+  // `acts_available` gating already applied upstream in loadCase.ts — `detections` is null on a
+  // D16 known-origin case, which this guards the same way `darkVesselItems`/`infrastructureItems`
+  // guard on a null `suspects`.
+  const shipDetectionItems = useMemo(() => {
+    if (!detections) return [] as ShipDetectionMapItem[];
+    const items: ShipDetectionMapItem[] = [];
+    for (const f of detections.features) {
+      for (const sd of f.properties.ship_detections ?? []) {
+        items.push({ position: [sd.lon, sd.lat] });
+      }
+    }
+    return items;
+  }, [detections]);
+
+  const shipDetectionLayer = useMemo(() => {
+    if (shipDetectionItems.length === 0) return null;
+    return new ScatterplotLayer<ShipDetectionMapItem>({
+      id: "ship-detections",
+      data: shipDetectionItems,
+      getPosition: (d) => d.position,
+      getFillColor: SHIP_DETECTION_COLOR,
+      getLineColor: SHIP_DETECTION_LINE_COLOR,
+      getRadius: SHIP_DETECTION_RADIUS_PX,
+      radiusUnits: "pixels",
+      lineWidthUnits: "pixels",
+      getLineWidth: 1.5,
+      stroked: true,
+      pickable: false,
+    });
+  }, [shipDetectionItems]);
 
   // Create the map exactly once.
   useEffect(() => {
@@ -371,7 +500,7 @@ export default function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Origin opacity — this is the ONLY thing about the origin layers that changes on a scrub.
+  // Origin opacity — this is the ONLY thing about the origin layer that changes on a scrub.
   // 0 when Origin is toggled off. Otherwise the rewind fraction (0 at T−0, 1 at T−24h) run
   // through a smoothstep, so the cloud is hidden near the detection time and eases in only as
   // the slider nears maximum rewind ("the origin becomes knowable the further back you drift",
@@ -384,28 +513,32 @@ export default function MapView() {
     return smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind);
   }, [originVisible, t, particles]);
 
-  // Origin heatmap + 50/90 % rings — the backdrop the particles rewind into, drawn UNDERNEATH
-  // them. Everything expensive about these layers is done ONCE, up front, and never on a scrub:
-  //   - `originCloud` / `originRings` (grid → weighted points, km → ring polygons) are memoised
+  // Origin cloud + 50/90 % rings — the backdrop the particles rewind into, drawn UNDERNEATH
+  // them. Ruling D11: a BitmapLayer, never a HeatmapLayer. HeatmapLayer aggregates its points
+  // and renormalises colour in screen space, so the cloud's shape changes as a judge zooms —
+  // indefensible for an uncertainty visual. The BitmapLayer samples a fixed 120×120 texture
+  // through a fixed bilinear filter, so the cloud is identical at every zoom.
+  //
+  // Everything expensive is done ONCE and never on a scrub:
+  //   - `originImage` (grid → RGBA texels) and `originRings` (km → ring polygons) are memoised
   //     on the bundle identity above;
-  //   - the HeatmapLayer aggregates its points into a GPU texture and compiles three shader
-  //     programs the first time it is drawn. That cost (~1 s wall, mostly async, on integrated
-  //     GPUs) is paid as soon as the origin bundle loads, because the layers mount then and are
-  //     kept mounted and drawn for the life of the case.
+  //   - the BitmapLayer uploads that one 120×120 texture when the bundle loads and keeps it for
+  //     the life of the case — no aggregation, no per-texel reduction pass.
   // The T−24h → T−0 fade is therefore a pure `opacity` change, which deck.gl applies WITHOUT
-  // re-aggregating or re-tessellating. Removing the layers from the list on fade-out instead
-  // made deck.gl re-mount + re-aggregate on every re-entry — the 0.3–1.8 s "slider freeze"
-  // this file used to have.
+  // re-uploading the texture. `origin` is read for `origin.bounds` — the origin grid's own
+  // rectangle, NOT bounds.json (CONTRACTS §6, Master §5.6).
   const originLayerList = useMemo(() => {
-    if (!originCloud) return [] as (HeatmapLayer | PathLayer<OriginRing>)[];
-    const list: (HeatmapLayer | PathLayer<OriginRing>)[] = [
-      new HeatmapLayer({
+    if (!originImage || !origin) return [] as (BitmapLayer | PathLayer<OriginRing>)[];
+    const list: (BitmapLayer | PathLayer<OriginRing>)[] = [
+      new BitmapLayer({
         id: "origin",
-        data: originCloud,
-        radiusPixels: ORIGIN_RADIUS_PIXELS,
-        intensity: ORIGIN_INTENSITY,
-        threshold: ORIGIN_THRESHOLD,
-        weightsTextureSize: ORIGIN_WEIGHTS_TEXTURE_SIZE,
+        image: originImage,
+        bounds: [
+          origin.bounds.west,
+          origin.bounds.south,
+          origin.bounds.east,
+          origin.bounds.north,
+        ],
         opacity: originOpacity,
         pickable: false,
       }),
@@ -428,7 +561,7 @@ export default function MapView() {
       );
     }
     return list;
-  }, [originCloud, originRings, originOpacity]);
+  }, [originImage, origin, originRings, originOpacity]);
 
   // Particle cloud — one pre-built binary position frame per timestep (Phase 2). This is the
   // only deck layer that is rebuilt on every playback tick; `frames[t]` is a pre-computed view,
@@ -452,12 +585,30 @@ export default function MapView() {
     });
   }, [particles, particlesVisible, t]);
 
-  // Push the composed list into the deck overlay. Order is bottom→top: heatmap, rings, vessel
-  // tracks, particles. Runs only when one of the memoised pieces actually changes — never on a
-  // bare animation frame — and never re-renders the map container.
+  // Push the composed list into the deck overlay. Order is bottom→top: origin bitmap, rings,
+  // vessel tracks, particles, dark-vessel markers, infrastructure markers, ship-detection
+  // markers (all three point layers drawn last so none is ever hidden under a track line).
+  // Runs only when one of the memoised pieces actually changes — never on a bare animation
+  // frame — and never re-renders the map container.
   useEffect(() => {
-    overlayRef.current?.setProps({ layers: [...originLayerList, vesselLayer, particleLayer] });
-  }, [originLayerList, vesselLayer, particleLayer]);
+    overlayRef.current?.setProps({
+      layers: [
+        ...originLayerList,
+        vesselLayer,
+        particleLayer,
+        darkVesselLayer,
+        infrastructureLayer,
+        shipDetectionLayer,
+      ],
+    });
+  }, [
+    originLayerList,
+    vesselLayer,
+    particleLayer,
+    darkVesselLayer,
+    infrastructureLayer,
+    shipDetectionLayer,
+  ]);
 
   // SAR source follows the active case / bounds.
   useEffect(() => {
@@ -487,7 +638,12 @@ export default function MapView() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !styleReadyRef.current || !bounds) return;
-    const target = activeStage === "attribute" ? sceneAndVesselExtent(bounds, vessels) : bounds;
+    const target =
+      activeStage === "attribute"
+        ? sceneAndVesselExtent(bounds, vessels)
+        : activeStage === "trace"
+          ? sceneParticleOriginExtent(bounds, particles, origin)
+          : bounds;
     map.fitBounds(
       [
         [target.west, target.south],
@@ -495,7 +651,7 @@ export default function MapView() {
       ],
       { padding: 40, animate: false },
     );
-  }, [activeStage, bounds, vessels]);
+  }, [activeStage, bounds, vessels, particles, origin]);
 
   // Detection features follow the store.
   useEffect(() => {

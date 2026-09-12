@@ -199,6 +199,18 @@ def check_meta(d):
     if "verify" in acts and not (d / "verification.json").exists():
         err("meta.json: 'verify' in acts_available but verification.json is missing")
 
+    # ais_source (Master §6.1, D20) — REQUIRED whenever attribution runs, because it decides
+    # which of Jaiveer's scoring components can fire at all. NOAA reports every ~71 s; GFW's
+    # presence layer gives one position per vessel per HOUR, so 'gap' is structurally
+    # impossible there and 'slowdown' is very coarse. The scorer has to know which it is in.
+    ais = m.get("ais_source")
+    if ais is not None and ais not in ("noaa_dense", "gfw_hourly"):
+        err(f"meta.json/ais_source: must be noaa_dense|gfw_hourly, got {ais!r}")
+    if "attribute" in acts and ais is None:
+        err("meta.json: 'attribute' is available but ais_source is missing — attribution "
+            "confidence depends on AIS sampling density and every case must declare which "
+            "regime it is in (noaa_dense ~71 s, gfw_hourly 1/hour)")
+
     # v3 meta fields — validated only if present (Master §6.1); case selection authors them
     ct = m.get("case_type")
     if ct is not None and ct not in ("spill", "lookalike", "nospill"):
@@ -287,41 +299,50 @@ def check_detections(d, box):
              "an error for any case with 'trace' in acts_available")
 
 
-def check_particles(d, box, meta):
-    p = load(d / "particles.json")
+def check_particles(d, box, meta, fname="particles.json", expect="backward", required=True):
+    """Validate one particle file. Runs twice: the backward rewind (required with 'trace')
+    and, when present, particles_forward.json — a SEPARATE file, never an overwrite of the
+    first (Master §6.4)."""
+    p = load(d / fname)
     if p is None:
-        err("particles.json: missing (required whenever 'trace' is available)")
-        return
+        if required:
+            err(f"{fname}: missing (required whenever 'trace' is available)")
+        return None
     if not need_keys(p, ["t0", "direction", "timestep_minutes", "n_steps",
-                         "n_particles", "positions"], "particles.json"):
-        return
-    t0 = parse_ts(p["t0"], "particles.json/t0")
+                         "n_particles", "positions"], fname):
+        return None
+    t0 = parse_ts(p["t0"], f"{fname}/t0")
     if meta and t0:
         dt = parse_ts(meta["detection_time"], "meta.json/detection_time")
         if dt and abs((t0 - dt).total_seconds()) > 60:
-            err(f"particles.json/t0 ({p['t0']}) does not match meta detection_time "
+            err(f"{fname}/t0 ({p['t0']}) does not match meta detection_time "
                 f"({meta['detection_time']}) — the rewind must start at the satellite pass")
-    if p["direction"] != "backward":
-        warn(f"particles.json/direction is {p['direction']!r}; the demo rewind expects 'backward'")
+    if p["direction"] != expect:
+        if expect == "forward":
+            err(f"{fname}/direction is {p['direction']!r}, must be 'forward' — this looks like "
+                "a copy of the backward run. The forward prediction is a second integration, "
+                "not a renamed file (Master §6.4).")
+        else:
+            warn(f"{fname}/direction is {p['direction']!r}; the demo rewind expects 'backward'")
     pos = p["positions"]
     if not isinstance(pos, list) or not pos:
-        err("particles.json/positions: must be a non-empty list of timesteps")
-        return
+        err(f"{fname}/positions: must be a non-empty list of timesteps")
+        return None
     if len(pos) != p["n_steps"]:
-        err(f"particles.json: n_steps says {p['n_steps']} but positions has {len(pos)} timesteps")
+        err(f"{fname}: n_steps says {p['n_steps']} but positions has {len(pos)} timesteps")
     if len(pos[0]) != p["n_particles"]:
-        err(f"particles.json: n_particles says {p['n_particles']} but step 0 has {len(pos[0])}")
+        err(f"{fname}: n_particles says {p['n_particles']} but step 0 has {len(pos[0])}")
     lens = {len(s) for s in pos}
     if len(lens) > 1:
-        err(f"particles.json: timesteps have differing particle counts {sorted(lens)[:5]} — "
+        err(f"{fname}: timesteps have differing particle counts {sorted(lens)[:5]} — "
             "particles must never be added or dropped mid-run")
     span_h = (p["n_steps"] - 1) * p["timestep_minutes"] / 60
     if not 6 <= span_h <= 72:
-        warn(f"particles.json: rewind spans {span_h:.1f} h; the demo is scoped to ~24 h")
+        warn(f"{fname}: run spans {span_h:.1f} h; the demo is scoped to ~24 h")
     if box:
         for si in (0, len(pos) // 2, len(pos) - 1):
             for pt in pos[si][::max(1, len(pos[si]) // 50)]:
-                box.check(float(pt[0]), float(pt[1]), f"particles.json/positions[{si}]")
+                box.check(float(pt[0]), float(pt[1]), f"{fname}/positions[{si}]")
     # displacement plausibility — the units bug catcher
     try:
         a, b = pos[0][0], pos[-1][0]
@@ -330,14 +351,25 @@ def check_particles(d, box, meta):
         dy = (b[1] - a[1]) * 111.32
         dist = math.hypot(dx, dy)
         if dist > 400:
-            err(f"particles.json: particle 0 travelled {dist:.0f} km in {span_h:.0f} h "
+            err(f"{fname}: particle 0 travelled {dist:.0f} km in {span_h:.0f} h "
                 "— check current units (HYCOM on GEE is int x 0.001 m/s: divide by 1000)")
         elif dist < 0.5:
-            err(f"particles.json: particle 0 barely moved ({dist:.2f} km) — fields may be zero")
+            err(f"{fname}: particle 0 barely moved ({dist:.2f} km) — fields may be zero")
         elif dist > 250:
-            warn(f"particles.json: particle 0 travelled {dist:.0f} km — high but not impossible")
+            warn(f"{fname}: particle 0 travelled {dist:.0f} km — high but not impossible")
     except (IndexError, TypeError):
-        err("particles.json/positions: malformed coordinate arrays")
+        err(f"{fname}/positions: malformed coordinate arrays")
+    return p
+
+
+def check_particles_forward(d, box, meta, backward):
+    """particles_forward.json is optional. When it exists it must be a genuine second run:
+    same t0, opposite direction, and not a byte-for-byte twin of the rewind."""
+    fwd = check_particles(d, box, meta, fname="particles_forward.json",
+                          expect="forward", required=False)
+    if fwd and backward and fwd.get("positions") == backward.get("positions"):
+        err("particles_forward.json: positions are identical to particles.json — the forward "
+            "prediction was never integrated, only relabelled")
 
 
 def check_origin(d, box):
@@ -397,6 +429,57 @@ def check_origin(d, box):
         warn(f"origin.json: only {o['ensemble_runs']} ensemble runs; uncertainty will look fake")
     if box:
         box.check(float(o["centroid"][0]), float(o["centroid"][1]), "origin.json/centroid")
+
+    # time_window_method (D12) — 'bounded' is a SEARCH BRACKET, not a measured release time,
+    # and the frontend renders the two differently. An absent value is the dangerous case.
+    twm = o.get("time_window_method")
+    if twm is None:
+        warn("origin.json: no time_window_method — the frontend cannot tell a measured window "
+             "from a search bracket and will render a bracket as a measurement (D12)")
+    elif twm not in ("bounded", "convergence"):
+        err(f"origin.json/time_window_method: must be bounded|convergence, got {twm!r}")
+
+    # Optional v3/v4 blocks (Master §6.5). Absence hides a UI row; it must never throw.
+    am = o.get("age_method")
+    if am is not None and am not in ("shear", "fay", "elongation", "combined",
+                                     "disagreement", "none"):
+        err(f"origin.json/age_method: must be shear|fay|elongation|combined|disagreement|none, "
+            f"got {am!r}")
+    aw = o.get("age_weathering")
+    if aw is not None and aw not in ("fresh", "weathered", "unknown"):
+        err(f"origin.json/age_weathering: must be fresh|weathered|unknown, got {aw!r}")
+    ah = o.get("age_hours")
+    if ah is not None:
+        if not (isinstance(ah, list) and len(ah) == 2):
+            err("origin.json/age_hours: must be [low, high]")
+        elif ah[0] > ah[1]:
+            err(f"origin.json/age_hours: low {ah[0]} exceeds high {ah[1]}")
+        elif ah[0] < 0:
+            err(f"origin.json/age_hours: negative age {ah[0]}")
+    ae = o.get("age_estimators")
+    if ae is not None:
+        if not isinstance(ae, dict):
+            err("origin.json/age_estimators: must be an object of estimator -> [low, high] or null")
+        else:
+            for k, v in ae.items():
+                # null means this estimator did not apply — never render it as a zero band
+                if v is None:
+                    continue
+                if not (isinstance(v, list) and len(v) == 2 and v[0] <= v[1]):
+                    err(f"origin.json/age_estimators.{k}: must be null or [low, high], got {v!r}")
+    sf = o.get("stranded_fraction")
+    if sf is not None and not (isinstance(sf, (int, float)) and 0 <= sf <= 1):
+        err(f"origin.json/stranded_fraction: must be a fraction in 0-1, got {sf!r}")
+    oc = o.get("opendrift_comparison")
+    if oc is not None:
+        if not isinstance(oc, dict):
+            err("origin.json/opendrift_comparison: must be an object")
+        else:
+            need_keys(oc, ["centroid_separation_km", "r90_ratio"],
+                      "origin.json/opendrift_comparison")
+            r = oc.get("r90_ratio")
+            if isinstance(r, (int, float)) and r <= 0:
+                err(f"origin.json/opendrift_comparison.r90_ratio: must be positive, got {r}")
     return o
 
 
@@ -425,7 +508,7 @@ def check_vessels(d, box):
     return seen
 
 
-def check_suspects(d, known_mmsi, origin, box=None):
+def check_suspects(d, known_mmsi, origin, box=None, ais_source=None):
     s = load(d / "suspects.json")
     if s is None:
         err("suspects.json: missing (required whenever 'attribute' is available)")
@@ -451,14 +534,69 @@ def check_suspects(d, known_mmsi, origin, box=None):
         if not sus["reasons"]:
             warn(f"{w}: no reasons given; judge-facing cards need plain-language justification")
         st = sus.get("source_type")
-        if st is not None and st not in ("vessel", "dark_vessel", "infrastructure"):
-            err(f"{w}: source_type must be vessel|dark_vessel|infrastructure, got {st!r}")
+        if st is not None and st not in ("vessel", "dark_vessel", "infrastructure",
+                                         "natural_seep"):
+            err(f"{w}: source_type must be vessel|dark_vessel|infrastructure|natural_seep, "
+                f"got {st!r}")
         comps = sus.get("components")
         if isinstance(comps, dict):
             for cname, cval in comps.items():
                 # null is meaningful — a not-applicable component, never rendered as 0
                 if cval is not None and not (isinstance(cval, (int, float)) and 0 <= cval <= 1):
                     err(f"{w}: components.{cname} must be null or in 0–1, got {cval!r}")
+            # D20: at one position per vessel per hour you cannot see a 30-minute silence.
+            # A number here is not a low score, it is a fabricated measurement.
+            if ais_source == "gfw_hourly":
+                for cname in ("gap", "slowdown"):
+                    if isinstance(comps.get(cname), (int, float)):
+                        err(f"{w}: components.{cname} is {comps[cname]} on a gfw_hourly case — "
+                            f"hourly AIS cannot resolve {cname}, so this must be null, not a "
+                            "number. A zero where a null belongs is an honesty bug (D20).")
+
+        # component_notes (D29) — explanation, not evidence. Keys must name real components,
+        # and every gated (null) component should say why, because the UI renders null as
+        # "n/a" and an unexplained "n/a" reads as a broken feature rather than a refusal to
+        # measure something unmeasurable.
+        notes = sus.get("component_notes")
+        if notes is not None:
+            if not isinstance(notes, dict):
+                err(f"{w}: component_notes must be an object keyed by component name")
+            else:
+                # Only skippable when there is no components object at all to check against;
+                # an EMPTY components dict still means the note names nothing real.
+                have_comps = isinstance(comps, dict)
+                for k, v in notes.items():
+                    if have_comps and k not in comps:
+                        err(f"{w}: component_notes.{k} names no component in components "
+                            f"{sorted(comps)} — a note must explain a bar that exists")
+                    if not str(v or "").strip():
+                        err(f"{w}: component_notes.{k} is empty; drop the key or write the reason")
+        if isinstance(comps, dict):
+            missing = [c for c, v in comps.items()
+                       if v is None and not str((notes or {}).get(c) or "").strip()]
+            if missing:
+                warn(f"{w}: components {missing} are null with no component_notes entry — "
+                     "the card will render 'n/a' with nothing behind it (D29)")
+
+    # A component that returns the SAME value for every scored suspect discriminates nothing:
+    # it adds a constant to every score, changes no ranking, and inflates the numbers on screen
+    # by its full weight. This is the check that catches type_prior = 1.00 across a homogeneous
+    # offshore fleet mechanically, instead of someone noticing it by eye (D28).
+    scored = [x for x in s["suspects"] if isinstance(x.get("components"), dict)]
+    if len(scored) >= 3:
+        names = set()
+        for x in scored:
+            names |= set(x["components"])
+        for cname in sorted(names):
+            vals = [x["components"].get(cname) for x in scored]
+            if any(v is None for v in vals):
+                continue
+            if not all(isinstance(v, (int, float)) for v in vals):
+                continue
+            if len(set(vals)) == 1:
+                warn(f"suspects.json: components.{cname} is {vals[0]} for all {len(scored)} "
+                     "scored suspects — it separates nobody, so it only inflates every score "
+                     "by its weight. Gate it to null instead (D28).")
     scores = [x.get("score", 0) for x in s["suspects"]]
     if scores != sorted(scores, reverse=True):
         err("suspects.json: suspects are not sorted by descending score")
@@ -494,6 +632,22 @@ def check_suspects(d, known_mmsi, origin, box=None):
             err(f"{w}: score {inf['score']} outside 0–1")
         if box:
             box.check(float(inf["lon"]), float(inf["lat"]), w)
+
+    # natural_seep (D19) — the fourth source class. It is an object, not a list: either the
+    # detection sits in documented seep territory or it does not. A flag raised without a
+    # named source is exactly the claim we could not substantiate on Mumbai, so 'flagged'
+    # true demands both a source and a note.
+    ns = s.get("natural_seep")
+    if ns is not None:
+        if not isinstance(ns, dict):
+            err("suspects.json/natural_seep: must be an object with flagged/source/note")
+        elif not isinstance(ns.get("flagged"), bool):
+            err("suspects.json/natural_seep.flagged: must be true or false")
+        elif ns["flagged"]:
+            for k in ("source", "note"):
+                if not str(ns.get(k) or "").strip():
+                    err(f"suspects.json/natural_seep.{k}: required when flagged is true — "
+                        "a seep claim on screen needs a citable source, not a bare flag")
 
 
 def check_verification(d):
@@ -593,13 +747,14 @@ def _run_bundle(d, strict=False):
     if "detect" in acts:
         check_detections(d, box)
     if "trace" in acts:
-        check_particles(d, box, meta)
+        backward = check_particles(d, box, meta)
+        check_particles_forward(d, box, meta, backward)
         origin = check_origin(d, box)
     else:
         origin = None
     if "attribute" in acts:
         known = check_vessels(d, box)
-        check_suspects(d, known, origin, box)
+        check_suspects(d, known, origin, box, meta.get("ais_source") if meta else None)
     if "verify" in acts:
         check_verification(d)
 

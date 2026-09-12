@@ -8,6 +8,7 @@ import { loadParticleBundle, type ParticleBundle } from "./particles";
 import { loadOriginBundle, type OriginBundle } from "./origin";
 import { loadVesselBundle, type VesselBundle } from "./vessels";
 import { loadSuspectsBundle, type SuspectsBundle } from "./suspects";
+import { loadVerificationBundle, type VerificationBundle } from "./verification";
 
 export type LayerId = "sar" | "detections" | "particles" | "origin" | "vessels";
 
@@ -21,6 +22,10 @@ export interface AppState {
   meta: CaseMeta | null;
   bounds: Bounds | null;
   detections: DetectionCollection | null;
+  /** The case offers `detect` but Stage 1 has not written detections.geojson yet. The Detect
+   *  screen shows the SAR scene and says so, instead of rendering an empty map that reads as
+   *  a broken feature. Distinct from `detections: null` on a case with no `detect` act. */
+  detectionsPending: boolean;
 
   // Phase 2 particle playback. The bundle is fetched + parsed once per case and then only
   // indexed by timestep — never re-fetched or re-parsed while the slider moves.
@@ -58,8 +63,19 @@ export interface AppState {
   suspectsStatus: LoadStatus;
   suspectsError: string | null;
 
+  // Phase 4 (P1.1) verification. Same discipline as origin/suspects: fetched + parsed once per
+  // case, then read from memory. Feeds the Verify screen only. Loaded in the background when
+  // `verify` is in acts_available — never blocks the shell.
+  verification: VerificationBundle | null;
+  verificationStatus: LoadStatus;
+  verificationError: string | null;
+
   activeStage: Act;
   selectedDetectionId: string | null;
+  /** docs/04 Phase 3.3 — the mmsi of the suspect card currently hovered in Attribute, or `null`.
+   *  Purely transient UI state (same family as `selectedDetectionId`); MapView reads it to
+   *  emphasise/dim the matching vessel track. Never persisted, never drives any data fetch. */
+  hoveredSuspectMmsi: string | null;
 
   layers: Record<LayerId, boolean>;
   tNorm: number; // 0..1, 1 = "T-0 detect". Bound to an integer timestep via lib/timestep.ts.
@@ -70,8 +86,10 @@ export interface AppState {
   loadOrigin: () => Promise<void>;
   loadVessels: () => Promise<void>;
   loadSuspects: () => Promise<void>;
+  loadVerification: () => Promise<void>;
   setStage: (stage: Act) => void;
   selectDetection: (id: string | null) => void;
+  setHoveredSuspect: (mmsi: string | null) => void;
   toggleLayer: (id: LayerId) => void;
   setTNorm: (t: number) => void;
   setPlaying: (p: boolean) => void;
@@ -80,11 +98,19 @@ export interface AppState {
    *  rewind from T−0. No-ops unless particles + origin are both `ready` and this case has not
    *  been initialised yet, so it is safe to call on every render. */
   initTrace: () => void;
+  /** Return to a clean Gallery state (docs/04 C8, Master §2.1). Clears only the transient
+   *  session state the next judge must not inherit — slider, selection, stage, layers,
+   *  playback, the Trace-arrival guard — and re-seeds the best-oil detection. When the case is
+   *  fully loaded (`status === "ready"`) every bundle stays in memory, so re-picking the same
+   *  case is instant with no re-fetch; otherwise the incomplete load is dropped and re-entry
+   *  retries. Navigation to "/" is the caller's job (the store never touches the router). */
+  resetToGallery: () => void;
 }
 
 /** The `id` of the highest-confidence `"oil"` detection (first in file order on a tie), or
  *  `null` when the scene has no oil features. Reads the collection only — never mutates it. */
-function bestOilDetectionId(d: DetectionCollection): string | null {
+function bestOilDetectionId(d: DetectionCollection | null): string | null {
+  if (d === null) return null;
   let bestId: string | null = null;
   let bestConf = -Infinity;
   for (const f of d.features) {
@@ -107,6 +133,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   meta: null,
   bounds: null,
   detections: null,
+  detectionsPending: false,
 
   particles: null,
   particlesStatus: "idle",
@@ -127,8 +154,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   suspectsStatus: "idle",
   suspectsError: null,
 
+  verification: null,
+  verificationStatus: "idle",
+  verificationError: null,
+
   activeStage: "detect",
   selectedDetectionId: null,
+  hoveredSuspectMmsi: null,
 
   layers: {
     sar: true,
@@ -151,6 +183,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       status: "loading",
       error: null,
       selectedDetectionId: null,
+      hoveredSuspectMmsi: null,
+      // Reset Stage 1 state for the incoming case, so a pending banner from the previous
+      // case can never bleed onto one whose detections did load.
+      detections: null,
+      detectionsPending: false,
       // Reset playback state for the incoming case.
       particles: null,
       particlesStatus: "idle",
@@ -170,9 +207,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       suspects: null,
       suspectsStatus: "idle",
       suspectsError: null,
+      // Reset verification for the incoming case.
+      verification: null,
+      verificationStatus: "idle",
+      verificationError: null,
     });
     try {
-      const { meta, bounds, detections } = await loadCase(id);
+      const { meta, bounds, detections, detectionsPending } = await loadCase(id);
       // Guard against a stale response if the case was switched mid-fetch.
       if (get().activeCaseId !== id) return;
       const activeStage: Act = meta.acts_available.includes(get().activeStage)
@@ -183,9 +224,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         meta,
         bounds,
         detections,
+        detectionsPending,
         activeStage,
         // Detect arrives with the best oil detection already selected (docs/04 C1).
-        selectedDetectionId: bestOilDetectionId(detections),
+        // detections is null for a D16 known-origin case (no `detect` act) — nothing to select.
+        selectedDetectionId: detections ? bestOilDetectionId(detections) : null,
       });
       // Fetch the trace-stage bundles in the background — they must not block the map /
       // detections. Both files are required whenever the `trace` act is available (CONTRACTS §1).
@@ -199,6 +242,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (meta.acts_available.includes("attribute")) {
         void get().loadVessels();
         void get().loadSuspects();
+      }
+      // Fetch the Verify bundle in the background. CONTRACTS §6.1: `verify` in acts_available
+      // guarantees verification.json exists (the validator enforces it).
+      if (meta.acts_available.includes("verify")) {
+        void get().loadVerification();
       }
     } catch (err) {
       if (get().activeCaseId !== id) return;
@@ -280,6 +328,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  loadVerification: async () => {
+    const id = get().activeCaseId;
+    if (get().verificationStatus === "loading") return;
+    set({ verificationStatus: "loading", verificationError: null });
+    try {
+      const bundle = await loadVerificationBundle(id);
+      // A different case was selected while this bundle was in flight — drop it.
+      if (get().activeCaseId !== id) return;
+      set({ verification: bundle, verificationStatus: "ready" });
+    } catch (err) {
+      if (get().activeCaseId !== id) return;
+      set({
+        verification: null,
+        verificationStatus: "error",
+        verificationError: (err as Error).message,
+      });
+    }
+  },
+
   setStage: (stage) => {
     const meta = get().meta;
     if (meta && !meta.acts_available.includes(stage)) return;
@@ -287,6 +354,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectDetection: (id) => set({ selectedDetectionId: id }),
+  setHoveredSuspect: (mmsi) => set({ hoveredSuspectMmsi: mmsi }),
 
   toggleLayer: (id) =>
     set((s) => ({ layers: { ...s.layers, [id]: !s.layers[id] } })),
@@ -308,5 +376,59 @@ export const useAppStore = create<AppState>((set, get) => ({
       playing: true, // existing usePlayback rewinds T−0 → T−24h once, then stops
       autoPlaying: true, // Slice 2 — run that first rewind at AUTOPLAY_STEPS_PER_SEC
     }));
+  },
+
+  resetToGallery: () => {
+    const s = get();
+    // The transient session state Judge B must never inherit (docs/04 C8, Master §2.1).
+    const transient = {
+      tNorm: 1,
+      activeStage: "detect" as Act,
+      layers: {
+        sar: true,
+        detections: true,
+        particles: false,
+        origin: false,
+        vessels: false,
+      },
+      playing: false,
+      autoPlaying: false,
+      traceInitFor: null,
+      error: null,
+      // Re-seed the best-oil pick so Detect is never blank on re-entry (docs/04 C1).
+      selectedDetectionId: s.detections ? bestOilDetectionId(s.detections) : null,
+      hoveredSuspectMmsi: null,
+    };
+    if (s.status === "ready") {
+      // Case fully loaded — keep every bundle (and its ready/error status) in memory. Re-picking
+      // the same case between judges is then instant, with no re-fetch.
+      set(transient);
+    } else {
+      // Never loaded cleanly (idle / loading / error) — drop the incomplete state so re-entry
+      // runs loadActiveCase() fresh.
+      set({
+        ...transient,
+        status: "idle",
+        selectedDetectionId: null,
+        meta: null,
+        bounds: null,
+        detections: null,
+        particles: null,
+        particlesStatus: "idle",
+        particlesError: null,
+        origin: null,
+        originStatus: "idle",
+        originError: null,
+        vessels: null,
+        vesselsStatus: "idle",
+        vesselsError: null,
+        suspects: null,
+        suspectsStatus: "idle",
+        suspectsError: null,
+        verification: null,
+        verificationStatus: "idle",
+        verificationError: null,
+      });
+    }
   },
 }));

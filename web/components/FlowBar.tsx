@@ -7,18 +7,29 @@ import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import type { Act } from "@/lib/contracts";
 import { adjacentStage, flowSteps } from "@/lib/flow";
+import { isNoSpill } from "@/lib/detections";
 
 export default function FlowBar({ stage }: { stage: Act }) {
   const router = useRouter();
   const meta = useAppStore((s) => s.meta);
   const activeCaseId = useAppStore((s) => s.activeCaseId);
+  const resetToGallery = useAppStore((s) => s.resetToGallery);
+  const noSpill = isNoSpill(useAppStore((s) => s.detections));
   const acts = meta?.acts_available;
 
   const prev = adjacentStage(stage, acts, -1);
-  const steps = flowSteps(acts);
+  // docs/04 D1 — greyed dots get the "nothing to trace" reason on a no-spill scene.
+  const steps = flowSteps(acts, { noSpill });
+
+  // Any path back to the Gallery goes through the same clean-state reset as the idle timer
+  // (docs/04 C8) — going forward through a stage never does.
+  const toGallery = () => {
+    resetToGallery();
+    router.push("/");
+  };
 
   const goBack = () =>
-    prev ? router.push(`/case/${activeCaseId}/${prev}`) : router.push("/");
+    prev ? router.push(`/case/${activeCaseId}/${prev}`) : toGallery();
 
   return (
     <div className="flex h-8 shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] bg-[#0b0f14] px-4">
@@ -67,7 +78,7 @@ export default function FlowBar({ stage }: { stage: Act }) {
 
       <button
         type="button"
-        onClick={() => router.push("/")}
+        onClick={toGallery}
         className="shrink-0 text-[10px] font-medium text-white/40 transition-colors hover:text-white/75"
       >
         Start over

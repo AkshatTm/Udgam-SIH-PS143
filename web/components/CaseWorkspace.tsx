@@ -13,6 +13,8 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useAppStore } from "@/lib/store";
+import { useIdleReset } from "@/lib/useIdleReset";
+import { isNoSpill } from "@/lib/detections";
 import { adjacentStage, isStage, primaryActionLabel } from "@/lib/flow";
 import type { Act } from "@/lib/contracts";
 import Header from "./Header";
@@ -21,6 +23,8 @@ import TimeSlider from "./TimeSlider";
 import LayerToggles from "./LayerToggles";
 import FlowBar from "./FlowBar";
 import PrimaryAction from "./PrimaryAction";
+import VerifyScreen from "./VerifyScreen";
+import NoSpillBanner from "./NoSpillBanner";
 
 // MapLibre touches `window` — never render it on the server.
 const MapView = dynamic(() => import("./MapView"), {
@@ -56,6 +60,7 @@ export default function CaseWorkspace() {
   const status = useAppStore((s) => s.status);
   const error = useAppStore((s) => s.error);
   const meta = useAppStore((s) => s.meta);
+  const detections = useAppStore((s) => s.detections);
   const activeCaseId = useAppStore((s) => s.activeCaseId);
   const setActiveCase = useAppStore((s) => s.setActiveCase);
   const loadActiveCase = useAppStore((s) => s.loadActiveCase);
@@ -63,6 +68,11 @@ export default function CaseWorkspace() {
   const particlesStatus = useAppStore((s) => s.particlesStatus);
   const originStatus = useAppStore((s) => s.originStatus);
   const initTrace = useAppStore((s) => s.initTrace);
+  const resetToGallery = useAppStore((s) => s.resetToGallery);
+
+  // C8 — after ~90 s of no interaction, return to the Gallery in a clean state. Mounted here
+  // so the timer/listeners exist only while a case is open; unmounts (and cleans up) on "/".
+  useIdleReset();
 
   // URL case → store. setActiveCase() no-ops when the id already matches, so kick off the
   // first load explicitly when the store is still idle for that id.
@@ -107,8 +117,13 @@ export default function CaseWorkspace() {
   const acts = meta?.acts_available;
   const nextStage = adjacentStage(stage, acts, 1);
   const onPrimary = () => {
-    if (nextStage) router.push(`/case/${caseId}/${nextStage}`);
-    else router.push("/");
+    if (nextStage) {
+      router.push(`/case/${caseId}/${nextStage}`);
+    } else {
+      // Terminal stage → "Try another case": same clean-state reset as idle / Start over.
+      resetToGallery();
+      router.push("/");
+    }
   };
 
   return (
@@ -135,11 +150,29 @@ export default function CaseWorkspace() {
         <div className="flex items-center justify-center">
           <span className="font-mono text-[11px] text-white/30">Loading case…</span>
         </div>
+      ) : !meta.acts_available.includes(stage) ? (
+        // D3 — a direct URL to an act this case does not expose. The reconcile effect above
+        // redirects to the first available stage on the next tick; until it lands, show a
+        // neutral placeholder rather than flashing the map + a stale ContextPanel. Not an
+        // error state — no red, no "failed".
+        <div className="flex items-center justify-center">
+          <span className="font-mono text-[11px] text-white/30">
+            Not part of this case — taking you to the first stage…
+          </span>
+        </div>
       ) : (
         <div className="grid min-h-0 grid-cols-[auto_1fr_auto]">
           <StageRail />
           <div className="relative min-w-0">
             <MapView />
+            {/* D1 — a valid zero-oil scene is a *result*, not an error: an over-map banner
+                while the SAR + grey look-alike polygons stay visible below it. */}
+            {stage === "detect" && !error && isNoSpill(detections) && <NoSpillBanner />}
+            {/* Verify replaces the map+panel view but keeps MapView mounted underneath so it
+                is never torn down on stage navigation. ContextPanel and the footer controls
+                are suppressed for this stage; PrimaryAction stays (it is "Try another case →"
+                here, wired the same as every other stage). */}
+            {stage === "verify" && <VerifyScreen />}
             {status === "loading" && (
               <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded border border-white/[0.08] bg-black/50 px-3 py-1">
                 <span className="font-mono text-[10px] text-white/50">Loading…</span>
@@ -147,11 +180,11 @@ export default function CaseWorkspace() {
             )}
             <PrimaryAction label={primaryActionLabel(stage, acts)} onClick={onPrimary} />
           </div>
-          <ContextPanel />
+          {stage !== "verify" && <ContextPanel />}
         </div>
       )}
 
-      {meta && !error && (
+      {meta && !error && stage !== "verify" && meta.acts_available.includes(stage) && (
         <footer className="flex flex-col bg-[#0b0f14]">
           <TimeSlider />
           <div className="flex items-center border-t border-white/[0.06] px-4 py-1.5">

@@ -63,18 +63,45 @@ The dataset is titled *"Sentinel-1 SAR Oil spill image dataset for train, valida
 
 **You have been benchmarking against the wrong number.** See B2.
 
-## A4. What is now resolved
+## A4. What is now resolved — the case library is locked
 
-**VH is confirmed available for Ennore.** All four candidate Sentinel-1 scenes report bands `["VV","VH","angle"]`, all `IW` mode. The chosen scene:
+**Six spill cases plus two rejection cases, all real data.** The library straddles both hemispheres and four ocean basins, which is good for your generalisation claim and dangerous for any assumption baked in against one case.
 
-```
-S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04
-2017-01-29 00:31:32 UTC   (06:01 IST, the morning after the collision)
-```
+| # | Case | Where | Your job |
+|---|---|---|---|
+| 1 | **Menuett** 2024-07-30 | Atlantic, 30.4 N −79.6 W | Hero. 31 km linear slick, expect `chronic` |
+| 2 | **Panagia Thalass…** 2023-03-17 | Pacific, 37.8 N −123.9 W | 20 km linear |
+| 3 | **Huntington Beach** 2021-10-02 | San Pedro Bay, 33.6 N −118.1 W | Comma-shaped, sea −20.9 dB VV, core −28 to −32 |
+| 4 | **Alaska dark vessel** 2023-05-16 | Gulf of Alaska, 59.6 N −142.7 W | 2 km, 0.3 km² — **the smallest slick in the library.** Also: **find the bright target 4.5 km away**, it is the whole case |
+| 5 | **Mumbai** 2023-09-03 | Indian EEZ, 18.5 N 72.2 E | 21 km, 7.7 km². Carries infrastructure + dark vessel + natural-seep flag |
+| 6 | **Jamnagar** 2024-02-23 | Arabian Sea, 20.15 N 71.9 E | 21 km hook — measured ~8 dB VV depression, VV −25.41 vs clean −17.24 |
+| 7 | **Look-alike** Ennore 2023-11-30 | Bay of Bengal | **Correct output is zero oil features** |
+| 8 | **No-spill** Zenodo Part 3 | — | **You nominate this one.** Correct output is zero oil features |
+
+**Ennore 2017 is archived (D18) and Golden Ray is dropped (D17).** Neither is your problem any more.
 
 **Akshat exports a 2-band float32 GeoTIFF in dB, not an 8-bit PNG.** Insist on this if it ever slips. Your signal is ~1 dB deep; an 8-bit PNG quantises the usable dB range into 256 levels and destroys VH precision. He generates the PNG separately, for display only.
 
-> WAIT / FLAG: **VH for the four US cases is unverified** until Akshat picks them. Post-2016 US coastal acquisitions are overwhelmingly VV+VH IW, so this is very likely fine — but ask him to confirm `bandNames()` per scene as he selects, and keep the VV-only fallback ready (D3).
+> WAIT / FLAG: **VH per case is confirmed by Akshat running `bandNames()`** as he exports. Post-2016 acquisitions are overwhelmingly VV+VH IW, so this is very likely fine everywhere — but if any case comes back VV-only he tells you which, and the VV-only fallback applies for that case alone (D3), noted honestly on the results slide.
+
+## A5. Two things that are new and both are for you
+
+**You now have real-incident ground truth for segmentation.** Akshat is downloading the **Cerulean slick polygon** for every case it has. Right now every IoU number you own comes from the Zenodo test set. With those polygons you can say:
+> *"On the Huntington Beach scene our segmentation achieves X IoU against SkyTruth Cerulean's operational detection of the same slick."*
+
+That is a completely different claim from benchmark-only figures, and it is available for four or five cases rather than zero.
+
+**But the polygons arrive AFTER your detector has run.** See A6.
+
+## A6. Blind evaluation — read this before you start
+
+**You are not told where the slick is.** Akshat holds the documented answer for every case in a sealed file. You get `sar_vv_vh.tif`, `sar.png`, `bounds.json`, and nothing else.
+
+Why: if you know where the slick is, you will lower the threshold until it appears. That is not dishonesty, it is what anyone does when the target is visible — and it collapses *"our detector found it"* into *"we tuned until it did."* A December panel will ask which happened.
+
+So: **run your pipeline, commit the output, and only then ask Akshat for the Cerulean polygon** to compute IoU. The comparison is only meaningful in that order.
+
+He will not answer *"is this right?"* during the week. That is deliberate, not unhelpfulness.
 
 ---
 
@@ -362,12 +389,24 @@ Instead: run the detector on each real scene, look at the distribution of `contr
 ### 6.5 Per-case verification, before handover
 For every case, do all four:
 1. Plot `detections.geojson` over `sar.png` — polygons must sit on dark features
-2. Check coordinates are in the right hemisphere (Ennore ~80E/13N; California ~-118E/33N)
+2. Check coordinates are in the right hemisphere. **The library straddles both**: Menuett −79.6, Panagia −123.9, Huntington −118.1, Alaska −142.7, Mumbai +72.2, Jamnagar +71.9. A sign error that survives four Atlantic cases surfaces the moment you cross into the Indian Ocean
 3. Read the Layer 1 confidence — if the classifier says 0.51, say so rather than presenting certainty
 4. `python scripts/validate_case.py cases/<id>` -> PASS
 
-### 6.6 Cases 6 and 7
-Give Akshat your nominations from Part 3: one look-alike scene where the dark feature is genuinely convincing, and one clean-ocean scene. Run your pipeline on both — **the correct output is zero oil features.** That fifteen seconds on stage, where the system loads a scene and correctly reports nothing, answers three hostile questions at once.
+### 6.6 Two cases that need specific attention
+
+**Alaska is the hardest detection in the library.** 2 km long, 0.3 km² — an order of magnitude smaller than the others, at 59.6 N where incidence-angle effects and sea state differ from the mid-latitude cases. If your classifier gates it out, that is a real result and you report it. But **do not lower the threshold to force it through** — you would be tuning against an answer you are not supposed to know.
+
+**The ship detector matters more on Alaska than anywhere else.** Cerulean places a dark vessel at 59.546 N −142.639 W, roughly 4.5 km from the slick, estimated 40 m ± 20%. **Your bright-point detector finding that contact independently is the entire case.** A 40 m vessel is at the small end of what SAR resolves reliably — if you find it, say so with the measured peak dB; if you do not, say that too, because a missed contact is honest and a fabricated one is not.
+
+**Mumbai carries three source types at once** — infrastructure, a dark vessel, and a natural-seep flag. Your `discharge_class` and `ship_detections` both feed the source classification that sorts them out. Expect a messier scene than the open-ocean cases.
+
+### 6.7 Cases 7 and 8 — the rejection pair
+**Case 7 is already chosen**: the Ennore scene of **2023-11-30 00:32 UTC**, from the Arabian Sea sweep. It is four days *before* the December 2023 CPCL spill, so its dark patches provably cannot be oil. That is a better look-alike than anything in Zenodo because it is the same coast and sensor as a real incident.
+
+**Case 8 is yours to nominate**: one clean-ocean scene from Zenodo Part 3.
+
+Run your pipeline on both — **the correct output is zero oil features.** That fifteen seconds on stage, where the system loads a scene and correctly reports nothing, answers three hostile questions at once.
 
 ---
 
@@ -405,7 +444,10 @@ Zenodo scenes sit at ~-29 dB; GEE scenes at ~-20 dB. A model trained on absolute
 ## D2. The U-Net hallucinates on look-alikes *(MEDIUM, loud if you test for it)*
 The paper reports exactly this. Layer 1 is the mitigation; 4.3's gated-vs-ungated comparison is how you prove it works. If look-alike scenes still leak through, raise the classifier threshold — better to miss a marginal spill than fabricate one on a demo case whose whole purpose is to be rejected.
 
-## D3. A US case turns out VV-only *(LOW-MEDIUM)*
+## D2b. Alaska's slick is too small to detect *(MEDIUM, and it is a legitimate outcome)*
+0.3 km² at 59.6 N. If Layer 1 gates it out or Layer 2 finds nothing, **report that** — and note that the ship detection may still succeed, which would make it a dark-vessel case with no confirmed slick of our own. Resist the urge to tune it in; you do not know the answer and tuning against a suspicion is the same error as tuning against a known one.
+
+## D3. A case turns out VV-only *(LOW-MEDIUM)*
 Then `vh_contrast_db` and `vh_mean_depth_db` are unavailable for that case. Have a VV-only variant of both the classifier and the RF trained and ready — same pipeline, one channel — and **note the degradation honestly per case** on the results slide. Do not silently zero-fill the VH features; a zero is a value and the model will treat it as one.
 
 ## D4. Class imbalance defeats training *(MEDIUM, loud)*
@@ -463,6 +505,8 @@ Disk full, corrupt archive, a case delivered as PNG-only or VV-only, a real scen
 - [ ] U-Net trained; IoU on Part 3, gated and ungated
 - [ ] Classical baseline retrained on the clean split — the ablation row
 - [ ] `ship_detections` and `discharge_class` shipping, stubbed early for Jaiveer and Anushka
-- [ ] Valid `detections.geojson` for all seven cases, each plotted and eyeballed
-- [ ] Cases 6 and 7 nominated and verified to produce zero oil features
+- [ ] Valid `detections.geojson` for all eight cases, each plotted and eyeballed
+- [ ] Alaska's 40 m radar contact searched for, and the result reported either way
+- [ ] Case 8 nominated; cases 7 and 8 verified to produce zero oil features
+- [ ] IoU against Cerulean polygons computed **after** your own detections were committed
 - [ ] Numbers table and the VH slide ready for the deck

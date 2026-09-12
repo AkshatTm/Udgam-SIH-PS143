@@ -70,19 +70,64 @@ Three things make this stage hard and interesting:
 2. Vessels lie, or go silent. **A gap is evidence, not missing data.**
 3. There are three kinds of culprit — a broadcasting vessel, a **dark vessel**, and **fixed infrastructure** — and the system must be able to say which.
 
-## B2. The three source types *(this is new and it matters)*
+## B2. The four source types *(this is new and it matters)*
 
-The reference system in this field, SkyTruth's Cerulean, runs three separate source-association algorithms. Ours must too, because **one of our five cases is not a vessel at all.**
+The reference system in this field, SkyTruth's Cerulean, runs separate source-association algorithms per class. Ours must too, because **two of our six cases are not a vessel at all, and one carries three source types simultaneously.**
 
 | Source type | What it means | Our case |
 |---|---|---|
-| **Broadcasting vessel** | A ship with AIS on, near the origin, at the right time | cases 4, 5 |
-| **Dark vessel** | Radar sees a ship; AIS reports nothing there | our best technical differentiator |
-| **Fixed infrastructure** | A pipeline, platform or wreck — stationary, not a vessel | **Huntington Beach, Golden Ray** |
+| **Broadcasting vessel** | A ship with AIS on, near the origin, at the right time | Menuett, Panagia |
+| **Dark vessel** | Radar sees a ship; AIS reports nothing there | **Alaska** — real, and our best technical differentiator |
+| **Fixed infrastructure** | A pipeline, platform or wreck — stationary, not a vessel | **Huntington Beach**, and one of Mumbai's |
+| **Natural seep** | Geological seepage — oil nobody spilled | flagged on **Mumbai** |
 
-This changes the Huntington Beach story completely. Without an infrastructure module, the correct answer there is "no vessel is responsible", which reads as a failure. **With one, the correct answer is "the source is fixed infrastructure at this location, and all transiting vessels are excluded" — which is a hit**, and the verification screen then tells the anchor-strike story on top of it.
+**A system that can only consider vessels will name a vessel even when the source is a pipeline.** That is a false accusation and it is the worst failure mode you have. So source classification runs *before* attribution:
 
-Emit `source_type` in `suspects.json` per finding: `vessel | dark_vessel | infrastructure`.
+```
+origin reconstructed
+  → fixed infrastructure at the origin?   → infrastructure
+  → known natural seep area?              → natural_seep
+  → radar ship with no AIS?               → dark_vessel
+  → otherwise score the AIS fleet         → vessel
+```
+
+Without it the correct answer on Huntington Beach is "no vessel is responsible", which reads as a failure. **With it, the answer is "the source is fixed infrastructure at this location, and all transiting vessels are excluded" — which is a hit**, and the verification screen then tells the anchor-strike story on top of it.
+
+`natural_seep` exists because Cerulean flags the Mumbai detection as sitting in a known seep area. Presenting a case where the honest answer includes *"some of this may be geological"* is a credibility move, and separating seeps from discharges is a real enforcement problem. It is a **flag on the finding, not a ranked suspect** — you never score a seep, you report that the area has documented seepage and that it bears on interpretation.
+
+Emit `source_type` in `suspects.json` per finding: `vessel | dark_vessel | infrastructure`, plus the `natural_seep` block when flagged.
+
+**On stage:** *"Before we name a ship, we ask whether a ship is even the right kind of answer."*
+
+## B2b. Two AIS regimes, and the scorer must know which it is in
+
+`meta.ais_source` is `noaa_dense` or `gfw_hourly`, and it is **required** on every case with `attribute`.
+
+| | NOAA Marine Cadastre | Global Fishing Watch |
+|---|---|---|
+| Interval | **~71 s median** — you measured this | **one position per vessel per hour** |
+| Cases | Menuett, Panagia, Huntington, Alaska | Mumbai, Jamnagar |
+| Coverage | US EEZ only | global; 400k+ vessels, the majority non-fishing |
+
+At 12 knots a ship covers about **22 km in an hour**. So on a `gfw_hourly` case:
+
+| Component | Status |
+|---|---|
+| proximity | Applicable, but precision drops to tens of km. **Do not interpolate to compensate** — that invents positions, which is exactly what your 30-minute ceiling already refuses to do |
+| trajectory, parity | **Applicable.** Direction over hours is robust |
+| temporality | Applicable, coarse |
+| **gap** | **Structurally impossible.** You cannot see a 30-minute silence in hourly data. Returns `null` |
+| **slowdown** | **Not applicable.** Returns `null` |
+| type_prior | Applicable |
+
+`null`, never zero — a zero says *"we measured this and it scored nothing"*, which is a different and false claim. The remaining weights renormalise, exactly as they do for your port-traffic gating.
+
+**Say it on the limitations slide:** *"attribution confidence depends on AIS sampling density, and we state which source each case used."* That is a stronger position than pretending the two are equivalent.
+
+**One correction to carry about GFW.** A report in circulation claims the AIS Vessel Presence dataset returns MMSI, name, IMO and positions. **It does not** — GFW's own documentation says it *"shows vessel presence patterns and movement corridors, but does not provide individual vessel positions."* It is a gridded layer on the 4Wings tile API. For tracks use the **Vessels API**; for behaviour use the **Events API**, which includes **AIS-disabling events** computed on GFW's full-resolution underlying data — so gap analysis may still be reachable through that endpoint even though it is impossible from the hourly presence layer. **Test that.** There is also a **SAR vessel detections** endpoint flagging non-broadcasting vessels: use it to *validate* your dark-vessel module, never to replace it, because building it ourselves is the differentiator.
+
+**A cheap, high-value measurement.** Take the dense NOAA data from Menuett, downsample it to one position per hour, and re-run the scorer. That turns a caveat into a number — *"at hourly sampling the correct vessel fell from rank 1 to rank N, and the gap component became unavailable"* — and it adds sampling density as a third axis to your evaluation curve alongside traffic density and cloud size.
+
 
 ## B3. What we take from Cerulean, and what we do differently
 
@@ -102,7 +147,7 @@ Cerulean scores each nearby AIS track against the **centerline of the slick** on
 
 Their **dark vessel** module restricts to objects over 30 m estimated length, detected with high confidence, within 50 km of the slick, then scores on distance plus **angular deviation from the predicted path**, where the path is estimated at each end of the slick from the centerline. Take those parameters as a starting point rather than inventing your own.
 
-Their **infrastructure** module finds points along the slick perimeter far enough from the centre to be a plausible terminus, then applies a distance decay so points nearer the terminus get higher probability. That is directly reusable for Huntington Beach and Golden Ray.
+Their **infrastructure** module finds points along the slick perimeter far enough from the centre to be a plausible terminus, then applies a distance decay so points nearer the terminus get higher probability. That is directly reusable for Huntington Beach and for Mumbai's infrastructure source.
 
 Also worth noting: Cerulean only evaluates **long, linear detections** for vessel association, since that is the expected shape for a transiting-vessel slick. That independently validates Soum's `discharge_class` split — a blob should not be run through the vessel scorer at all.
 
@@ -183,7 +228,21 @@ Message: *"attribution not possible at acceptable confidence."* Building in the 
 
 # PART C — THE PHASES
 
-## PHASE 0 — Unblock yourself *(about an hour, do first)*
+## PHASE 0 — Unblock yourself, and one task that blocks the whole team
+
+### 0.0 THE BLOCKING TASK — verify NOAA AIS density at Menuett
+**Do this before anything else in this document.**
+
+Menuett is the hero case: `2024-07-30 23:21:29 UTC`, **30.384 N −79.634 W**. That is roughly **100 km off Jacksonville**, and NOAA Marine Cadastre is built primarily on **terrestrial AIS receivers**, whose coverage thins with distance from shore.
+
+Pull the NOAA file for 2024-07-30, filter to a box around that position, and **count distinct MMSIs**.
+
+- A few hundred vessels with dense reporting → the hero case is confirmed. Tell Akshat, carry on
+- A handful of positions → **the hero case has no AIS.** Panagia becomes hero, Alaska moves up, and the presentation order reshuffles
+
+This is the only open item in the whole project that could still force a replan. Twenty minutes, and three other people are waiting behind it.
+
+### The rest of Phase 0 *(about an hour)*
 
 0.1 **Push branch `jaiveer`.** All of it — `ingest.py`, `tracks.py`, `plot_tracks.py`, the update log, the report.
 0.2 **Build a US-located fake origin.** Copy `case-000/origin.json`, move `bounds`, `centroid` and `time_window` into your Galveston box on 25 Jan 2023, keep the grid shape. Now Phase 1 is testable today without waiting for anyone.
@@ -279,7 +338,9 @@ Also: AIS-gap analysis as a signal is **established practice in fisheries enforc
 
 ## PHASE 4 — Infrastructure source association *(this turns Huntington Beach into a hit)*
 
-Two of our five cases have a **fixed** source: the San Pedro Bay Pipeline and the Golden Ray wreck. Without this module the system's answer on both is "no vessel responsible", which reads as a failure. With it, the answer is *"the source is fixed infrastructure at this position, and all transiting vessels are excluded"* — which is correct, and impressive.
+Two of our cases have a **fixed** source: the San Pedro Bay Pipeline at Huntington Beach, and structure 121229 at Mumbai (18.577 N 72.241 E, from Cerulean's record). Without this module the system's answer on both is "no vessel responsible", which reads as a failure. With it, the answer is *"the source is fixed infrastructure at this position, and all transiting vessels are excluded"* — which is correct, and impressive.
+
+**Mumbai additionally carries a natural-seep flag**, so its output is not a single source but a ranked set across three classes plus a seepage caveat. Build for that rather than assuming one winner.
 
 ### 4.1 Candidate infrastructure
 Public sources: Global Fishing Watch publishes offshore infrastructure locations; NOAA and BOEM publish US pipeline and platform data. For our two cases the location is known from the investigation, so **hardcoding a small per-case candidate list is acceptable** — just declare it in `meta.json` as case input rather than pretending it was discovered.
@@ -366,7 +427,24 @@ The injected offender behaves how *we think* an offender behaves. If real pollut
 
 ## PHASE 9 — The real cases
 
-> **WAIT for Akshat** (US case list, dates, bounds) **and Anushka** (real `origin.json` per case).
+> **WAIT for Akshat** (case list, dates, bounds, `ais_source`) **and Anushka** (real `origin.json` per case).
+
+### 9.0 The library, and what each case asks of you
+
+| # | Case | `ais_source` | What your stage must do |
+|---|---|---|---|
+| 1 | **Menuett** 2024-07-30, 30.38 N −79.63 W | `noaa_dense` | **Hero.** The only case where **every** component fires, including `gap` — Cerulean records 1 AIS-off event. This is the case the accuracy claim rests on |
+| 2 | **Panagia** 2023-03-17, 37.81 N −123.89 W | `noaa_dense` | Full chain, Pacific. **Hero backup** |
+| 3 | **Huntington** 2021-10-02, 33.6 N −118.1 W | `noaa_dense` | **Infrastructure finding + vessel exclusions.** Naming a transiting vessel here would be *wrong* |
+| 4 | **Alaska** 2023-05-16, 59.56 N −142.71 W | `noaa_dense` | **Dark-vessel cross-check on real data.** Contact ~4.5 km from the slick |
+| 5 | **Mumbai** 2023-09-03, 18.52 N 72.20 E | `gfw_hourly` | **All four source classes at once.** `gap` and `slowdown` return `null` |
+| 6 | **Jamnagar** 2024-02-23, 20.15 N 71.90 E | `gfw_hourly` | Undocumented discharge. `gap`/`slowdown` `null`. Anonymise the top candidate on screen |
+
+**Blind evaluation applies to you more than anyone.** Akshat holds the documented answer for every case — vessel names, MMSIs, IMOs — in a sealed file. **You do not get them.** If you knew Menuett was the answer while tuning weights, you would tune until Menuett ranked first. That is not dishonesty, it is what anyone does when the target is visible, and it collapses *"our system identified the vessel"* into *"we tuned it until it did."* A December panel will ask which happened.
+
+Your search box at `2 × radius_90_km` contains the culprit and plenty of decoys anyway. **Tune on the injected-offender curve (Phase 8), never on a real case.** That is calibration on synthetic data, disclosed — completely different from adjusting weights until a real case comes out right, which we never do.
+
+He will not answer *"is this right?"* during the week. That is deliberate.
 
 ### 9.1 Download consecutive days
 Incident ±2 days. **Never merge non-consecutive days into one Parquet** — `lag(ts)` would compute a three-week interval as a transponder gap for every vessel and `max_gap_minutes` becomes meaningless, so the `gap` component would fire on the entire fleet. Your three files on hand are 25 Jan, 16 Feb, 28 Feb; they must never be ingested together. **Add a hard check in `ingest.py` that refuses inputs more than ~2 days apart.**
@@ -385,7 +463,9 @@ Every name and MMSI on screen comes from the real AIS file. **If the documented 
 
 Expected outcomes to prepare for:
 - **Huntington Beach** — infrastructure finding plus vessel exclusions. The anchor strike was eight months before the release, so no vessel was the proximate source at detection time. Naming a transiting ship there would be *wrong*.
-- **Golden Ray** — infrastructure finding on the wreck position; AIS will show salvage vessels, which should be excluded as responders rather than named as culprits. Worth handling explicitly.
+- **Alaska** — a dark-vessel finding, and **state the asymmetry in the `reasons` array, not just on a slide**: a vessel dark to Cerulean's *commercial* AIS is a strong claim; a vessel absent from our *free NOAA* archive might be a coverage hole. Two independent absences is evidence. One is not.
+- **Mumbai** — expect multiple source types to score at once. The honest output may be *"infrastructure and a dark vessel are both plausible, and the area carries documented natural seepage."* That is a real analytical outcome, not a failure to decide, and it is the best demonstration in the library of why source classification exists.
+- **Jamnagar** — no official finding exists, so whatever you produce is a lead with no way to check it. That is exactly why *leads, not verdicts* is the frame. **Anonymise on screen**: mask the MMSI, label it "Vessel A", keep the full data one click away. Naming a real vessel as a polluter with no investigation behind it is a real exposure and you gain nothing from it.
 
 ---
 
@@ -508,7 +588,11 @@ NOAA download route changed · incident days missing your region · `origin.json
 - [ ] Abstention path exercised and demonstrable
 - [ ] Parity, head-proximity and temporality implemented and Cerulean cited
 - [ ] Dark-vessel cross-check running against Soum's `ship_detections`
-- [ ] Infrastructure association working on Huntington Beach and Golden Ray
+- [ ] **Menuett AIS density verified and reported to Akshat — before anything else**
+- [ ] Infrastructure association working on Huntington Beach and Mumbai
+- [ ] `natural_seep` flag emitted on Mumbai
+- [ ] `ais_source` gating: `gap` and `slowdown` return `null` on the two `gfw_hourly` cases
+- [ ] Sampling-density experiment run (downsample Menuett to hourly, re-score, report the rank change)
 - [ ] Traffic-density prior and repeat-offender history
 - [ ] Chronic vs acute changing the search strategy
 - [ ] Evaluation curve with a stated operating limit

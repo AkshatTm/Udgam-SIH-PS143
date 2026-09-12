@@ -6,7 +6,9 @@ Owns the entire judge-facing app. Full brief: `docs/04_HARSHITA_FRONTEND.md`. In
 - **NEVER use localStorage or sessionStorage.** State lives in memory (Zustand).
 - **The frontend never calls Python.** It fetches static JSON from `cases/<id>/`. If a field is missing or malformed, show a visible error and tell Akshat — do not patch data client-side.
 - Stack is fixed: Next.js + MapLibre GL JS (no token) + deck.gl (ScatterplotLayer for particles, **BitmapLayer** for the origin grid — never HeatmapLayer, it re-smooths in screen pixels and renormalises per viewport so the answer changes as a judge zooms, ruling D11) + Tailwind + Recharts + Zustand. Decide Next vs Vite on day one and never switch.
-- `meta.acts_available` drives the stage rail. A missing act is a greyed stage with a tooltip, not a crash. Ennore has no `attribute`.
+- `meta.acts_available` drives the stage rail. A missing act is a greyed stage with a tooltip, not a crash. Right now **every case ships `["detect"]` only** and gains acts as stages land, so the rail must look deliberate with three of four stages greyed.
+- `meta.ais_source` is `noaa_dense | gfw_hourly`. On a `gfw_hourly` case (Mumbai, Jamnagar) the `gap` and `slowdown` component bars are **`null`, and `null` renders as "n/a", never as a zero bar**. That is an honesty requirement, not a styling choice (D20).
+- `suspects.natural_seep` is an optional object (`flagged`/`source`/`note`), not a list. No case in the library currently sets it.
 - Zero oil features in `detections.geojson` is the **no-spill case** — a designed state with a banner, not an error.
 
 ## Performance (the demo lives or dies here)

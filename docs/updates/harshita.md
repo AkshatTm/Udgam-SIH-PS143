@@ -12,6 +12,815 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-12 18:15] Phase 5.4 — natural_seep caution panel + AIS sampling label
+
+**Done:** Closed the two Phase 5.4 gaps identified by a reality check first (per instructions,
+no code before the check): `contracts.ts` already had `AisSource`/`RawNaturalSeep`/D20's
+null-gap/slowdown honesty rendering — but `suspects.ts` never parsed `natural_seep` off the
+wire (silently dropped), and nothing anywhere rendered it or the AIS sampling regime. Added
+`NaturalSeep`/`validateNaturalSeep` to `suspects.ts` (same descriptive-throw discipline as every
+other field there: `flagged: true` requires non-empty `source`+`note`, mirroring
+`validate_case.py`'s own rule) and threaded it into `SuspectsBundle`. In `ContextPanel.tsx`:
+a new amber-toned `NaturalSeepNotice` (reusing `VerdictBadge`'s "partial" `#fbbf24` tone — not
+the orange suspect-score accent, not error-red) renders **above** `SectionLabel("Suspects")`
+inside the `gate === "clear"` branch only when `naturalSeep.flagged` is true — never added to
+`suspects[]`, never ranked. `AttributeCard` gained an optional `aisSource` prop rendered as a
+one-line caption under the "Vessel Attribution" title via a frozen `AIS_SAMPLING_LABEL` map
+(`noaa_dense` → "AIS: 71-second sampling (NOAA)", `gfw_hourly` → "AIS: hourly sampling (Global
+Fishing Watch)"); `ContextPanel` now reads `meta` from the store and passes
+`meta?.ais_source` through — absent renders nothing, never a guessed regime. The null→"n/a"
+`gap`/`slowdown` rendering in `ComponentBars` was **already correct** before this phase; nothing
+there needed to change.
+
+No real case in the library exercises either feature yet (`case-mumbai-2023` /
+`case-jamnagar-2024` are `gfw_hourly` but `acts_available: ["detect"]` only — no
+`suspects.json` exists for them; Mumbai's own `meta.json` notes explicitly forbid claiming
+`natural_seep` there without a real source). Built a new synthetic **`cases/case-000-gfw/`**
+(assets cloned from `case-000`; `ais_source: "gfw_hourly"`, all three suspects carry
+`components` with `gap`/`slowdown` explicitly `null` + `component_notes` explaining why, and a
+`natural_seep: {flagged: true, source, note}` block) to verify both end-to-end. **Not** in
+`cases/index.json`.
+
+**Files touched:** `web/lib/suspects.ts` (modified — `NaturalSeep` type, `validateNaturalSeep`,
+parsed into `SuspectsBundle.naturalSeep`) · `web/components/ContextPanel.tsx` (modified —
+`AIS_SAMPLING_LABEL`, `NaturalSeepNotice`, `AttributeCard` gains `aisSource` prop + renders the
+notice/label, `ContextPanel` reads `meta` from the store) · `cases/case-000-gfw/` (new synthetic
+fixture — meta.json + suspects.json hand-written, other assets copied from `case-000`) ·
+`docs/updates/harshita.md` (this entry). No `contracts.ts`, validator, producer, MapView,
+store.ts (beyond reading the existing `meta` slice), or real-case changes.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000-gfw   # PASS (0 warnings)
+robocopy cases web\public\cases /MIR                  # PowerShell — git-bash mangles /MIR
+cd web && npm run dev
+```
+Expected: `http://localhost:3000/case/case-000-gfw/attribute` — "AIS: hourly sampling (Global
+Fishing Watch)" under the title; an amber "Documented natural seepage in this area" panel above
+Suspects; every suspect's Score Breakdown shows **Gap: n/a** / **Slowdown: n/a** with no bar.
+`http://localhost:3000/case/case-000/attribute` (unrelated `noaa_dense` fixture) shows "AIS:
+71-second sampling (NOAA)" and no seepage panel, suspects/scores unchanged from before this
+phase.
+
+**Checkpoint artefact:**
+- Static (all PASS): `python scripts/validate_case.py cases/case-000-gfw` → PASS (0 warnings) ·
+  `cd web && npx tsc --noEmit` → clean · `npm run lint` → 0 warnings · `npm run build` →
+  compiled, 5/5 pages.
+- Browser (Playwright, dev server):
+  - `case-000-gfw` Attribute: sampling label + amber natural-seep panel (title, plain-language
+    line, the fixture's note, the fixture's source) render above Suspects, not inside the
+    ranked list ✓ · every suspect card's Score Breakdown shows `Gap n/a` / `Slowdown n/a`, no
+    bar underneath, other components (Proximity/Parity/Temporality/Trajectory/Type prior) show
+    normal numeric bars ✓
+  - `case-000` (regression, `noaa_dense`, no `natural_seep`): "AIS: 71-second sampling (NOAA)"
+    label present, no seepage panel, 3 suspect cards / scores / AIS gap row byte-identical to
+    pre-phase behaviour ✓
+  - `case-000-abstain` (regression): unaffected — no sampling label (fixture predates
+    `ais_source`, correctly renders nothing rather than a guess), "Deliberate abstention" card
+    unchanged (the seep notice only lives in the `gate === "clear"` branch, so it's a no-op here
+    by design — natural_seep isn't part of this fixture anyway) ✓
+  - `case-000-d3` Detect (regression): ATTRIBUTE still correctly greyed, Phase 5.3 Measurements
+    panel + headline unchanged ✓
+  - `case-000-nospill` Detect (regression): D1 banner + "No oil in this scene" block unchanged ✓
+  - Console clean (0 errors/warnings) across every page in this pass.
+- Discovered while refreshing the fixture mirror: `web/public/cases/case-000/meta.json` was
+  stale (missing `ais_source` — predated that field being added to the source bundle). Not a
+  regression I introduced; `robocopy cases web\public\cases /MIR` from PowerShell (not git-bash,
+  which mangles the `/MIR` flag into a path argument) re-synced it correctly.
+
+**Open issues:**
+- Real-data dependency (Jaiveer/Anushka): neither `gfw_hourly` nor `natural_seep` can be
+  verified against a real bundle yet — Mumbai/Jamnagar have no `suspects.json`, and Akshat's own
+  notes say not to claim `natural_seep` on Mumbai until a real source is substantiated. Code
+  lights up unchanged once a real bundle lands with either field.
+- Not committed / not pushed.
+
+**Next:** wire the real `gfw_hourly` suspects bundle once Jaiveer's Mumbai/Jamnagar attribution
+output lands, and re-verify this exact UI against it (no code change expected, just a real-data
+confirmation pass).
+
+---
+
+## [2026-09-12 17:05] Build-break revert — MapView.tsx
+
+**Done:** Working tree (uncommitted) `web/components/MapView.tsx` had the same additive-duplication
+pattern as the earlier `ed7defa` bug re-introduced on top of clean `HEAD` (`1be8009`) —  a stale
+duplicate `sceneAndVesselExtent` import, duplicate `getColor`/`getWidth` in the vessel `PathLayer`,
+a duplicate camera-effect dependency array, a duplicate `target` ternary, and a duplicate overlay
+`useEffect` sitting next to their correct post-Phase-3 versions, with no unique content of its own.
+This is what broke `npx tsc --noEmit` (9 syntax errors, all in this file). `git diff` confirmed
+`HEAD:web/components/MapView.tsx` was already clean — the corruption existed only in the working
+copy, never committed. Fix: `git checkout -- web/components/MapView.tsx`, discarding the bad
+uncommitted edit and restoring the clean committed version. No feature code lost — every removed
+line was a duplicate of a line still present.
+
+**Files touched:** `web/components/MapView.tsx` (reverted to `HEAD`, no net change vs. last commit).
+
+**Validation commands:**
+- `cd web && npx tsc --noEmit` → clean (0 errors)
+- `cd web && npm run lint` → 0 warnings
+- `python scripts/validate_case.py cases/case-000` → PASS (0 warnings)
+
+**Open issues:**
+- `ContextPanel.tsx` was also reported broken by an audit earlier today but compiles clean now
+  with no uncommitted diff — already fixed outside this change, not touched here.
+- Not committed / not pushed.
+
+**Next:** commit this revert before building anything else on top of `MapView.tsx`; see
+`docs/REALITY_CHECK_2026-09-12.md` for the rest of the outstanding backlog (real-case pipeline
+outputs, the v3 `suspects.json` fields, the doc-rename hygiene issue in `docs/`).
+
+---
+
+## [2026-09-12 00:10] B2 — origin time_window_method
+
+**Done:** Implemented B2 `origin.time_window_method` schema extension, validation, bundle mapping, and honest UI rendering per the approved decisions.
+
+1. **`web/lib/contracts.ts`:**
+   - Added optional `time_window_method?: string` to `RawOriginBundle`.
+
+2. **`web/lib/origin.ts`:**
+   - Added `timeWindowMethod: "bounded" | "convergence" | null` to parsed `OriginBundle`.
+   - In `validate(raw, id)`: validated that when `time_window_method` is present and non-null, it must be strictly `"bounded"` or `"convergence"`, throwing a descriptive `Error` otherwise. Missing or null is accepted cleanly. No type coercion or heuristic inference from time window timestamps or other fields.
+   - In `loadOriginBundle`: mapped `"bounded"` → `"bounded"`, `"convergence"` → `"convergence"`, and absent/null → `null`.
+
+3. **`web/components/ContextPanel.tsx`:**
+   - In `TraceCard`, replaced the hardcoded release-window caption with conditional rendering keyed strictly on `origin.timeWindowMethod`:
+     - `"bounded"` → displays `"Search bracket (not a measured release time)"`
+     - `"convergence"` → displays `"Measured estimate"`
+     - `null` → displays no method-specific claim or caption
+   - Retained the existing "Released between" time values, date formatting, and InfoDot affordance verbatim.
+   - Left all other Trace card sections (Best estimate, Uncertainty, abstain banner, particles control-path note) completely unaltered.
+
+4. **Scope adherence:**
+   - B6 files (`web/lib/extent.ts`, `web/components/MapView.tsx`) left untouched from `HEAD`.
+   - All `cases/` fixtures preserved untouched (temporary QA edits verified and reverted; `git diff cases` clean).
+   - No validator changes.
+   - B3 age fields not implemented.
+   - No commits or pushes performed.
+
+**Files touched:**
+- `web/lib/contracts.ts` (modified — added `time_window_method?: string` to `RawOriginBundle`)
+- `web/lib/origin.ts` (modified — added `timeWindowMethod` to `OriginBundle`, validation, and bundle mapping)
+- `web/components/ContextPanel.tsx` (modified — conditional method label/caption in `TraceCard`)
+- `docs/updates/harshita.md` (this entry)
+
+**Validation commands:**
+- `python scripts/validate_case.py cases/case-000` → PASS (0 warnings)
+- `python scripts/validate_case.py cases/case-000-abstain` → PASS (1 warning: no excluded vessels, expected for fixture)
+- `python scripts/validate_case.py cases/case-000-d3` → PASS (0 warnings)
+- B2 unit test suite (`scratch/test_b2_unit.js`) → PASS (5/5 suites: absent→null, null→null, bounded→bounded, convergence→convergence, 8 invalid values rejected with descriptive error)
+
+**Browser QA results (automated Playwright Chromium):**
+1. **Existing fixtures (field absent):** Case loads cleanly; time window values (`28 Jan 2017`, `04:14 – 16:14 UTC`) remain clearly visible; neither "Search bracket (not a measured release time)" nor "Measured estimate" appears; old hardcoded caption is gone. PASS.
+2. **Temporary local QA — `bounded`:** Setting `time_window_method: "bounded"` displays exact project wording `"Search bracket (not a measured release time)"` beneath time values. PASS.
+3. **Temporary local QA — `convergence`:** Setting `time_window_method: "convergence"` displays exact wording `"Measured estimate"`. PASS.
+4. **Temporary local QA — invalid value:** Setting `time_window_method: "invalid_heuristic"` triggers the origin contract-error banner with descriptive error. PASS.
+5. **Reversion confirmed:** Fixtures restored to original state; `git diff cases` completely empty. PASS.
+6. **B6 camera regression check:** Trace union camera framing verified intact (`[80.10, 12.95, 80.94695, 13.76316]`). PASS.
+7. **Console:** 0 errors during standard case loading. PASS.
+
+---
+
+## [2026-09-11 23:10] B6 — Union camera + per-stage camera framing
+
+**Done:** Implemented B6 union camera + per-stage camera framing in full per the approved Claude plan.
+
+1. **`web/lib/extent.ts`:**
+   - Imported `ParticleBundle` from `./particles` and `OriginBundle` from `./origin`.
+   - Added private helper `particleExtent(particles: ParticleBundle | null): GeoBounds | null` following the existing `vesselExtent` pattern. Scans all frames in `particles.frames` and every `[lon, lat]` pair within each frame, computing min/max longitude and latitude. Returns `null` if `particles` is null or contains zero particles.
+   - Added exported function `sceneParticleOriginExtent(scene: GeoBounds, particles: ParticleBundle | null, origin: OriginBundle | null): GeoBounds`. Starts with `scene`, unions `particleExtent(particles)` via `unionBounds` if non-null, and unions `origin.bounds` via `unionBounds` if `origin` is non-null. Returns `scene` unchanged if both are absent.
+   - Existing `unionBounds`, `vesselExtent`, and `sceneAndVesselExtent` functions preserved completely untouched.
+
+2. **`web/components/MapView.tsx`:**
+   - Imported `sceneParticleOriginExtent` alongside `sceneAndVesselExtent` from `@/lib/extent`.
+   - Updated the camera effect to select target by stage:
+     `activeStage === "attribute" ? sceneAndVesselExtent(bounds, vessels) : activeStage === "trace" ? sceneParticleOriginExtent(bounds, particles, origin) : bounds`.
+   - Extended the effect dependency array from `[activeStage, bounds, vessels]` to `[activeStage, bounds, vessels, particles, origin]`.
+   - Maintained `{ padding: 40, animate: false }` verbatim.
+   - Did not alter the Map creation effect, SAR raster source effect, layer composition, visibility/selection syncing, or deck.gl layers.
+
+3. **Pre-existing issue explicitly left untouched:**
+   - `styleReadyRef` ordering risk: setting `styleReadyRef.current = true` inside `map.on("load")` uses a `useRef` rather than React state, meaning if `styleReadyRef.current` is false when the camera effect first evaluates on a cold reload, it does not re-trigger on its own until a dependency changes. Observed during testing that transitioning into Trace (`Detect -> Trace`) reliably triggers the stage-aware camera refit. Left strictly untouched per B6 scope instructions.
+
+**Files touched:**
+- `web/lib/extent.ts` (modified — added `particleExtent` and `sceneParticleOriginExtent`)
+- `web/components/MapView.tsx` (modified — imported `sceneParticleOriginExtent` and updated stage camera effect)
+- `docs/updates/harshita.md` (this entry)
+
+**Validation commands:**
+- `cd web && npm run lint` → PASS (0 ESLint warnings or errors)
+- `cd web && npx tsc --noEmit` → PASS (clean exit 0, 0 type errors)
+- `cd web && npm run build` → PASS (Compiled successfully, 5/5 static pages generated)
+- `python scripts/validate_case.py cases/case-000` → PASS (0 warnings)
+- `python scripts/validate_case.py cases/case-000-d3` → PASS (0 warnings)
+
+**Browser QA results (objective MapLibre inspection via Playwright Chrome):**
+- **Test 1 (`case-000` Detect):** Camera fits scene bounds `[80.10, 12.95, 80.70, 13.55]`. Center `lng=80.4000, lat=13.2502`, zoom `9.309`. Center diff from scene centroid `< 0.001°`. PASS.
+- **Test 2 (`case-000` Trace):** Camera fits union target `[80.10, 12.95, 80.94695, 13.76316]`. Center `lng=80.5235, lat=13.3569`, zoom `8.870`. Viewport bounds `[79.817, 12.891, 81.230, 13.822]` fully enclose target union. Origin cloud and rings are completely in view with margin and no longer clipped. PASS.
+- **Test 3 (Trace layer toggles):** Toggling Origin and Particles produces `center diff = 0, zoom diff = 0`. Camera does not refit on layer toggles. PASS.
+- **Test 4 (Trace scrub):** Scrubbing slider through timeline (`0 -> 0.5 -> 1`) produces `center diff = 0, zoom diff = 0`. No camera movement during playback/scrubbing. PASS.
+- **Test 5 (Stage round trip):** Transitioning `Detect -> Trace -> Attribute -> Trace -> Detect` returns to byte-identical camera center and zoom targets (diff `< 1e-12`). PASS.
+- **Test 6 (Attribute framing):** Attribute stage zoom is `8.761` (wider than Detect's `9.309`), correctly framing `sceneAndVesselExtent(bounds, vessels)` including tracks extending outside scene. PASS.
+- **Test 7 (`case-000-d3` Trace):** Transitioning to Trace on D3 widens camera to union target `[80.10, 12.95, 80.94695, 13.76316]` with zoom `8.870`. Viewport encloses union. PASS.
+- **Test 8 (Console):** 0 errors captured across entire browser QA run. PASS.
+
+---
+
+## [2026-09-11 01:00] P1.6 — C4/C5 plain-language labels + InfoDot affordances + Screen-1 headline
+
+**Done:** Implemented P1.6 in full. Three interlocking changes:
+
+1. **`InfoDot` component (new `web/components/InfoDot.tsx`)** — a tiny inline "i" button
+   that shows a one-sentence plain-language tooltip on hover and keyboard focus. No external
+   library. Accessibility: native `<button>` (no `role` override — the tooltip role lives on
+   the `<span>`, not the button); tooltip `<span>` carries `role="tooltip"` and a stable `id`;
+   button has `aria-describedby` pointing to that id at all times; tooltip is **always in the
+   DOM** (`aria-hidden={!visible}` + CSS opacity) so `aria-describedby` is never a dangling
+   reference; `tabIndex` omitted (native button is natively focusable). Keyboard: Tab reaches
+   the button; focus/hover opens the tooltip; Escape closes it without blurring; Tab-away
+   (blur) closes it too. Tooltip is `absolute bottom-full w-48 pointer-events-none` —
+   never causes layout shifts.
+   **Positioning (fixed during QA, see below):** the tooltip anchors to the nearest
+   `relative` ANCESTOR, not to the 14 px button itself. The button's own x-position drifts
+   with label length (inline text before it), so anchoring to the button overflowed the
+   panel for the three longer Detect labels. Anchoring to the caller's row — a fixed,
+   panel-width box (`MetricRow`'s root div, and the two bespoke `TraceCard` rows, all now
+   carry `relative`) — makes every tooltip's position independent of label length. `align`
+   ("left" default / "right") then just picks which edge of that row the tooltip hangs from.
+
+2. **`DetectionCard` re-labelled (C4 + C5):** the Geometry/Shape-class section is replaced
+   by a "Measurements" block using a new `MetricRow` helper that renders the plain-language
+   primary label, an optional muted technical secondary (`text-white/35`, `text-[9px]`), and
+   an `InfoDot`. Required labels: "How big" (area) · "How stretched" (elongation) · "How
+   sharp-edged" (edge gradient) · "How much darker" (contrast) · "Shape" (shape class). All
+   measured values unchanged. The "Why this classification" Recharts bar chart (`featureRows` /
+   `BarChart`) is completely unchanged — labels, values, bar heights all preserved verbatim.
+
+3. **`TraceCard` re-labelled (C4 + C5):** plain-language section headers and `MetricRow` /
+   `InfoDot` per metric. "Best estimate" (centroid with InfoDot) · "Half the runs land within"
+   (50 % radius) · "Nine in ten within" (90 % radius) · "Released between" (time window with
+   InfoDot). Header changed to "Where the Oil Came From" / "{n} simulations". Both verbatim
+   captions preserved exactly: the bracket note and the particle-vs-uncertainty note.
+
+4. **Screen-1 oil detection headline:** in the `oilCount > 0` detect branch, a headline above
+   the DetectionCard reads "We found N dark patches. M is oil." Counts derive directly from
+   `detections.features`. Grammar handled: "1 dark patch" / "2 dark patches" / "1 is oil" /
+   "N are oil". NOT shown in the `oilCount === 0` D1 branch (that branch keeps its existing
+   "No oil in this scene" messaging unchanged).
+
+D1 / D2 / D3 branches untouched. Attribute and Verify sections untouched.
+
+**Files touched:** `web/components/InfoDot.tsx` (new) · `web/components/ContextPanel.tsx`
+(modified — `InfoDot` import; `MetricRow` component; `DetectionCard` Measurements section;
+`TraceCard` all sections; detect-branch oil headline) · `docs/updates/harshita.md` (this entry)
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000
+robocopy cases web\public\cases /MIR
+cd web && npm run lint && npm run build && npm run dev
+```
+Expected: PASS (0 warnings) · 0 lint warnings · Compiled successfully 5/5 pages.
+Navigate to `/case/case-000/detect` — "We found 2 dark patches. 1 is oil." headline · plain-language labels with muted technical terms · every metric has an "i" dot tooltip. Navigate to `/trace` — "Where the Oil Came From" / "Best estimate" / "Half the runs land within" / "Nine in ten within" / "Released between" all with InfoDots.
+
+**Checkpoint artefact — static:**
+- `python scripts/validate_case.py cases/case-000` → PASS (0 warnings) ✓
+- `npm run lint` → 0 ESLint warnings or errors ✓ (re-run after the positioning fix, still clean)
+- `npx tsc --noEmit` → clean (exit 0, no output) ✓ (re-run after the fix, still clean)
+- `npm run build` → ✓ Compiled successfully, 5/5 pages ✓ (clean `.next` rebuild, re-run after
+  the fix, still clean; two transient `PageNotFoundError` / stale-`.next`-types build failures
+  during this session were a Windows file-lock/cache artefact — reproduced on a from-scratch
+  `rm -rf .next && npm run build`, not on the code, and did not recur on retry)
+- `git diff --check` → 0 whitespace errors ✓
+
+**Checkpoint artefact — manual QA on the dev server (Playwright MCP), this session:**
+- **`case-000` Detect:** headline "We found 2 dark patches. 1 is oil." exact ✓ · all 5
+  Measurements rows plain-language-first with the muted technical term beneath ✓ · every
+  metric has a working InfoDot ✓ · "Why this classification" bars + values byte-identical to
+  before (8.2 / 0.34 / −6.2 dB) ✓ · Centroid / Detection ID unchanged ✓
+- **`case-000` Trace:** "Where the Oil Came From" / "50 simulations" · "Best estimate" +
+  InfoDot · "Half the runs land within" 4.2 km + InfoDot · "Nine in ten within" 11.8 km +
+  InfoDot · "Released between" + InfoDot — all values unchanged from pre-P1.6 · bracket
+  caption **verbatim** ("Earliest and latest… a bracket, not a single measured release
+  time.") ✓ · particle-vs-uncertainty caption **verbatim** ("The drifting points trace one
+  representative path… stacked from 50 perturbed runs.") ✓ · abstain-false line "Origin
+  within attribution confidence" unchanged ✓
+- **InfoDot interaction, verified directly on the DOM (not just visually):** mouse hover
+  opens (`aria-hidden` false while `:hover`) ✓ · keyboard focus opens ✓ · Escape closes
+  without blurring (focus stays on the button) ✓ · Tab-away blurs and closes the previous
+  tooltip while opening the next one's ✓ · **zero layout shift** — row `top` positions
+  identical with a tooltip open vs. closed, measured via `getBoundingClientRect()` ✓
+- **🔴 Bug found and fixed this session — tooltip overflow.** Measuring every tooltip's
+  `getBoundingClientRect()` against the `<aside>` panel's showed **3 of 5 Detect metrics
+  overflowing the panel's right edge by 3–20 px** ("How stretched", "How sharp-edged", "How
+  much darker" — the longer labels) and the two `TraceCard` trailing dots ("Best estimate",
+  "Released between") overflowing by **~155 px**. Root cause: the tooltip was anchored to the
+  14 px button, whose x-position depends on inline label length / row layout — not a fixed
+  point. **Fix:** re-anchor to the row instead of the button (see the `InfoDot` entry above).
+  Re-measured after the fix: **all 9 InfoDot instances across Detect + Trace now sit fully
+  inside the panel bounds**, confirmed by `getBoundingClientRect()`, not just eyeballed.
+- **D1 regression (`case-000-nospill`):** NoSpillBanner + "No oil in this scene" block +
+  count-derived sub-line unchanged ✓ · **no** "N is oil" headline shown (correctly suppressed
+  in the `oilCount === 0` branch) ✓ · Trace/Attribute tooltips still "nothing to trace…" /
+  "no oil origin to attribute" ✓ · Verify tooltip unchanged ✓
+- **D2 regression (`case-000-abstain`):** Attribute stays **enabled** (not greyed) ✓ ·
+  "Deliberate abstention" / "Attribution not possible at acceptable confidence." + the
+  synthetic `abstain_reason` unchanged ✓ · funnel unchanged ✓ · on Trace, abstain-true line
+  "Origin cloud too diffuse — no suspects can be named." unchanged, with the new
+  plain-language TraceCard labels applied consistently around it ✓ · Verify still greyed ✓
+- **D3 regression (`case-000-d3`):** ATTRIBUTE still greyed with the AIS tooltip ✓ · Trace
+  primary action still reads **"See what really happened →"** and skips to Verify ✓ ·
+  headline + plain-language labels present on Detect there too, no interaction with the D3
+  gating ✓
+- **Console:** 0 errors, 0 warnings across every page/interaction in this QA pass (checked
+  with `all: true`, i.e. since session start, not just since last navigation).
+
+**Open issues:**
+- None outstanding from this QA pass. The tooltip-overflow bug found during QA is fixed and
+  re-verified (above).
+- Not committed / not pushed.
+
+**Next:** hand off diff + `git status` + validation evidence to the user for commit/push.
+
+---
+
+## [2026-09-11 00:05] P1.5 / D3 — act-unavailable state (a stage missing from acts_available)
+
+**Done:** Closed D3 (docs/04 Part D). The greyed-stage machinery already existed from Phase 1
+(StageRail greys a disabled act + tooltip; FlowBar dims the step + tooltip; `flow.ts`
+`adjacentStage` / `primaryActionLabel` skip a missing act so Trace's primary action becomes
+"See what really happened →" when `attribute` is absent; `CaseWorkspace` reconciles a URL that
+points at a missing act to `acts_available[0]`; `store.setStage` refuses one). D3 had **never
+been exercised at runtime** — every loadable case exposed all four acts. P1.5 (a) built a
+synthetic fixture that actually has a gap and verified the whole path end-to-end, and (b) fixed
+one flash: a direct URL to a missing act (`/case/<id>/attribute`) briefly rendered the map + a
+stale ContextPanel + the Trace footer before the redirect effect fired. `CaseWorkspace` now
+renders a neutral one-line placeholder ("Not part of this case — taking you to the first
+stage…") for that frame and suppresses the footer while `stage` is not in `acts_available`.
+**No copy changed** (the four `STAGE_UNAVAILABLE_REASON` strings stay frozen); **`loadCase` /
+D16 untouched** (the detect-gap D3 path — real Ennore — stays deferred, see open issues);
+**no D1 / D2 code touched** (both regressed clean).
+
+**Files touched:** `web/components/CaseWorkspace.tsx` (modified — direct-nav placeholder guard +
+footer guard, ~2 conditionals) · `cases/case-000-d3/` (new synthetic fixture:
+`acts_available: ["detect","trace","verify"]`, one oil detection so D1 never fires,
+`origin.abstain: false` so D2 never fires; bounds/sar/detections/particles/origin/verification
+copied from `case-000`). **Not** in `cases/index.json`.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000-d3     # PASS (0 warnings)
+robocopy cases web\public\cases /MIR                  # or: cp -r cases/case-000-d3 web/public/cases/
+cd web && npm run lint && npm run build && npm run dev
+```
+Expected: `http://localhost:3000/case/case-000-d3/detect` — Detect + Trace + Verify live in the
+rail, **ATTRIBUTE greyed + `cursor-not-allowed`**, FlowBar "Find" dot dimmed with tooltip
+"no free historical AIS is published for these waters"; Trace's primary action reads
+**"See what really happened →"** and lands on `/verify`, skipping Attribute; typing
+`/case/case-000-d3/attribute` redirects to `/detect` with no error and no content flash.
+
+**Checkpoint artefact:** screenshots (D3 detect / trace / verify + no-spill regression) sent to
+Harshita 2026-09-11. `npm run lint` clean, `npm run build` clean, Playwright pass across
+D3 + case-000 + case-000-nospill (D1) + case-000-abstain (D2) with **0 console errors / warnings**.
+D1 tooltips still "nothing to trace — no oil was detected in this scene" / "no oil origin to
+attribute"; D2 keeps Attribute **enabled** with the abstention card.
+
+**Open issues:**
+- **Detect-gap D3 is still unverified.** Real Ennore & Golden Ray omit `detect` (decision D16),
+  but `loadCase()` fetches `detections.geojson` unconditionally, so they throw on load. Out of
+  P1.5 scope by instruction. Fix when it's scheduled: gate the `detections.geojson` fetch on
+  `"detect" in acts_available` and make `store` / `isNoSpill` / the ContextPanel detect branch
+  tolerate `detections === null`.
+- **No real case exercises D3 yet.** `case-ennore-2017`, `case-golden-ray-2021`,
+  `case-huntington-2021` are all scaffolds missing their bundle files — blocked on
+  Akshat / Anushka / Soum. D3 is verified only against the synthetic fixture (same footing as
+  D1 / D2).
+- `web/public/cases/` is a gitignored copy — refresh it before running.
+
+**Next:** the D16 `loadCase` gate (its own small task), then wire real Ennore when its
+`particles.json` / `origin.json` / `verification.json` land and add its greyed-Attribute path to
+the Part B QA checklist (docs/05 Phase 4.3).
+
+## [2026-09-10 23:05] P1.4 / D2 — abstain state (deliberate attribution refusal)
+
+**Done:** Completed the D2 abstain state on the Attribute screen (docs/04 Part D). It was
+~70% built (the `AttributeCard` `gate === "abstain"` branch already showed the funnel + the
+verbatim headline `"Attribution not possible at acceptable confidence."` in a neutral box).
+Added: the D2 trigger now fires on **`origin.abstain === true` OR `suspects.abstained === true`**
+(Stage 3 can abstain for reasons other than a diffuse origin — e.g. >40 vessels in the
+window); the case's **`abstain_reason`** is now parsed and rendered as supplied (nothing
+invented, nothing shown when null); a "Deliberate abstention" label frames it as a decision,
+not a gap. `RawSuspectsBundle` gains optional `abstained?` / `abstain_reason?`; `suspects.ts`
+parses them into `SuspectsBundle.abstained` / `.abstainReason` and **throws a contract error
+on a malformed value** (`abstained` not a boolean, `abstain_reason` not string|null,
+`abstained: true` with a non-empty suspect list) — never coerced or silently ignored.
+
+**Fixed a pre-existing blocker:** `suspects.ts` threw on `excluded: []`, but the validator
+only *warns*. A genuine abstain bundle (origin too diffuse → nobody ruled in *or* out) has
+`excluded: []`, so it would have rendered the **red "Suspects bundle failed to load — contract
+bug"** card — the opposite of D2. The empty-`excluded` throw is now scoped to
+`suspects.length > 0` (a scored case still needs ≥1 exclusion; an abstaining / no-vessel case
+does not) — aligning the frontend with the validator without loosening it for normal cases.
+
+**D1 vs D2:** orthogonal — an abstain case *has* oil (`isNoSpill` false), so `NoSpillBanner`
+and the "nothing to trace" tooltips never appear. **No P1.3 code touched.** Attribute stays
+**available** (no greying) — the D1/D2 distinction. `MapView` already renders every vessel
+track "plain" under abstain; `TraceCard` already shows "Origin cloud too diffuse — no suspects
+can be named."; `VerifyScreen` already handles `naap_result.abstained` (P1.1). None touched.
+
+QA'd against a synthetic **`cases/case-000-abstain/`** — a full `detect+trace+attribute` case
+(`origin.abstain: true`, `radius_90_km: 45`, `suspects: []`, `abstained: true` + a synthetic
+`abstain_reason`; 1 oil detection so `isNoSpill` stays false). Assets copied from `case-000`.
+**Not** in `cases/index.json`.
+
+**Files touched:** `web/lib/contracts.ts` (+`RawSuspectsBundle.abstained?` / `abstain_reason?`) ·
+`web/lib/suspects.ts` (parse + throw-on-malformed; scope the empty-`excluded` throw) ·
+`web/components/ContextPanel.tsx` (gate `|| suspects.abstained`; abstain branch renders the
+reason + label) · `cases/case-000-abstain/` (new synthetic fixture). No producer / validator /
+MapView / store / flow / StageRail / FlowBar / VerifyScreen / real-case / index.json changes.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000-abstain   # PASS (1 benign "no excluded vessels" warning)
+robocopy cases\case-000-abstain web\public\cases\case-000-abstain /MIR
+cd web && npm run dev
+```
+Expected: `http://localhost:3000/case/case-000-abstain/attribute` — the funnel
+(412 → 63 → 12 → **0**), then "Deliberate abstention / Attribution not possible at acceptable
+confidence." + the case's reason, in a neutral box. No suspect cards, no fabricated vessel, no
+red. Detect/Trace are normal; StageRail shows all acts enabled.
+
+**Checkpoint artefact:**
+- Static (all PASS): `validate_case.py` on `case-000` (0 warn, unchanged), `case-000-nospill`
+  (1 warn, unchanged), `case-000-abstain` (1 warn) · `test_validator.py` 14/14 ·
+  `npm run lint` 0 warnings · `npx tsc --noEmit` clean · `npm run build` compiled.
+- Browser (Playwright MCP, dev server):
+  - Abstain fixture Attribute: **no** red error card; funnel with `Scored 0`; "DELIBERATE
+    ABSTENTION" + headline + the fixture's `abstain_reason`; **no** suspect cards / fabricated
+    name ✓
+  - Abstain fixture Detect: oil card, **no** `NoSpillBanner`, "Trace this slick back →" ✓
+  - Abstain fixture Trace: `TraceCard`, `90% region 45.0 km`, "Origin cloud too diffuse — no
+    suspects can be named." ✓
+  - StageRail: Detect/Trace/Attribute **enabled** (standard tooltips, not "nothing to
+    trace"); Verify greyed with the existing D3 string ✓ · primary action "Try another case →"
+  - Edge A — `abstain_reason` absent → headline + label only, no crash ✓
+  - Edge B — `abstained: "yes"` (malformed) → **contract-error card** `"abstained" must be a
+    boolean`, abstention UI **not** shown ✓ (the mandatory correction)
+  - Edge C — `abstained: true` + a suspect listed → contract-error card, no abstention UI, no
+    fabricated suspect ✓
+  - Edge D — `suspects.json` missing → contract-error card (HTTP 404), no abstention UI ✓
+  - Regression — `case-000`: 3 suspect cards, `Scored 3`, exclusions, **no** abstention text ✓
+  - Regression — `case-000-nospill`: banner + "nothing to trace" tooltip unchanged ✓
+  - Case switching (abstain → gallery → case-000 → nospill): no state leak ✓
+  - Console clean (the only error was the deliberate Edge-D 404, since restored).
+  - All temporary QA edits to the served fixture restored.
+
+**Open issues:**
+- **Real-data dependency (Anushka):** the real abstain bundle does not exist (Master §8
+  "Anushka: abstain bundle ──▶ Harshita: refusal screen"; `docs/04:307`, `docs/05:137,140`).
+  Final "abstain screen against the real bundle" sign-off is deferred; the code lights up
+  unchanged when Anushka's bundle lands in `cases/` + `index.json`.
+- **Behaviour change for a hypothetical case shape:** a *normal* case with
+  `suspects.length === 0 && excluded === []` (currently non-existent) now renders "No suspects
+  scored." instead of erroring — matching the validator (`warn`), but noted.
+- `origin.abstain === false` + `suspects.abstained === true` (a >40-vessel abstain): the
+  Attribute screen abstains correctly, but `TraceCard` still says "Origin within attribution
+  confidence" — true (the origin geometry *is* fine); the abstention is downstream. Left as-is
+  per scope.
+- Fixture cosmetic: `origin.json` grid copied from `case-000` (a tight blob) while
+  `radius_90_km: 45` — the rendered cloud won't *look* 45 km diffuse. D2 UI is flag-driven.
+- Not committed / not pushed.
+
+**Next:** backlog P2 — union / per-stage camera (Phase 5.2 "W5", needs Akshat's D4 ruling), or
+the D16 `loadCase.ts` gate (small, unblocks real-case Trace/Verify).
+
+---
+
+## [2026-09-10 19:20] P1.3 / D1 — no-spill designed state
+
+**Done:** Built the D1 "No spill detected" state (docs/04 Part D; Master §2.2, §6.3) — a
+*result*, never an error. New `web/lib/detections.ts` `isNoSpill(detections)` = `detections
+!= null && no feature is classification "oil"` (the authoritative signal — the actual
+`classification` field, not `meta.case_type`, and guarded so a missing/malformed
+`detections.geojson` stays the existing contract-error path). New
+`web/components/NoSpillBanner.tsx` — an over-the-map banner ("No spill detected in this
+scene." + a **count-derived** sub-line: "We checked N dark patches — none match oil…" /
+"The scene is clear…"), `pointer-events-none` so clicks pass through to the grey look-alike
+polygons; `CaseWorkspace` renders it only when `stage === "detect" && !error &&
+isNoSpill(detections)`. `flow.ts` gains `stageUnavailableReason(act, { noSpill })` — on a
+no-spill scene Trace → "nothing to trace — no oil was detected in this scene", Attribute →
+"no oil origin to attribute"; every other case (Ennore's D3 "no free historical AIS…"
+included) keeps the static `STAGE_UNAVAILABLE_REASON` string, which is preserved verbatim as
+the fallback. `StageRail` + `FlowBar` read `store.detections`, compute `noSpill`, and pass it
+through (`flowSteps(acts, ctx?)`). `ContextPanel`'s Detect `oilCount === 0` sub-branch is now
+a titled block ("No oil in this scene" + the count line + "click a grey patch to see why it
+was rejected") followed by the existing `{selected && <DetectionCard/>}` — the oil-case and
+Trace/Attribute/Verify branches are untouched, `DetectionCard` is untouched (its "Why this
+classification" feature bars already carry the why-not-oil evidence), and `bestOilDetectionId`
+still returns `null` for a zero-oil scene so `selectedDetectionId` stays `null` — no look-alike
+is auto-selected. MapView is not touched (its `det-outline-lookalike` grey-dashed + `det-fill`
+click already handle look-alikes).
+
+QA'd against a synthetic **`cases/case-000-nospill/`** fixture (2 look-alike features, zero
+oil, `acts_available: ["detect"]`, `case_type: "nospill"`). **Not** in `cases/index.json` —
+never shown to a judge, reachable by direct URL only. SAR raster copied from `case-000`.
+
+**Files touched:** `web/lib/detections.ts` (new) · `web/lib/flow.ts` (modified —
+`stageUnavailableReason`, `flowSteps(acts, ctx?)`) · `web/components/StageRail.tsx` (modified —
+context-aware reason) · `web/components/FlowBar.tsx` (modified — pass `noSpill`) ·
+`web/components/NoSpillBanner.tsx` (new) · `web/components/CaseWorkspace.tsx` (modified — render
+the banner) · `web/components/ContextPanel.tsx` (modified — the Detect no-oil sub-branch only) ·
+`cases/case-000-nospill/` (new synthetic fixture). No producer / validator / MapView /
+store.ts / loadCase.ts / contracts.ts / Gallery / real-case changes.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000-nospill   # PASS (1 benign "zero 'oil' features" warning)
+robocopy cases\case-000-nospill web\public\cases\case-000-nospill /MIR
+cd web && npm run dev
+```
+Expected: `http://localhost:3000/case/case-000-nospill/detect` — SAR + 2 grey dashed
+look-alike polygons, an over-map "No spill detected in this scene." banner, a "No oil in this
+scene" panel block, Trace/Attribute/Verify greyed, "Try another case →" primary action, no
+error card. Click a grey patch → its look-alike `DetectionCard`.
+
+**Checkpoint artefact:**
+- Static (all PASS): `validate_case.py cases/case-000` → PASS (unchanged) ·
+  `validate_case.py cases/case-000-nospill` → PASS (1 benign warning) · `npm run lint` → 0
+  warnings · `npx tsc --noEmit` → clean · `npm run build` → compiled.
+- Browser (Playwright MCP, dev server):
+  - Fixture loads with **no** contract-error card ✓
+  - Over-map banner + "We checked 2 dark patches…" copy; `pointer-events-none` ✓
+  - `ContextPanel` "No oil in this scene" block, **no** "Select a detection…" prompt ✓
+  - Click a look-alike → `DetectionCard`: "Look-alike", 68 %, Area 15.0 km², "Blob / Radial",
+    centroid, the feature bars ✓
+  - StageRail Trace tooltip = "nothing to trace — no oil was detected in this scene";
+    Attribute = "no oil origin to attribute"; Verify = unchanged "no official finding to
+    compare against yet" ✓ — FlowBar dots carry the same strings ✓
+  - Primary action = "Try another case →"; click → Gallery ✓
+  - Direct `/trace` and `/attribute` URLs → redirect to `/detect` ✓
+  - Empty `FeatureCollection` → "The scene is clear…", no crash ✓
+  - Malformed `detections.geojson` (bad `classification`) → the contract-error card, **not**
+    the no-spill banner ✓
+  - `case-000` oil case unchanged: "Oil Slick" 87 %, "Trace this slick back →", Trace/Attribute
+    enabled, no no-spill banner ✓
+  - Case switching (Try another case → Gallery → case-000) ✓
+  - Console clean (0 errors / 0 warnings) throughout.
+  - All temporary QA edits to the served fixture restored.
+
+**Open issues:**
+- **Real-data dependency (Soum):** the real no-spill case (Master §3 case 7, Zenodo Part 3) does
+  not exist. Final "against the real bundle" sign-off (`docs/05:139`) is deferred. The code
+  lights up unchanged when Soum's bundle lands in `cases/` + `index.json`.
+- **Fixture SAR artefact:** `case-000-nospill/sar.png` is copied from `case-000`, whose raster
+  has a painted elongated dark streak baked in — so the fixture shows an obvious dark feature
+  with no detection polygon on it. Cosmetic only (the D1 UI is driven by the detection
+  classifications, not the raster); the real Zenodo scene won't have this. A clean fixture SAR
+  would need a producer-side asset.
+- **Ennore D3 attribute string** could not be exercised end-to-end (`case-ennore-2017` is a
+  D16 scaffold with no `detections.geojson` → it errors before the rail renders). Verified
+  instead by code (the `STAGE_UNAVAILABLE_REASON` record is untouched and only overridden when
+  `ctx.noSpill` is true) + the Verify-tooltip fallthrough test.
+- Not committed / not pushed.
+
+**Next:** backlog P2 — union / per-stage camera (Phase 5.2 "W5", needs Akshat's D4 ruling), or
+the D16 `loadCase.ts` gate (small, unblocks real-case Trace/Verify).
+
+---
+
+## [2026-09-10 16:35] P1.2 / C8 — idle reset to a clean Gallery after ~90 s
+
+**Done:** Implemented the C8 self-guiding requirement (Master §2.1, `docs/04:278`): after ~90 s
+of no interaction the app returns to the Gallery in a clean state so the next judge never
+inherits the previous one's slider / selection / stage / layers / playback. New store action
+`resetToGallery()` (`store.ts`) clears **only the transient session state** — `tNorm → 1`,
+`activeStage → "detect"`, `layers →` initial, `playing`/`autoPlaying → false`,
+`traceInitFor → null`, `error → null` — and re-seeds `selectedDetectionId` to the best-oil pick
+(C1). When `status === "ready"` it **keeps `activeCaseId` + every loaded bundle in memory**, so
+re-picking the same case between judges is instant with **no re-fetch**; a case that never
+loaded cleanly is dropped to `status: "idle"` so re-entry retries. This also fixes the P1.1
+audit's stale-state bug (`setActiveCase` no-ops on the same id) — on re-entry `CaseWorkspace`'s
+mount effect sees `status !== "idle"` and doesn't reload, rendering instantly from kept data,
+now clean. New hook `web/lib/useIdleReset.ts` (`IDLE_MS = 90_000`), mounted once from
+`CaseWorkspace`: one `useEffect([router])` attaching `["pointerdown","pointermove","keydown",
+"wheel"]` on `window` (`{capture:true, passive:true}`) to a bare `last = Date.now()` bump, plus
+a self-rescheduling `setTimeout` that fires `resetToGallery(); router.push("/")` once (a
+`fired` guard) when idle ≥ `IDLE_MS`. Cleanup on unmount removes every listener and clears the
+timeout — the Gallery has no timer, and repeat mount/unmount leaks nothing. `FlowBar` "Start
+over" and the first-stage "Cases" button, and `CaseWorkspace`'s terminal "Try another case →"
+primary action, all route through the same `resetToGallery()`. Forward stage navigation is
+untouched. The listeners only observe input — never `preventDefault` / `stopPropagation`. No
+new dependency; no localStorage.
+
+**Files touched:** `web/lib/store.ts` (modified — `resetToGallery` action + interface) ·
+`web/lib/useIdleReset.ts` (new — the hook) · `web/components/CaseWorkspace.tsx` (modified —
+`useIdleReset()` + `resetToGallery()` in the terminal primary action) ·
+`web/components/FlowBar.tsx` (modified — `toGallery()` for "Start over" + the "Cases" branch).
+No producer / pipeline / doc / data / routing / camera / MapView / TimeSlider changes.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000      # PASS (no data change — standard gate)
+cd web && npm run dev                                # http://localhost:3000/case/case-000/detect
+```
+Expected: enter a case, scrub the slider / toggle layers, then leave it alone for ~90 s → the
+app returns to the Gallery; re-pick the same case → slider rested, layers default, best
+detection selected, stage = Detect, no network re-fetch of the bundle. "Start over" / "Cases" /
+"Try another case →" do the same clean reset immediately.
+
+**Checkpoint artefact:**
+- Static (all PASS): `python scripts/validate_case.py cases/case-000` → PASS ·
+  `npm run lint` → 0 warnings · `npx tsc --noEmit` → clean · `npm run build` → compiled, 5/5
+  pages. Final `IDLE_MS` value in the tree: **90_000**.
+- Browser (Playwright MCP, dev server; QA run with `IDLE_MS` temporarily 3 000 / 15 000 /
+  120 000, then restored to 90 000 for a real-time check):
+  - **Idle → Gallery** fires reliably once idle exceeds `IDLE_MS`; real-time run with
+    `IDLE_MS = 90_000` fired at ~85–90 s of no interaction ✓
+  - **Activity prevents reset** — `pointermove` every 1 s held the session open for 22 s past a
+    15 s `IDLE_MS` ✓
+  - **Clean re-entry, no re-fetch** — after "Start over" with Origin+Vessels toggled on and the
+    slider at 0.4: re-picking case-000 → slider back to `T − 0h 0m`, Origin/Vessels/Particles
+    OFF, best-oil detection selected, stage = Detect; network shows **no** new
+    `bounds/detections/particles/origin/vessels/suspects/verification` fetch (only MapView's
+    cached `sar.png` on remount) ✓
+  - **Trace auto-play re-initialises** on the next Trace visit (`traceInitFor` was reset) ✓
+  - **"Start over" / "Cases" / "Try another case →"** each → `/` with the same clean reset ✓
+  - **Forward stage nav** (detect→trace→attribute→verify, and Back) never resets ✓
+  - **Gallery has no timer** — 20 s idle on `/` → nothing, no console error ✓
+  - **No leak** — 5× enter/leave cycles → zero console warnings/errors, no "setState on
+    unmounted" ✓  · console clean throughout.
+
+**Open issues:**
+- A judge who reads a screen for 90 s without any pointer move / wheel / keypress gets bounced
+  to the Gallery mid-read — C8's deliberate trade-off; the docs fix the value at ~90 s.
+- A backgrounded browser tab throttles `setTimeout`, so the reset fires late there — fine for a
+  foreground kiosk demo; not handled.
+- Programmatic `element.click()` does **not** count as activity (it emits no `pointerdown`) —
+  irrelevant to real use (a real click fires real pointer events); noted only because it
+  affected test scripting.
+- Not committed / not pushed.
+
+**Next:** backlog P2 — union / per-stage camera (Phase 5.2, "W5"), which needs Akshat's D4
+ruling; or wire the real verification prose once Akshat runs `build_case.py`.
+
+---
+
+## [2026-09-10 15:20] P1.1 / Phase 4 — Screen 4 Verify: two-column finding comparison + verdict
+
+**Done:** Built the missing Verify screen. `verification.json` (Master §6.8) now loads:
+`RawVerification` + sub-types + `Verdict` in `contracts.ts`; a new `web/lib/verification.ts`
+loader/validator (same discipline as `origin.ts`/`suspects.ts` — descriptive throws, never
+patches, ignores unknown keys like a scaffold's `_status`); a `verification /
+verificationStatus / verificationError` slice in `store.ts` with `loadVerification()` fetched
+in the background when `verify` is in `acts_available`. New `web/components/VerifyScreen.tsx`
+renders two equal columns (What NAAP concluded | What the investigation found), a `VerdictBadge`
+(HIT/PARTIAL/MISS/NOT APPLICABLE — identical box, only the colour token differs, MISS is a calm
+slate not an error), responsible parties (`mmsi: null` → "MMSI —"), the `explanation` verbatim,
+and optional rows that hide when absent. `source_url` goes through a new `ExternalLink` that
+only becomes a real `<a target=_blank rel="noopener noreferrer">` for `http(s)` — anything else
+(a `javascript:` scheme, a scaffold's "TODO — real URL") renders as text + a "malformed URL"
+note, never an href. `CaseWorkspace` renders `VerifyScreen` as a full-cover layer over the
+still-mounted `MapView` and suppresses `ContextPanel` + the footer slider/toggles on `verify`;
+the bottom-right primary action ("Try another case →") is unchanged. D16: when
+`meta.known_origin` is present the NAAP column shows "Origin seeded from a documented source,
+not a NAAP detection" — `known_origin` already flows through `loadCase` untouched, so this
+needed only a `CaseMeta` type field, no new data path and no `loadCase.ts` change.
+
+QA'd against a **synthetic `case-000` fixture** (`cases/case-000/verification.json` + `verify`
+added to its `acts_available`) because the three real verify-capable cases don't load through
+the frontend yet (see open issues). The fixture is explicitly synthetic, ASCII-only, and
+passes the current validator.
+
+**Files touched:** `web/lib/contracts.ts` (+`RawVerification`/sub-types/`Verdict`, +optional
+`CaseMeta.known_origin`) · `web/lib/verification.ts` (new) · `web/lib/store.ts` (+verification
+slice + `loadVerification` + gated background fetch) · `web/components/VerifyScreen.tsx` (new) ·
+`web/components/VerdictBadge.tsx` (new) · `web/components/ExternalLink.tsx` (new) ·
+`web/components/CaseWorkspace.tsx` (render `VerifyScreen`, hide panel+footer on `verify`) ·
+`web/components/ContextPanel.tsx` (removed the obsolete Verify placeholder) ·
+`cases/case-000/verification.json` (new — synthetic fixture) · `cases/case-000/meta.json`
+(+`"verify"`). No producer/pipeline/validator/real-case files touched.
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-000     # PASS (acts now include verify)
+robocopy cases\case-000 web\public\cases\case-000 /MIR
+cd web && npm run dev
+```
+Expected: `http://localhost:3000/case/case-000/verify` — two equal columns, a PARTIAL badge,
+the synthetic explanation prose, a working external source link, and "Try another case →"
+bottom-right. Full flow: `/case/case-000/detect` → Trace → Attribute → "Check our answer" →
+Verify.
+
+**Checkpoint artefact:**
+- Static (all PASS): `python scripts/validate_case.py cases/case-000` → PASS ·
+  `python scripts/test_validator.py` → 14/14, golden `case-000` still passes ·
+  `npm run lint` → 0 warnings · `npx tsc --noEmit` → clean · `npm run build` → compiled, 5/5
+  pages.
+- Browser (Playwright MCP, dev server): direct `/verify` URL ✓ · full case-000 flow to Verify
+  ✓ · all four verdicts render with an identical badge, MISS not an error style ✓ ·
+  `source_url` = `javascript:alert(1)` and a "TODO — real URL" string → plain text + note, no
+  href, no dialog ✓ · corrupt bundle (missing `explanation`) → red "contract bug — tell Akshat"
+  card, no crash ✓ · optional fields dropped + empty parties + `abstained:true` → rows hide,
+  "NAAP named no vessel", no throw ✓ · `meta.known_origin` present → "seeded from a documented
+  source" line appears ✓ · Back from Verify → Attribute rebuilds cleanly, footer/panel restored
+  ✓ · "Try another case →" → gallery ✓ · console clean · `verification.json` fetched once. All
+  temporary QA edits to the served copy were restored.
+
+**Open issues:**
+- **D16 `loadCase.ts` gap (separate prerequisite, NOT fixed here, routed to Harshita in
+  `docs/updates/_INTEGRATION.md`):** `web/lib/loadCase.ts` fetches `detections.geojson`
+  unconditionally, so `case-ennore-2017` / `case-golden-ray-2021` (no `detect` act, D16) throw
+  on load — Verify is unreachable on the only real cases that carry the `verify` act. Fix:
+  gate the `detections.geojson` fetch on `"detect" in acts_available`.
+- **All three real `verification/case-*.json` are Akshat's Phase-4 scaffolds** —
+  `assessment.explanation` and `naap_result.origin_summary` are `"TODO — HUMAN PROSE"`, and
+  Ennore's `source_url` is a "TODO" string. `build_case.py` has not copied any of them into
+  `cases/<id>/verification.json`.
+- **Contract conflict (Akshat's to reconcile):** `case-ennore-2017` and `case-golden-ray-2021`
+  `meta.json` list `"verify"` in `acts_available` but have no `cases/<id>/verification.json`
+  → `validate_case.py` fails them; the scaffold files' own `_status` says not to add `verify`
+  until the prose is real.
+- **`case-huntington-2021`** (gallery default / hero) has `acts_available: ["detect"]` — no
+  `verify` act. If Verify must be in the default demo path, Akshat needs to add the act +
+  prose.
+- **`scripts/make_case000.py`** regeneration would drop the hand-added `verify` act +
+  `verification.json` from `case-000` (noted in the fixture's `notes`).
+- **Same-case re-selection** after "Try another case" keeps stale transient state — the C8
+  idle-reset gap (backlog P1.2), deliberately not fixed here.
+- Not committed / not pushed.
+
+**Next:** the `loadCase.ts` D16 gate (small, unblocks real-case Verify + Trace), then P1.1's
+real-data pass once Akshat lands a real `verification.json` via `build_case.py`.
+
+---
+
+## [2026-09-10 13:46] W1 / Phase 5.1 — origin visualization: HeatmapLayer → BitmapLayer (ruling D11)
+
+**Done:** The origin probability field now renders through a deck.gl `BitmapLayer`, never a
+`HeatmapLayer` (ruling D11 — HeatmapLayer re-smooths in screen pixels and renormalises colour
+per viewport, so the cloud changed shape/colour as a judge zoomed). `origin.ts` drops
+`buildOriginPointCloud` / `OriginPointCloud`; `buildOriginImage(origin)` rasterises the
+row-major 120×120 grid onto an `OffscreenCanvas` (grid row `r` → canvas row `r`, row 0 =
+NORTH, no flip) and returns its `ImageBitmap` — a single fixed amber hue in every texel with
+**alpha alone** carrying probability, `alpha = v**0.7 · 0.85 · 255`: proportional, gamma not
+linear, no hard cutoff (docs/04 Phase 5.1 — a threshold left a just-above-cutoff fringe reading
+as a phantom second cloud). `MapView` builds the image once per bundle, mounts one
+`BitmapLayer` (id `origin`) georeferenced with **`origin.bounds`** (not bounds.json), and the
+T−24h→T−0 fade + Origin toggle stay a pure `opacity` change with the layer kept mounted (the
+slider-freeze fix is preserved). `originOpacity` smoothstep, the 50/90 % ring `PathLayer`,
+camera, store, `ContextPanel`, `LayerToggles` and the particle layer are untouched.
+
+**Files touched:** `web/lib/origin.ts` (modified — `buildOriginImage` via OffscreenCanvas,
+removed `buildOriginPointCloud` + `OriginPointCloud`) · `web/components/MapView.tsx` (modified —
+`BitmapLayer` replaces `HeatmapLayer`, removed the `@deck.gl/aggregation-layers` import and the
+`ORIGIN_RADIUS_PIXELS` / `_INTENSITY` / `_THRESHOLD` / `_WEIGHTS_TEXTURE_SIZE` constants). No
+data / case / schema / pipeline change. `@deck.gl/aggregation-layers` is now unused in
+`web/package.json` — left in place (also a transitive dep of `deck.gl@9.4`), not touched.
+
+**Run command:**
+```bash
+robocopy cases web\public\cases /MIR     # bundle copy (unchanged)
+cd web && npm run dev                     # open http://localhost:3000/case/case-000/trace
+```
+Expected: enter Trace (Particles + Origin auto-on); at full rewind a soft amber cloud sits
+concentric with the two amber rings; zooming in/out does not change the cloud's shape or colour
+relative to the rings; dragging T−0→T−24h eases the cloud in with no hard edge and no slider
+stall.
+
+**Checkpoint artefact:**
+- **Static (all PASS):** `npm run lint` → 0 warnings · `npx tsc --noEmit` → clean ·
+  `npm run build` → `✓ Compiled successfully`, types + lint pass, 5/5 pages, `/` 11.2 kB /
+  99.1 kB first load (dev server stopped first so `.next` was free).
+- **Browser (Playwright MCP, Chromium on the dev server):** D11 zoom test — cloud shape and
+  colour *relative to the 50/90 % rings* unchanged across zoom in +3 / out to −2. Fade at
+  T−9h 30m: edges dissolve smoothly, no fringe / phantom second cloud. `origin.json` fetched
+  **once**, not re-fetched on scrub / zoom / stage change. Console clean — the old
+  `luma.gl: Binding weightsTexture not set` warning (HeatmapLayer-only) is gone. Origin toggle
+  off/on drops and restores the cloud **and** rings together; particles unaffected. Trace card
+  still shows centroid `80.64695, 13.46316`, radii `4.2 km` / `11.8 km`, window, `50` runs.
+- `python scripts/validate_case.py cases/case-000` → `PASS`. Screenshots in the session
+  scratchpad, not committed.
+
+**Open issues:**
+- Row-0-is-north can't be *proved* on case-000 — its origin blob is near-radially-symmetric, so
+  a vertical flip renders identically. Verified only as concentric-with-rings. The definitive
+  check is the real Ennore bundle (docs/04 §7.1: origin must be NE of and above the slick); if
+  it renders flipped there, reverse the row index in `buildOriginImage`
+  (`i → (rows-1-r)*cols + c`).
+- `@deck.gl/aggregation-layers` is now an unused dependency in `web/package.json` — drop it
+  after the freeze, not now.
+- Display constants (`ORIGIN_RGB`, `ORIGIN_ALPHA_GAMMA`, `ORIGIN_ALPHA_MAX`) are fitted to
+  case-000's in-frame blob and are first-to-retune against the real bundle (docs/04 §7.2);
+  Urooz owns the final palette tokens.
+- This entry is written but **not committed** — no commit / push was performed for W1.
+
+**Next:** W5 — union / per-stage camera (docs/04 §5.2): extend `lib/extent.ts` to
+`bounds.json ∪ particle extent ∪ origin.bounds` so the cloud and particles are not framed
+off-screen on real data.
+
+---
+
 ## [2026-09-08 15:55] Phase 3 — origin heatmap + rings, Detect object card + feature bars, Trace card
 
 **Done:** Phase 3 of the frontend is complete on `case-000`. Seven files:

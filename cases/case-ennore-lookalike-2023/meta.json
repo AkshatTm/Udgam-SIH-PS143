@@ -1,0 +1,16 @@
+{
+  "case_id": "case-ennore-lookalike-2023",
+  "title": "Ennore — four days before the spill",
+  "short_location": "Kamarajar (Ennore) Port, Chennai, Tamil Nadu",
+  "case_type": "lookalike",
+  "satellite": "Sentinel-1A",
+  "scene_id": "S1A_IW_GRDH_1SDV_20231130T003201_20231130T003226_051439_06353D_343D",
+  "detection_time": "2023-11-30T00:32:01Z",
+  "acts_available": ["detect"],
+  "gallery": {
+    "thumbnail": "thumb.png",
+    "blurb": "Dark patches on the water, same coast and same sensor as a real spill. Is this oil?",
+    "difficulty": "medium"
+  },
+  "notes": "CORRECT-REJECTION CASE. The answer is no, and it is provable rather than argued: this pass is 2023-11-30, four days BEFORE the CPCL / Cyclone Michaung spill of 4 Dec 2023. Whatever is dark in this scene, it cannot be that oil. This is a stronger look-alike than anything in the Zenodo test set because it is the same coastline and the same sensor as a real Indian incident. Expected Stage 1 output: zero features classified 'oil'; look-alike features are fine and welcome — the Detect screen shows them grey with the reason they were rejected. Scene resolved and CONFIRMED by find_scenes.py over 80.20 13.05 80.50 13.40, 2023-11-20..2023-12-10: exactly ONE Sentinel-1 pass in that twenty-day window, DESCENDING, VV+VH, at 2023-11-30 00:32:01Z — 3.98 days BEFORE the incident. That scarcity is itself the argument for why backward reconstruction has to exist. Export box 80.28 13.10 80.45 13.30, 100% inside the scene footprint, dB clamp [-27, 0] — wider than the open-ocean cases because this box contains the Chennai coast, and land runs bright (VV p98 = +4.1 dB) while the sea sits at a median of -16.9 dB. The scene shows anchored vessels as bright points offshore and several darker low-wind patches — those patches are the look-alikes Stage 1 has to reject."
+}
