@@ -290,8 +290,30 @@ def centroid_lonlat(region, transform):
 # Classification
 # ---------------------------------------------------------------------------
 
+def _apply_area_floor(regions, min_oil_km2):
+    """Demote any 'oil' region below the minimum reportable area.
+
+    A dark patch of a few hundred pixels is not a reportable spill, and at the
+    rule boundary it is indistinguishable from clutter: on the Ennore look-alike
+    the two regions that squeaked past the -3 dB rule were 0.065 and 0.053 km2
+    at margins of 0.528 and 0.500 — i.e. sitting exactly ON the threshold.
+
+    0.10 km2 is set from the LIBRARY, not from that case: section A4 records the
+    Gulf of Alaska slick as the smallest we must detect at 0.3 km2, so this floor
+    is three times below anything we are required to find. It is stated on the
+    results slide rather than applied quietly.
+    """
+    if min_oil_km2 <= 0:
+        return
+    for r in regions:
+        if r.get("classification") == "oil" and float(r.get("area_km2", 0.0)) < min_oil_km2:
+            r["classification"] = "lookalike"
+            r["confidence"] = min(float(r.get("confidence", 0.5)), 0.45)
+            r["_demoted_area"] = True
+
+
 def score_regions(regions, clf, features, threshold, rule_contrast, rule_elongation,
-                  force_rule=False):
+                  force_rule=False, min_oil_km2=0.0):
     """Attach 'confidence' and 'classification' to every region.
 
     Returns the method actually used, so the run can say so out loud rather than
@@ -314,7 +336,8 @@ def score_regions(regions, clf, features, threshold, rule_contrast, rule_elongat
                 for r, p in zip(regions, proba):
                     r["confidence"] = float(p)
                     r["classification"] = "oil" if p >= threshold else "lookalike"
-                return f"model (threshold {threshold})"
+                _apply_area_floor(regions, min_oil_km2)
+                return f"model (threshold {threshold}, area >= {min_oil_km2} km2)"
             reason = "non-finite feature values"
         else:
             reason = f"regions missing {missing}"
@@ -333,8 +356,9 @@ def score_regions(regions, clf, features, threshold, rule_contrast, rule_elongat
         margin = (rule_contrast - r.get("contrast_db", 0.0)) / max(abs(rule_contrast), 1e-6)
         conf = 0.5 + 0.25 * max(-2.0, min(2.0, margin))
         r["confidence"] = float(min(0.95, max(0.05, conf)))
-    return (f"RULE contrast_db <= {rule_contrast} and elongation >= {rule_elongation} "
-            f"({reason})")
+    _apply_area_floor(regions, min_oil_km2)
+    return (f"RULE contrast_db <= {rule_contrast} and elongation >= {rule_elongation}, "
+            f"area >= {min_oil_km2} km2 ({reason})")
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +378,10 @@ def main():
     ap.add_argument("--rule-contrast", type=float, default=-0.5,
                     help="fallback rule: contrast_db at or below this is oil. NOT -3; "
                          "see the -3 dB trap in this file's docstring")
+    ap.add_argument("--min-oil-km2", type=float, default=0.10,
+                    help="a region smaller than this is never classified 'oil'. 0.10 km2 "
+                         "sits well below the smallest slick in the library (Alaska, "
+                         "0.3 km2, section A4) so it cannot suppress anything we must find")
     ap.add_argument("--rule-elongation", type=float, default=2.0,
                     help="fallback rule: elongation at or above this is oil")
     ap.add_argument("--no-ships", action="store_true", help="skip the ship detector")
@@ -429,8 +457,15 @@ def main():
 
     ships, ship_stats = ([], None)
     if not a.no_ships:
+        # Exclude land first. prepare() already derives the land mask and its
+        # dilated coastal halo for the dark-spot path; the ship detector was
+        # running on the raw array, so a port scene returned its own buildings
+        # as vessels (Ennore: 1,377 of them, peaking at +34 dB on land).
+        from pipeline.detect.darkspot import prepare as _prepare
+        _, _, _land, _ = _prepare(vv, px_km2)
         ships, ship_stats = detect_ships(vv, transform, min_db=a.ship_min_db,
-                                         k_sigma=a.ship_k_sigma, return_stats=True)
+                                         k_sigma=a.ship_k_sigma, return_stats=True,
+                                         exclude=_land)
     print(f"[detect] ships  : {len(ships)} bright radar contact(s)")
     if ship_stats:
         print(f"[detect]          threshold {ship_stats['threshold_db']} dB "
@@ -464,7 +499,7 @@ def main():
 
         method = score_regions(regions, clf, features, threshold,
                                a.rule_contrast, a.rule_elongation,
-                               force_rule=not use_nets)
+                               force_rule=not use_nets, min_oil_km2=a.min_oil_km2)
         print(f"[detect] scored by: {method}")
 
         order = np.argsort([-r.get("confidence", 0.0) for r in regions])

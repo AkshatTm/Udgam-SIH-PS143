@@ -32,7 +32,23 @@ from scipy import ndimage as ndi
 #               so a scene with an unusually bright sea does not fill with
 #               phantom vessels.
 DEFAULT_MIN_DB = -10.0
-DEFAULT_K_SIGMA = 8.0
+
+# 4.0, not the 8.0 this started at. The threshold is max(absolute floor,
+# median + k*MAD), so the two terms are an AND and whichever is stricter wins.
+# At k=8 the scene-relative term always won and it won by an absurd margin: on
+# the Gulf of Alaska scene (sea -18.30 dB, MAD 2.56) it demanded +2.19 dB, while
+# the brightest pixel in the entire scene is -8.79 dB. The detector could not
+# fire on that scene by construction, and the -10 dB floor was dead code
+# everywhere. Requiring a return brighter than any ocean SAR pixel is not a
+# definition of "ship", it is a bug.
+#
+# 4.0 is from CFAR practice: a Pfa around 1e-5..1e-6 on approximately Gaussian
+# clutter sits near 4-5 sigma. It is chosen for that reason and applied to all
+# seven live scenes at once. It is NOT chosen because it makes any particular
+# case detect anything — the Alaska contact in section 6.6 is an answer we are
+# not supposed to be optimising against (A6, D2b), and if this value still misses
+# it then the miss gets reported with the diagnostics rather than tuned away.
+DEFAULT_K_SIGMA = 4.0
 
 # A Sentinel-1 IW GRD pixel is ~10 m. A 30 m tender is ~9 px; a 300 m ULCC with
 # its sidelobes is a few thousand. Anything larger is an island or a rig glint.
@@ -57,7 +73,7 @@ def _sea_level(db, finite):
 def detect_ships(db, transform, pixel_size_m=None,
                  min_db=DEFAULT_MIN_DB, k_sigma=DEFAULT_K_SIGMA,
                  min_px=MIN_PX, max_px=MAX_PX, merge_m=MERGE_M,
-                 nodata_value=0.0, return_stats=False):
+                 nodata_value=0.0, return_stats=False, exclude=None):
     """Bright point targets -> list of ship dicts in [lon, lat].
 
     db        : VV dB array (raw, unmasked — same array detect_array() takes)
@@ -67,6 +83,13 @@ def detect_ships(db, transform, pixel_size_m=None,
                 transform when omitted.
     return_stats : also return a diagnostics dict describing what was REJECTED
                 and why.
+    exclude   : optional bool mask of pixels that CANNOT hold a vessel — land,
+                and the coastal sidelobe halo around it. Pass darkspot.prepare()'s
+                land mask. Without it a port scene returns its own buildings as
+                ships: the Ennore look-alike peaks at +34 dB on land and reported
+                1,377 "vessels", which would have become 1,377 false dark-vessel
+                claims in Jaiveer's cross-check. A ship detection on land is not
+                a marginal call, it is definitionally wrong.
 
     On the diagnostics. The threshold is max(absolute floor, scene-relative), and
     the absolute floor is the part that can fail quietly at high latitude, where
@@ -84,6 +107,8 @@ def detect_ships(db, transform, pixel_size_m=None,
         return (ships, stats_out) if return_stats else ships
 
     finite = np.isfinite(db) & (db != nodata_value)
+    if exclude is not None:
+        finite &= ~np.asarray(exclude, dtype=bool)
     if not finite.any():
         return _ret([])
 
@@ -192,7 +217,31 @@ def _merge_and_project(raw, transform, pixel_size_m, merge_m):
 
 CHRONIC_ELONGATION = 5.0
 ACUTE_ELONGATION = 3.0
-STRAIGHTNESS_MIN = 0.80
+# 0.60, calibrated on data rather than on a synthetic ellipse.
+#
+# The original 0.80 was set from the smooth synthetic ellipse in this file's
+# self-test, where straightness is ~1.0 by construction. Real contours are
+# pixel-ragged, their perimeter runs long, and the ratio collapses — every one
+# of the twelve oil detections across the seven live cases came back "unknown",
+# including regions with elongation 19.0, 11.8 and 10.8, which are exactly the
+# chronic-discharge shape the field exists to name.
+#
+# Measured on Part 1 ground-truth masks (2,769 slick components, 400 scenes):
+# for elongation >= 5 straightness runs p10 0.654, median 0.819. 0.60 captures
+# 94% of those. Chosen from Zenodo, never from a demo case.
+#
+# CAVEAT, measured and worth stating: detector contours score 0.15-0.20 LOWER
+# than the hand-drawn masks this was calibrated on, because the detector follows
+# a thresholded boundary. So 0.60 against detector output is roughly 0.75-0.80
+# against a mask, and this threshold is more permissive than the number looks.
+#
+# It could NOT be calibrated on detector output directly: of 276 detector regions
+# overlapping GT oil in Part 1, ZERO have elongation >= 5 (median 1.72, p90 2.66)
+# — Part 1's slicks are broad and diffuse, so the detector fragments them into
+# blobs and the corpus has no elongated population at all. The brief's
+# "tune against Part 1's masks" (5.2) does not work for this split, and that is
+# a finding rather than an omission.
+STRAIGHTNESS_MIN = 0.60
 
 
 def _straightness(contour):
