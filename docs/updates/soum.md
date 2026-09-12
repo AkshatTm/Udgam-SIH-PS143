@@ -15,6 +15,51 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-13 17:05] Phase 6.3 — D34 closed out: Akshat's two corrections applied, decisions recorded
+
+**Done:** Merged `7d89a76`. Both Zenodo cases are now in `cases/index.json` at slots 8 and 9, so
+the library is **9 indexed cases**. Applied both things Akshat asked for:
+
+1. **Margin paragraph** — already corrected in `20594df`, before his handoff was written. The only
+   two surviving mentions of "20 / 0.578" are inside blocks that explicitly label the figure wrong
+   and explain its provenance. Nothing in the log can put 20 on a slide.
+2. **Contact total: 173, not 174.** His count is right and mine was arithmetic sloppiness:
+   72 + 43 + 31 + 21 + 3 + 2 + 1 + 0 + 0 = 173. Corrected — the edge finding is **2 of 173**.
+
+**Files:** `docs/updates/soum.md`.
+
+**His correction, recorded because it changes the shared record.** Akshat withdrew the claim that
+the Delta contact sits "among charted platforms" — he had not checked any platform dataset at that
+coordinate, and it was an inference written as a fact. `receipts.md`, D34 and the case notes now
+say only what was measured. My own reasoning never rested on it: the argument was that geometry
+cannot establish a contact's identity, which holds whatever is or isn't charted there. What
+survives unchanged is that it is **not** a dark vessel — darkness needs an AIS check at a known
+acquisition time, and that scene has none.
+
+**Decided by Akshat, not to be reopened before the freeze:**
+- **No edge rule and no `edge` flag.** My answer accepted in full, including the point that
+  windowed-CFAR's edge objection does not apply to a globally-estimated background.
+- **Do not change `DEFAULT_MIN_DB` before the freeze.** The floor-binding limitation on Zenodo
+  scenes is recorded in `receipts.md`: a −12 dB hull on a −29 dB sea (≈22σ) would be missed. A
+  scene-relative floor for benchmark scenes is October work and must ship with a before/after
+  contact count on Part III.
+- **Recording `--rule-contrast` in the bundle waits until October.** The frontend pins −3.0 as
+  `RULE_CONTRAST_DB` and every bundle matches it today. **Standing rule I owe him: if I ever rerun
+  a satellite case with anything but `--rule-contrast -3.0 --rule-elongation 2.5`, tell him before
+  pushing** — the bands would be wrong on screen and the bundle would not reveal it.
+
+**Guard rails through the demo (his, logged so they survive this chat):** no detector changes after
+15 Sept 05:00 unless it is a bug fix and he is told first; **Alaska stays at zero contacts** and the
+dark-vessel contact shown on that case is **Cerulean's**, never ours; and **nothing is called a
+"dark vessel" at Stage 1** — every contact we emit is unattributed, only Stage 3 can call one dark.
+
+**Next:** Cerulean IoU on the five cases carrying `cerulean_slick.geojson` (jacksonville,
+farallones, gulf-alaska, jamnagar, mumbai). Comparison target, not ground truth; gulf-alaska was
+classed AMBIGUOUS by Cerulean's own reviewer, so a poor IoU there is the expected result and gets
+reported, not hidden.
+
+---
+
 ## [2026-09-13 16:10] Phase 6.2 — D34 adopted, all nine reran, and the rerun hazard closed in code
 
 **Done:** Merged Akshat's `c001423` (D34). Reran all nine cases; `ship_detections` is now
@@ -52,7 +97,7 @@ Phase 6.1 entry below. The shipped figure is **12, median 0.645**; 20 was the pr
 rule-passing count. Akshat is right that nobody should quote 20.
 
 **Answering his question — should `detect_ships` reject contacts touching the scene edge? No.**
-Measured across all nine cases: only **2 of 174** contacts sit within 2 px of an edge, and one of
+Measured across all nine cases: only **2 of 173** contacts sit within 2 px of an edge, and one of
 them is Ennore's **+10.27 dB, 60 px** target in a working port — almost certainly a real ship. A
 blanket edge rule spends a confident true positive to remove one questionable contact.
 
