@@ -152,7 +152,7 @@ def integrate(positions, t0, field, n_steps, timestep_minutes=15, direction="bac
 
 def integrate_stranding(positions, t0, field, n_steps, timestep_minutes=15,
                         direction="backward", wind_coeff=WIND_COEFF, guard=True,
-                        is_land=None):
+                        is_land=None, return_strand_step=False):
     """integrate(), but particles that reach land STRAND: frozen in place and flagged.
 
     Returns (history, times, stranded) where `stranded` is a bool array [n].
@@ -180,8 +180,13 @@ def integrate_stranding(positions, t0, field, n_steps, timestep_minutes=15,
 
     pos = as_positions(positions).copy()
     stranded = np.zeros(pos.shape[0], dtype=bool)
+    # step index at which each particle stranded; -1 means it never did. This is what a coastal
+    # impact ETA is made of (Phase 2.3) -- the bool alone says whether, never when.
+    strand_step = np.full(pos.shape[0], -1, dtype=np.int64)
     if is_land is not None:
-        stranded |= is_land(pos[:, 0], pos[:, 1])       # seeded on land is already stranded
+        seeded_ashore = is_land(pos[:, 0], pos[:, 1])
+        stranded |= seeded_ashore
+        strand_step[seeded_ashore] = 0
 
     history = np.empty((n_steps, pos.shape[0], 2), dtype=np.float64)
     times = []
@@ -193,13 +198,16 @@ def integrate_stranding(positions, t0, field, n_steps, timestep_minutes=15,
             break
         moved = rk2_step(pos, t, dt, field, wind_coeff, guard)
         if is_land is not None:
-            newly = is_land(moved[:, 0], moved[:, 1])
+            newly = is_land(moved[:, 0], moved[:, 1]) & ~stranded
+            strand_step[newly] = k + 1
             stranded |= newly
             # a stranded particle keeps its LAST WET position; it does not step onto land
             moved[stranded] = pos[stranded]
         pos = moved
         t = t + timedelta(seconds=dt)
 
+    if return_strand_step:
+        return history, times, stranded, strand_step
     return history, times, stranded
 
 
@@ -282,6 +290,66 @@ def assert_inside_field_box(positions, bbox, margin_km=10.0, label="final positi
         f"not fail -- they slid along the wall and produced a plausible, WRONG origin cloud.\n"
         f"  Refetch with a bigger pad, then rerun:\n"
         f"    python pipeline/drift/fetch_fields.py --case <id> --vmax-ms 2.0 --force")
+
+
+class FieldTimeSpan(ImplausibleDrift):
+    """Raised when the cached field does not cover the time span being integrated."""
+
+
+def assert_field_covers(field, t_start, t_end, label="run", tol_frac=0.05, tol_min_hours=1.0):
+    """Refuse when the field's time axes do not span [t_start, t_end].
+
+    THE BUG THIS EXISTS FOR. GriddedField clamps its time index at the edge of the axis, so a
+    step past the last snapshot silently re-uses that snapshot. Measured on case-000: current
+    and wind are bit-identical at t0, t0+6h, t0+12h and t0+24h, because fetch_fields.py used to
+    pull only detection_time - 30 h -> detection_time. A 24 h FORWARD run through that cache is
+    one frozen snapshot advecting particles for a day, and the output is a perfectly ordinary
+    particles_forward.json.
+
+    Analytic and constant fields are steady by construction and have no axes, so they pass.
+
+    A SMALL overhang is tolerated, and that is deliberate rather than lax. `detection_time` is a
+    satellite acquisition instant and HYCOM's snapshots are on the hour, so t0 routinely sits a
+    few minutes past the last snapshot -- case-000's is 14 minutes past. Refusing every backward
+    run over a 1% clamp would be useless. The tolerance is the larger of one hour and 5% of the
+    span, which passes that and still refuses a 24 h forward run into a frozen field. A tolerated
+    overhang is RETURNED so the caller can report it; it is not silently swallowed.
+
+    Returns (cov_lo, cov_hi, overhang_hours). Raises FieldTimeSpan when the overhang is material.
+    """
+    ct = getattr(field, "ctime", None)
+    wt = getattr(field, "wtime", None)
+    if ct is None or wt is None:
+        return None
+
+    from datetime import datetime, timezone
+    lo = max(int(np.min(ct)), int(np.min(wt)))
+    hi = min(int(np.max(ct)), int(np.max(wt)))
+    cov_lo = datetime.fromtimestamp(lo, tz=timezone.utc)
+    cov_hi = datetime.fromtimestamp(hi, tz=timezone.utc)
+    a, b = sorted((require_aware(t_start), require_aware(t_end)))
+
+    short_before = max(0.0, (cov_lo - a).total_seconds() / 3600.0)
+    short_after = max(0.0, (b - cov_hi).total_seconds() / 3600.0)
+    overhang = short_before + short_after
+    span_h = (b - a).total_seconds() / 3600.0
+    tol = max(float(tol_min_hours), float(tol_frac) * span_h)
+
+    if overhang <= tol:
+        return (cov_lo, cov_hi, overhang)
+
+    raise FieldTimeSpan(
+        f"the cached field does not cover this {label}.\n"
+        f"  needs     {a:%Y-%m-%dT%H:%MZ}  ->  {b:%Y-%m-%dT%H:%MZ}\n"
+        f"  field has {cov_lo:%Y-%m-%dT%H:%MZ}  ->  {cov_hi:%Y-%m-%dT%H:%MZ}\n"
+        + (f"  short by {short_before:.1f} h at the START\n" if short_before else "")
+        + (f"  short by {short_after:.1f} h at the END\n" if short_after else "")
+        + f"  overhang {overhang:.2f} h against a tolerance of {tol:.2f} h "
+          f"({overhang / span_h * 100:.0f}% of a {span_h:.1f} h span)\n"
+        + f"  Past the axis the field is CLAMPED, not modelled -- every step re-uses the edge\n"
+          f"  snapshot and the output looks entirely normal. Refetch a wider window:\n"
+          f"    python pipeline/drift/fetch_fields.py --case <id> --hours 30 "
+          f"--forward-hours {max(24.0, short_after):.0f} --force")
 
 
 class FieldBoxEdge(ImplausibleDrift):

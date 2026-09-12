@@ -35,9 +35,9 @@ import numpy as np
 import coastline
 import ensemble as ens
 from fields import load_case_field, make_fake
-from step import (assert_displacement_plausible, assert_inside_field_box,
-                  displacement_km, edge_distance_km, integrate,
-                  integrate_stranding)
+from step import (assert_displacement_plausible, assert_field_covers,
+                  assert_inside_field_box, displacement_km, edge_distance_km,
+                  integrate, integrate_stranding)
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -72,27 +72,61 @@ def pick_slick(dets):
     return max(oil, key=lambda f: f["properties"].get("confidence", 0.0))
 
 
+def seed_geometry(props):
+    """(geometry, reason) for this detection. `discharge_class` is the AUTHORITY (Phase 3.4).
+
+    `shape_class` was always a proxy for the thing that actually matters: was the source moving?
+    `discharge_class` says so directly, so it wins where it is known.
+
+      chronic  -> the vessel was under way, so the origin is a LINE SEGMENT along the slick's
+                  principal axis, and the backward cloud should come out elongated. The
+                  reconstruction then implies a course and a speed, not just a place.
+      acute    -> a release at a point, so seed from the centroid.
+      unknown  -> fall back to shape_class, and SAY that is what happened. Stage 2 must not
+                  present a fallback as a determination.
+    """
+    dc = props.get("discharge_class", "unknown")
+    if dc == "chronic":
+        return "line", "discharge_class=chronic - vessel under way, origin is a line segment"
+    if dc == "acute":
+        return "point", "discharge_class=acute - release at a point, seed from the centroid"
+    sc = props.get("shape_class")
+    if sc == "linear":
+        return "line", f"discharge_class={dc!r}, FALLING BACK to shape_class=linear"
+    return "point", f"discharge_class={dc!r}, FALLING BACK to shape_class={sc!r} (centroid)"
+
+
 def seed_particles(feat, n, rng):
-    """KEEP THIS. shape_class decides the seeding geometry — that field carries physics."""
+    """Seeding geometry comes from seed_geometry() — that field carries physics."""
     props = feat["properties"]
     clon, clat = float(props["centroid"][0]), float(props["centroid"][1])
     klat = 1.0 / max(math.cos(math.radians(clat)), 1e-6)
     jitter_deg = 0.3 / KM_PER_DEG          # +/- 300 m
 
-    if props.get("shape_class") == "linear":
-        # principal axis of the polygon ring, approximated by its most distant point pair
-        ring = feat["geometry"]["coordinates"][0]
-        best, axis = -1.0, (1.0, 0.0)
-        for i in range(0, len(ring), 4):
-            for j in range(i + 1, len(ring), 4):
-                dx = (ring[j][0] - ring[i][0]) * math.cos(math.radians(clat))
-                dy = ring[j][1] - ring[i][1]
-                d = dx * dx + dy * dy
-                if d > best:
-                    best, axis = d, (dx, dy)
-        half = math.sqrt(best) / 2.0
-        norm = math.hypot(*axis) or 1.0
-        ux, uy = axis[0] / norm, axis[1] / norm
+    geom_kind, _ = seed_geometry(props)
+    if geom_kind == "line":
+        # Principal axis of the polygon ring, by PCA on its vertices.
+        #
+        # This REPLACED a most-distant-point-pair scan that stepped through the ring with
+        # range(0, len(ring), 4) to keep the O(n^2) search cheap. That subsampling can miss the
+        # true major axis: on a 5-vertex rectangle it compared exactly one pair -- the SHORT
+        # edge -- and seeded the line ACROSS the slick instead of along it. Real polygons have
+        # more vertices (case-000 has 41, Cerulean's Jacksonville ribbon 71) so it usually found
+        # something close, but "usually" is not a property to rely on for the chronic seeding
+        # that implies a vessel's course.
+        #
+        # PCA is exact, O(n), uses every vertex, and is cheaper than the scan it replaces. The
+        # along-axis half-length is taken as the actual projected extent of the ring, so the
+        # seeded segment matches the slick rather than a covariance-derived proxy.
+        ring = np.asarray(feat["geometry"]["coordinates"][0], dtype=np.float64)
+        coslat = math.cos(math.radians(clat))
+        xy = np.column_stack([(ring[:, 0] - ring[:, 0].mean()) * coslat,
+                              ring[:, 1] - ring[:, 1].mean()])
+        evals, evecs = np.linalg.eigh(np.cov(xy, rowvar=False))
+        major = evecs[:, int(np.argmax(evals))]          # unit vector in (deg*coslat, deg)
+        proj = xy @ major
+        half = float(proj.max() - proj.min()) / 2.0      # degrees along the axis
+        ux, uy = float(major[0]), float(major[1])
         pts = []
         for _ in range(n):
             t = rng.uniform(-half, half)
@@ -100,7 +134,7 @@ def seed_particles(feat, n, rng):
                         clat + (t * uy) + rng.gauss(0, jitter_deg)])
         return pts
 
-    # blob: gaussian around the centroid, sigma ~ half the equivalent radius
+    # point: gaussian around the centroid, sigma ~ half the equivalent radius
     area = max(float(props.get("area_km2", 1.0)), 0.01)
     sigma = (math.sqrt(area / math.pi) / 2.0) / KM_PER_DEG
     return [[clon + rng.gauss(0, sigma) * klat, clat + rng.gauss(0, sigma)]
@@ -154,6 +188,152 @@ def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_ste
     return clon, clat, r50, r90, method, doc["abstain"]
 
 
+def write_particles_forward(path, t0, positions, dt_min):
+    """particles_forward.json. A SEPARATE FILE and a SEPARATE INTEGRATION (Master 6.4).
+
+    The validator compares the position array against particles.json and ERRORS if they are
+    identical, so a relabelled copy is caught mechanically. It should be -- forward and backward
+    answer different questions and a copy would answer neither.
+    """
+    path.write_text(json.dumps({
+        "t0": iso(t0), "direction": "forward", "timestep_minutes": dt_min,
+        "n_steps": len(positions), "n_particles": len(positions[0]),
+        "positions": positions}))
+
+
+def coastal_impact(history, times, strand_step, dt_min):
+    """Phase 2.3. What the forward run says about the coast, and only what it can say.
+
+    Forward-from-slick answers the question a coast guard actually asks -- which coastline is
+    threatened, and when. Forward-from-origin would only recreate the slick we already detected.
+
+    What is measurable here: whether particles beach, WHEN the first one does, WHERE, and how
+    the stranded fraction grows with time. What is NOT measurable and is therefore not claimed:
+    the NAME of the affected stretch. That needs a coastline gazetteer, which is another
+    dependency and another thing to get wrong; the landfall footprint below is the honest
+    substitute and a human can name it from a map in five seconds.
+    """
+    n = history.shape[1]
+    # A particle SEEDED on land did not make landfall -- it was already ashore at t0, which is a
+    # Stage 1 data-quality signal (the detected polygon overlaps the coast), not a forecast.
+    # Conflating the two reports "first landfall 0.00 h" and misstates the coastal impact.
+    seeded_ashore = strand_step == 0
+    landed = strand_step > 0
+    out = {
+        "n_particles": int(n),
+        "seeded_ashore_fraction": float(np.mean(seeded_ashore)),
+        "stranded_fraction": float(np.mean(strand_step >= 0)),
+        "landfall_fraction": float(np.mean(landed)),
+        "span_hours": (len(times) - 1) * dt_min / 60.0,
+        "first_landfall": None,
+        "landfall_footprint": None,
+        "eta_curve": [],
+        "note": ("stretch NAMES are not reported: that needs a coastline gazetteer we do not "
+                 "have. The footprint is the measured substitute."),
+    }
+    if seeded_ashore.any():
+        out["seeded_ashore_warning"] = (
+            f"{out['seeded_ashore_fraction'] * 100:.1f}% of particles were ON LAND at t0. They "
+            f"are excluded from the landfall statistics because they never made landfall -- "
+            f"they started ashore. This means the detected polygon overlaps the coastline, "
+            f"which is Stage 1's to look at.")
+
+    if not landed.any():
+        out["verdict"] = ("no particle reached land within the modelled span -- no coastal "
+                          "impact from this release at this horizon")
+        return out
+
+    k_first = int(strand_step[landed].min())
+    who = int(np.argmax(strand_step == k_first))
+    pos_first = history[k_first, who]
+    out["first_landfall"] = {
+        "hours_after_t0": k_first * dt_min / 60.0,
+        "time": iso(times[k_first]),
+        "position": [r5(float(pos_first[0])), r5(float(pos_first[1]))],
+    }
+    pts = np.array([history[int(strand_step[i]), i] for i in np.flatnonzero(landed)])
+    out["landfall_footprint"] = {
+        "west": r5(float(pts[:, 0].min())), "east": r5(float(pts[:, 0].max())),
+        "south": r5(float(pts[:, 1].min())), "north": r5(float(pts[:, 1].max())),
+        "centroid": [r5(float(pts[:, 0].mean())), r5(float(pts[:, 1].mean()))],
+    }
+    for hours in range(0, int(out["span_hours"]) + 1, 3):
+        k = int(round(hours * 60.0 / dt_min))
+        frac = float(np.mean(landed & (strand_step <= k)))
+        out["eta_curve"].append({"hours": hours, "stranded_fraction": round(frac, 4)})
+    out["verdict"] = (f"first landfall {out['first_landfall']['hours_after_t0']:.2f} h after "
+                      f"detection, {out['landfall_fraction'] * 100:.1f}% of particles ashore "
+                      f"by {out['span_hours']:.0f} h")
+    return out
+
+
+def run_forward(a, meta, t0, field, seed, feat, out_dir):
+    """PHASE 2. Forward from the slick at t0 -- which coast is threatened, and when.
+
+    Deliberately does NOT touch particles.json or origin.json, and does not run the ensemble.
+    Those are the backward product; Harshita builds against them and a forward run must not
+    disturb them.
+    """
+    span_h = (a.steps - 1) * a.timestep_minutes / 60.0
+
+    # The field must actually cover the future. Without this the run is a frozen snapshot.
+    # Presented as a clean refusal rather than a traceback: this is a "refetch a wider window"
+    # instruction for a person, not a crash.
+    from step import FieldTimeSpan
+    try:
+        cov = assert_field_covers(field, t0, t0 + timedelta(hours=span_h), "forward run")
+    except FieldTimeSpan as exc:
+        raise SystemExit(str(exc))
+    if cov is not None:
+        print(f"              coverage  field spans {cov[0]:%Y-%m-%dT%H:%MZ} -> "
+              f"{cov[1]:%Y-%m-%dT%H:%MZ}  (overhang {cov[2]:.2f} h, tolerated)")
+
+    land = coastline.is_land if coastline.available() else None
+    print(f"              coast  {coastline.describe()}")
+
+    history, times, stranded, strand_step = integrate_stranding(
+        seed, t0, field, a.steps, a.timestep_minutes, direction="forward",
+        is_land=land, return_strand_step=True)
+
+    positions = np.round(history, 5).tolist()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fwd_path = out_dir / "particles_forward.json"
+    write_particles_forward(fwd_path, t0, positions, a.timestep_minutes)
+
+    impact = coastal_impact(history, times, strand_step, a.timestep_minutes)
+    impact_path = out_dir / f"coastal_impact_{a.case}.json"
+    impact_path.write_text(json.dumps(impact, indent=2))
+
+    # a forward run must not be a relabelled backward run; prove it here rather than waiting
+    # for the validator to catch it
+    back_path = out_dir / "particles.json"
+    if back_path.exists():
+        back = json.loads(back_path.read_text())
+        same = back.get("positions") == positions
+        print(f"              distinct from particles.json: {not same}"
+              + ("  !! IDENTICAL - the validator will reject this" if same else ""))
+
+    dist = displacement_km(history[0], history[-1])
+    print(f"[drift:FWD]   wrote {fwd_path}")
+    print(f"              wrote {impact_path}   (working space - not in the bundle)")
+    print(f"              seeded {a.particles} from {feat['properties']['id']}, ran FORWARD "
+          f"{span_h:.2f} h in {a.steps} steps of {a.timestep_minutes} min")
+    print(f"              t0 {iso(t0)} -> {iso(times[-1])}")
+    print(f"              displacement  median {float(np.median(dist)):.1f} km   "
+          f"max {float(dist.max()):.1f} km")
+    if impact.get("seeded_ashore_warning"):
+        print(f"              !! {impact['seeded_ashore_warning']}")
+    print(f"              coastal impact: {impact['verdict']}")
+    if impact["first_landfall"]:
+        fl = impact["first_landfall"]
+        fp = impact["landfall_footprint"]
+        print(f"                first ashore at {fl['position']} at {fl['time']}")
+        print(f"                footprint W {fp['west']} S {fp['south']} "
+              f"E {fp['east']} N {fp['north']}")
+    print(f"              NOTE {impact['note']}")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description="Stage 2 — backward drift + 50-run ensemble")
     ap.add_argument("--case", required=True)
@@ -175,6 +355,10 @@ def main():
                          "intervals = exactly 24.0 h (CONTRACTS.md 5)")
     ap.add_argument("--timestep-minutes", type=int, default=15)
     ap.add_argument("--seed", type=int, default=143)
+    ap.add_argument("--forward", action="store_true",
+                    help="PHASE 2: run FORWARD from the slick at t0 and write "
+                         "particles_forward.json + a coastal impact summary. Does not touch "
+                         "particles.json or origin.json, and does not run the ensemble.")
     ap.add_argument("--out", default=str(OUT), help="directory for particles.json/origin.json")
     a = ap.parse_args()
 
@@ -210,6 +394,12 @@ def main():
         clat0 = float(feat["properties"]["centroid"][1])
         field = make_fake(a.field, lon0=clon0, lat0=clat0, wind=tuple(a.wind))
         tag = "FAKE"
+
+    geom_kind, geom_why = seed_geometry(feat["properties"])
+    print(f"[drift:{tag}]  seeding {geom_kind.upper()}: {geom_why}")
+
+    if a.forward:
+        return run_forward(a, meta, t0, field, seed, feat, Path(a.out))
 
     span_h = (a.steps - 1) * a.timestep_minutes / 60.0    # states recorded, not steps taken
 
