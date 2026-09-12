@@ -347,6 +347,12 @@ def main():
                     help="with --fake: analytic = a vortex cell on the slick; constant = uniform")
     ap.add_argument("--wind", type=float, nargs=2, default=(6.0, -4.0), metavar=("U", "V"),
                     help="with --fake: 10 m wind, signed m/s components (east, north)")
+    ap.add_argument("--fake-current", type=float, nargs=2, default=(0.5, 0.0),
+                    metavar=("U", "V"),
+                    help="with --fake --field constant: the uniform current, signed m/s. "
+                         "ConstantField defaults to a DEAD ocean (0, 0), which makes the mode "
+                         "wind-only and means --current-sigma has nothing to scale. 0.5 m/s "
+                         "east matches the convention in tests.py.")
     ap.add_argument("--particles", type=int, default=3000)
     ap.add_argument("--runs", type=int, default=50,
                     help="ensemble members. The cut order allows 25; say so in origin.json.")
@@ -355,6 +361,13 @@ def main():
                          "intervals = exactly 24.0 h (CONTRACTS.md 5)")
     ap.add_argument("--timestep-minutes", type=int, default=15)
     ap.add_argument("--seed", type=int, default=143)
+    ap.add_argument("--current-sigma", type=float, default=None,
+                    help="width of the current-scale perturbation. Default is the honest "
+                         f"{ens.CURRENT_SIGMA} (+/-15%%). Widening it is how the ABSTAIN fixture "
+                         "is produced (Phase 3.3): the pipeline writes a real schema-valid "
+                         "bundle with abstain=true instead of anyone hand-editing one. A "
+                         "non-default value is announced in the output and must never be "
+                         "presented as a case result.")
     ap.add_argument("--forward", action="store_true",
                     help="PHASE 2: run FORWARD from the slick at t0 and write "
                          "particles_forward.json + a coastal impact summary. Does not touch "
@@ -392,7 +405,10 @@ def main():
     else:
         clon0 = float(feat["properties"]["centroid"][0])
         clat0 = float(feat["properties"]["centroid"][1])
-        field = make_fake(a.field, lon0=clon0, lat0=clat0, wind=tuple(a.wind))
+        fake_kw = {"wind": tuple(a.wind)}
+        if a.field == "constant":
+            fake_kw["current"] = tuple(a.fake_current)
+        field = make_fake(a.field, lon0=clon0, lat0=clat0, **fake_kw)
         tag = "FAKE"
 
     geom_kind, geom_why = seed_geometry(feat["properties"])
@@ -413,6 +429,14 @@ def main():
     positions = np.round(history, 5).tolist()
 
     # ---- ensemble: the answer ---------------------------------------------------------
+    if a.current_sigma is not None and abs(a.current_sigma - ens.CURRENT_SIGMA) > 1e-9:
+        print(f"[drift:{tag}]  !! CURRENT SIGMA OVERRIDDEN: {a.current_sigma} instead of the "
+              f"honest {ens.CURRENT_SIGMA}.")
+        print(f"              This widens the uncertainty budget beyond what the physics "
+              f"supports. The only sanctioned use is")
+        print(f"              producing the Phase 3.3 abstain fixture. This output is NOT a "
+              f"case result and must not be shown as one.")
+
     nprng = np.random.default_rng(a.seed)
 
     def tick(done, total):
@@ -421,7 +445,7 @@ def main():
 
     endpoints, conv_idx, members = ens.run_ensemble(
         seed, t0, field, a.steps, a.timestep_minutes, n_runs=a.runs, rng=nprng, progress=tick,
-        is_land=land)
+        is_land=land, current_sigma=a.current_sigma)
     # the reported fraction is the ENSEMBLE's, not the control run's: origin.json describes the
     # cloud, and the cloud is the ensemble
     strand_frac = (float(np.mean([m["stranded_fraction"] for m in members]))

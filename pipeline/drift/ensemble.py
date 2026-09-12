@@ -133,7 +133,7 @@ def run_once(seed_pos, t0, field, n_steps, timestep_minutes=15, wind_coeff=0.03,
     return pos, spread, history, times
 
 
-def _stratified_draws(n, rng):
+def _stratified_draws(n, rng, current_sigma=None):
     """The 50 members' parameters, drawn by STRATIFICATION rather than independently.
 
     Fifty independent draws from N(1, 0.15) have a sample mean scattered by 0.021 and a
@@ -153,7 +153,7 @@ def _stratified_draws(n, rng):
     u = (np.arange(n) + rng.random(n)) / n           # one uniform per stratum
     winds = WIND_COEFF_LO + u * (WIND_COEFF_HI - WIND_COEFF_LO)
 
-    nd = NormalDist(1.0, CURRENT_SIGMA)
+    nd = NormalDist(1.0, CURRENT_SIGMA if current_sigma is None else float(current_sigma))
     u2 = (np.arange(n) + rng.random(n)) / n
     scales = np.array([nd.inv_cdf(float(p)) for p in u2])
 
@@ -163,7 +163,7 @@ def _stratified_draws(n, rng):
 
 
 def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=50,
-                 rng=None, progress=None, is_land=None):
+                 rng=None, progress=None, is_land=None, current_sigma=None):
     """The 50 runs. Returns (endpoints [n_runs*n, 2], conv_idx [n_runs], members).
 
     `endpoints` is every final position from every member pooled together -- 150,000 points
@@ -173,7 +173,7 @@ def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=
     rng = rng if rng is not None else np.random.default_rng(143)
     seed_pos = as_positions(seed_pos)
 
-    winds, scales = _stratified_draws(n_runs, rng)
+    winds, scales = _stratified_draws(n_runs, rng, current_sigma=current_sigma)
 
     endpoints = []
     conv_idx = []
