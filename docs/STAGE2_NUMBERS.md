@@ -105,10 +105,76 @@ elongations in test 6e precisely so the test's own output cannot be misquoted.
 
 ---
 
-## 8.4 OpenDrift agreement
+## 8.4 OpenDrift agreement — RUN, and it lands at 118 m
 
-**Not run.** Tier 1 commits to one case; it is Phase 7 for a reason — last, and droppable (F7).
-If it does not happen we say we ran out of time rather than shipping a half-done comparison.
+`case-000`, 3000 particles, 24 h backward, **our RK2 against OpenDrift 1.14's RK4**, both fed the
+*identical* cached HYCOM + ERA5 field (re-expressed as CF NetCDF, nothing regridded).
+
+| | Measured |
+|---|---|
+| Distance travelled, median | **48.4 km** (ours 48.392, OpenDrift 48.430) |
+| Per-particle disagreement, **median** | **161 m** — 0.33% of the path |
+| Per-particle disagreement, p95 | 449 m |
+| Per-particle disagreement, worst of 3000 | 958 m — 2.0% of the path |
+| **Origin centroid separation** | **118 m** |
+| …against our own r50 of 8.84 km | **1.3% of it** |
+
+**What this does and does not prove.** It cannot make our answer *true* — there is still no ground
+truth for origin position on any case (8.2). What it does is separate two objections that a judge
+will otherwise merge:
+
+> *"Your physics is wrong"* — an independent implementation would have diverged.
+> *"Your input field is coarse"* — an independent implementation agrees to 118 m, and **both** are
+> still limited by HYCOM.
+
+The second is our position, and this is the only independent evidence we have for it. It is also
+the direct measurement behind **§8.5's rank 4**: the integration scheme is not a meaningful error
+source. Two different schemes, RK2 and RK4, written by different people, disagree by **two orders
+of magnitude less than our own precision radius.**
+
+**The line:** *"We ran the same field through OpenDrift's RK4. The origin moved 118 metres. Our
+uncertainty is the ocean model, not our code."*
+
+### Making it apples-to-apples — every switch, and why
+
+OpenDrift is a much larger model, so most of its processes had to be turned **off** or the
+comparison would measure somebody else's turbulence scheme against our advection:
+
+| Setting | Value | Why |
+|---|---|---|
+| `general:use_auto_landmask` | False | OpenDrift ships its own GSHHG mask. A stranded particle is a *stopped* particle — two coastlines would read as a physics disagreement. Our side runs `step.integrate` with no stranding to match |
+| `drift:advection_scheme` | `runge-kutta4` | **OpenDrift's default is Euler.** Comparing our RK2 to their Euler would measure two schemes, not two implementations. RK4 is the strictest available check |
+| `drift:vertical_advection` | False | **defaults to True** |
+| `drift:vertical_mixing`, `drift:stokes_drift` | False | we model neither |
+| `horizontal_diffusivity` | 0 | random-walk diffusion would make the comparison stochastic |
+| `wind_drift_factor` | 0.03 | our single empirical constant, matched exactly |
+
+Particle identity was verified rather than assumed: **OpenDrift returns the trajectories in a
+different order than seeded.** Matching by index gave a nonsense 6.1 km disagreement at t = 0 —
+which is just the length of the seed line. A KD-tree match on the t0 positions is a verified
+bijection, 3000/3000, with a 0.21 m residual.
+
+### Two silent-failure traps found inside OpenDrift, worth one slide
+
+Both are the same shape as the frozen-field bug in 8.7, and neither would have raised anything:
+
+1. **`environment:fallback:x_sea_water_velocity` ships as `0`.** A particle outside reader
+   coverage keeps integrating through a **dead ocean** — it simply stops moving and the run still
+   completes and still writes output. Setting the fallbacks to `None` instead is what made our
+   missing-wind problem raise an exception rather than quietly produce a wind-free trajectory and
+   a large spurious disagreement with us.
+2. **`reader_netCDF_CF_generic` silently truncates a file with a non-uniform final timestep.** A
+   3 h pad appended to the hourly wind file moved its `end_time` from 00:00Z back to **23:00Z** —
+   discarding the real last snapshot along with the pad, announced only at INFO level.
+
+We hit both in an afternoon, on a mature and widely used model. That is the honest context for our
+own guard work: this class of bug is not a beginner's mistake, it is what particle tracking is
+actually like.
+
+**Reproduce:** `/tmp/claude-0/odenv/bin/python pipeline/drift/opendrift_compare.py`
+(OpenDrift is NOT added to `requirements.txt` — it pulls ~90 packages including Cartopy and
+netCDF4, and it is a comparison tool, not a runtime dependency. `opendrift_compare.py` is
+committed so the number is reproducible; the venv is not.)
 
 ---
 
@@ -165,6 +231,26 @@ either already happened or was about to.
 **Test suite: 11 suites, 70 assertions, green.** Including four that exist only to pin down where
 the implementation had to depart from the brief, so a departure is testable rather than a comment
 nobody reads.
+
+**One artefact a judge will point at, so have the answer ready.** The origin heatmap for
+`case-000` shows a small second bright spot **on top of the slick**, separate from the main cloud.
+It is real and it is explained: `case-000`'s own slick polygon overlaps the coast, so **1.20% of
+the 3000 seeds start on land**, strand immediately, and are held at their seed position for the
+whole rewind. They land in the grid as a tight, therefore bright, knot.
+
+Quantified rather than waved away — removing every endpoint within 1 km of its nearest seed point
+(1.36% of 150,000, matching `stranded_fraction` exactly) moves the answer by:
+
+| | centroid | r50 | r90 |
+|---|---|---|---|
+| as shipped | (80.6187, 13.6952) | 8.84 km | 17.64 km |
+| stuck mode removed | (80.6225, 13.7011) | 8.69 km | 17.21 km |
+| **change** | **0.77 km** | **−0.15 km (1.7%)** | −0.43 km |
+
+So it is immaterial at the same order as the coastline upgrade's 0.53 km, and it is *flagged* —
+`stranded_fraction: 0.0136` is in `origin.json` precisely so this is visible rather than inferred
+from a picture. The honest sentence is *"1.4% of our particles never left the beach, we report that
+number, and removing them moves the origin 770 metres against a precision radius of 8.8 km."*
 
 Two stability checks worth quoting, because they show the upgrades did not quietly move the answer:
 the GSHHG coastline moved case-000's origin **0.53 km**, and replacing the principal-axis finder
@@ -266,7 +352,7 @@ python pipeline/drift/plot_heatmap.py --case <id>                 # the cloud, p
 
 ## Still outstanding before the deck is final
 
-- **8.4** OpenDrift agreement — Phase 7, not started, droppable
+- ~~**8.4** OpenDrift agreement~~ — **DONE**, 118 m on case-000
 - **8.2** should be restated on a real case once Soum's detections land; today's r50/r90 are
   `case-000`'s synthetic slick over a real ocean, and that must be said if it is quoted
 - **8.3** the N = 1 age line, if and only if Huntington's detection arrives and C3.1 fires
