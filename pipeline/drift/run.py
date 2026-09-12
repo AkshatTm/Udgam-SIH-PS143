@@ -32,10 +32,13 @@ from pathlib import Path
 
 import numpy as np
 
+import coastline
 import ensemble as ens
 from fields import load_case_field, make_fake
-from step import (assert_displacement_plausible, assert_inside_field_box,
-                  displacement_km, edge_distance_km, integrate)
+import step
+from step import (assert_displacement_plausible, assert_field_covers,
+                  assert_inside_field_box, displacement_km, edge_distance_km,
+                  integrate, integrate_stranding)
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -70,27 +73,61 @@ def pick_slick(dets):
     return max(oil, key=lambda f: f["properties"].get("confidence", 0.0))
 
 
+def seed_geometry(props):
+    """(geometry, reason) for this detection. `discharge_class` is the AUTHORITY (Phase 3.4).
+
+    `shape_class` was always a proxy for the thing that actually matters: was the source moving?
+    `discharge_class` says so directly, so it wins where it is known.
+
+      chronic  -> the vessel was under way, so the origin is a LINE SEGMENT along the slick's
+                  principal axis, and the backward cloud should come out elongated. The
+                  reconstruction then implies a course and a speed, not just a place.
+      acute    -> a release at a point, so seed from the centroid.
+      unknown  -> fall back to shape_class, and SAY that is what happened. Stage 2 must not
+                  present a fallback as a determination.
+    """
+    dc = props.get("discharge_class", "unknown")
+    if dc == "chronic":
+        return "line", "discharge_class=chronic - vessel under way, origin is a line segment"
+    if dc == "acute":
+        return "point", "discharge_class=acute - release at a point, seed from the centroid"
+    sc = props.get("shape_class")
+    if sc == "linear":
+        return "line", f"discharge_class={dc!r}, FALLING BACK to shape_class=linear"
+    return "point", f"discharge_class={dc!r}, FALLING BACK to shape_class={sc!r} (centroid)"
+
+
 def seed_particles(feat, n, rng):
-    """KEEP THIS. shape_class decides the seeding geometry — that field carries physics."""
+    """Seeding geometry comes from seed_geometry() — that field carries physics."""
     props = feat["properties"]
     clon, clat = float(props["centroid"][0]), float(props["centroid"][1])
     klat = 1.0 / max(math.cos(math.radians(clat)), 1e-6)
     jitter_deg = 0.3 / KM_PER_DEG          # +/- 300 m
 
-    if props.get("shape_class") == "linear":
-        # principal axis of the polygon ring, approximated by its most distant point pair
-        ring = feat["geometry"]["coordinates"][0]
-        best, axis = -1.0, (1.0, 0.0)
-        for i in range(0, len(ring), 4):
-            for j in range(i + 1, len(ring), 4):
-                dx = (ring[j][0] - ring[i][0]) * math.cos(math.radians(clat))
-                dy = ring[j][1] - ring[i][1]
-                d = dx * dx + dy * dy
-                if d > best:
-                    best, axis = d, (dx, dy)
-        half = math.sqrt(best) / 2.0
-        norm = math.hypot(*axis) or 1.0
-        ux, uy = axis[0] / norm, axis[1] / norm
+    geom_kind, _ = seed_geometry(props)
+    if geom_kind == "line":
+        # Principal axis of the polygon ring, by PCA on its vertices.
+        #
+        # This REPLACED a most-distant-point-pair scan that stepped through the ring with
+        # range(0, len(ring), 4) to keep the O(n^2) search cheap. That subsampling can miss the
+        # true major axis: on a 5-vertex rectangle it compared exactly one pair -- the SHORT
+        # edge -- and seeded the line ACROSS the slick instead of along it. Real polygons have
+        # more vertices (case-000 has 41, Cerulean's Jacksonville ribbon 71) so it usually found
+        # something close, but "usually" is not a property to rely on for the chronic seeding
+        # that implies a vessel's course.
+        #
+        # PCA is exact, O(n), uses every vertex, and is cheaper than the scan it replaces. The
+        # along-axis half-length is taken as the actual projected extent of the ring, so the
+        # seeded segment matches the slick rather than a covariance-derived proxy.
+        ring = np.asarray(feat["geometry"]["coordinates"][0], dtype=np.float64)
+        coslat = math.cos(math.radians(clat))
+        xy = np.column_stack([(ring[:, 0] - ring[:, 0].mean()) * coslat,
+                              ring[:, 1] - ring[:, 1].mean()])
+        evals, evecs = np.linalg.eigh(np.cov(xy, rowvar=False))
+        major = evecs[:, int(np.argmax(evals))]          # unit vector in (deg*coslat, deg)
+        proj = xy @ major
+        half = float(proj.max() - proj.min()) / 2.0      # degrees along the axis
+        ux, uy = float(major[0]), float(major[1])
         pts = []
         for _ in range(n):
             t = rng.uniform(-half, half)
@@ -98,7 +135,7 @@ def seed_particles(feat, n, rng):
                         clat + (t * uy) + rng.gauss(0, jitter_deg)])
         return pts
 
-    # blob: gaussian around the centroid, sigma ~ half the equivalent radius
+    # point: gaussian around the centroid, sigma ~ half the equivalent radius
     area = max(float(props.get("area_km2", 1.0)), 0.01)
     sigma = (math.sqrt(area / math.pi) / 2.0) / KM_PER_DEG
     return [[clon + rng.gauss(0, sigma) * klat, clat + rng.gauss(0, sigma)]
@@ -112,7 +149,60 @@ def write_particles(path, t0, positions, dt_min):
         "positions": positions}))
 
 
-def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_steps, n_runs):
+def wind_share_of_drift(field, history, times, wind_coeff=step.WIND_COEFF):
+    """What fraction of the drift that actually moved this cloud came from the wind term?
+
+    Phase 5.3 found this the hard way. `case-gulf-alaska-2023` rewinds to an origin in the WEST
+    where the brief predicted EAST, and neither the integrator nor any guard was wrong: the
+    Alaska Current is simply absent from that field (24 h mean 0.041 m/s, direction wandering
+    with no preferred heading) and a persistent easterly 4-6.5 m/s wind supplies 81% of the
+    drift vector. The brief's prediction came from a basin-scale current climatology, which does
+    not describe a 9 km HYCOM cell on one afternoon.
+
+    Nothing in the output said so. A reviewer comparing the origin against a current atlas would
+    have called it a sign error, and the only way to tell them apart was to decompose the field
+    by hand. So it is decomposed here, once, along the control trajectory -- sampling the path
+    the cloud took rather than a fixed point, because on a weak-current case the two differ
+    (Huntington's origin bearing moves 143 degrees between a t0 sample and a window mean).
+
+    The number is a DIAGNOSTIC, not an error bar. It does not widen the cloud and does not
+    reduce confidence in the answer: the ensemble already perturbs the coefficient over
+    U(0.025, 0.035), and across that honest range the origin direction moves at most 5 degrees
+    on every case in the library. What a high share means is narrower and more useful -- that
+    the answer rests on ERA5 and the 3% rule rather than on HYCOM, so it should be checked
+    against a wind reanalysis and NOT against a current atlas.
+
+    Returns None on a SYNTHETIC field, rather than 0.0. Every field class here implements
+    get_wind -- the analytic and constant ones just return their configured constant, which is
+    (0, 0) by default -- so `hasattr` is not the test. The test is whether the wind came from
+    ERA5 at all, and the idiom for that in this file is already `bbox`: a real fetched field has
+    a box, the lab fields do not. On a lab field the share would be a true statement about a
+    field that is not an ocean, and writing it into origin.json would invite exactly the
+    misreading the field exists to prevent (CONTRACTS.md 6.5, the rule stranded_fraction
+    follows: absence hides a row, a false number misinforms one).
+    """
+    if getattr(field, "bbox", None) is None or not hasattr(field, "get_wind"):
+        return None
+    pos = np.asarray(history, dtype=np.float64)
+    cur_mag, wind_mag = [], []
+    for i, when in enumerate(times[:len(pos)]):
+        lons, lats = pos[i][:, 0], pos[i][:, 1]
+        cu, cv = field.get_uv(lons, lats, when)
+        wu, wv = field.get_wind(lons, lats, when)
+        cu, cv = np.asarray(cu, float), np.asarray(cv, float)
+        wu, wv = np.asarray(wu, float), np.asarray(wv, float)
+        if not np.isfinite(wu).any():
+            return None
+        cur_mag.append(np.nanmean(np.hypot(cu, cv)))
+        wind_mag.append(wind_coeff * np.nanmean(np.hypot(wu, wv)))
+    c, w = float(np.mean(cur_mag)), float(np.mean(wind_mag))
+    if c + w <= 0.0:
+        return None
+    return w / (c + w), c, w
+
+
+def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_steps,
+                 n_runs, stranded_fraction=None, wind_share=None):
     """The real thing: a histogram of every ensemble endpoint, radii measured from the raw
     points, and a time window that is honest about whether it was measured or bounded."""
     (clon, clat), r50, r90 = ens.radii_km(endpoints)
@@ -141,8 +231,164 @@ def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_ste
         # somewhere else; nothing breaks if the frontend ignores it.
         "time_window_method": method,
     }
+    # Phase 4.3. A high fraction is itself a signal -- it means the slick may have originated
+    # ashore, or the rewind is running past a coastline. Either is worth surfacing, not hiding.
+    # Omitted entirely when there is no real coastline, because 0.0 would be a claim we cannot
+    # make: absence hides a UI row, a false zero misinforms one (CONTRACTS.md 6.5).
+    if stranded_fraction is not None:
+        doc["stranded_fraction"] = round(float(stranded_fraction), 4)
+    # Phase 5.3. Says which input the answer actually rests on -- see wind_share_of_drift().
+    # Omitted, never zeroed, when the field has no wind term.
+    if wind_share is not None:
+        doc["wind_share"] = round(float(wind_share), 4)
     path.write_text(json.dumps(doc))
     return clon, clat, r50, r90, method, doc["abstain"]
+
+
+def write_particles_forward(path, t0, positions, dt_min):
+    """particles_forward.json. A SEPARATE FILE and a SEPARATE INTEGRATION (Master 6.4).
+
+    The validator compares the position array against particles.json and ERRORS if they are
+    identical, so a relabelled copy is caught mechanically. It should be -- forward and backward
+    answer different questions and a copy would answer neither.
+    """
+    path.write_text(json.dumps({
+        "t0": iso(t0), "direction": "forward", "timestep_minutes": dt_min,
+        "n_steps": len(positions), "n_particles": len(positions[0]),
+        "positions": positions}))
+
+
+def coastal_impact(history, times, strand_step, dt_min):
+    """Phase 2.3. What the forward run says about the coast, and only what it can say.
+
+    Forward-from-slick answers the question a coast guard actually asks -- which coastline is
+    threatened, and when. Forward-from-origin would only recreate the slick we already detected.
+
+    What is measurable here: whether particles beach, WHEN the first one does, WHERE, and how
+    the stranded fraction grows with time. What is NOT measurable and is therefore not claimed:
+    the NAME of the affected stretch. That needs a coastline gazetteer, which is another
+    dependency and another thing to get wrong; the landfall footprint below is the honest
+    substitute and a human can name it from a map in five seconds.
+    """
+    n = history.shape[1]
+    # A particle SEEDED on land did not make landfall -- it was already ashore at t0, which is a
+    # Stage 1 data-quality signal (the detected polygon overlaps the coast), not a forecast.
+    # Conflating the two reports "first landfall 0.00 h" and misstates the coastal impact.
+    seeded_ashore = strand_step == 0
+    landed = strand_step > 0
+    out = {
+        "n_particles": int(n),
+        "seeded_ashore_fraction": float(np.mean(seeded_ashore)),
+        "stranded_fraction": float(np.mean(strand_step >= 0)),
+        "landfall_fraction": float(np.mean(landed)),
+        "span_hours": (len(times) - 1) * dt_min / 60.0,
+        "first_landfall": None,
+        "landfall_footprint": None,
+        "eta_curve": [],
+        "note": ("stretch NAMES are not reported: that needs a coastline gazetteer we do not "
+                 "have. The footprint is the measured substitute."),
+    }
+    if seeded_ashore.any():
+        out["seeded_ashore_warning"] = (
+            f"{out['seeded_ashore_fraction'] * 100:.1f}% of particles were ON LAND at t0. They "
+            f"are excluded from the landfall statistics because they never made landfall -- "
+            f"they started ashore. This means the detected polygon overlaps the coastline, "
+            f"which is Stage 1's to look at.")
+
+    if not landed.any():
+        out["verdict"] = ("no particle reached land within the modelled span -- no coastal "
+                          "impact from this release at this horizon")
+        return out
+
+    k_first = int(strand_step[landed].min())
+    who = int(np.argmax(strand_step == k_first))
+    pos_first = history[k_first, who]
+    out["first_landfall"] = {
+        "hours_after_t0": k_first * dt_min / 60.0,
+        "time": iso(times[k_first]),
+        "position": [r5(float(pos_first[0])), r5(float(pos_first[1]))],
+    }
+    pts = np.array([history[int(strand_step[i]), i] for i in np.flatnonzero(landed)])
+    out["landfall_footprint"] = {
+        "west": r5(float(pts[:, 0].min())), "east": r5(float(pts[:, 0].max())),
+        "south": r5(float(pts[:, 1].min())), "north": r5(float(pts[:, 1].max())),
+        "centroid": [r5(float(pts[:, 0].mean())), r5(float(pts[:, 1].mean()))],
+    }
+    for hours in range(0, int(out["span_hours"]) + 1, 3):
+        k = int(round(hours * 60.0 / dt_min))
+        frac = float(np.mean(landed & (strand_step <= k)))
+        out["eta_curve"].append({"hours": hours, "stranded_fraction": round(frac, 4)})
+    out["verdict"] = (f"first landfall {out['first_landfall']['hours_after_t0']:.2f} h after "
+                      f"detection, {out['landfall_fraction'] * 100:.1f}% of particles ashore "
+                      f"by {out['span_hours']:.0f} h")
+    return out
+
+
+def run_forward(a, meta, t0, field, seed, feat, out_dir):
+    """PHASE 2. Forward from the slick at t0 -- which coast is threatened, and when.
+
+    Deliberately does NOT touch particles.json or origin.json, and does not run the ensemble.
+    Those are the backward product; Harshita builds against them and a forward run must not
+    disturb them.
+    """
+    span_h = (a.steps - 1) * a.timestep_minutes / 60.0
+
+    # The field must actually cover the future. Without this the run is a frozen snapshot.
+    # Presented as a clean refusal rather than a traceback: this is a "refetch a wider window"
+    # instruction for a person, not a crash.
+    from step import FieldTimeSpan
+    try:
+        cov = assert_field_covers(field, t0, t0 + timedelta(hours=span_h), "forward run")
+    except FieldTimeSpan as exc:
+        raise SystemExit(str(exc))
+    if cov is not None:
+        print(f"              coverage  field spans {cov[0]:%Y-%m-%dT%H:%MZ} -> "
+              f"{cov[1]:%Y-%m-%dT%H:%MZ}  (overhang {cov[2]:.2f} h, tolerated)")
+
+    land = coastline.is_land if coastline.available() else None
+    print(f"              coast  {coastline.describe()}")
+
+    history, times, stranded, strand_step = integrate_stranding(
+        seed, t0, field, a.steps, a.timestep_minutes, direction="forward",
+        is_land=land, return_strand_step=True)
+
+    positions = np.round(history, 5).tolist()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fwd_path = out_dir / "particles_forward.json"
+    write_particles_forward(fwd_path, t0, positions, a.timestep_minutes)
+
+    impact = coastal_impact(history, times, strand_step, a.timestep_minutes)
+    impact_path = out_dir / f"coastal_impact_{a.case}.json"
+    impact_path.write_text(json.dumps(impact, indent=2))
+
+    # a forward run must not be a relabelled backward run; prove it here rather than waiting
+    # for the validator to catch it
+    back_path = out_dir / "particles.json"
+    if back_path.exists():
+        back = json.loads(back_path.read_text())
+        same = back.get("positions") == positions
+        print(f"              distinct from particles.json: {not same}"
+              + ("  !! IDENTICAL - the validator will reject this" if same else ""))
+
+    dist = displacement_km(history[0], history[-1])
+    print(f"[drift:FWD]   wrote {fwd_path}")
+    print(f"              wrote {impact_path}   (working space - not in the bundle)")
+    print(f"              seeded {a.particles} from {feat['properties']['id']}, ran FORWARD "
+          f"{span_h:.2f} h in {a.steps} steps of {a.timestep_minutes} min")
+    print(f"              t0 {iso(t0)} -> {iso(times[-1])}")
+    print(f"              displacement  median {float(np.median(dist)):.1f} km   "
+          f"max {float(dist.max()):.1f} km")
+    if impact.get("seeded_ashore_warning"):
+        print(f"              !! {impact['seeded_ashore_warning']}")
+    print(f"              coastal impact: {impact['verdict']}")
+    if impact["first_landfall"]:
+        fl = impact["first_landfall"]
+        fp = impact["landfall_footprint"]
+        print(f"                first ashore at {fl['position']} at {fl['time']}")
+        print(f"                footprint W {fp['west']} S {fp['south']} "
+              f"E {fp['east']} N {fp['north']}")
+    print(f"              NOTE {impact['note']}")
+    return 0
 
 
 def main():
@@ -158,6 +404,12 @@ def main():
                     help="with --fake: analytic = a vortex cell on the slick; constant = uniform")
     ap.add_argument("--wind", type=float, nargs=2, default=(6.0, -4.0), metavar=("U", "V"),
                     help="with --fake: 10 m wind, signed m/s components (east, north)")
+    ap.add_argument("--fake-current", type=float, nargs=2, default=(0.5, 0.0),
+                    metavar=("U", "V"),
+                    help="with --fake --field constant: the uniform current, signed m/s. "
+                         "ConstantField defaults to a DEAD ocean (0, 0), which makes the mode "
+                         "wind-only and means --current-sigma has nothing to scale. 0.5 m/s "
+                         "east matches the convention in tests.py.")
     ap.add_argument("--particles", type=int, default=3000)
     ap.add_argument("--runs", type=int, default=50,
                     help="ensemble members. The cut order allows 25; say so in origin.json.")
@@ -166,6 +418,17 @@ def main():
                          "intervals = exactly 24.0 h (CONTRACTS.md 5)")
     ap.add_argument("--timestep-minutes", type=int, default=15)
     ap.add_argument("--seed", type=int, default=143)
+    ap.add_argument("--current-sigma", type=float, default=None,
+                    help="width of the current-scale perturbation. Default is the honest "
+                         f"{ens.CURRENT_SIGMA} (+/-15%%). Widening it is how the ABSTAIN fixture "
+                         "is produced (Phase 3.3): the pipeline writes a real schema-valid "
+                         "bundle with abstain=true instead of anyone hand-editing one. A "
+                         "non-default value is announced in the output and must never be "
+                         "presented as a case result.")
+    ap.add_argument("--forward", action="store_true",
+                    help="PHASE 2: run FORWARD from the slick at t0 and write "
+                         "particles_forward.json + a coastal impact summary. Does not touch "
+                         "particles.json or origin.json, and does not run the ensemble.")
     ap.add_argument("--out", default=str(OUT), help="directory for particles.json/origin.json")
     a = ap.parse_args()
 
@@ -199,17 +462,53 @@ def main():
     else:
         clon0 = float(feat["properties"]["centroid"][0])
         clat0 = float(feat["properties"]["centroid"][1])
-        field = make_fake(a.field, lon0=clon0, lat0=clat0, wind=tuple(a.wind))
+        fake_kw = {"wind": tuple(a.wind)}
+        if a.field == "constant":
+            fake_kw["current"] = tuple(a.fake_current)
+        field = make_fake(a.field, lon0=clon0, lat0=clat0, **fake_kw)
         tag = "FAKE"
+
+    geom_kind, geom_why = seed_geometry(feat["properties"])
+    print(f"[drift:{tag}]  seeding {geom_kind.upper()}: {geom_why}")
+
+    if a.forward:
+        return run_forward(a, meta, t0, field, seed, feat, Path(a.out))
 
     span_h = (a.steps - 1) * a.timestep_minutes / 60.0    # states recorded, not steps taken
 
     # ---- control run: the animation ---------------------------------------------------
-    history, times = integrate(seed, t0, field, a.steps, a.timestep_minutes,
-                               direction="backward")
+    # The BACKWARD run needs coverage too, and did not check it. Jacksonville is the case that
+    # showed why: fetched with filterDate(start, t0), its last HYCOM snapshot lands 2.36 h
+    # BEFORE t0, because the 3-hourly snapshots go ...18:00, 21:00, 00:00 and t0 is 23:21. So
+    # the first 2.36 h of the rewind -- the end NEAREST the detection, where the answer is most
+    # sensitive -- ran through a frozen field, silently. --forward-hours fixes both directions
+    # at once, because it pulls the snapshots that bracket t0 instead of stopping short of it.
+    from step import FieldTimeSpan
+    try:
+        cov = assert_field_covers(field, t0, t0 - timedelta(hours=span_h), "backward run")
+        if cov is not None and cov[2] > 0.0:
+            print(f"              coverage  field spans {cov[0]:%Y-%m-%dT%H:%MZ} -> "
+                  f"{cov[1]:%Y-%m-%dT%H:%MZ}  (overhang {cov[2]:.2f} h, tolerated)")
+    except FieldTimeSpan as exc:
+        raise SystemExit(str(exc))
+
+    land = coastline.is_land if coastline.available() else None
+    print(f"              coast  {coastline.describe()}")
+    if not coastline.available():
+        print(f"              NOTE   {coastline.why_unavailable()}")
+    history, times, stranded_ctl = integrate_stranding(
+        seed, t0, field, a.steps, a.timestep_minutes, direction="backward", is_land=land)
     positions = np.round(history, 5).tolist()
 
     # ---- ensemble: the answer ---------------------------------------------------------
+    if a.current_sigma is not None and abs(a.current_sigma - ens.CURRENT_SIGMA) > 1e-9:
+        print(f"[drift:{tag}]  !! CURRENT SIGMA OVERRIDDEN: {a.current_sigma} instead of the "
+              f"honest {ens.CURRENT_SIGMA}.")
+        print(f"              This widens the uncertainty budget beyond what the physics "
+              f"supports. The only sanctioned use is")
+        print(f"              producing the Phase 3.3 abstain fixture. This output is NOT a "
+              f"case result and must not be shown as one.")
+
     nprng = np.random.default_rng(a.seed)
 
     def tick(done, total):
@@ -217,7 +516,12 @@ def main():
             print(f"              ensemble {done}/{total}", flush=True)
 
     endpoints, conv_idx, members = ens.run_ensemble(
-        seed, t0, field, a.steps, a.timestep_minutes, n_runs=a.runs, rng=nprng, progress=tick)
+        seed, t0, field, a.steps, a.timestep_minutes, n_runs=a.runs, rng=nprng, progress=tick,
+        is_land=land, current_sigma=a.current_sigma)
+    # the reported fraction is the ENSEMBLE's, not the control run's: origin.json describes the
+    # cloud, and the cloud is the ensemble
+    strand_frac = (float(np.mean([m["stranded_fraction"] for m in members]))
+                   if land is not None else None)
 
     # ---- the loud edge guard (Phase 3.1) ----------------------------------------------
     # Runs BEFORE anything is written. A cloud whose particles reached the wall must not be
@@ -231,12 +535,28 @@ def main():
         print(f"              edge guard  closest particle sits {margin:.1f} km inside the "
               f"field box (limit 10 km)")
 
+    # ---- Phase 5.3: which input is the answer resting on? -----------------------------
+    ws = wind_share_of_drift(field, history, times)
+    wind_share = None
+    if ws is not None:
+        wind_share, c_mag, w_mag = ws
+        print(f"              drift mix  current {c_mag:.3f} m/s + 0.03xwind {w_mag:.3f} m/s "
+              f"= wind is {100 * wind_share:.0f}% of the drift")
+        if wind_share >= 0.5:
+            print(f"              !! WIND-DOMINATED CASE  the origin direction is set by ERA5 "
+                  f"and the 0.03 rule, NOT by HYCOM.")
+            print(f"              Check it against a WIND reanalysis. A current atlas will "
+                  f"disagree and that disagreement is not an error.")
+            print(f"              (Ensemble already spans U(0.025, 0.035); direction moves "
+                  f"<=5 deg across that range, so this is a provenance note, not a wider cloud.)")
+
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     write_particles(out_dir / "particles.json", t0, positions, a.timestep_minutes)
     clon, clat, r50, r90, method, abstain = write_origin(
         out_dir / "origin.json", endpoints, conv_idx, members,
-        t0, a.timestep_minutes, a.steps, a.runs)
+        t0, a.timestep_minutes, a.steps, a.runs, stranded_fraction=strand_frac,
+        wind_share=wind_share)
 
     # The endpoint pool, kept so plot_heatmap.py can draw the cloud without rerunning 50 runs.
     np.savez_compressed(out_dir / f"ensemble_{a.case}.npz",
@@ -267,6 +587,14 @@ def main():
     print(f"              origin ({clon:.4f}, {clat:.4f})  "
           f"r50={r50:.1f} km  r90={r90:.1f} km  abstain={abstain}")
     print(f"              time_window method={method}")
+    if strand_frac is not None:
+        ctl = float(np.mean(stranded_ctl))
+        print(f"              stranded  {strand_frac * 100:.2f}% of ensemble endpoints "
+              f"({ctl * 100:.2f}% of the control run) reached land and were held")
+        if strand_frac > 0.10:
+            print(f"              !! {strand_frac * 100:.0f}% stranded is high. Either the slick "
+                  f"originated ashore or the rewind runs past a coastline -- look at the "
+                  f"heatmap before believing the origin.")
 
 
 if __name__ == "__main__":

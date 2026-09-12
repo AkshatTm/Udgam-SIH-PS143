@@ -46,14 +46,28 @@ SCALE_WINDS_M = 27750
 
 MAX_PLAUSIBLE_SPEED_MS = 3.0
 
+# HYCOM's GEE archive boundary. A forward window can walk off the end of it even
+# when the scene itself is comfortably inside (Master 3.1, risk F6).
+HYCOM_ARCHIVE_END = datetime(2024, 9, 5, tzinfo=timezone.utc)
 
-def pull(ee, coll_id, bands, bbox, t0, hours, scale, label, divide_by=1.0):
-    """One collection -> (lons, lats, times_utc, a, b) with a/b shaped [time, lat, lon]."""
+
+def pull(ee, coll_id, bands, bbox, t0, hours, scale, label, divide_by=1.0,
+         forward_hours=0.0):
+    """One collection -> (lons, lats, times_utc, a, b) with a/b shaped [time, lat, lon].
+
+    `forward_hours` extends the window PAST t0. Phase 2 needs it: forward drift from the slick
+    runs into the future, and a field that stops at t0 does not refuse -- GriddedField clamps
+    its time index at the edge, so every step past t0 re-uses the last snapshot. A 24 h forward
+    run through one frozen snapshot is a steady-state extrapolation wearing a forecast's
+    clothes, and nothing about the output says so. Measured on case-000: current and wind are
+    bit-identical at t0, t0+6h, t0+12h and t0+24h.
+    """
     region = ee.Geometry.Rectangle(bbox)
     start = t0 - timedelta(hours=hours)
+    end = t0 + timedelta(hours=float(forward_hours))
     coll = (ee.ImageCollection(coll_id)
             .filterBounds(region)
-            .filterDate(start.strftime("%Y-%m-%dT%H:%M:%S"), t0.strftime("%Y-%m-%dT%H:%M:%S"))
+            .filterDate(start.strftime("%Y-%m-%dT%H:%M:%S"), end.strftime("%Y-%m-%dT%H:%M:%S"))
             .select(bands))
 
     print(f"  {label}: requesting {coll_id} at {scale} m ...", flush=True)
@@ -127,6 +141,11 @@ def main():
                          "(case-jacksonville-2024) and anywhere else fast (Phase 3.1)")
     ap.add_argument("--pad-km", type=float, default=None,
                     help="override the computed pad entirely, in km")
+    ap.add_argument("--forward-hours", type=float, default=24.0,
+                    help="extend the time window PAST detection_time, for Phase 2 forward "
+                         "drift. 0 fetches only the past, which makes any forward run a "
+                         "frozen-snapshot extrapolation. HYCOM's archive ends 2024-09-05, so "
+                         "check the case date plus this window stays inside it.")
     a = ap.parse_args()
 
     out = Path(a.out) if a.out else REPO / "data" / "fields" / f"{a.case}.npz"
@@ -152,14 +171,25 @@ def main():
     print(f"  pad     {pad_km_used:.0f} km  =  {_dlon:.3f} deg lon x {_dlat:.3f} deg lat "
           f"(converted at the poleward edge, {max(abs(bbox[1]), abs(bbox[3])):.1f} deg)")
     print(f"          sized for {a.rewind_hours:.0f} h of rewind at up to {a.vmax_ms:.1f} m/s")
-    print(f"  window  {(t0 - timedelta(hours=a.hours)):%Y-%m-%dT%H:%MZ}  ->  {t0:%Y-%m-%dT%H:%MZ}")
+    win_end = t0 + timedelta(hours=a.forward_hours)
+    print(f"  window  {(t0 - timedelta(hours=a.hours)):%Y-%m-%dT%H:%MZ}  ->  "
+          f"{win_end:%Y-%m-%dT%H:%MZ}")
+    print(f"          {a.hours:.0f} h before t0 (backward rewind) + "
+          f"{a.forward_hours:.0f} h after (Phase 2 forward drift)")
+    if win_end > HYCOM_ARCHIVE_END:
+        raise SystemExit(
+            f"the forward window reaches {win_end:%Y-%m-%d}, past HYCOM's GEE archive end "
+            f"{HYCOM_ARCHIVE_END:%Y-%m-%d}.\n"
+            f"  Reduce --forward-hours, or accept no forward drift on this case and say so.")
     print("=" * 78)
 
     # HYCOM arrives as int * 0.001 m/s. This division is the only place it happens.
     clon, clat, ctime, cu, cv = pull(ee, CURRENTS, CURRENT_BANDS, bbox, t0, a.hours,
-                                     SCALE_CURRENTS_M, "currents", divide_by=1000.0)
+                                     SCALE_CURRENTS_M, "currents", divide_by=1000.0,
+                                     forward_hours=a.forward_hours)
     wlon, wlat, wtime, wu, wv = pull(ee, WINDS, WIND_BANDS, bbox, t0, a.hours,
-                                     SCALE_WINDS_M, "winds", divide_by=1.0)
+                                     SCALE_WINDS_M, "winds", divide_by=1.0,
+                                     forward_hours=a.forward_hours)
 
     c_med, c_p99, c_max = describe("current", cu, cv)
     describe("wind", wu, wv)

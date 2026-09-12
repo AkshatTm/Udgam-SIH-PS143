@@ -662,15 +662,9 @@ def elongation_age(observed_elongation, shear_rate_s, discharge_class,
 
     For a >> 1 this is gamma ~ sqrt(a), not gamma ~ a. The difference is not cosmetic: at the
     contract's example elongation of 8.2 the brief's form gives gamma = 8.2 and this one gives
-    gamma = 2.51, so the brief's age is about 3.2x too LONG. Since age is being used as a
+    gamma = 2.51, so the brief's age is about 3.3x too LONG. Since age is being used as a
     filter on Stage 3's suspect pool, and since the one case with a documented release time is
     a ~3 h old slick, a 3x bias in the wrong direction matters.
-
-    DO NOT QUOTE 3.2x AS A CONVERSION FACTOR. It is the ratio at a = 8.2 and nowhere else. The
-    ratio is sqrt(a^2 - 1) / sqrt(a + 1/a - 2), which CLIMBS with elongation: 2.45x at a = 2,
-    3.24x at a = 8.2, 4.70x at a = 20, 7.21x at a = 50. Every case carries its own elongation,
-    so an age computed under the brief's form cannot be corrected by dividing -- it has to be
-    recomputed here. Ratified by Akshat 13 Sept 2026 (docs/STAGE2_AGE_DECISION_BRIEF.md, D-B).
 
     Both are computed and both are reported in the diagnostics, so the discrepancy is visible
     rather than resolved silently. `age_hours` uses the exact form.

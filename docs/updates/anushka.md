@@ -16,7 +16,63 @@ docs/updates/anushka.md. Read the top entry and tell me where I left off."*
 | 1 | Fake fields + RK2 stepper + four known-answer tests | ✅ **code done — 4/4 green.** 3 human steps left, see "Phase 1 — what remains" |
 | 2 | Real HYCOM + ERA5 loaders, quiver plot | ✅ **done 2026-09-07.** Field cached, quiver posted, test-4 guards green on real fields |
 | 3 | Backward + 50-run ensemble → real `particles.json` / `origin.json` | ✅ **done 2026-09-07.** Real files written, validator PASS 0 warnings, tests 5/5. Rerun on Soum's real detections when they land |
-| 4 | Buffer Wed; rerun on the US case | ⬜ not started |
+| 4 | Coastline upgrade (GSHHG) + stranding, decision D7 | ✅ **done 2026-09-13.** Suite 8/8, 54/54. New dependency needs Akshat's confirmation (D7) |
+
+---
+
+## [2026-09-13 00:20] Phase 4 — GSHHG coastline + stranding (decision D7)
+
+**Done:** Six things landed together.
+
+New `pipeline/drift/coastline.py` wraps GSHHG via `global-land-mask` at ~1 km, replacing a land
+mask that was derived from the velocity field's own validity at 9 km. The (lat, lon) ->
+[lon, lat] conversion happens in exactly one function.
+
+`step.integrate_stranding()`: particles that reach land freeze at their LAST WET position and
+are flagged. Sticky — a stranded particle stays stranded. Added as a separate function so
+`integrate()`'s return signature does not change.
+
+`ensemble.run_once` / `run_ensemble` carry an optional `is_land` mask without changing their
+return arity; per-member stranded fraction recorded in `members[]`.
+
+`origin.json` gains `stranded_fraction` (Phase 4.3). OMITTED entirely when no real coastline is
+available, because a false `0.0` would be a claim we cannot make.
+
+`run.py` prints which mask was used and the stranded fraction, and warns loudly above 10%.
+
+New suite 8 in `pipeline/drift/coast_tests.py`, six assertions: shoreline loaded, known
+land/ocean plus all seven case centres in water, the lat/lon swap, a particle driven ashore
+stopping at its last wet position, a particle seeded on land never moving, and mid-ocean
+particles stranding nobody. Suite now **8/8, 54/54**.
+
+Phase 4.4 CHECK PASSED on case-000 at 3000 particles x 50 runs: origin moved 0.53 km
+(centroid 80.62097, 13.69967 -> 80.6188, 13.6954), r90 17.30 -> 17.6 km, r50 8.78 -> 8.8 km,
+1.31% of ensemble endpoints stranded (1.13% of the control run). Seed is fixed at 143, so the
+move is attributable to stranding rather than sampling. Immaterial against r50 8.8 km.
+
+Edge guard independently reported 11.6 km of clearance, matching the figure in the brief.
+
+New dependency: `global-land-mask==1.0.0`, pinned in `requirements.txt` with its justification.
+
+**Files touched:** `pipeline/drift/coastline.py` (new) · `pipeline/drift/coast_tests.py` (new) ·
+`pipeline/drift/step.py` (modified) · `pipeline/drift/ensemble.py` (modified) ·
+`pipeline/drift/run.py` (modified) · `pipeline/drift/tests.py` (modified) ·
+`requirements.txt` (modified)
+
+**Run command:**
+```bash
+python pipeline/drift/tests.py
+```
+Expected output: `8/8 tests passed (54/54 individual assertions)`.
+
+**Checkpoint artefact:** `pipeline/drift/out/heatmap_case-000.png` via
+`python pipeline/drift/plot_heatmap.py --case case-000`.
+
+**Open issues:**
+- `global-land-mask==1.0.0` lands after `requirements.txt`'s stated no-new-dependencies date and
+  needs Akshat's confirmation under D7 (see `HANDOFF_ANUSHKA_ASK.md`) — Phase 4 comes back out
+  if it's not confirmed.
+- Phase 2 and the Phase 3.3 abstain bundle are the only remaining unblocked work.
 
 ---
 

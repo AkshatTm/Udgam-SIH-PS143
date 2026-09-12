@@ -14,7 +14,7 @@ so the departure is testable rather than a comment nobody reads:
   6c  a 2D incompressible flow PRESERVES cloud area   -> which is why C3.1 matches on the
                                                           major axis and not on area_km2
   6d  the exact patch-aspect inversion recovers a known age in a known shear
-  6e  the brief's C3.3 line-stretch formula would have been ~3x high on the same slick
+  6e  the brief's C3.3 error is a factor that CLIMBS with elongation, not a constant
 """
 import math
 from datetime import datetime, timezone
@@ -126,16 +126,28 @@ def run(check):
                 f"[{band[0]:.2f}, {band[1]:.2f}] h contains the true {t_true_h:g} h"
                 if band else f"no band returned: {diag.get('skipped')}")
 
-    # --- 6e  the brief's formula, on the same slick, would have been ~3x high -----------
-    band82, diag82 = elongation_age(8.2, 1.0e-5, "acute")
-    ratio = (diag82["brief_formula_hours"] / diag82["central_hours"]
-             if diag82.get("central_hours") else float("nan"))
-    ok &= check("6e  the brief's C3.3 line-stretch formula is ~3x too long, as documented",
-                band82 is not None and 3.0 < ratio < 3.6,
-                f"at the contract's example elongation 8.2 with S = 1e-5 1/s: patch-aspect "
-                f"inversion {diag82['central_hours']:.2f} h vs the brief's "
-                f"sqrt(a^2-1) form {diag82['brief_formula_hours']:.2f} h = x{ratio:.2f}. "
-                f"age_hours uses the former; both ship in the diagnostics")
+    # --- 6e  the brief's formula is wrong by a factor that CLIMBS with elongation -------
+    # Ratified by Akshat 13 Sept 2026, and his correction to how it gets quoted: 3.24x is the
+    # ratio at a = 8.2 and NOWHERE ELSE. sqrt(a^2-1)/sqrt(a+1/a-2) grows without bound, so no
+    # age computed under the brief's form can be fixed by dividing -- each one is recomputed.
+    # Asserted at four elongations precisely so this test's own output cannot be misquoted as
+    # a single conversion factor. Jacksonville's ribbon is aspect ~168, where it is ~13x.
+    expected = {2.0: 2.45, 8.2: 3.24, 20.0: 4.70, 50.0: 7.21}
+    got, worst = {}, 0.0
+    for a_val, want in expected.items():
+        _, d = elongation_age(a_val, 1.0e-5, "acute")
+        r = d["brief_formula_hours"] / d["central_hours"]
+        got[a_val] = r
+        worst = max(worst, abs(r - want) / want)
+    climbs = all(got[k1] < got[k2] for k1, k2 in zip(sorted(got), sorted(got)[1:]))
+    ok &= check("6e  the brief's C3.3 error is a factor that CLIMBS, not a 3.2x constant",
+                worst < 0.01 and climbs,
+                "ratio sqrt(a^2-1)/sqrt(a+1/a-2) by elongation: "
+                + " · ".join(f"a={k:g} -> x{v:.2f}" for k, v in sorted(got.items()))
+                + f" (worst deviation from the ruling's table {worst * 100:.2f}%). "
+                  f"Strictly increasing, so an age under the brief's form CANNOT be corrected "
+                  f"by dividing by 3.2 -- it has to be recomputed. At Jacksonville's aspect "
+                  f"~168 the factor is ~13x")
 
     # --- 6f  the acute gate actually gates ----------------------------------------------
     chronic_band, chronic_diag = elongation_age(8.2, 1.0e-5, "chronic")
@@ -228,12 +240,21 @@ def run(check):
                                         n_members=2, discharge_class="chronic")
     open_gate, odiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
                                             n_members=2, discharge_class="acute")
-    ok &= check("6r  C3.1 refuses a chronic slick, and runs on an acute one",
-                gated is None and "not 'acute'" in gdiag.get("skipped", "")
+    # The refusal must also say WHOSE problem it is: 'chronic' is physics and nothing is
+    # missing, 'unknown' is a Stage 1 data gap. A5 found the field unset on every case, so the
+    # second message is the one this estimator actually emits in production today.
+    unset, udiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
+                                        n_members=2, discharge_class="unknown")
+    ok &= check("6r  C3.1 refuses a chronic slick, runs on an acute one, and names the cause",
+                gated is None and "'chronic'" in gdiag.get("skipped", "")
+                and "nothing is missing" in gdiag.get("skipped", "")
+                and unset is None and "MISSING INPUT" in udiag.get("skipped", "")
                 and "members" in odiag,
-                f"chronic -> None ({gdiag.get('skipped', '')[:70]}...); "
-                f"acute -> ran {odiag.get('n_members')} members and reported "
-                f"{odiag.get('n_fitted')} fits against a 31.17 km axis")
+                f"chronic -> None, and the reason says the gate is correct and nothing is "
+                f"missing. unknown -> None, and the reason says MISSING INPUT (Soum). "
+                f"acute -> ran {odiag.get('n_members')} members, {odiag.get('n_fitted')} fits "
+                f"against a 31.17 km axis. Those are three different situations and the "
+                f"diagnostics now distinguish them")
 
     # --- 6q  an age outside the modelled range is reported as absent, not clamped ------
     out_of_range = invert_curve([2.0, 6.0, 12.0], [1.0, 2.0, 3.0], 99.0)
