@@ -1,21 +1,18 @@
-# RUNBOOK — freeze, demo day, and what to do when something breaks
+# RUNBOOK — demo prep, demo day, and what to do when something breaks
 *Everyone reads this. Judges wander and ask whoever is nearest — "that's not my part" is the worst possible answer.*
 
 ---
 
-## 1. The freeze — 12 hours before judging
+## 1. Demo prep — before judging
 
-Non-negotiable. Your own risk analysis names "someone pushes a small improvement the night before" as the most common way strong teams lose demos. An unrehearsed better demo loses to a rehearsed worse one.
+Work continues on `main` right up to the demo. The demo machine pulls the latest `main`, and every pull is followed by the checklist below. A change that has not been through it does not get shown.
 
-**At freeze (Akshat runs this):**
+**After every pull onto the demo machine:**
 ```bash
-git checkout -b demo && git push -u origin demo
+git pull && python scripts/validate_case.py cases/
 ```
-- Demo machine checks out `demo` and **never** pulls again.
-- `main` may keep moving. Nothing from `main` reaches the demo machine.
-- Exceptions: **none.** Including for Akshat.
 
-**Freeze checklist:**
+**Demo-prep checklist:**
 - [ ] All case bundles present and `validate_case.py` PASSES on each
 - [ ] App runs on the demo machine **with wifi turned off**
 - [ ] Every case loads, every layer toggles, the slider scrubs, every panel populates
@@ -25,12 +22,12 @@ git checkout -b demo && git push -u origin demo
 - [ ] Deck exported to PDF, on the machine and on a phone
 - [ ] Laptop charger, HDMI adapter, phone hotspot ready
 
-**After freeze:** two full timed rehearsals with someone playing hostile judge. Fix only what the rehearsals expose, and only if the fix is under ten minutes.
+**Rehearsals:** two full timed runs with someone playing hostile judge, on the demo machine. If a pull changes what is shown, re-run the click path and re-record the fallback video.
 
 ---
 
 ## 2. Demo machine rules
-Chosen before the freeze (Akshat's or Harshita's). Never present from a machine the app has not run on. Before judging: close everything else, disable notifications and auto-updates, set display to never sleep, plug in power, open the app in one browser window, no other tabs. Have a second laptop with the same repo and video as a cold spare.
+Chosen early (Akshat's or Harshita's). Never present from a machine the app has not run on. Before judging: close everything else, disable notifications and auto-updates, set display to never sleep, plug in power, open the app in one browser window, no other tabs. Have a second laptop with the same repo and video as a cold spare.
 
 ---
 

@@ -55,8 +55,8 @@ Two traps, both of which fail **silently**:
 
 ## Env
 `numpy scipy opencv-python scikit-image scikit-learn rasterio shapely matplotlib` plus
-**`torch==2.6.0` + `torchvision==0.21.0` (cu124)**, added 12 Sept — the dependency freeze was
-amended for this and Akshat broadcast it. Training needs the GPU; inference falls back to CPU.
+**`torch==2.6.0` + `torchvision==0.21.0` (cu124)**, added 12 Sept, pinned with its
+justification in `requirements-detect.txt` and broadcast by Akshat. Training needs the GPU; inference falls back to CPU.
 
 ## Order of operations
 ```bash

@@ -483,16 +483,10 @@ python pipeline/detect/train.py            # classical baseline, updated FEATURE
 # evaluate - Part 3 only, always
 python pipeline/detect/evaluate.py --test data/labels/features_test.csv --report
 
-# inference — the hero case; seven real scenes are on disk, `ls cases/` for the list
-python pipeline/detect/run.py --case case-jacksonville-2024
-python pipeline/export/build_case.py --case case-jacksonville-2024 --stage detect
-python scripts/validate_case.py cases/case-jacksonville-2024
-python scripts/sync_web_cases.py     # so the browser sees it
+# inference
+python pipeline/detect/run.py --case case-ennore-2017
+python scripts/validate_case.py cases/case-ennore-2017
 ```
-
-> **Do not skip the `build_case.py` line.** The case folder is the hand-off medium: if your stage
-> writes to `out/` and you validate `cases/<id>/`, you are validating somebody else's file and the
-> PASS means nothing. That has already happened once on this project (TRAPS #21).
 
 ## E2. Environment
 `numpy scipy opencv-python scikit-image scikit-learn rasterio shapely matplotlib` plus PyTorch or TensorFlow with CUDA for Phases 3-4. **No new dependencies get added to `requirements.txt` after the freeze** — pin the DL framework now if you are adding one.

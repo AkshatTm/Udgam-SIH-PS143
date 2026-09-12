@@ -17,8 +17,7 @@ Stage 2 has 20 known-answer assertions that caught a real 10x unit error before 
 single particle moved. This is the same idea for Stage 3, and it goes in BEFORE the
 scorer rather than after, because the scorer is the thing it has to catch.
 
-NO NEW DEPENDENCIES. `unittest` is stdlib; pytest is not in requirements.txt and
-nothing new goes in this close to the freeze (Master Part 5, rule 8).
+`unittest` is stdlib, so this needs nothing beyond requirements.txt (pytest is not in it).
 
 Every fixture below is synthetic and hand-computed — the expected values are worked
 out on paper, never read back out of the code being tested. A test that asserts what
