@@ -55,11 +55,29 @@ def report(ok, name, detail):
 
 
 def load_case_window(case_id, cases_root):
-    """Take the box and time from a real case bundle when one exists; fall back to Ennore."""
-    meta_path = Path(cases_root) / case_id / "meta.json"
-    bounds_path = Path(cases_root) / case_id / "bounds.json"
+    """Take the box and time from a real case bundle. A NAMED case must exist.
+
+    This used to fall back to the Ennore defaults when the bundle was missing, which is how
+    `--case case-gulf-2019` cheerfully downloaded January 2017 Bay of Bengal water and cached
+    it under the Gulf's name (2026-09-07). Nothing in the resulting file revealed the swap:
+    the values were a plausible ocean, and `case_id` inside the cache said what you asked
+    for, not what you got. Stage 2's whole failure mode is wrong-but-running, so a missing
+    bundle is now a stop, not a shrug.
+
+    The Ennore defaults still exist for the no-argument preflight (`check_gee.py` with no
+    --case), which is a "does my Earth Engine auth work at all" smoke test, not a case run.
+    """
+    case_dir = Path(cases_root) / case_id
+    meta_path = case_dir / "meta.json"
+    bounds_path = case_dir / "bounds.json"
     if not meta_path.exists():
-        return ENNORE_BBOX, ENNORE_T0, f"no {meta_path.name} — using Ennore defaults"
+        raise SystemExit(
+            f"no case bundle at {case_dir}\n"
+            f"  {meta_path.name} is missing, so there is no box and no detection time to "
+            f"fetch for.\n"
+            f"  Stage 2 will NOT silently substitute another case's ocean.\n"
+            f"  Akshat exports meta.json + bounds.json with the scene; ask for them, or run "
+            f"against a bundle that exists (cases/case-000).")
 
     meta = json.loads(meta_path.read_text())
     t0 = datetime.fromisoformat(meta["detection_time"].replace("Z", "+00:00"))
