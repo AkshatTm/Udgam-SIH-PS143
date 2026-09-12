@@ -25,7 +25,7 @@ Written any `verification.json` prose — the researched `official_finding` bloc
 
 | # | Case | `case_id` | Scene status | What it gives you |
 |---|---|---|---|---|
-| 1 | **Jacksonville** — 30 Jul 2024, Atlantic | `case-jacksonville-2024` | ✅ full id | Hero. Gap detection on dense AIS. ⚠️ offshore AIS unverified |
+| 1 | **Jacksonville** — 30 Jul 2024, Atlantic | `case-jacksonville-2024` | ✅ full id | Hero. ✅ AIS density verified: 69 s, holds to 240 km. **Not a gap case** (D30) |
 | 2 | **Farallones** — 17 Mar 2023, Pacific | `case-farallones-2023` | ✅ full id | Second basin, and hero backup |
 | 3 | **Huntington Beach** — 2 Oct 2021 | `case-huntington-2021` | ✅ exported | Infrastructure + NTSB ground truth |
 | 4 | **Alaska dark vessel** — 16 May 2023 | `case-gulf-alaska-2023` | ✅ full id | Real radar-vs-AIS cross-check |
@@ -162,7 +162,7 @@ Presentation order 1 → 8 per Master §3, default `case-jacksonville-2024`.
 ### 1.8 Announce each case as it lands ⬜
 > 🚩 **Do not batch this.** Every case unblocks three people on different tasks. Message the group per case with: scene id, UTC timestamp, bounding box, `ais_source`, and which acts apply.
 
-**One message goes out first, before any case:** Jaiveer verifies NOAA AIS density at Jacksonville's position (30.384 N −79.634 W, ~100 km offshore). It is your hero case and NOAA leans on terrestrial receivers. If it comes back with a handful of positions rather than hundreds of vessels, **Farallones becomes hero and the presentation order reshuffles.** That is the only open item that could still force a replan.
+~~**One message goes out first:** Jaiveer verifies NOAA AIS density at Jacksonville.~~ **DONE, and it came back clean** — 69-second reporting interval at the case-1 position, holding out to 240 km, no thinning. Hero confirmed; nothing reshuffles. The check also corrected the distance: **~170 km offshore, not ~170 km.**
 
 ---
 
@@ -234,7 +234,8 @@ After the stages have run. Not from memory, not from an earlier draft, not from 
 `verdict` ∈ `hit | partial | miss | not_applicable`. **The `explanation` is human prose. Never generate it.**
 
 Expected verdicts, written now so you notice if reality diverges:
-- **Jacksonville and Farallones** — genuinely unknown until they run. This is the point of the blind evaluation (Part H). **A `miss` ships**, and a team that shows one with an explanation of *why* reads as engineering; a team that shows only hits reads as marketing.
+- **Jacksonville** — **no longer blind** (D31: verifying AIS density required identifying the vessel) and **pre-registered as a possible `partial`/`miss`**: the `gap` component gives full marks to a competing vessel 7.4 km out, 12.5 kn, silent 142 minutes, and zero to the documented one. If it outranks, that is the verdict we ship, and the explanation is already written.
+- **Farallones** — genuinely unknown until it runs, and therefore **the headline blind result**. **A `miss` ships**, and a team that shows one with an explanation of *why* reads as engineering; a team that shows only hits reads as marketing.
 - **Huntington Beach** — `hit` if the infrastructure module lands: origin on the pipeline right-of-way, every transiting vessel excluded, which is what the NTSB concluded. `partial` without it. **Naming a transiting vessel here would be wrong.**
 - **Alaska** — `hit` if the origin cloud lands on or near the radar contact 4.5 km away. **State the asymmetry plainly:** a vessel dark to Cerulean's *commercial* AIS is a strong claim; a vessel absent from our *free NOAA* archive might be a coverage hole. Two independent absences is evidence; one is not.
 - **Mumbai** — expect a multi-source finding. The honest assessment may well be *"infrastructure and a dark vessel are both plausible, and the area has documented natural seepage."* That is a real analytical outcome, not a fudge, and it is the best possible demonstration of why source classification runs before attribution.
@@ -439,7 +440,9 @@ A short sync every time a bundle changes state: the bundle id and its state — 
 
 # PART F — RISKS
 
-**F1. Jacksonville's AIS coverage is unverified.** It is the hero, at ~100 km offshore where NOAA's terrestrial receivers thin. **This is the only open item that could still force a replan.** Jaiveer checks it first; Farallones is the fallback hero and Alaska moves up.
+**F1. ~~Jacksonville's AIS coverage~~ — CLOSED.** 69 s interval at ~170 km offshore, holding to 240 km. The hero stands.
+
+**F1b. Two scoring components have been measured as near-inert, and the temptation will be to reweight.** `trajectory` scored 1.00 for 13 of 15 once its geometry was fixed; `type_prior` scored 1.00 for all 17 in an offshore lane. Both are now gated to `null` where they cannot discriminate (D27, D28). **Do not let anyone move a weight until the Phase 8 ablation says what the weight buys** — a weight chosen because a component looked weak on one real case is indistinguishable, in December, from a weight chosen to make that case come out right.
 
 **F2. You take on component work.** Your value is slack. Guard it.
 
@@ -476,7 +479,7 @@ python pipeline/export/build_case.py --case <case-id>
 - Jacksonville: `S1A_IW_GRDH_1SDV_20240730T232129_20240730T232154_054997_06B32C_7973`, 2024-07-30 23:21:29Z, Cerulean slick 3046293
 - Farallones: `S1A_IW_GRDH_1SDV_20230317T142442_20230317T142507_047685_05BA4D_AFD8`, 2023-03-17 14:24:42Z, Cerulean slick 3687325
 - Huntington: `S1A_IW_GRDH_1SDV_20211002T015821_20211002T015850_039934_04B9C9_2BF9`, 2021-10-02 01:58:21Z; sea median −20.9 dB VV, slick core −28 to −32 dB; clamp [−25, −5]
-- Alaska: `S1A_IW_GRDH_1SDV_20230516T155708_20230516T155736_048561_05D74A_DCBF`, 2023-05-16 15:57:08Z, Cerulean slick 3630124, dark vessel D38.5238724
+- Alaska: `S1A_IW_GRDH_1SDV_20230516T155708_20230516T155736_048561_05D74A_DCBF`, 2023-05-16 15:57:08Z, Cerulean slick 3630124 (dark-vessel id in `ANSWERS.md`, not here)
 - Mumbai: `S1A_IW_GRDH_1SDV_20230903T010333_20230903T010358_050156_06095B_9215`, 2023-09-03 01:03:33Z, Cerulean slick 3612640
 - Jamnagar: `S1A_IW_GRDH_1SDV_20240223T011114_20240223T011139_052679_065FA4_546D`, 2024-02-23 01:11:14Z, DESCENDING, rel. orbit 107, VV+VH, IW; slick 20.14617 N 71.89911 E; inside VV −25.41 / VH −47.36, clean water VV −17.24 / VH −33.12 — ~8 dB VV depression; Cerulean slick 3477622
 - Archived: Ennore 2017 scene `S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04` (D18, `cases/_archive/`)

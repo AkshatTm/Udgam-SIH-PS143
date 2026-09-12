@@ -131,6 +131,14 @@ W_TYPE_PRIOR  = 0.05   # tanker/cargo over ferry
 
 Note the change from v1: **proximity drops from 0.40 to 0.30 and the freed weight goes to parity and temporality** — geometry and timing are stronger evidence than raw closeness, which is what Cerulean's design implies and what your fleet analysis supports.
 
+> ⚠️ **No weight moves without the Phase 8 ablation.** You have now measured two components as
+> near-inert on real data — `trajectory` at 1.00 for 13 of 15 once its geometry was fixed, and
+> `type_prior` at 1.00 for all 17 in an offshore lane. The correct response is **gating**, which is
+> done (D27, D28), **not reweighting**. A weight changed because a component looked weak on one real
+> case is indistinguishable — in December, to a panel — from a weight changed to make that case come
+> out right. The injected-offender curve with a per-component ablation is the only thing that can
+> justify touching these numbers, and it is the legitimate way to set them.
+
 ### Proximity — score the grid, not the circle
 Anushka measured the real origin cloud at aspect ratio **4.38 : 1**, with **44.7% of high-probability mass falling outside the r50 circle**. Circle membership would name vessels sitting in near-empty water inside the circle and exclude vessels sitting in the bright streak just outside it.
 
@@ -147,9 +155,28 @@ Take the maximum grid value the vessel touches during the time window. Since the
 Your measurements say the v1 spec fails on port traffic. The fix is not reweighting; it is **defining when a component is applicable**.
 
 - **`gap` applies only when the vessel was under way on both sides of the silence.** A parked boat whose transponder idled overnight is not going dark; it is moored.
+  - **And not when the "silence" is your own box edge.** A vessel that leaves the search rectangle and comes back is under way on both sides, so the under-way test passes and the gap looks real — five of eleven candidate silences on case 1 were this artefact. If a silence begins and ends on the boundary, it is a sampling gap in *our* data, not in the vessel's transponder. Box-boundary gate, added by you, and it is the kind of bug that would have survived all the way to a suspect card.
 - **`slowdown` is scoped to the closest approach to the origin**, compared against an **under-way median** that excludes hours at rest. Comparing against a median of exactly 0.0 is unreachable by construction.
 - **`parity` applies only when `discharge_class == "chronic"`.** A blob has no meaningful centerline.
+- **`trajectory` applies only when the vessel was seen outside `radius_90_km`** in the window — see §1.5 and D27.
+- **`type_prior` applies only when the candidate fleet is mixed (D28).** It scored **1.00 for all 17** vessels on your offshore run, because an offshore lane is all tankers and cargo. A component that returns the same value for every candidate changes no ranking and quietly adds its full weight to everyone's displayed score. When all scored candidates share a type class, return `null`.
+- **`gap` and `slowdown` are `null` on any `gfw_hourly` case** — you cannot see a 30-minute silence in hourly data (D20). The validator now errors on a number there.
 - **When a component is not applicable it contributes nothing, and the remaining weights renormalise.** Say that out loud on the limitations slide. It is a statement about applicability, not a thumb on the scale.
+
+### `component_notes` — blessed, with one condition (D29)
+
+Approved into `suspects.json` §6.7. Optional object keyed by component name, short plain-language
+string values, carrying each gate's stated reason.
+
+**The condition: it is explanation, not evidence.** A note may not introduce any fact the card is
+not already showing — it says *why a bar is missing*, never adds a new claim about the vessel.
+
+**And every `null` should have one.** The frontend renders `null` as "n/a", and an unexplained "n/a"
+on a judge-facing card is worse than no card: it reads as a broken feature rather than a deliberate
+refusal to measure something unmeasurable. *"hourly AIS cannot resolve a transponder gap"* turns the
+weakest-looking part of the screen into the most convincing. The validator warns when a `null` has
+no note, and warns when a non-null component holds the **same value for every scored suspect** —
+which is the check that would have caught `type_prior` mechanically.
 
 Emit which components fired per suspect, so the frontend can show the reasoning and a judge can audit it.
 
@@ -207,8 +234,34 @@ Per §B4. Each returns `(score, applicable)`, never a silent zero — a zero and
 ### 1.4 Closest approach
 For each vessel, walk its track through the origin time window and find the point of maximum grid probability. Record position, time, distance to origin centroid (for display), and the grid value (for scoring).
 
-### 1.5 Trajectory consistency
-At closest approach, compare the vessel's course over ground to the bearing from its position toward the origin centroid. Within ±60° counts as consistent. Remember COG's 360.0 sentinel means "not available" — treat as not applicable, not as due north.
+### 1.5 Trajectory consistency — **rewritten, the original spec could not fire (D27)**
+
+> **Do not restore the old version.** It read: *"At closest approach, compare the vessel's course
+> over ground to the bearing from its position toward the origin centroid."* That is
+> self-defeating. Closest approach is, by definition, the point where the line to the origin is
+> roughly **perpendicular** to the course — that is what makes it the closest point — so a ±60°
+> cone is unsatisfiable almost everywhere. Measured on a real fleet: **0.00 for 16 of 17 vessels,
+> median 126° off.** It was geometry, not data, and it sat in the spec unnoticed because nobody had
+> run it on a real track.
+
+**Measure it on approach instead.** Take the **last report before closest approach at which the
+vessel was still outside `radius_90_km`**, and compare its course over ground to the bearing from
+*that* position toward the origin centroid. The question the component is actually asking is *"was
+this vessel heading in, from outside the cloud?"* — so it has to be asked from outside the cloud.
+Within ±60° counts as consistent. Scale-free across cases, because `radius_90_km` comes from the
+bundle.
+
+**Applicability gate (D27).** If the vessel has **no report outside `radius_90_km`** inside the
+window, it was never observed approaching from anywhere, and `trajectory` is **`null`** — not 1.0.
+Without this gate the corrected component scores 1.00 for 13 of 15, which is close to tautological:
+anything that ended up inside the cloud was, trivially, heading toward it.
+
+Remember COG's 360.0 sentinel means "not available" — `null`, not due north. It affects 9.9% of rows.
+
+**Honest limitation to carry to the slide:** even gated, this component is expected to be a weak
+discriminator on transiting-vessel cases. The component that should separate a source from a
+passer-by is **`parity`**, and `parity` is blocked on Soum's polygon — so until that lands, our
+strongest discriminator is untested. Say that rather than let the bars imply otherwise.
 
 ### 1.6 The funnel, exclusions, abstention
 Per §B4.

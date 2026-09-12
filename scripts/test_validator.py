@@ -223,6 +223,39 @@ def seep_flagged_without_a_source(d):
     return "natural_seep"
 
 
+def component_note_names_nothing(d):
+    """A note explaining a bar that does not exist. Either the component was renamed and the
+    note was left behind, or the note is inventing a component the card never shows."""
+    s = read(d, "suspects.json")
+    sus = s["suspects"][0]
+    sus.setdefault("components", {})
+    sus["component_notes"] = {"kraken_index": "no kraken detected in the window"}
+    write(d, "suspects.json", s)
+    return "component_notes.kraken_index"
+
+
+def null_component_without_a_note(d):
+    """A gated component with nothing behind it. The card renders 'n/a' and the judge asks why —
+    which is the one question we should always be able to answer (D29)."""
+    s = read(d, "suspects.json")
+    sus = s["suspects"][0]
+    sus.setdefault("components", {})["slowdown"] = None
+    sus.pop("component_notes", None)
+    write(d, "suspects.json", s)
+    return "component_notes"
+
+
+def component_is_constant_across_the_fleet(d):
+    """type_prior = 1.00 for every vessel in an offshore lane. It ranks nobody above anybody and
+    silently adds its full weight to every score on screen (D28)."""
+    s = read(d, "suspects.json")
+    for sus in s["suspects"]:
+        sus.setdefault("components", {})["type_prior"] = 1.0
+        sus.setdefault("component_notes", {})
+    write(d, "suspects.json", s)
+    return "separates nobody"
+
+
 MUTATIONS = [
     ("detection polygon written as [lat, lon]", swap_detection_lonlat,   "swapped",  False),
     ("particles.t0 missing its trailing Z",     naive_timestamp,         "naive",    False),
@@ -241,6 +274,11 @@ MUTATIONS = [
     ("gfw_hourly case reports a numeric gap",   gfw_hourly_reports_a_gap, "null",    False),
     ("particles_forward is a copy of the rewind", forward_particles_are_a_copy, "forward", False),
     ("natural_seep flagged with no source",     seep_flagged_without_a_source, "natural_seep", False),
+    ("component_notes names a component that doesn't exist", component_note_names_nothing,
+     "component_notes.kraken_index", False),
+    ("null component with no note behind it",   null_component_without_a_note, "component_notes", True),
+    ("a component scoring identically for every suspect", component_is_constant_across_the_fleet,
+     "separates nobody", True),
 ]
 
 

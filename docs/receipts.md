@@ -17,7 +17,7 @@ on screen within five seconds, not a story. Internals are binding — whatever w
 
 | # | Case | `system:index` | Acquired (UTC) | Mode / pol / pass | Notes |
 |---|---|---|---|---|---|
-| 1 | case-jacksonville-2024 | `S1A_IW_GRDH_1SDV_20240730T232129_20240730T232154_054997_06B32C_7973` | 2024-07-30 23:21:29Z | IW / VV+VH / ASC, rel. orbit 150 | HERO. Open ocean ~100 km offshore. **Long sinuous chronic slick**, full scene height. Cerulean slick 3046293 (31.17 km, 4.55 km²). |
+| 1 | case-jacksonville-2024 | `S1A_IW_GRDH_1SDV_20240730T232129_20240730T232154_054997_06B32C_7973` | 2024-07-30 23:21:29Z | IW / VV+VH / ASC, rel. orbit 150 | HERO. Open ocean ~170 km offshore. **Long sinuous chronic slick**, full scene height. Cerulean slick 3046293 (31.17 km, 4.55 km²). |
 | 2 | case-farallones-2023 | `S1A_IW_GRDH_1SDV_20230317T142442_20230317T142507_047685_05BA4D_AFD8` | 2023-03-17 14:24:42Z | IW / VV+VH / DESC, rel. orbit 13 | **Ruler-straight discharge line** NW–SE. Cerulean slick 3687325 (19.63 km, 3.85 km²). Three other slicks share this scene — ours is the 19.6 km one. |
 | 3 | case-huntington-2021 | `S1A_IW_GRDH_1SDV_20211002T015821_20211002T015850_039934_04B9C9_2BF9` | 2021-10-02 01:58:21Z | IW / VV+VH / ASC, rel. orbit 137 | +0.1 d after first alarm (1 Oct 23:10Z). **Clear comma-shaped slick**, ~8–10 dB VV depression. Not in Cerulean — NTSB is its ground truth. |
 | 4 | case-gulf-alaska-2023 | `S1A_IW_GRDH_1SDV_20230516T155708_20230516T155736_048561_05D74A_DCBF` | 2023-05-16 15:57:08Z | IW / VV+VH / DESC, rel. orbit 14 | Dark-vessel cross-check. Cerulean slick 3630124 (2.48 km, 0.27 km²), **human-reviewed as `AMBIGUOUS`** — stated openly, see Master §3.2. |
@@ -104,7 +104,28 @@ Source: `coast.noaa.gov/htdata/CMSP/AISDataHandler/` — no registration require
 
 | Case | Files used | Date range | Rows after bbox+time filter |
 |---|---|---|---|
-| case-us-`TODO` | `TODO` | `TODO` | `TODO` |
+| case-jacksonville-2024 | `AIS_2024_07_30`, `AIS_2024_07_31` | 30–31 Jul 2024 | 52 vessels in the scoring window |
+| others | `TODO` | `TODO` | `TODO` |
+
+### AIS sampling density — measured, not assumed (2026-09-12)
+
+This is a number we cite on the sampling-density slide, so it needs a receipt.
+
+| What | Measured |
+|---|---|
+| Where | `case-jacksonville-2024`, 30.384 N −79.634 W — **~170 km offshore** (earlier drafts said ~100 km; that was wrong) |
+| Method | NOAA Marine Cadastre for 30–31 Jul 2024, filtered to a box running **40 km to 260 km offshore** |
+| **Reporting interval** | **69 seconds**, and it **holds out to 240 km** — no thinning with distance |
+| Cross-check | Matches the Galveston baseline from the same pipeline |
+| Consequence | The offshore-coverage risk on the hero case is **closed**. Nothing reshuffles. |
+
+**Coverage of the documented vessel inside Cerulean's own −8 h/+6 h window:** 714 broadcasts
+covering **14.0 hours of 14**, longest silence **130 seconds**, no hole at either end. That is why
+case 1 is **not** a gap case (D30) — the claim it once carried was measurably false.
+
+**Refusal path, demonstrated on real data:** on real Galveston AIS the funnel runs
+**987 → 897 → 17** and the scorer **abstains**, top two within 1.1%. Correct behaviour on a patch of
+ocean with no spill in it.
 
 Known limitation we state openly: **MMSI is an imperfect identifier** — reused, spoofed,
 sometimes zero. We group by MMSI as-is and do not attempt identity resolution. One demo case.

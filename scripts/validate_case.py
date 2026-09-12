@@ -552,6 +552,51 @@ def check_suspects(d, known_mmsi, origin, box=None, ais_source=None):
                         err(f"{w}: components.{cname} is {comps[cname]} on a gfw_hourly case — "
                             f"hourly AIS cannot resolve {cname}, so this must be null, not a "
                             "number. A zero where a null belongs is an honesty bug (D20).")
+
+        # component_notes (D29) — explanation, not evidence. Keys must name real components,
+        # and every gated (null) component should say why, because the UI renders null as
+        # "n/a" and an unexplained "n/a" reads as a broken feature rather than a refusal to
+        # measure something unmeasurable.
+        notes = sus.get("component_notes")
+        if notes is not None:
+            if not isinstance(notes, dict):
+                err(f"{w}: component_notes must be an object keyed by component name")
+            else:
+                # Only skippable when there is no components object at all to check against;
+                # an EMPTY components dict still means the note names nothing real.
+                have_comps = isinstance(comps, dict)
+                for k, v in notes.items():
+                    if have_comps and k not in comps:
+                        err(f"{w}: component_notes.{k} names no component in components "
+                            f"{sorted(comps)} — a note must explain a bar that exists")
+                    if not str(v or "").strip():
+                        err(f"{w}: component_notes.{k} is empty; drop the key or write the reason")
+        if isinstance(comps, dict):
+            missing = [c for c, v in comps.items()
+                       if v is None and not str((notes or {}).get(c) or "").strip()]
+            if missing:
+                warn(f"{w}: components {missing} are null with no component_notes entry — "
+                     "the card will render 'n/a' with nothing behind it (D29)")
+
+    # A component that returns the SAME value for every scored suspect discriminates nothing:
+    # it adds a constant to every score, changes no ranking, and inflates the numbers on screen
+    # by its full weight. This is the check that catches type_prior = 1.00 across a homogeneous
+    # offshore fleet mechanically, instead of someone noticing it by eye (D28).
+    scored = [x for x in s["suspects"] if isinstance(x.get("components"), dict)]
+    if len(scored) >= 3:
+        names = set()
+        for x in scored:
+            names |= set(x["components"])
+        for cname in sorted(names):
+            vals = [x["components"].get(cname) for x in scored]
+            if any(v is None for v in vals):
+                continue
+            if not all(isinstance(v, (int, float)) for v in vals):
+                continue
+            if len(set(vals)) == 1:
+                warn(f"suspects.json: components.{cname} is {vals[0]} for all {len(scored)} "
+                     "scored suspects — it separates nobody, so it only inflates every score "
+                     "by its weight. Gate it to null instead (D28).")
     scores = [x.get("score", 0) for x in s["suspects"]]
     if scores != sorted(scores, reverse=True):
         err("suspects.json: suspects are not sorted by descending score")
