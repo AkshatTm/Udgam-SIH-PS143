@@ -2,6 +2,61 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-13 ~11:00] Unblocking Soum's Stage 1 push — provenance field, gitignore, three corrections
+
+**Done:** Soum's reply to `HANDOFF_SOUM_CASES.md` answered all four questions and returned three
+findings I did not have, one of which invalidated a premise in my own code. Landed the schema
+change he is blocked on (`meta.provenance`, D33) through the required order — Master §6.1 →
+`CONTRACTS.md` → validator enum — so he can switch `scene_provenance()` off the CRS sniff. Fixed
+`benchmark_scene.py`, which was built on the belief that Part III tiles are ungeoreferenced and
+wrote a Null Island placeholder box for them; it now reads the real transform (verified round-trip
+against the bounds Soum reported). Ignored `models/` before it could reach GitHub — 534 MB with
+three blobs over the 100 MB hard limit. Pinned torch in a **separate** `requirements-detect.txt`,
+because `--index-url` is not per-package and putting it in `requirements.txt` would repoint all
+twelve shared dependencies at the PyTorch mirror. Recorded the corrected Stage 1 metrics and
+killed the stale ones. Fixed the frontend rendering a rule margin as "87% confidence".
+
+**Files touched:** `docs/00_MASTER_PLAN.md` (§6.1 `provenance`, §6.3 confidence semantics, D33) ·
+`docs/CONTRACTS.md` (mirrored) · `scripts/validate_case.py` (provenance enum + non-finite JSON
+guard) · `pipeline/export/benchmark_scene.py` (real bounds from the geotransform) · `.gitignore`
+(`models/`) · `requirements-detect.txt` (new) · `requirements.txt` · `docs/receipts.md` (Stage 1
+numbers, VH noise floor, cases 8–9) · `docs/TRAPS.md` (#24 nanmean/-inf→Infinity, #25 PROJ
+hijack) · `web/lib/contracts.ts` · `web/components/ContextPanel.tsx` ·
+`cases/case-lookalike-zenodo/meta.json` (new) · `cases/case-nospill-zenodo/meta.json`
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-nospill-zenodo
+```
+Expected output: `FAIL — bounds.json: missing · detections.geojson: missing`. That is the
+**correct** state today: both artefacts come off Soum's machine, and `meta.json` itself validates
+clean with `provenance: "benchmark"`.
+
+**Checkpoint artefact:** fed `benchmark_scene.py` a synthetic EPSG:4326 raster stamped with the
+box Soum reported for `00134`; `bounds.json` came back `-89.6488, 29.1688 .. -89.4649, 29.3527`,
+exact. The non-finite guard was tested by reproducing his bug directly — `np.nanmean` over an
+array containing `-inf` → `json.dumps` → `{"contrast_db": -Infinity}` → validator fails it by
+name. `npx tsc --noEmit` clean.
+
+**Open issues:**
+- **The push itself has not happened.** Everything above unblocks it; none of it is it. Stage 1 is
+  still one commit from 9 Sept, and the seven live cases still fail the validator on a missing
+  `detections.geojson`. That is the only thing between us and a working chain.
+- `confidenceLabel()` bands the rule margin at 0.75 / 0.45 — those cutoffs are **my invention**
+  and nothing has measured them. They are honest in kind (qualitative, not a percentage) but
+  arbitrary in value. Ask Soum for the real margin distribution, or drop to two bands.
+- The VH reframe is recorded in `receipts.md` but **the slide has not been changed.** Urooz has
+  not seen this yet. If the deck ships claiming dual-pol discrimination on the seven live cases,
+  it is claiming something we measured to be false.
+- `features.py`'s `-inf` bug is fixed **at the gate, not at the source** — Soum is fixing the
+  producing code. Until his push lands, the validator is the only thing catching it.
+- Retrained-RF reproducibility is asserted, not demonstrated: nobody has retrained from
+  `train.py` on a clean machine and compared to `model_meta.json`.
+
+**Next:** Soum pushes Stage 1 → I merge → run the seven live cases through
+`build_case.py --stage detect` and get `detections.geojson` on all of them. That is the last
+structural gap in the chain.
+
 ---
 
 ## [2026-09-13, later] Integration-account pass — merged Anushka's plot guards, held her coastline commit on a dependency question

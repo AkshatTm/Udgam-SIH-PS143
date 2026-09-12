@@ -46,6 +46,7 @@ These are not per-schema. Violating one is how the project dies.
   "title": "Huntington Beach — San Pedro Bay Pipeline",
   "short_location": "Orange County, California",
   "case_type": "spill",
+  "provenance": "satellite",
   "satellite": "Sentinel-1A",
   "scene_id": "<GEE system:index — the real one>",
   "detection_time": "2021-10-02T01:58:21Z",
@@ -68,6 +69,7 @@ These are not per-schema. Violating one is how the project dies.
 | Field | Rule |
 |---|---|
 | `case_type` | `spill \| lookalike \| nospill` |
+| `provenance` | `satellite \| benchmark` — optional, absent means `satellite` (D33) |
 | `acts_available` | subset of `["detect","trace","attribute","verify"]`, non-empty |
 | `gallery.difficulty` | `easy \| medium \| hard` |
 | `gallery.blurb` | written as a **question** — it is the gallery card's hook |
@@ -76,6 +78,14 @@ These are not per-schema. Violating one is how the project dies.
 **Dependency rules the validator enforces:**
 `trace` requires `detect` **or** `meta.known_origin` · `attribute` requires `trace` ·
 `verify` requires `verification.json` to exist · `attribute` requires `ais_source`.
+
+**`provenance` (D33).** Which corpus the pixels came from, and therefore which of Stage 1's two
+detection paths runs: `satellite` (our GEE exports → classical CV + RandomForest) or `benchmark`
+(Zenodo Part III → CNN scene classifier). `scene_provenance()` reads this field. It must **not**
+sniff the CRS: Zenodo Part III tiles carry EPSG:4326 and a real geotransform just like a GEE
+export, so that test never discriminated anything. It also decides what `detections.geojson/
+confidence` means — model probability on `benchmark`, rule margin on `satellite`. See Master §6.1
+and §6.3, which are the live contract; this file is the v1 record.
 
 **`ais_source` (D20).** NOAA Marine Cadastre reports at a ~71-second median interval; Global
 Fishing Watch's presence layer gives **one position per vessel per hour** — roughly 50× sparser.

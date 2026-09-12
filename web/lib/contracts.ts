@@ -10,6 +10,7 @@ export type Act = "detect" | "trace" | "attribute" | "verify";
 export type LonLat = [number, number];
 
 export type CaseType = "spill" | "lookalike" | "nospill";
+export type Provenance = "satellite" | "benchmark";
 export type Difficulty = "easy" | "medium" | "hard";
 
 /**
@@ -39,6 +40,14 @@ export interface CaseMeta {
   title: string;
   short_location?: string;
   case_type?: CaseType;
+  /**
+   * Master §6.1, D33. Which corpus the pixels came from — and therefore which of Stage 1's two
+   * detection paths produced `confidence`. Absent means "satellite".
+   *
+   * This is NOT cosmetic: on "benchmark" the number is a calibrated model probability, on
+   * "satellite" it is a rule margin. See `confidenceLabel()` in ContextPanel.
+   */
+  provenance?: Provenance;
   satellite: string;
   scene_id: string;
   detection_time: string; // UTC ISO 8601, trailing Z

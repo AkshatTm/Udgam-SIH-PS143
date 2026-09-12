@@ -306,6 +306,7 @@ Violating these is how the project dies. They are in `CLAUDE.md` too.
   "title": "Huntington Beach — San Pedro Bay Pipeline",
   "short_location": "Orange County, California",
   "case_type": "spill",
+  "provenance": "satellite",
   "satellite": "Sentinel-1A",
   "scene_id": "<GEE system:index — the real one>",
   "detection_time": "2021-10-02T01:58:21Z",
@@ -324,7 +325,27 @@ Violating these is how the project dies. They are in `CLAUDE.md` too.
   "notes": "free text"
 }
 ```
-`case_type` ∈ `spill | lookalike | nospill` · `difficulty` ∈ `easy | medium | hard` · `acts_available` ⊆ `["detect","trace","attribute","verify"]`.
+`case_type` ∈ `spill | lookalike | nospill` · `provenance` ∈ `satellite | benchmark` · `difficulty` ∈ `easy | medium | hard` · `acts_available` ⊆ `["detect","trace","attribute","verify"]`.
+
+**`provenance` (optional, D33).** Where the pixels came from — `satellite` for a scene we
+exported from GEE ourselves, `benchmark` for a tile out of the Zenodo Part III corpus. Absent
+means `satellite`, so nothing already in the library needs backfilling.
+
+It exists because Stage 1 has **two detection paths** and something has to choose between them:
+the classical CV + RandomForest path that runs on our own GEE exports, and the CNN scene
+classifier that was trained on the Zenodo corpus. `scene_provenance()` originally chose by
+sniffing for a missing CRS. That heuristic never worked — **Zenodo Part III tiles carry
+EPSG:4326 and a real geotransform, exactly like a GEE export** — so the sniff matched everything
+and routed both corpora down the same path. Routing on the *absence* of a property is an
+invisible tripwire; this field is the source of truth and the CRS is not consulted.
+
+Two consequences that are not optional:
+
+- **It decides what `detections.geojson/confidence` means** (see §6.3). On a `benchmark` case
+  the number is a model probability. On a `satellite` case it is a rule margin. The frontend
+  must not render the second one as a model confidence bar.
+- **It does not license a placeholder coordinate.** Both Zenodo cases are georeferenced, so
+  `bounds.json` carries their real boxes. `benchmark` marks the *corpus*, not "no location".
 
 **`known_origin` (optional, D16).** A documented fixed source the trace stage seeds from when
 there is no SAR-visible slick — a wreck, a pipeline right-of-way, a collision position. Either
@@ -384,6 +405,20 @@ FeatureCollection. Each feature:
 `classification` ∈ `oil | lookalike` — not "none", not "oil_spill".
 `shape_class` ∈ `linear | blob`. `discharge_class` ∈ `chronic | acute | unknown`.
 `confidence` ∈ [0,1]. `contrast_db` **negative** for a dark spot. `elongation` **≥ 1.0**.
+
+**What `confidence` means depends on `meta.provenance` — and it is not the same quantity.**
+On a `benchmark` case the detector is the CNN scene classifier and the number is a calibrated
+model probability P(oil). On a `satellite` case the classical path produces it, and it is a
+**stated rule margin** — how far the feature sits from the decision boundary, not a probability
+of anything. The range is [0,1] in both, which is exactly why this is dangerous: the two look
+identical in JSON and mean different things.
+
+**The frontend must not render a `satellite` confidence as a model confidence bar.** A bar
+asserts calibration we have not measured on those seven cases. Show the margin as a qualitative
+band (weak / moderate / strong) with the rule named, and reserve the numeric bar for
+`provenance: "benchmark"`. No new field for this: `provenance` already separates the two paths
+one-to-one. If they ever cross — a model scoring a satellite case — that stops being true and we
+add an explicit `confidence_kind` then, not before.
 `ship_detections` may be `[]` — that is valid and common.
 A no-spill case is a FeatureCollection with **zero `oil` features**; look-alikes may still be present.
 
@@ -650,6 +685,7 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 | D29 | **`component_notes` is blessed into `suspects.json`** | Jaiveer proposed it and it earns its place: a gated component renders as "n/a", and an unexplained "n/a" on a judge-facing card is worse than no card. Optional object keyed by component name, short strings, **explanation not evidence** — it may not introduce a fact the card is not already showing. Every `null` should carry one. |
 | D30 | **The gap story moves from case 1 to case 4** | Case 1's Part 3 line — "the only case that exercises gap detection" — was **false**, and measurably so: 714 broadcasts covering 14.0 of 14 hours inside Cerulean's own window, longest silence 130 seconds. Case 4's dark vessel carries the argument better anyway, because a ship that never speaks at all is a stronger version of the same point and it is actually present in the data. Recorded at the same time, before the scoring run: on case 1 the `gap` component gives full marks to a **competing candidate** (7.4 km, 12.5 kn, 142 minutes silent) and zero to the documented vessel, so **case 1 may return `partial` or `miss`**. Writing that down in advance is worth more than explaining it afterwards. |
 | D31 | **Blindness is declared per case, never claimed globally** | Verifying AIS density at case 1 *required* identifying the vessel — the check and the answer are the same operation, so that case was never going to stay blind. Separately, Alaska's and Mumbai's source identifiers and coordinates were sitting in §3.2 of a document the whole team reads. Both are now stated openly per case (Part 16) rather than papered over with a blanket claim a panel could take apart in one question. **Case 1 is open**: its documented vessel may be used for diagnostics and worked examples, but **no weight or threshold may be chosen using it** — weights are set on injected scenarios only. Case 2 becomes the headline blind result. |
+| D33 | **Detector routing moves to an explicit `meta.provenance` field; the CRS sniff is deleted** | Stage 1 has two detection paths (classical CV + RandomForest for our GEE exports, CNN scene classifier for the Zenodo corpus) and `scene_provenance()` chose between them by testing whether the GeoTIFF had a CRS. That test was **always false**: Zenodo Part III tiles carry EPSG:4326 and a real geotransform exactly like a GEE export, so the sniff matched both corpora and discriminated nothing — every Zenodo bundle would have gone down the classical path. Two rules were violated at once: routing on the *absence* of a property is an invisible tripwire, and the same false premise had been written into `benchmark_scene.py`, which was emitting a Null Island placeholder box for scenes that are georeferenced. `provenance` ∈ `satellite \| benchmark`, optional, absent means `satellite` so nothing needs backfilling. It also carries a second meaning we were going to need anyway: it is what tells the frontend whether `confidence` is a model probability or a rule margin (§6.3). Found by Soum, 13 Sept. |
 
 ---
 

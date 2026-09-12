@@ -31,6 +31,18 @@ __pycache__/
 # Intermediate stage outputs — regenerable, the bundle in cases/ is the artefact
 pipeline/*/out/
 
+# Trained weights. GitHub hard-rejects any blob over 100 MB and models/ is 534 MB:
+# classifier_vv_only.pkl is 204 MB and unet.pt / unet_baseline.pt are 121 MB each. We ship
+# CODE, not weights — the training scripts and the eval JSONs are the reproducible artefact,
+# and a 300-tree unbounded RandomForest is cheaper to retrain than to store. No LFS: the quota
+# is shared, the objects outlive the repo, and nothing in the demo loads these files.
+models/*
+!models/.gitkeep
+# ...except the small ones the demo actually needs, and every metric file, which is evidence
+# and must be in the repo whether or not the weights are (CLAUDE.md: "internals are binding").
+!models/*.json
+!models/scene_classifier.pt
+
 # Throwaway end-to-end smoke / dry-run bundles (scripts/make_case000.py --scene-only)
 cases/case-smoke/
 cases/case-dry/

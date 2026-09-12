@@ -124,6 +124,23 @@ A constant is not a score. **If a component cannot discriminate on this case, it
 
 - **Check:** `validate_case.py` now warns when a non-null component holds the identical value for every scored suspect. Take that warning seriously; it means a bar on the card is decoration.
 
+## 24. `np.nanmean` does not protect you from `-inf` · Soum, Akshat
+The obvious defensive move against nodata is to reach for the `nan`-aware reductions. **They do not help here.** `np.nanmean` ignores `NaN` and *propagates* `-inf` — so on a scene with real nodata corners (Trap 22: Farallones, Jamnagar, Huntington) it returns `-inf`, Sobel over that emits `inf`, and those flow straight into the feature dict.
+
+Then the real damage: **`json.dumps` writes bare `Infinity` / `NaN` into the file.** That is not valid JSON. Python's `json.loads` accepts it — so every Python-side check passes — and the browser's `JSON.parse` **throws**, so the bundle dies in the frontend with `Unexpected token I` and nothing upstream ever complained. This was found in `pipeline/detect/features.py` on 13 Sept before it shipped.
+
+- **Fix:** mask on `np.isfinite()` *before* the statistic. `nanmean` is not a substitute for a finite-mask; it solves a different problem.
+- **Check:** `validate_case.py` now passes `parse_constant=` to every `json.loads` and fails the bundle by name on a bare `Infinity`/`NaN`. The guard is permanent — but it catches this at the gate, not at the source. **Fix it in the producing code**, per the repo rule.
+
+## 25. A stray PROJ installation hijacks `rasterio` · Akshat, Soum
+`rasterio.open(..., crs='EPSG:4326')` failed on Akshat's laptop with `CRSError: The EPSG code is unknown`, pointing at `C:\Program Files\PostgreSQL\18\...\proj\proj.db` — **PostGIS's PROJ database, found ahead of rasterio's bundled one** and too old to read (`DATABASE.LAYOUT.VERSION.MINOR = 2`, needs ≥ 5). Any unrelated GIS install (PostGIS, QGIS, OSGeo4W) can do this by putting `PROJ_LIB`/`PROJ_DATA` in the environment.
+
+The failure is loud, which is the good news — but it looks like a broken GeoTIFF or a bad EPSG code, so the hour goes into the wrong file.
+
+- **Fix:** point PROJ at the venv's own copy before running anything geospatial:
+  `export PROJ_DATA="$PWD/venv/Lib/site-packages/rasterio/proj_data"` (and `PROJ_LIB` to the same path for older PROJ).
+- **Check:** `python -c "import rasterio; print(rasterio.crs.CRS.from_epsg(4326))"` must print `EPSG:4326` and not raise.
+
 ---
 
 ## Escalation
