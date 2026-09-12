@@ -1,4 +1,12 @@
 {
  "type": "FeatureCollection",
+ "ship_detections": [
+  {
+   "lon": -89.54732,
+   "lat": 29.35262,
+   "px_area": 26,
+   "peak_db": -5.93
+  }
+ ],
  "features": []
 }

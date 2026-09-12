@@ -1,5 +1,6 @@
 {
  "type": "FeatureCollection",
+ "ship_detections": [],
  "features": [
   {
    "type": "Feature",
@@ -2288,7 +2289,6 @@
      -123.87328,
      37.794
     ],
-    "ship_detections": [],
     "vh_contrast_db": -0.026,
     "vh_mean_depth_db": 1.181,
     "solidity": 0.321,
@@ -2418,7 +2418,6 @@
      -123.9643,
      37.85709
     ],
-    "ship_detections": [],
     "vh_contrast_db": 0.264,
     "vh_mean_depth_db": 1.039,
     "solidity": 0.342,

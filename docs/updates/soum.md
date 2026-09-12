@@ -15,6 +15,75 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-13 16:10] Phase 6.2 — D34 adopted, all nine reran, and the rerun hazard closed in code
+
+**Done:** Merged Akshat's `c001423` (D34). Reran all nine cases; `ship_detections` is now
+top-level on every bundle and the per-feature copy is gone everywhere. **All 32 previously
+dropped contacts now reach the bundles** — lookalike-zenodo 1, nospill-zenodo 31. Six spill
+cases validate with **0 warnings**; the three zero-oil cases keep the expected "zero 'oil'
+features" warning. The legacy top-level warning Akshat predicted would clear, cleared.
+
+The seven satellite cases reproduce their shipped numbers exactly under
+`--rule-contrast -3.0 --rule-elongation 2.5` (oil 3/1/1/3/3/1/0, contacts 2/0/43/0/21/3/72),
+which independently confirms his back-solve that −3.0 was the value used.
+
+**Files:** `pipeline/detect/run.py`, all nine `cases/*/detections.geojson`, `docs/updates/soum.md`.
+
+**Run:**
+```bash
+for c in case-jacksonville-2024 case-farallones-2023 case-huntington-2021 \
+         case-gulf-alaska-2023 case-mumbai-2023 case-jamnagar-2024 case-ennore-lookalike-2023; do
+  python pipeline/detect/run.py --case $c --rule-contrast -3.0 --rule-elongation 2.5
+  python pipeline/export/build_case.py --case $c --stage detect
+done
+```
+
+**Rerun hazard closed in code, not in a note.** Akshat flagged that the −3.0 rule is typed by
+hand, stored in no bundle, and that forgetting it silently falls through to −0.5 and
+reclassifies everything with no error. I did **not** change the default to −3.0: −0.5 is the
+right number for Zenodo and −3.0 for our satellite exports, and baking either in is what the
+"−3 dB trap" docstring says not to do. Instead both flags now default to `None` and the
+**classical path refuses to guess** — it exits 1 naming the two values and which suits which
+family. The network path still resolves −0.5 / 2.0 internally, since the rule barely matters
+behind a closed Layer 1 gate. A silent wrong answer is now a loud failure.
+
+**CORRECTED: my "20 oil detections, median 0.578" was wrong.** See the corrected block in the
+Phase 6.1 entry below. The shipped figure is **12, median 0.645**; 20 was the pre-area-floor
+rule-passing count. Akshat is right that nobody should quote 20.
+
+**Answering his question — should `detect_ships` reject contacts touching the scene edge? No.**
+Measured across all nine cases: only **2 of 174** contacts sit within 2 px of an edge, and one of
+them is Ennore's **+10.27 dB, 60 px** target in a working port — almost certainly a real ship. A
+blanket edge rule spends a confident true positive to remove one questionable contact.
+
+There is also no statistical reason to distrust an edge detection *in this implementation*. The
+classic CFAR objection is that a target at the border has a truncated guard/background window, so
+its test statistic is computed on an incomplete neighbourhood. `detect_ships` doesn't use a local
+window — `_sea_level()` estimates the sea median and sigma **globally over every valid pixel**, so
+an edge contact is tested against exactly the same background as a centre-of-scene one.
+
+And the Delta contact is not marginal. On `case-lookalike-zenodo` the sea sits at −29.46 dB with
+σ = 0.793; that contact peaks at **−5.93 dB, i.e. 29.7 σ** above the sea. Something bright is
+genuinely there. What is in doubt is *what it is* — platform or vessel — not whether it is a
+return. **So the objection is about provenance, not geometry**, and the correct filter would be a
+charted-infrastructure mask, which we do not have and cannot add under the dependency freeze. His
+"unattributed radar contact" relabel is the right mitigation and already does the work. If he
+wants it visible, the honest move is to **flag** the truncated extent (`edge: true` on the entry),
+not to drop the detection — his call, I have not touched the entry schema.
+
+Worth knowing separately: on `case-lookalike-zenodo` the ship threshold is **floor-binding** —
+−10.0 dB absolute versus −26.3 dB scene-relative (−29.46 + 4 × 0.793). On Zenodo benchmark scenes
+`k_sigma` is therefore inert and `DEFAULT_MIN_DB` alone decides what counts as a contact.
+
+**Open:** both Zenodo cases are still absent from `cases/index.json` — Akshat's call, as he says.
+`--rule-contrast` is still recorded in no bundle; the guard makes forgetting it loud, but it does
+not make a *shipped* bundle self-describing. If he wants that, it is a top-level `detect_params`
+key and needs his ruling, not mine.
+
+**Next:** Cerulean IoU on the five cases carrying `cerulean_slick.geojson`.
+
+---
+
 ## [2026-09-13 14:30] Phase 6.1 — nine cases PASS, k_sigma correction, and the contract gap measured
 
 **Done:** Built the two Zenodo benchmark bundles (`case-lookalike-zenodo`, `case-nospill-zenodo`)
@@ -76,10 +145,31 @@ and do not. D3's VV-only fallback is therefore universal on live data. The contr
 "VH is the discriminator" a **conditional finding** rather than a retreat, and the slide must say
 so with the numbers.
 
-**Open — margin distribution, owed to Akshat, previously only in chat.** The 20 oil detections
-span confidence 0.500–0.755, median 0.578. His proposed 0.75/0.45 bands yield 1 strong / 19
-moderate / 0 weak — degenerate. Recommend **two bands expressed in dB**, which is what the
-detector actually measures: clear ≤ −4.5 dB contrast (conf ≥ 0.625), marginal −3.0 to −4.5 dB.
+**CORRECTED — margin distribution. My "20 detections, median 0.578" was wrong; Akshat caught it.**
+The shipped answer is **12 oil detections, confidence 0.509–0.755, median 0.645**. The 20 was a
+different population: it is the count of regions that PASS the rule (contrast ≤ −3.0 dB AND
+elongation ≥ 2.5) *before* `--min-oil-km2 0.10` demotes the sub-floor ones. Exactly 8 are demoted
+— 0.048–0.073 km², all of them — and 20 − 8 = 12. So I measured the rule's output and reported it
+as the detector's output. **Nobody should quote 20.** Per case: jacksonville 3, gulf-alaska 3,
+mumbai 3, farallones 1, huntington 1, jamnagar 1, ennore 0.
+
+The dB bands survive the correction and are no longer degenerate on the right population —
+**7 clear / 5 marginal** across the 12:
+
+| contrast | case | conf | band |
+|---|---|---|---|
+| −6.06 | huntington | 0.755 | clear |
+| −5.11 | farallones | 0.676 | clear |
+| −5.05 | jacksonville | 0.671 | clear |
+| −5.04 | mumbai | 0.670 | clear |
+| −4.91 | jacksonville | 0.659 | clear |
+| −4.82 | gulf-alaska | 0.652 | clear |
+| −4.65 | mumbai | 0.638 | clear |
+| −4.39 | jacksonville | 0.616 | marginal |
+| −4.05 | jamnagar | 0.588 | marginal |
+| −3.50 | gulf-alaska | 0.542 | marginal |
+| −3.23 | mumbai | 0.519 | marginal |
+| −3.11 | gulf-alaska | 0.509 | marginal |
 
 **Open — Gulf of Alaska finds no radar contact** even under k=4: threshold −8.06 dB, scene peaks
 −8.79 dB. Reported, not tuned away (A6, D2b).

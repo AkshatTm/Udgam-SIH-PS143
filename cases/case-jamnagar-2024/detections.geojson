@@ -1,5 +1,25 @@
 {
  "type": "FeatureCollection",
+ "ship_detections": [
+  {
+   "lon": 71.83545,
+   "lat": 20.19083,
+   "px_area": 71,
+   "peak_db": 8.74
+  },
+  {
+   "lon": 71.91331,
+   "lat": 20.22191,
+   "px_area": 96,
+   "peak_db": 2.63
+  },
+  {
+   "lon": 71.87092,
+   "lat": 20.19199,
+   "px_area": 88,
+   "peak_db": -2.02
+  }
+ ],
  "features": [
   {
    "type": "Feature",
@@ -1492,26 +1512,6 @@
      71.90863,
      20.16469
     ],
-    "ship_detections": [
-     {
-      "lon": 71.83545,
-      "lat": 20.19083,
-      "px_area": 71,
-      "peak_db": 8.74
-     },
-     {
-      "lon": 71.91331,
-      "lat": 20.22191,
-      "px_area": 96,
-      "peak_db": 2.63
-     },
-     {
-      "lon": 71.87092,
-      "lat": 20.19199,
-      "px_area": 88,
-      "peak_db": -2.02
-     }
-    ],
     "vh_contrast_db": -0.317,
     "vh_mean_depth_db": 6.888,
     "solidity": 0.28,
@@ -1660,26 +1660,6 @@
     "centroid": [
      71.90906,
      20.21598
-    ],
-    "ship_detections": [
-     {
-      "lon": 71.83545,
-      "lat": 20.19083,
-      "px_area": 71,
-      "peak_db": 8.74
-     },
-     {
-      "lon": 71.91331,
-      "lat": 20.22191,
-      "px_area": 96,
-      "peak_db": 2.63
-     },
-     {
-      "lon": 71.87092,
-      "lat": 20.19199,
-      "px_area": 88,
-      "peak_db": -2.02
-     }
     ],
     "vh_contrast_db": -0.928,
     "vh_mean_depth_db": 7.895,

@@ -1,5 +1,19 @@
 {
  "type": "FeatureCollection",
+ "ship_detections": [
+  {
+   "lon": -79.6346,
+   "lat": 30.35297,
+   "px_area": 13,
+   "peak_db": -7.34
+  },
+  {
+   "lon": -79.59244,
+   "lat": 30.3918,
+   "px_area": 4,
+   "peak_db": -8.13
+  }
+ ],
  "features": [
   {
    "type": "Feature",
@@ -2616,20 +2630,6 @@
      -79.62503,
      30.28747
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": 0.143,
     "vh_mean_depth_db": 6.68,
     "solidity": 0.223,
@@ -4427,20 +4427,6 @@
      -79.64078,
      30.46135
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": -0.63,
     "vh_mean_depth_db": 7.015,
     "solidity": 0.22,
@@ -4650,20 +4636,6 @@
      -79.63132,
      30.38409
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": 0.072,
     "vh_mean_depth_db": 6.244,
     "solidity": 0.343,
@@ -4776,20 +4748,6 @@
     "centroid": [
      -79.66432,
      30.25859
-    ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
     ],
     "vh_contrast_db": -1.272,
     "vh_mean_depth_db": 7.558,
@@ -4911,20 +4869,6 @@
     "centroid": [
      -79.63933,
      30.21944
-    ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
     ],
     "vh_contrast_db": 0.157,
     "vh_mean_depth_db": 6.459,
@@ -5111,20 +5055,6 @@
      -79.61235,
      30.47546
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": -1.84,
     "vh_mean_depth_db": 7.818,
     "solidity": 0.271,
@@ -5225,20 +5155,6 @@
     "centroid": [
      -79.6417,
      30.27913
-    ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
     ],
     "vh_contrast_db": -0.72,
     "vh_mean_depth_db": 6.354,
@@ -5377,20 +5293,6 @@
      -79.66458,
      30.22013
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": -0.413,
     "vh_mean_depth_db": 6.802,
     "solidity": 0.529,
@@ -5499,20 +5401,6 @@
     "centroid": [
      -79.61691,
      30.28482
-    ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
     ],
     "vh_contrast_db": 1.041,
     "vh_mean_depth_db": 6.517,
@@ -5723,20 +5611,6 @@
      -79.67291,
      30.2816
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": -2.411,
     "vh_mean_depth_db": 7.814,
     "solidity": 0.381,
@@ -5854,20 +5728,6 @@
      -79.6335,
      30.27725
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": 0.355,
     "vh_mean_depth_db": 6.345,
     "solidity": 0.549,
@@ -5972,20 +5832,6 @@
     "centroid": [
      -79.5927,
      30.24979
-    ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
     ],
     "vh_contrast_db": -1.581,
     "vh_mean_depth_db": 6.863,
@@ -6112,20 +5958,6 @@
      -79.67682,
      30.40137
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": -1.79,
     "vh_mean_depth_db": 7.443,
     "solidity": 0.476,
@@ -6242,20 +6074,6 @@
     "centroid": [
      -79.66479,
      30.55187
-    ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
     ],
     "vh_contrast_db": -2.431,
     "vh_mean_depth_db": 7.196,
@@ -6414,20 +6232,6 @@
      -79.61441,
      30.4014
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": -0.331,
     "vh_mean_depth_db": 6.865,
     "solidity": 0.36,
@@ -6545,20 +6349,6 @@
      -79.62312,
      30.45458
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": -1.557,
     "vh_mean_depth_db": 7.37,
     "solidity": 0.526,
@@ -6639,20 +6429,6 @@
     "centroid": [
      -79.60808,
      30.21919
-    ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
     ],
     "vh_contrast_db": 0.609,
     "vh_mean_depth_db": 5.842,
@@ -6834,20 +6610,6 @@
     "centroid": [
      -79.60459,
      30.43174
-    ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
     ],
     "vh_contrast_db": 0.015,
     "vh_mean_depth_db": 6.247,
@@ -7106,20 +6868,6 @@
      -79.65385,
      30.5111
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": -0.854,
     "vh_mean_depth_db": 7.099,
     "solidity": 0.386,
@@ -7220,20 +6968,6 @@
     "centroid": [
      -79.67347,
      30.51737
-    ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
     ],
     "vh_contrast_db": 0.884,
     "vh_mean_depth_db": 6.317,
@@ -7732,20 +7466,6 @@
      -79.66873,
      30.5426
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": -0.046,
     "vh_mean_depth_db": 6.508,
     "solidity": 0.477,
@@ -7903,20 +7623,6 @@
      -79.63296,
      30.50516
     ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
-    ],
     "vh_contrast_db": 1.075,
     "vh_mean_depth_db": 6.124,
     "solidity": 0.376,
@@ -8069,20 +7775,6 @@
     "centroid": [
      -79.64604,
      30.2271
-    ],
-    "ship_detections": [
-     {
-      "lon": -79.6346,
-      "lat": 30.35297,
-      "px_area": 13,
-      "peak_db": -7.34
-     },
-     {
-      "lon": -79.59244,
-      "lat": 30.3918,
-      "px_area": 4,
-      "peak_db": -8.13
-     }
     ],
     "vh_contrast_db": -1.972,
     "vh_mean_depth_db": 7.338,

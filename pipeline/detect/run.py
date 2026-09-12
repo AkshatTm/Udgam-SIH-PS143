@@ -376,15 +376,18 @@ def main():
     ap.add_argument("--t-low", type=float, default=1.0)
     ap.add_argument("--threshold", type=float, default=None,
                     help="override the classifier probability threshold")
-    ap.add_argument("--rule-contrast", type=float, default=-0.5,
-                    help="fallback rule: contrast_db at or below this is oil. NOT -3; "
-                         "see the -3 dB trap in this file's docstring")
+    ap.add_argument("--rule-contrast", type=float, default=None,
+                    help="fallback rule: contrast_db at or below this is oil. NOT -3 on "
+                         "benchmark scenes; see the -3 dB trap in this file's docstring. "
+                         "REQUIRED on the classical path — there is no safe default, so "
+                         "omitting it is a hard error rather than a silent reclassification")
     ap.add_argument("--min-oil-km2", type=float, default=0.10,
                     help="a region smaller than this is never classified 'oil'. 0.10 km2 "
                          "sits well below the smallest slick in the library (Alaska, "
                          "0.3 km2, section A4) so it cannot suppress anything we must find")
-    ap.add_argument("--rule-elongation", type=float, default=2.0,
-                    help="fallback rule: elongation at or above this is oil")
+    ap.add_argument("--rule-elongation", type=float, default=None,
+                    help="fallback rule: elongation at or above this is oil. REQUIRED on "
+                         "the classical path, for the same reason as --rule-contrast")
     ap.add_argument("--no-ships", action="store_true", help="skip the ship detector")
     # Defaults come FROM ships.py, never duplicated here. They were duplicated,
     # and the copy went stale: ships.DEFAULT_K_SIGMA was corrected 8.0 -> 4.0 but
@@ -425,6 +428,32 @@ def main():
     print(f"[detect] scene   : {kind.upper()} — {why}")
     print(f"[detect] path    : {'Layer 1 + Layer 2 networks' if use_nets else 'classical detector + stated rule'}"
           f"{'' if a.path != 'auto' else '  (auto, by provenance)'}")
+
+    # THE RERUN HAZARD (Akshat, D34). The rule threshold is passed on the command line
+    # and recorded in no bundle, so a rerun that forgets --rule-contrast used to fall
+    # through to -0.5 and silently reclassify every detection — no error, different
+    # answer, and the dB confidence bands wrong with it. The default is now None and
+    # the classical path REFUSES to guess. -0.5 is not restored as a default because it
+    # is the right number for Zenodo and the wrong one for a satellite export; that is
+    # exactly the choice the docstring says must be stated per scene family.
+    NL = chr(10)
+    if use_nets:
+        rule_contrast = -0.5 if a.rule_contrast is None else a.rule_contrast
+        rule_elongation = 2.0 if a.rule_elongation is None else a.rule_elongation
+    else:
+        missing = [f for f, v in (("--rule-contrast", a.rule_contrast),
+                                  ("--rule-elongation", a.rule_elongation)) if v is None]
+        if missing:
+            sys.exit(NL.join([
+                f"[detect] FATAL: {' and '.join(missing)} not given, and this scene",
+                f"         takes the classical path ({why}), where the rule decides",
+                 "         oil vs look-alike. There is no safe default: -0.5 dB suits",
+                 "         Zenodo, -3.0 dB suits our satellite exports, and guessing",
+                 "         silently changes every label. The seven live cases ship with:",
+                 "             --rule-contrast -3.0 --rule-elongation 2.5",
+            ]))
+        rule_contrast, rule_elongation = a.rule_contrast, a.rule_elongation
+    print(f"[detect] rule   : contrast <= {rule_contrast:+.2f} dB AND elongation >= {rule_elongation:.2f}")
     scene_cnn, gate_thr = nets.load_classifier() if use_nets else (None, None)
     unet, unet_thr = nets.load_unet() if use_nets else (None, None)
     layer1_prob = None
@@ -503,7 +532,7 @@ def main():
                   f"p95={np.percentile(cd,95):+.2f} max={cd.max():+.2f}")
 
         method = score_regions(regions, clf, features, threshold,
-                               a.rule_contrast, a.rule_elongation,
+                               rule_contrast, rule_elongation,
                                force_rule=not use_nets, min_oil_km2=a.min_oil_km2)
         print(f"[detect] scored by: {method}")
 

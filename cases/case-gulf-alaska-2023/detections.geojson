@@ -1,5 +1,6 @@
 {
  "type": "FeatureCollection",
+ "ship_detections": [],
  "features": [
   {
    "type": "Feature",
@@ -388,7 +389,6 @@
      -142.72349,
      59.55629
     ],
-    "ship_detections": [],
     "vh_contrast_db": -0.071,
     "vh_mean_depth_db": 1.331,
     "solidity": 0.513,
@@ -894,7 +894,6 @@
      -142.76157,
      59.60672
     ],
-    "ship_detections": [],
     "vh_contrast_db": -0.142,
     "vh_mean_depth_db": 1.491,
     "solidity": 0.563,
@@ -1188,7 +1187,6 @@
      -142.7798,
      59.59346
     ],
-    "ship_detections": [],
     "vh_contrast_db": -0.087,
     "vh_mean_depth_db": 1.24,
     "solidity": 0.331,
@@ -2326,7 +2324,6 @@
      -142.68173,
      59.60423
     ],
-    "ship_detections": [],
     "vh_contrast_db": 0.044,
     "vh_mean_depth_db": 1.331,
     "solidity": 0.594,
@@ -2496,7 +2493,6 @@
      -142.77113,
      59.5933
     ],
-    "ship_detections": [],
     "vh_contrast_db": 0.039,
     "vh_mean_depth_db": 1.261,
     "solidity": 0.332,
@@ -2730,7 +2726,6 @@
      -142.65028,
      59.56293
     ],
-    "ship_detections": [],
     "vh_contrast_db": -0.073,
     "vh_mean_depth_db": 1.351,
     "solidity": 0.449,
@@ -2860,7 +2855,6 @@
      -142.70598,
      59.59621
     ],
-    "ship_detections": [],
     "vh_contrast_db": 0.029,
     "vh_mean_depth_db": 1.124,
     "solidity": 0.549,
@@ -3050,7 +3044,6 @@
      -142.75785,
      59.59783
     ],
-    "ship_detections": [],
     "vh_contrast_db": -0.088,
     "vh_mean_depth_db": 1.212,
     "solidity": 0.464,
@@ -3212,7 +3205,6 @@
      -142.73437,
      59.60115
     ],
-    "ship_detections": [],
     "vh_contrast_db": 0.038,
     "vh_mean_depth_db": 1.436,
     "solidity": 0.46,
@@ -3346,7 +3338,6 @@
      -142.66634,
      59.55447
     ],
-    "ship_detections": [],
     "vh_contrast_db": -0.122,
     "vh_mean_depth_db": 1.48,
     "solidity": 0.545,
@@ -3484,7 +3475,6 @@
      -142.69106,
      59.55261
     ],
-    "ship_detections": [],
     "vh_contrast_db": 0.129,
     "vh_mean_depth_db": 1.085,
     "solidity": 0.579,
@@ -3610,7 +3600,6 @@
      -142.65879,
      59.55245
     ],
-    "ship_detections": [],
     "vh_contrast_db": 0.088,
     "vh_mean_depth_db": 1.361,
     "solidity": 0.611,
@@ -4048,7 +4037,6 @@
      -142.65012,
      59.55483
     ],
-    "ship_detections": [],
     "vh_contrast_db": -0.069,
     "vh_mean_depth_db": 1.468,
     "solidity": 0.435,
