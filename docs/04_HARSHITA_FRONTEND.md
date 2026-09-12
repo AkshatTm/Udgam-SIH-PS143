@@ -378,7 +378,7 @@ Part C, C1 through C8. Then C9 — test on a stranger, watch, fix.
 8.1 Run on the actual demo laptop. Re-measure frame times with all seven cases loaded.
 8.2 **Run with wifi off.** If the basemap style is remote, vendor it locally or drop the basemap.
 8.3 Fix the bundle re-download on case switch-back — with seven cases it will bite.
-8.4 Record the fallback video, on the demo machine, **before** the freeze.
+8.4 Record the fallback video on the demo machine, and re-record it whenever the build shown changes.
 
 ## PHASE 9 — Integration alongside Akshat
 He drives the pipeline side of each case; you drive the frontend side. When a bundle looks wrong on screen, you diagnose whether it is a render bug or a data bug and route it to the right owner. **Never patch data in the frontend** — surface the error, name the file, tell Akshat. A frontend workaround hides the bug until demo day and then it is someone else's.
@@ -405,7 +405,7 @@ He drives the pipeline side of each case; you drive the frontend side. When a bu
 
 # PART G — REFERENCE
 
-**G1. Stack, fixed.** Next.js · MapLibre GL JS (no token) · deck.gl `ScatterplotLayer` + `BitmapLayer` · Tailwind · Recharts · Zustand. **No localStorage or sessionStorage** — all state in memory. No new dependencies after the freeze.
+**G1. Stack, fixed.** Next.js · MapLibre GL JS (no token) · deck.gl `ScatterplotLayer` + `BitmapLayer` · Tailwind · Recharts · Zustand. **No localStorage or sessionStorage** — all state in memory. A new dependency is pinned and announced to the group.
 
 **G2. Performance rules.** Parse each bundle once; consider `Float32Array` for particle positions. Slider state feeds the deck layer only, never re-renders the map container. `updateTriggers` on data change. No per-frame allocation. Escape hatches if it ever stutters: decimate to every 2nd timestep, or 2000 particles — both invisible to a viewer, and **neither changes the schema**.
 
@@ -424,4 +424,4 @@ He drives the pipeline side of each case; you drive the frontend side. When a bu
 - [ ] Self-guiding pass complete, including idle reset — and tested on a stranger
 - [ ] All seven cases load and switch without re-download
 - [ ] Verified on the demo laptop **with wifi off**
-- [ ] Fallback video recorded before the freeze
+- [ ] Fallback video recorded of the build being demoed

@@ -306,15 +306,16 @@ Never pretend CleanSeaNet or Cerulean don't exist. Master §7 has the three resp
 
 ---
 
-## PHASE 7 — Freeze and demo day
+## PHASE 7 — Demo prep and demo day
 
-### 7.1 Freeze, twelve hours before 15 Sept 17:00
+### 7.1 The demo machine runs the latest validated `main`
+Work continues on `main` up to the demo. Before anything reaches the demo machine:
 ```bash
-git checkout -b demo && git push -u origin demo
+git pull && python scripts/validate_case.py cases/
 ```
-Demo machine runs `demo` and never pulls again. `main` may keep moving. **No exceptions, including for you** — your own runbook names the night-before improvement as the most common way strong teams lose demos.
+A pull that changes what is shown means re-running 7.2 on that machine.
 
-### 7.2 Freeze checklist
+### 7.2 Demo-prep checklist
 - [ ] All seven bundles present, `validate_case.py` PASS on each
 - [ ] App runs on the demo machine **with wifi off**
 - [ ] Every case loads, every layer toggles, the slider scrubs, every panel populates
@@ -447,7 +448,7 @@ A short sync between the two of you every time a bundle changes state. Not a mee
 
 **F4b. The blind evaluation quietly erodes.** Under pressure someone asks "is this right?" and you answer. Then the claim is gone and you cannot get it back. Hold it.
 **F5. Numbers change under you.** A re-verified scene changes the ocean, which changes the origin, which changes the suspects, which changes the deck. Log every change in `_INTEGRATION.md` and re-check the slides.
-**F6. Freeze slips.** An unrehearsed better demo loses to a rehearsed worse one.
+**F6. An unvalidated change reaches the demo machine.** Every pull onto it is followed by the validator and the click path (Phase 7.1).
 
 ---
 
@@ -482,4 +483,4 @@ python pipeline/export/build_case.py --case <id>
 - [ ] `verification.json` written by hand for every case that has one
 - [ ] `receipts.md` complete, including the CC-BY attribution
 - [ ] All seven bundles validated **and** signed off by Harshita in the browser
-- [ ] Deck done, two rehearsals, freeze executed, fallback video exists
+- [ ] Deck done, two rehearsals, demo-prep checklist run, fallback video exists

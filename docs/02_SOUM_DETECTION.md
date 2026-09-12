@@ -489,7 +489,7 @@ python scripts/validate_case.py cases/case-ennore-2017
 ```
 
 ## E2. Environment
-`numpy scipy opencv-python scikit-image scikit-learn rasterio shapely matplotlib` plus PyTorch or TensorFlow with CUDA for Phases 3-4. **No new dependencies get added to `requirements.txt` after the freeze** — pin the DL framework now if you are adding one.
+`numpy scipy opencv-python scikit-image scikit-learn rasterio shapely matplotlib` plus PyTorch or TensorFlow with CUDA for Phases 3-4. **Any new dependency is pinned with its justification next to it and announced to the group.**
 
 ## E3. Escalate to Akshat (45-minute rule)
 Disk full, corrupt archive, a case delivered as PNG-only or VV-only, a real scene whose normalised statistics look nothing like the training distribution, or anything where you are about to change a contract field.

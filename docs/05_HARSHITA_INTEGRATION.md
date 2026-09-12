@@ -158,8 +158,8 @@ Your first diagnostic question, always. Getting this wrong wastes two people's t
 6.3 Re-measure frame times with all eight cases loaded. You verified 60 fps at 3000 × 97 under software rendering; confirm it holds here.
 6.4 Close everything else, disable notifications and auto-updates, display never sleeps, power plugged in, one browser window, no other tabs.
 6.5 Full click-path check across all eight cases.
-6.6 **Record the fallback video on this machine, before the freeze.** Full demo run, screen capture. Save locally and on a phone. This is the thing that always gets skipped and it is the only thing that saves you if the laptop dies.
-6.7 At freeze: check out `demo`, never pull again.
+6.6 **Record the fallback video on this machine.** Full demo run, screen capture. Save locally and on a phone. Re-record it whenever the build shown changes. This is the thing that always gets skipped and it is the only thing that saves you if the laptop dies.
+6.7 Before each pull onto the demo machine: `validate_case.py cases/` PASSES, and the click path is re-run after pulling.
 
 ## PHASE 7 — Demo day
 7.1 **You drive the laptop** so Akshat can face the judges and gesture at the screen.
@@ -205,5 +205,5 @@ Your first diagnostic question, always. Getting this wrong wastes two people's t
 - [ ] Gallery ordered, thumbnails and badges verified
 - [ ] Demo machine set up, verified **with wifi off**, frame times re-measured
 - [ ] Click path run across all eight cases on the demo machine
-- [ ] Fallback video recorded before the freeze
-- [ ] `demo` branch checked out at freeze and never pulled again
+- [ ] Fallback video recorded of the build being demoed
+- [ ] Click path re-run on the demo machine after its last pull

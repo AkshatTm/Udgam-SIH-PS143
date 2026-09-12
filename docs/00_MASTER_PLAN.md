@@ -221,7 +221,7 @@ Violating these is how the project dies. They are in `CLAUDE.md` too.
 5. **`origin.json` grid row 0 is NORTH.**
 6. **`origin.bounds` is not `bounds.json`.** They are different rectangles.
 7. **`null` ≠ `0`.** A not-applicable score is `null`; a measured zero is `0`. Rendering one as the other is an honesty bug.
-8. Python 3.11 + venv, pinned. Node 20 for `web/`. **No new dependencies after the pipeline is assembling; none at all after the freeze.**
+8. Python 3.11 + venv, pinned. Node 20 for `web/`. **A new dependency is pinned with its justification written next to it, and announced to the group.**
 
 ---
 
@@ -455,7 +455,7 @@ Order is presentation order, strongest first. **The frontend never hardcodes a c
 
 | Person | Owns | Primary AI |
 |---|---|---|
-| **Akshat** | Contracts, case selection, **2-band GEE exports**, `verification.json`, the exporter, the validator, integration (producer side), deck, freeze | Claude ×2, Codex |
+| **Akshat** | Contracts, case selection, **2-band GEE exports**, `verification.json`, the exporter, the validator, integration (producer side), deck, demo prep | Claude ×2, Codex |
 | **Soum** | Stage 1 entire: scene classifier, U-Net, classical features, ship detections, chronic/acute | Claude, Codex, Antigravity |
 | **Anushka** | Stage 2 entire: integrator, ensemble, origin, **age estimation**, forward drift, coastline, OpenDrift comparison | Claude |
 | **Jaiveer** | Stage 3 entire: AIS, scoring, dark vessels, **infrastructure**, traffic prior, repeat offenders, evaluation curve | Claude, Codex |
@@ -621,7 +621,7 @@ Honest caveat to state alongside it: a vessel dark to Cerulean's **commercial** 
 5. **Fresh AI chat per phase or bug.** Log to `docs/updates/<name>.md` after each phase.
 6. **Post checkpoint artefacts in the group** as they happen. Three people finished major work the team could not see because images were never posted.
 7. **Push daily.** `main` carrying two commits while four branches hold the project is the highest-probability catastrophic risk here.
-8. **Freeze twelve hours before 15 Sept 17:00.** `demo` branch, demo machine runs only that, fallback video recorded **before** the freeze, two rehearsals. No exceptions, including Akshat.
+8. **Demo prep before 15 Sept 17:00.** The demo machine runs the latest validated `main`, the fallback video is recorded on it, and two rehearsals happen on it. Every bundle shown must PASS the validator.
 
 ---
 
@@ -638,7 +638,7 @@ Honest caveat to state alongside it: a vessel dark to Cerulean's **commercial** 
 | Read Dasari et al. 2021 and resolve the Ennore contradiction (D18) | Akshat | whether Ennore returns to the library | medium |
 | Project name | Urooz | deck, UI header, repo | medium |
 | Deployment cost figure for national coverage | Akshat | a Q&A answer | low |
-| `docs/receipts.md` complete | Akshat | the "is this real?" question | before freeze |
+| `docs/receipts.md` complete | Akshat | the "is this real?" question | before the demo |
 
 ## Deliberately not building
 Repeat-offender tracking at scale · polarimetric decomposition · multi-pass age estimation · live API · auth and multi-user · offline mode. **Stating scope decisions confidently reads as engineering judgement; being caught by them reads as gaps.**
