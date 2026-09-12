@@ -62,6 +62,60 @@ def circle(lon, lat, radius_km, n=180):
     return lon + dlon * np.cos(th), lat + dlat * np.sin(th)
 
 
+class WrongCase(SystemExit):
+    """Raised when out/ holds a different case's run than the one being plotted."""
+
+
+def assert_belongs_to_case(case_id, origin, parts, src):
+    """Refuse to plot one case's cloud under another case's name.
+
+    THE BUG THIS EXISTS FOR (2026-09-12). `out/origin.json` and `out/particles.json` are NOT
+    case-scoped: run.py writes them to a single shared directory, so every case overwrites the
+    last. Meanwhile --case here controls the FIELD, the SLICK OUTLINE and the OUTPUT FILENAME.
+    So `plot_heatmap.py --case case-jacksonville-2024` cheerfully rendered a leftover Ennore
+    cloud -- centroid 80.6 E, 13.7 N -- on Jacksonville's field at -79.6 W, and wrote it to
+    heatmap_case-jacksonville-2024.png. 160 degrees of longitude apart, and nothing tripped.
+
+    This is the same shape as the `--case case-gulf-2019` cache mixup that cost an evening on
+    2026-09-07: an argument that labels the output without selecting the data. That one was
+    fixed by re-deriving the box and time from the bundle and refusing a cache that disagreed.
+    This is the same fix applied to the plot.
+
+    Two checks, both from guarantees the contract already makes:
+      1. CONTRACTS.md 6.4 -- particles.t0 must match meta.detection_time within 60 s. Seven
+         years apart is not a rounding error.
+      2. The origin centroid has to sit inside the field box the particles were integrated
+         through. It cannot be somewhere the field does not exist.
+    """
+    meta_path = REPO / "cases" / case_id / "meta.json"
+    if not meta_path.exists():
+        raise WrongCase(f"no meta.json for {case_id} at {meta_path}")
+    meta = json.loads(meta_path.read_text())
+    want = datetime.fromisoformat(meta["detection_time"].replace("Z", "+00:00"))
+    got = datetime.fromisoformat(str(parts["t0"]).replace("Z", "+00:00"))
+    if abs((got - want).total_seconds()) > 60:
+        raise WrongCase(
+            f"{src / 'particles.json'} was produced for t0 {got:%Y-%m-%dT%H:%M:%SZ}, but "
+            f"{case_id}'s detection_time is {want:%Y-%m-%dT%H:%M:%SZ}.\n"
+            f"  out/ is NOT case-scoped -- it still holds a different case's run, and plotting "
+            f"it would label that cloud {case_id}.\n"
+            f"  Run the case first:\n"
+            f"    python pipeline/drift/run.py --case {case_id} --real --particles 3000 --runs 50")
+
+    clon, clat = float(origin["centroid"][0]), float(origin["centroid"][1])
+    b = json.loads((REPO / "cases" / case_id / "bounds.json").read_text())
+    # generous: the origin legitimately sits mostly OFF the SAR scene, so allow 5 degrees
+    pad = 5.0
+    if not (b["west"] - pad <= clon <= b["east"] + pad
+            and b["south"] - pad <= clat <= b["north"] + pad):
+        raise WrongCase(
+            f"origin centroid ({clon:.4f}, {clat:.4f}) is nowhere near {case_id}, whose scene "
+            f"box is [W {b['west']}, S {b['south']}, E {b['east']}, N {b['north']}].\n"
+            f"  An origin cloud sitting mostly off-scene is normal and expected; being on "
+            f"another ocean is not.\n"
+            f"  out/ holds a different case's run.")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Phase 3 checkpoint: the origin cloud")
     ap.add_argument("--case", default="case-000")
@@ -77,6 +131,7 @@ def main():
     src = Path(a.src) if a.src else HERE / "out"
     origin = json.loads((src / "origin.json").read_text())
     parts = json.loads((src / "particles.json").read_text())
+    assert_belongs_to_case(a.case, origin, parts, src)
     grid = np.asarray(origin["values"], dtype=float).reshape(origin["shape"])
     b = origin["bounds"]
     clon, clat = origin["centroid"]
@@ -154,6 +209,15 @@ def main():
         f"{nonzero:.0f}% of the grid carries >5% probability",
         fontsize=10.5)
 
+    # Where did the origin land relative to the slick? The one number that says whether the
+    # rewind went upstream or downstream, which is the check that actually matters.
+    seed0 = pos[0]
+    slick_c = (float(seed0[:, 0].mean()), float(seed0[:, 1].mean()))
+    dx = (clon - slick_c[0]) * np.cos(np.deg2rad(clat)) * KM_PER_DEG
+    dy = (clat - slick_c[1]) * KM_PER_DEG
+    sep_km = float(np.hypot(dx, dy))
+    bearing = float((np.degrees(np.arctan2(dx, dy)) + 360.0) % 360.0)
+
     out = Path(a.out) if a.out else HERE / "out" / f"heatmap_{a.case}.png"
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
@@ -162,8 +226,15 @@ def main():
     print(f"  centroid ({clon:.4f}, {clat:.4f})  r50 {r50:.1f} km  r90 {r90:.1f} km  "
           f"abstain={origin['abstain']}")
     print(f"  release window {tw[0]} -> {tw[1]}  ({method})")
-    print("\n  Judge it: a coherent blob, in water, NORTH-EAST of the slick (upstream of a")
-    print("  southward current), tens of km wide. Anything else is a bug, not a finding.")
+    # The expected direction is PER CASE and lives in 03_ANUSHKA_DRIFT.md Phase 5.3. It used
+    # to be hardcoded here as "NORTH-EAST ... upstream of a southward current", which is
+    # Ennore's answer printed for every case -- worse than useless under the blind protocol,
+    # because it tells you what to expect regardless of which case you ran.
+    print(f"\n  Judge it: a coherent blob, in water, tens of km wide, and UPSTREAM of the")
+    print(f"  slick for THIS case's current regime -- work out which way that is from the")
+    print(f"  quiver before you look, not after. Expected direction per case: Phase 5.3.")
+    print(f"  Slick centre ({slick_c[0]:.4f}, {slick_c[1]:.4f}) -> origin "
+          f"({clon:.4f}, {clat:.4f}): bearing {bearing:.0f} deg, {sep_km:.1f} km.")
     return 0
 
 
