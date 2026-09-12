@@ -20,6 +20,103 @@ docs/updates/anushka.md. Read the top entry and tell me where I left off."*
 
 ---
 
+## [2026-09-12 00:00] Phase 1 — age estimation (Part C)
+
+**Done:** Built `pipeline/drift/age.py`, implementing Part C of the brief: C3.1 shear
+dispersion, C3.2 Fay spreading, C3.3 elongation-under-shear, C3.4 weathering flag, and the C4
+combine rules. It patches `age_hours`, `age_method`, `age_weathering` and `age_estimators` into
+`out/origin.json`, and writes full diagnostics to `out/age_<case>.json`, which stays out of the
+case bundle. `pipeline/drift/age_tests.py` adds suite 6 (17 assertions), wired into
+`tests.py`. Suite is now 6/6, 37/37.
+
+Three departures from the brief's Part C are documented in `docs/STAGE2_AGE_DECISION_BRIEF.md`
+and await Akshat's ratification:
+- (a) C3.1 matches major-axis length, not area, because a 2D incompressible flow preserves a
+  cloud's area.
+- (b) C3.3 uses the exact patch-aspect inversion `St = sqrt(a + 1/a - 2)` instead of
+  `sqrt(1 + (St)^2)`, which is about 3.2x shorter.
+- (c) C3.2 requires an independently reported release volume and returns a regime verdict
+  rather than an age at SAR scale.
+
+Also added a field-time-coverage guard that drops candidate ages outside the cached field's
+span, because `fetch_fields.py`'s 30 h window yields only ~24 h of daily HYCOM coverage.
+
+**Files touched:** `pipeline/drift/age.py` (new) · `pipeline/drift/age_tests.py` (new) ·
+`pipeline/drift/tests.py` (modified, wires in suite 6) · `docs/STAGE2_AGE_DECISION_BRIEF.md`
+(new) · `docs/STAGE2_COMPONENT_REPORT.md` (new)
+
+**Run command:**
+```bash
+python pipeline/drift/age.py --case <id> --real [--volume-m3 N]
+```
+Expected output: patched `out/origin.json` with `age_hours`/`age_method`/`age_weathering`/
+`age_estimators`, plus `out/age_<case>.json` diagnostics.
+
+**Checkpoint artefact:** `python pipeline\drift\tests.py` → `6/6 tests passed (37/37
+individual assertions)`.
+
+**Open issues:**
+- 1.6 validation not run yet (blind protocol — bands first).
+- `age_hours` emits `null` when no estimator fires, which may not satisfy the validator's new
+  `[low, high]` check.
+- `combine_bands` can return a degenerate band when two estimators touch at a single point.
+
+**Next:** run 1.6 validation against `scripts/validate_case.py`, then get Akshat's ratification
+on the three Part C departures above.
+
+---
+
+## [2026-09-07 23:10] Silent-fallback bug: a case that does not exist got another case's ocean  🐛→✅
+
+**Found by running `--case case-gulf-2019` before that bundle existed.** Both `check_gee.py`
+and `fetch_fields.py` fell back to the hardcoded Ennore defaults, downloaded **January 2017
+Bay of Bengal** water, and cached it as `data/fields/case-gulf-2019.npz`. Everything printed
+PASS. The field statistics looked like a real ocean, because they were one.
+
+**Why this was the dangerous kind of wrong.** Nothing in the cache revealed the swap:
+`fetch_fields.py` writes `case_id=<what you typed>`, so the file said "case-gulf-2019" inside
+as well as outside. `run.py --real` loads whatever `data/fields/<case>.npz` holds. Had the
+real Gulf bundle landed a day later, the cache would already have been there, `--force` would
+never have been passed, and Stage 2 would have rewound a Gulf of Mexico slick through
+Coromandel coast currents from seven years earlier — and handed Stage 3 a perfectly plausible
+origin cloud. No crash, no NaN, no warning. This is the exact failure mode this component
+exists to defend against, one directory up from the physics.
+
+### Fixed three ways
+
+| Fix | File | Behaviour now |
+|---|---|---|
+| A named case must exist | `check_gee.py` (`load_case_window`, used by both scripts) | Missing `meta.json` is a hard stop naming the directory. The Ennore defaults survive **only** for `check_gee.py` with no `--case`, which is an auth smoke test, not a case run |
+| The cache must prove it belongs to the case | `fields.py` (`load_case_field`) | Re-derives box and time from `meta.json` + `bounds.json` and refuses a cache whose `t0` differs by >60 s, or whose bbox does not contain the scene. Also catches a **stale** cache after a scene, bounds or detection_time change |
+| Fail before the network, not after | `fetch_fields.py` | Case resolved before `import ee` / `ee.Initialize()`, so a typo costs a second instead of an auth round trip |
+
+### Verified by forging bad caches, not by reasoning about them
+
+```
+named case with no bundle      -> stops, names the directory, refuses to substitute
+cache dated 2019 vs case 2017  -> "This cache is a different ocean than the case needs"
+cache boxed on the Gulf        -> "covers [W -91.0 ...] which does not contain case-000's scene"
+wider box, same place and time -> correctly ALLOWED (a superset is a valid cache)
+```
+
+Tests still 5/5, 20/20. `--real` on case-000 still reproduces
+`origin (80.6210, 13.6997) r50=8.8 r90=17.3` exactly — the guards add no drift.
+
+### Also fixed, same run
+
+`check_gee.py`'s HYCOM sample-value message ended with a leftover **"Divide by 100 in the
+loader, once."** immediately after the corrected sentence telling you to divide by 1000. The
+2026-09-07 unit correction missed the trailing line. It printed on every preflight PASS, and
+it is the single sentence most likely to be copied by someone in a hurry. Removed.
+
+### Left for a human
+
+`data/fields/_to_delete/case-gulf-2019.npz` — the bogus cache, moved aside rather than
+deleted (the workspace cannot delete inside the repo). `data/` is gitignored, so it is
+invisible to git; delete the folder when convenient.
+
+---
+
 ## [2026-09-07 22:20] Phase 3 — backward ensemble, origin cloud, the handoff files  ✅
 
 **Done:** Stage 2 now produces the two files the rest of the project consumes, from the real
