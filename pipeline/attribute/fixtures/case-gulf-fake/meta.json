@@ -1,0 +1,13 @@
+{
+  "case_id": "case-gulf-fake",
+  "title": "FAKE \u2014 Galveston test origin (Stage 3 development fixture)",
+  "satellite": "Sentinel-1A (fake)",
+  "scene_id": "FAKE-GULF",
+  "detection_time": "2023-01-25T23:00:00Z",
+  "acts_available": [
+    "detect",
+    "trace",
+    "attribute"
+  ],
+  "notes": "Synthetic. Never shown to a judge. Written by pipeline/attribute/make_fake_case.py so Stage 3 scoring can be built and tested against US AIS before the real US origin exists."
+}
