@@ -172,6 +172,81 @@ shift is attributable rather than sampling.
 
 ---
 
+## 8.8 The direction check — and the case where the brief's oceanography does not apply
+
+Phase 5.3 calls this *"the single most effective check you have, because a wrong origin looks
+exactly like a right one."* Run on all six fetched caches. Drift sampled at the scene centre,
+`current + 0.03 × wind`, averaged over the 24 h rewind window.
+
+| case | current | wind | 0.03×wind | wind share | **origin** | brief predicted |
+|---|---|---|---|---|---|---|
+| `case-jacksonville-2024` | 1.688 | 1.74 | 0.052 | **3%** | **SSW 199°** | SW ✅ |
+| `case-farallones-2023` | 0.247 | 5.19 | 0.156 | 39% | **N 359°** | N ✅ |
+| `case-huntington-2021` | 0.073 | 1.06 | 0.032 | 30% | SE 136° | deliberately unclear |
+| `case-gulf-alaska-2023` | 0.041 | 5.73 | 0.172 | **81%** | **W 265°** | E ❌ |
+| `case-mumbai-2023` | 0.149 | 2.52 | 0.076 | 34% | NNW 337° | ? |
+| `case-jamnagar-2024` | 0.081 | 3.86 | 0.116 | 59% | NW 312° | ? |
+
+**Gulf of Alaska is not a flipped sign, and the code is not wrong.** The brief predicted an origin
+to the east because the Alaska Current runs west. That current is *not in the field at this scene*:
+its 24 h mean is **0.041 m/s** — 3.5 km/day, indistinguishable from still water — and its
+instantaneous direction wanders N → NNE → NW → NNW across the window with no preferred heading.
+What sets the answer is a **persistent easterly 4.2–6.5 m/s wind, holding E/ESE at every one of nine
+3-hourly samples**, contributing 81% of the drift vector. A basin-scale current climatology does not
+predict a 9 km HYCOM cell on one afternoon. **Verify with Akshat before the deck: the prediction and
+the measurement are answering different questions, and the measurement is the one we ship.**
+
+### The wind coefficient decides Alaska's answer — but its calibration does not
+
+| | k=0.000 | k=0.025 | k=0.030 | k=0.035 | swing across the ensemble range |
+|---|---|---|---|---|---|
+| `case-jacksonville-2024` | SSW 199° | SSW 199° | SSW 199° | SSW 199° | **0°** |
+| `case-farallones-2023` | NNE 16° | N 1° | N 359° | N 357° | **2°** |
+| `case-huntington-2021` | ESE 110° | SE 132° | SE 136° | SE 141° | **5°** |
+| `case-gulf-alaska-2023` | S 183° | W 262° | W 265° | W 267° | **3°** |
+| `case-mumbai-2023` | N 356° | NNW 339° | NNW 337° | NNW 335° | **2°** |
+| `case-jamnagar-2024` | NNW 330° | NW 314° | NW 312° | NW 311° | **1°** |
+
+This is the reassuring half. Across U(0.025, 0.035) — the honest range the ensemble already samples —
+**the origin direction moves by at most 5° on any case.** Dropping the wind term entirely swings
+Alaska by **82°** and Huntington by **26°**. So on the wind-dominated cases it is the *existence* of
+the 3% term that decides the answer, not its calibration, and the ensemble's spread is not hiding a
+directional coin-flip.
+
+### Two cases cannot carry a direction claim
+
+Sampling the same field at t0 instead of over the window:
+
+| case | t0 instant | 24 h mean | disagreement |
+|---|---|---|---|
+| `case-jacksonville-2024` | SSW 200° | SSW 199° | **1°** |
+| `case-farallones-2023` | N 359° | N 359° | **0°** |
+| `case-gulf-alaska-2023` | WSW 248° | W 265° | 17° |
+| `case-mumbai-2023` | NW 318° | NNW 337° | 18° |
+| `case-jamnagar-2024` | N 1° | NW 312° | **49°** |
+| `case-huntington-2021` | W 279° | SE 136° | **143°** |
+
+**Huntington reverses.** A single point sample says the origin is west; the window mean says
+south-east. At 0.073 m/s current in a bay that is **53% land**, there is no direction to claim — which
+makes it the honest case for the coastline guard (D7) and stranding, and *not* a case to show a
+heatmap arrow on. Jamnagar's 49° is the same effect, milder.
+
+**Consequence for §8.5's error budget.** The ranking — current resolution #1, wind coefficient #2 —
+holds averaged over the library and on the hero case, where wind is 3% of Jacksonville's drift. It
+**inverts** on Alaska and Jamnagar, where the current field is too weak to resolve anything and the
+wind is effectively the whole signal. Quote the ranking as a library average, not a per-case law.
+
+**Only Jacksonville and Farallones are direction-stable enough to put a bearing on a slide** (1° and
+0° across sampling, 0° and 2° across the coefficient range). Both match their prediction.
+
+### Reproducing 8.8
+
+```bash
+python pipeline/drift/plot_quiver.py --case <id>     # the field, per case
+```
+
+---
+
 ## The demo sentence
 
 > *"We don't claim a point. We claim a probability field whose spread we measured by running the
