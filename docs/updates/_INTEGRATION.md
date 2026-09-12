@@ -85,10 +85,11 @@ certainly written from a cached copy of the docs rather than the files actually 
 pushed to `origin/main` before this was caught.
 
 **What it actually broke, not just "was out of date":**
-- **Reintroduced the vessel names *Menuett* and *Panagia Thalass…* directly into the shared,
-  pushed Master Plan** (table row + prose, cases 1 and 2) and into Anushka's doc. Case 2 is the
-  **headline blind result** (D31) — this is a live blind-evaluation leak in a document the whole
-  team reads, not a cosmetic staleness issue.
+- **Reintroduced the case-1 and case-2 vessel names directly into the shared, pushed Master Plan**
+  (table row + prose, both cases) and into Anushka's doc. Case 2 is the **headline blind result**
+  (D31) — this is a live blind-evaluation leak in a document the whole team reads, not a cosmetic
+  staleness issue. (Not repeating the names here either, on the same principle — see
+  `docs/ANSWERS.md` if you need them.)
 - **Reintroduced Jaiveer's original `trajectory` spec** ("compare course to the bearing toward the
   origin *at closest approach*") as current guidance in `06_JAIVEER_AIS.md`, after it had been
   found geometrically unsatisfiable, fixed, and blessed (D27). Anyone re-reading that doc for the

@@ -10,8 +10,8 @@
 `origin/main` before this session) had silently overwritten `00_MASTER_PLAN.md`,
 `01_AKSHAT_INTEGRATION.md`, `03_ANUSHKA_DRIFT.md`, `04_HARSHITA_FRONTEND.md`,
 `05_HARSHITA_INTEGRATION.md` and `06_JAIVEER_AIS.md` with a stale pre-v4 snapshot — deleting D23–
-D31, **reintroducing the vessel names *Menuett* and *Panagia Thalass…* into the shared Master
-Plan** (a live blind-eval leak on case 2, the headline blind result), and reintroducing Jaiveer's
+D31, **reintroducing the case-1 and case-2 vessel names into the shared Master Plan** (not
+repeated here either; a live blind-eval leak on case 2, the headline blind result), and reintroducing Jaiveer's
 already-fixed, geometrically-broken `trajectory` spec as current guidance. Reverted six files to
 `e1379b9` (exact match, verified by diff), kept `02_SOUM_DETECTION.md`'s genuine improvement from
 that commit, verified zero vessel-name hits outside `docs/ANSWERS.md`, committed (`084d4c2`) and
@@ -156,8 +156,8 @@ Zero schema errors, zero warnings.
   `verification/README.md`.
 - **Case 8 needs Soum's no-spill nomination** — scaffolded, held out of `index.json` so the gallery
   cannot 404.
-- **Confirm the case-1 vessel flag.** The old note says CHN with MMSI `563082600`, but MID 563 is
-  **Singapore**. Settle it on the slick page before it reaches a slide.
+- ~~Confirm the case-1 vessel flag~~ — **done 2026-09-12**, see the entry above. `ANSWERS.md` had
+  the old note down as CHN, which didn't match its own MID; corrected to Singapore.
 - `acts_available` is `["detect"]` on every case by design — add acts as stages land, so no bundle
   ever claims a screen it cannot render.
 

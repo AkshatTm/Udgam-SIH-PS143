@@ -6,10 +6,10 @@ fetch_cerulean.py — pull a slick record from SkyTruth Cerulean's public API. O
     python scripts/fetch_cerulean.py --search --bbox -80.2 30.0 -79.1 30.8 --date 2024-07-30
 
     # fetch one slick into a case bundle
-    python scripts/fetch_cerulean.py --case case-menuett-2024 --slick 3046293
+    python scripts/fetch_cerulean.py --case case-jacksonville-2024 --slick 3046293
 
     # ...and show the sealed attribution (Akshat's terminal ONLY)
-    python scripts/fetch_cerulean.py --case case-menuett-2024 --slick 3046293 --answers
+    python scripts/fetch_cerulean.py --case case-jacksonville-2024 --slick 3046293 --answers
 
 Cerulean's API is a public OGC Features service — no key, no auth, no registration
 (decision D23). Collection `public.slick_plus` carries, per detection: the FULL Sentinel-1
@@ -32,7 +32,7 @@ Two other things worth knowing:
   * `public.slick_to_source` and `public.source_vessel` return 403. Vessel names, flags and
     IMOs come from the per-slick web page (`slick_url`), not from this API.
   * One Sentinel-1 scene often carries several slicks. Match on length and area against
-    Master Plan section 3.2 before you commit a slick id to a case — Panagia's scene has four.
+    Master Plan section 3.2 before you commit a slick id to a case — case 2's scene has four.
 """
 import argparse
 import json
@@ -195,7 +195,7 @@ def main():
     ap.add_argument("--bbox", nargs=4, type=float, metavar=("W", "S", "E", "N"))
     ap.add_argument("--date", help="YYYY-MM-DD (search mode)")
     ap.add_argument("--limit", type=int, default=20)
-    ap.add_argument("--case", help="case id, e.g. case-menuett-2024")
+    ap.add_argument("--case", help="case id, e.g. case-jacksonville-2024")
     ap.add_argument("--slick", type=int, help="Cerulean slick id")
     ap.add_argument("--pad", type=float, default=DEFAULT_PAD_DEG,
                     help=f"degrees of padding on the export box (default {DEFAULT_PAD_DEG})")

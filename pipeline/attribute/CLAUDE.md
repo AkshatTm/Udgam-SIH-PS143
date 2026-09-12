@@ -32,7 +32,7 @@ Full brief: `docs/06_JAIVEER_AIS.md`. Contracts: `docs/00_MASTER_PLAN.md` Part 6
   - `gap` — only when the vessel was under way on **both** sides of the silence. 64% of gap
     hits are docked boats.
   - `gap` — also discarded when the last report before the silence sits **on the search-box
-    boundary**. Measured on the Menuett box: 5 of 11 "silences" were vessels leaving the
+    boundary**. Measured on case 1's box: 5 of 11 "silences" were vessels leaving the
     rectangle and returning, one of them apparently dark for 23 hours. Leaving the box is not
     going dark.
   - `slowdown` — scoped to the closest approach, compared against an **under-way median**
