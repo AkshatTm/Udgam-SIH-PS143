@@ -9,8 +9,8 @@ import {
   YAxis,
 } from "recharts";
 import { useAppStore } from "@/lib/store";
-import type { DetectionProperties } from "@/lib/contracts";
-import type { OriginBundle } from "@/lib/origin";
+import type { DetectionProperties, DischargeClass } from "@/lib/contracts";
+import type { AgeMethod, OriginBundle } from "@/lib/origin";
 import type {
   DarkVessel,
   ExcludedVessel,
@@ -148,6 +148,26 @@ function MetricRow({
   );
 }
 
+// docs/04 Phase 5.3 — discharge_class badge (Master §6.3). Plain language first, technical
+// enum second (C4), same convention as MetricRow. Renders the producer's value verbatim —
+// never a stronger claim, never a frontend-inferred category.
+const DISCHARGE_CLASS_PLAIN: Record<DischargeClass, string> = {
+  chronic: "Chronic discharge",
+  acute: "Acute discharge",
+  unknown: "Discharge type unknown",
+};
+
+function DischargeBadge({ value }: { value: DischargeClass }) {
+  return (
+    <div className="mt-1.5 inline-flex items-baseline gap-1.5 rounded border border-white/15 bg-white/[0.05] px-2 py-1">
+      <span className="text-[10px] font-semibold text-white/80">
+        {DISCHARGE_CLASS_PLAIN[value]}
+      </span>
+      <span className="font-mono text-[9px] text-white/35">{value}</span>
+    </div>
+  );
+}
+
 // ─── Detect stage card ────────────────────────────────────────────────────────
 
 function DetectionCard({ p }: { p: DetectionProperties }) {
@@ -176,6 +196,7 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
             ? `${Math.round(p.confidence * 100)}% confidence`
             : "— confidence"}
         </div>
+        {p.discharge_class && <DischargeBadge value={p.discharge_class} />}
       </div>
 
       <Divider />
@@ -280,6 +301,17 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
   );
 }
 
+// docs/04 Phase 5.3 — age_method plain-language labels (Master §6.5, C4). "none" and
+// "disagreement" are genuine estimator outcomes, not errors — worded as such, not hidden.
+const AGE_METHOD_LABEL: Record<AgeMethod, string> = {
+  shear: "Estimated from current shear",
+  fay: "Estimated from spreading rate",
+  elongation: "Estimated from slick elongation",
+  combined: "Combined estimate",
+  disagreement: "Estimators disagree — range widened",
+  none: "No estimator produced a result — using the search bracket",
+};
+
 // ─── Trace stage card ─────────────────────────────────────────────────────────
 
 function TraceCard({ origin }: { origin: OriginBundle }) {
@@ -374,6 +406,35 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
         <p className="mt-2 text-[10px] leading-relaxed text-white/45">
           Measured estimate
         </p>
+      )}
+
+      {/* docs/04 Phase 5.3 — estimated age (Master §6.5). ageHours and ageMethod are
+          independently optional (no invented pairing rule): each row renders only when its
+          own field is present, and the whole block hides when both are absent. */}
+      {(origin.ageHours || origin.ageMethod) && (
+        <>
+          <Divider />
+          <SectionLabel>Estimated age</SectionLabel>
+          {/* `relative` — see InfoDot.tsx: the tooltip anchors to this row, not the button. */}
+          <div className="relative mt-1.5 flex items-start gap-1">
+            <div className="flex-1">
+              {origin.ageHours && (
+                <div className="font-mono text-[13px] font-semibold text-white/90">
+                  {fmt(origin.ageHours[0], 0)} – {fmt(origin.ageHours[1], 0)} hours
+                </div>
+              )}
+              {origin.ageMethod && (
+                <div className="mt-0.5 text-[10px] text-white/45">
+                  {AGE_METHOD_LABEL[origin.ageMethod]}
+                </div>
+              )}
+            </div>
+            <InfoDot
+              align="right"
+              tip="How long ago the oil likely entered the water, estimated from how the slick has spread and sheared since release."
+            />
+          </div>
+        </>
       )}
 
       {/* Origin-confidence state. The two branches are genuinely distinct:
@@ -798,6 +859,7 @@ function AttributeCard({
 export default function ContextPanel() {
   const activeStage = useAppStore((s) => s.activeStage);
   const detections = useAppStore((s) => s.detections);
+  const detectionsPending = useAppStore((s) => s.detectionsPending);
   const selectedDetectionId = useAppStore((s) => s.selectedDetectionId);
   const origin = useAppStore((s) => s.origin);
   const originStatus = useAppStore((s) => s.originStatus);
@@ -820,7 +882,24 @@ export default function ContextPanel() {
   return (
     <aside className="flex w-72 shrink-0 flex-col overflow-y-auto border-l border-white/[0.08] bg-[#0b0f14] px-5 py-5">
       {activeStage === "detect" &&
-        (oilCount === 0 ? (
+        (detectionsPending ? (
+          // Stage 1 genuinely hasn't run for this case yet (loadCase.ts: a 404 on
+          // detections.geojson degrades to `detections: null` + `detectionsPending: true`,
+          // never a crash). `null` here means "not measured", never "measured as zero" — the
+          // D1 zero-oil branch below must not fire for this case, or it would claim a
+          // completed detection pass that never happened (the honesty rule, Master §5.7).
+          <div className="rounded border border-white/[0.08] bg-white/[0.03] p-3">
+            <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+              Stage 01 — Detect
+            </div>
+            <div className="mt-1 text-[15px] font-semibold leading-tight text-white/90">
+              Detection stage pending
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-white/55">
+              The scene is loaded, the detector hasn&apos;t run.
+            </p>
+          </div>
+        ) : oilCount === 0 ? (
           // D1 — a designed result, not an error (docs/04 Part D). Guide the judge to the
           // rejected look-alikes; their DetectionCard carries the "why not oil" evidence.
           <>

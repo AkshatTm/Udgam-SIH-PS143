@@ -130,6 +130,19 @@ const INFRASTRUCTURE_COLOR: [number, number, number, number] = [167, 139, 250, 2
 const INFRASTRUCTURE_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
 const INFRASTRUCTURE_RADIUS_PX = 7;
 
+// docs/04 Phase 5.3 — ship_detections (Master §6.3). Soum's RAW radar ship contacts nested per
+// detection feature — NOT the same list as suspects.json's `dark_vessels` (Jaiveer's already
+// AIS-cross-checked "no match" subset, Phase 3.5 above). This renders every candidate contact
+// the detector found, independent of any attribution result. Its own colour (teal) — unclaimed
+// by any existing layer (blue = vessel, amber = particle/origin, red = oil, grey =
+// look-alike/excluded, rose = dark vessel, violet = infrastructure).
+interface ShipDetectionMapItem {
+  position: LonLat;
+}
+const SHIP_DETECTION_COLOR: [number, number, number, number] = [45, 212, 191, 235];
+const SHIP_DETECTION_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
+const SHIP_DETECTION_RADIUS_PX = 6;
+
 const vesselTrackPath = (d: VesselMapItem): LonLat[] => d.path;
 const vesselTrackColor = (d: VesselMapItem): [number, number, number, number] => {
   switch (d.role) {
@@ -326,6 +339,39 @@ export default function MapView() {
       pickable: false,
     });
   }, [infrastructureItems]);
+
+  // docs/04 Phase 5.3 — ship_detections, flattened across every detection feature's own
+  // `ship_detections` list (Master §6.3). Independent of `selectedDetectionId` and of
+  // `acts_available` gating already applied upstream in loadCase.ts — `detections` is null on a
+  // D16 known-origin case, which this guards the same way `darkVesselItems`/`infrastructureItems`
+  // guard on a null `suspects`.
+  const shipDetectionItems = useMemo(() => {
+    if (!detections) return [] as ShipDetectionMapItem[];
+    const items: ShipDetectionMapItem[] = [];
+    for (const f of detections.features) {
+      for (const sd of f.properties.ship_detections ?? []) {
+        items.push({ position: [sd.lon, sd.lat] });
+      }
+    }
+    return items;
+  }, [detections]);
+
+  const shipDetectionLayer = useMemo(() => {
+    if (shipDetectionItems.length === 0) return null;
+    return new ScatterplotLayer<ShipDetectionMapItem>({
+      id: "ship-detections",
+      data: shipDetectionItems,
+      getPosition: (d) => d.position,
+      getFillColor: SHIP_DETECTION_COLOR,
+      getLineColor: SHIP_DETECTION_LINE_COLOR,
+      getRadius: SHIP_DETECTION_RADIUS_PX,
+      radiusUnits: "pixels",
+      lineWidthUnits: "pixels",
+      getLineWidth: 1.5,
+      stroked: true,
+      pickable: false,
+    });
+  }, [shipDetectionItems]);
 
   // Create the map exactly once.
   useEffect(() => {
@@ -540,10 +586,10 @@ export default function MapView() {
   }, [particles, particlesVisible, t]);
 
   // Push the composed list into the deck overlay. Order is bottom→top: origin bitmap, rings,
-  // vessel tracks, particles, dark-vessel markers, infrastructure markers (both point layers
-  // drawn last so neither is ever hidden under a track line). Runs only when one of the
-  // memoised pieces actually changes — never on a bare animation frame — and never re-renders
-  // the map container.
+  // vessel tracks, particles, dark-vessel markers, infrastructure markers, ship-detection
+  // markers (all three point layers drawn last so none is ever hidden under a track line).
+  // Runs only when one of the memoised pieces actually changes — never on a bare animation
+  // frame — and never re-renders the map container.
   useEffect(() => {
     overlayRef.current?.setProps({
       layers: [
@@ -552,9 +598,17 @@ export default function MapView() {
         particleLayer,
         darkVesselLayer,
         infrastructureLayer,
+        shipDetectionLayer,
       ],
     });
-  }, [originLayerList, vesselLayer, particleLayer, darkVesselLayer, infrastructureLayer]);
+  }, [
+    originLayerList,
+    vesselLayer,
+    particleLayer,
+    darkVesselLayer,
+    infrastructureLayer,
+    shipDetectionLayer,
+  ]);
 
   // SAR source follows the active case / bounds.
   useEffect(() => {

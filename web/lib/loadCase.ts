@@ -95,6 +95,8 @@ function validateBounds(b: Bounds, id: string): void {
   }
 }
 
+const DISCHARGE_CLASSES = ["chronic", "acute", "unknown"];
+
 function validateDetections(d: DetectionCollection, id: string): void {
   if (!d || d.type !== "FeatureCollection" || !Array.isArray(d.features)) {
     throw new Error(`${id}/detections.geojson: not a FeatureCollection with a features array`);
@@ -108,6 +110,31 @@ function validateDetections(d: DetectionCollection, id: string): void {
       throw new Error(
         `${id}/detections.geojson: ${p.id} has classification "${p.classification}" (expected oil|lookalike)`,
       );
+    }
+    // discharge_class (optional, docs/04 Phase 5.3) — chronic|acute|unknown.
+    if (p.discharge_class !== undefined && !DISCHARGE_CLASSES.includes(p.discharge_class)) {
+      throw new Error(
+        `${id}/detections.geojson: ${p.id} has discharge_class "${p.discharge_class}" (expected chronic|acute|unknown)`,
+      );
+    }
+    // ship_detections (optional, docs/04 Phase 5.3) — may be []. Same lon/lat swap-guard used
+    // everywhere else in this app, even on an optional field.
+    if (p.ship_detections !== undefined) {
+      if (!Array.isArray(p.ship_detections)) {
+        throw new Error(`${id}/detections.geojson: ${p.id}.ship_detections must be an array when present`);
+      }
+      p.ship_detections.forEach((sd, i) => {
+        if (typeof sd.lon !== "number" || !Number.isFinite(sd.lon) || sd.lon < -180 || sd.lon > 180) {
+          throw new Error(
+            `${id}/detections.geojson: ${p.id}.ship_detections[${i}].lon must be a finite number in [-180, 180]`,
+          );
+        }
+        if (typeof sd.lat !== "number" || !Number.isFinite(sd.lat) || sd.lat < -90 || sd.lat > 90) {
+          throw new Error(
+            `${id}/detections.geojson: ${p.id}.ship_detections[${i}].lat must be a finite number in [-90, 90]`,
+          );
+        }
+      });
     }
   }
 }

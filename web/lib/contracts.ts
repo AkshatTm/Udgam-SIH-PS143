@@ -74,11 +74,15 @@ export type Classification = "oil" | "lookalike";
 export type ShapeClass = "linear" | "blob";
 export type DischargeClass = "chronic" | "acute" | "unknown";
 
+/** Master §6.3, docs/04 Phase 5.3 — a raw radar ship contact near a detection (Soum's output).
+ *  `px_area`/`peak_db` are documented but not currently rendered by the frontend — only
+ *  position is used for the map marker, same "documented, optional, not all consumed" treatment
+ *  as `vessels.geojson`'s `n_points`/`max_gap_minutes`. */
 export interface ShipDetection {
   lon: number;
   lat: number;
-  px_area: number;
-  peak_db: number;
+  px_area?: number;
+  peak_db?: number;
 }
 
 export interface DetectionProperties {
@@ -90,9 +94,15 @@ export interface DetectionProperties {
   edge_gradient: number;
   contrast_db: number; // negative for a dark spot
   shape_class: ShapeClass;
+  /** Master §6.3, docs/04 Phase 5.3 — Soum's chronic/acute/unknown classification, feeding
+   *  Anushka's line-vs-point origin seeding on the producer side. Optional; absent hides the
+   *  badge — never inferred from geometry on the frontend. */
   discharge_class?: DischargeClass;
   centroid: LonLat;
-  /** Radar ship detections inside this feature. `[]` is valid and common. */
+  /** Master §6.3, docs/04 Phase 5.3 — raw radar ship contacts near this detection (Soum's
+   *  output). May be `[]` — valid and common. NOT suspects.json's `dark_vessels` (Jaiveer's
+   *  already AIS-cross-checked subset) — this is the unfiltered candidate set, rendered as its
+   *  own independent map layer. */
   ship_detections?: ShipDetection[];
 }
 

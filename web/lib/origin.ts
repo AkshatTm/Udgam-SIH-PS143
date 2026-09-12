@@ -10,6 +10,15 @@
 
 import type { GeoBounds, LonLat, RawOriginBundle } from "./contracts";
 
+/** Master §6.5, docs/04 Phase 5.3 — Anushka's combined age-estimation method. */
+export type AgeMethod =
+  | "shear"
+  | "fay"
+  | "elongation"
+  | "combined"
+  | "disagreement"
+  | "none";
+
 /** origin.json after parsing. `shape` is unpacked to `rows`/`cols`; `values` is a Float32Array. */
 export interface OriginBundle {
   bounds: GeoBounds;
@@ -27,6 +36,12 @@ export interface OriginBundle {
   timeWindowMethod: "bounded" | "convergence" | null;
   ensembleRuns: number;
   abstain: boolean;
+  /** Master §6.5, docs/04 Phase 5.3 — [min, max] hours since release. `null` when absent —
+   *  hides the "Estimated age" row, never rendered as a fabricated measurement. */
+  ageHours: [number, number] | null;
+  /** Master §6.5, docs/04 Phase 5.3 — the estimator that produced `ageHours`. Independently
+   *  nullable from `ageHours` (docs/04 Phase 5.3: "do not invent a pairing rule"). */
+  ageMethod: AgeMethod | null;
 }
 
 // Origin-cloud display curve. Hue is a single amber (the 50/90 % rings' family, V3 palette);
@@ -149,6 +164,15 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 }
 
+const AGE_METHODS: AgeMethod[] = [
+  "shear",
+  "fay",
+  "elongation",
+  "combined",
+  "disagreement",
+  "none",
+];
+
 function validate(raw: RawOriginBundle, id: string): void {
   const where = `${id}/origin.json`;
   if (!raw || typeof raw !== "object") {
@@ -270,6 +294,35 @@ function validate(raw: RawOriginBundle, id: string): void {
   if (typeof raw.abstain !== "boolean") {
     throw new Error(`${where}: "abstain" must be a boolean`);
   }
+
+  // age_hours (optional) — [min, max] hours since release. Independently optional from
+  // age_method (docs/04 Phase 5.3: "do not invent a pairing rule").
+  if (raw.age_hours !== undefined && raw.age_hours !== null) {
+    const ah = raw.age_hours;
+    if (
+      !Array.isArray(ah) ||
+      ah.length !== 2 ||
+      typeof ah[0] !== "number" || !Number.isFinite(ah[0]) ||
+      typeof ah[1] !== "number" || !Number.isFinite(ah[1])
+    ) {
+      throw new Error(`${where}: "age_hours" must be [min, max] finite numbers when present`);
+    }
+    if (ah[0] < 0 || ah[1] < 0) {
+      throw new Error(`${where}: "age_hours" must be non-negative (got [${ah[0]}, ${ah[1]}])`);
+    }
+    if (ah[0] > ah[1]) {
+      throw new Error(`${where}: "age_hours" min (${ah[0]}) must be <= max (${ah[1]})`);
+    }
+  }
+
+  // age_method (optional) — enum.
+  if (raw.age_method !== undefined && raw.age_method !== null) {
+    if (!AGE_METHODS.includes(raw.age_method as AgeMethod)) {
+      throw new Error(
+        `${where}: "age_method" must be one of ${AGE_METHODS.join(" | ")} (got "${raw.age_method}")`,
+      );
+    }
+  }
 }
 
 export async function loadOriginBundle(id: string): Promise<OriginBundle> {
@@ -297,5 +350,12 @@ export async function loadOriginBundle(id: string): Promise<OriginBundle> {
           : null,
     ensembleRuns: raw.ensemble_runs,
     abstain: raw.abstain,
+    ageHours:
+      raw.age_hours !== undefined && raw.age_hours !== null
+        ? [raw.age_hours[0], raw.age_hours[1]]
+        : null,
+    ageMethod: AGE_METHODS.includes(raw.age_method as AgeMethod)
+      ? (raw.age_method as AgeMethod)
+      : null,
   };
 }
