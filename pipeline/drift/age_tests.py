@@ -23,12 +23,14 @@ import numpy as np
 
 from age import (combine_bands, deformation_rate_s, elongation_age, fay_age,
                  fay_predicted_area_km2, fay_radius_km, invert_curve, observed_major_axis_km,
+                 polygon_major_axis_km, slick_major_axis_km,
                  pca_extent, seed_cloud, shear_dispersion_age, shear_extent_curve,
                  weathering_flag)
 from step import integrate
 
 T0 = datetime(2017, 1, 29, 0, 14, 0, tzinfo=timezone.utc)
 ENNORE = [80.35, 13.25]
+KM_DEG = 111.32   # km per degree of latitude; the fixtures below are built at the equator
 
 # Strong but physically plausible coastal shear. At 5e-5 1/s the shear timescale is 5.6 h, so
 # a 6 h old patch is visibly stretched and the aspect ratio is well clear of measurement noise.
@@ -255,6 +257,56 @@ def run(check):
                 f"acute -> ran {odiag.get('n_members')} members, {odiag.get('n_fitted')} fits "
                 f"against a 31.17 km axis. Those are three different situations and the "
                 f"diagnostics now distinguish them")
+
+    # --- 6s  the major axis is MEASURED off the polygon, not inferred from an ellipse --
+    # A1 made C3.1 match the observed major axis. Deriving that axis from area x elongation
+    # assumes the slick is an ellipse, and a real one is not: Jacksonville's det-01 has
+    # solidity 0.223. So this pins the measurement against a synthetic shape whose answer is
+    # known exactly, then against the failure mode that motivated the change.
+    #
+    # A 10 km x 1 km rectangle at the equator: the principal axis is 10 km by construction.
+    rect = [[0.0, 0.0], [10.0 / KM_DEG, 0.0], [10.0 / KM_DEG, 1.0 / KM_DEG],
+            [0.0, 1.0 / KM_DEG], [0.0, 0.0]]
+    length, ldiag = polygon_major_axis_km(rect)
+    ok &= check("6s  polygon PCA recovers a known major axis and minor width",
+                length is not None and abs(length - 10.0) < 0.02
+                and abs(ldiag["bbox_width_km"] - 1.0) < 0.02,
+                f"a 10.00 x 1.00 km rectangle measures {length:.4f} km along its principal "
+                f"axis and {ldiag['bbox_width_km']:.4f} km across -- peak-to-peak, because the "
+                f"quantity C3.1 matches is a physical end-to-end length, not a sigma")
+
+    # --- 6t  and it disagrees with the ellipse form exactly where the shape is not one --
+    # A 10 x 1 km SINUOUS filament: same 10 km span, but folded so it encloses far less area.
+    # The ellipse form reads the small area as a short slick; the measurement does not.
+    import math as _m
+    n = 61
+    wig = [[(10.0 * i / (n - 1)) / KM_DEG,
+            (0.35 * _m.sin(6.0 * _m.pi * i / (n - 1))) / KM_DEG] for i in range(n)]
+    wig = wig + [[p[0], p[1] + 0.06 / KM_DEG] for p in reversed(wig)]
+    wlen, _ = polygon_major_axis_km(wig)
+    feat = {"geometry": {"type": "Polygon", "coordinates": [wig]},
+            "properties": {"area_km2": 0.6, "elongation": 4.0}}
+    chosen, cdiag = slick_major_axis_km(feat)
+    derived = observed_major_axis_km(0.6, 4.0)
+    ok &= check("6t  a sinuous filament is measured, and the ellipse form underreads it",
+                abs(chosen - wlen) < 1e-9 and cdiag["route"].startswith("measured")
+                and chosen > 2.0 * derived
+                and cdiag["filament_aspect"] > float(feat["properties"]["elongation"]),
+                f"measured {chosen:.2f} km vs ellipse-derived {derived:.2f} km "
+                f"(x{cdiag['measured_over_derived']}); mean width "
+                f"{cdiag['mean_width_m']:.0f} m gives a filament aspect of "
+                f"{cdiag['filament_aspect']} against a reported elongation of 4.0. "
+                f"Jacksonville's det-01 is this shape: 17.38 km measured, 6.72 km derived")
+
+    # --- 6u  with no polygon it still answers, and SAYS it fell back ---------------------
+    bare = {"properties": {"area_km2": 12.4, "elongation": 8.2}}
+    fb, fbdiag = slick_major_axis_km(bare)
+    ok &= check("6u  no polygon -> ellipse fallback, and the route is recorded",
+                fb is not None and abs(fb - observed_major_axis_km(12.4, 8.2)) < 1e-9
+                and "ellipse" in fbdiag["route"],
+                f"no geometry -> {fb:.2f} km via '{fbdiag['route']}'. The fallback is allowed, "
+                f"but a band read off a derived axis is a different claim from one read off a "
+                f"measured axis, so the route travels with the result")
 
     # --- 6q  an age outside the modelled range is reported as absent, not clamped ------
     out_of_range = invert_curve([2.0, 6.0, 12.0], [1.0, 2.0, 3.0], 99.0)

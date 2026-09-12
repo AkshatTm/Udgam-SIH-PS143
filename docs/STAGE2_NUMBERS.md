@@ -105,76 +105,172 @@ elongations in test 6e precisely so the test's own output cannot be misquoted.
 
 ---
 
-## 8.4 OpenDrift agreement — RUN, and it lands at 118 m
+## 8.4 OpenDrift agreement — RUN ON ALL SEVEN CASES
 
-`case-000`, 3000 particles, 24 h backward, **our RK2 against OpenDrift 1.14's RK4**, both fed the
-*identical* cached HYCOM + ERA5 field (re-expressed as CF NetCDF, nothing regridded).
+Our RK2 against **OpenDrift 1.14.11's RK4**, both fed the *identical* cached HYCOM + ERA5 field
+(re-expressed as CF NetCDF, nothing regridded), 3000 particles, 24 h backward, pure advection on
+both sides. Seeded from Soum's real `detections.geojson` on every real case.
 
-| | Measured |
-|---|---|
-| Distance travelled, median | **48.4 km** (ours 48.392, OpenDrift 48.430) |
-| Per-particle disagreement, **median** | **161 m** — 0.33% of the path |
-| Per-particle disagreement, p95 | 449 m |
-| Per-particle disagreement, worst of 3000 | 958 m — 2.0% of the path |
-| **Origin centroid separation** | **118 m** |
-| …against our own r50 of 8.84 km | **1.3% of it** |
+| case | travel (median) | **origin centroid sep.** | per-particle median | worst | % of path |
+|---|---|---|---|---|---|
+| `case-jacksonville-2024` | **140.2 km** | **550.3 m** | 550.7 m | 599.8 m | **0.393%** |
+| `case-000` | 48.3 km | 119.8 m | 160.3 m | 1066.3 m | 0.332% |
+| `case-farallones-2023` | 35.5 km | 119.7 m | 122.4 m | 132.1 m | 0.345% |
+| `case-jamnagar-2024` | 16.7 km | 113.4 m | 113.4 m | 115.1 m | 0.677% |
+| `case-mumbai-2023` | 16.7 km | 79.7 m | 79.7 m | 80.6 m | 0.477% |
+| `case-gulf-alaska-2023` | 12.0 km | 31.3 m | 31.2 m | 36.2 m | 0.261% |
+| `case-huntington-2021` | 6.2 km | 104.3 m | 65.5 m | 670.6 m | **1.050%** |
+
+**The headline: on the hero case the two models put the origin 550 metres apart after 140 km of
+rewind.** Across a 23× range of travel distance the disagreement stays between **0.26% and 1.05%
+of the path**, and the worst case is Huntington — the weakest current, 53% land, the case we
+already say cannot carry a direction claim (8.8).
 
 **What this does and does not prove.** It cannot make our answer *true* — there is still no ground
-truth for origin position on any case (8.2). What it does is separate two objections that a judge
-will otherwise merge:
+truth for origin position on any case (8.2). What it does is separate two objections a judge will
+otherwise merge:
 
-> *"Your physics is wrong"* — an independent implementation would have diverged.
-> *"Your input field is coarse"* — an independent implementation agrees to 118 m, and **both** are
-> still limited by HYCOM.
+> *"your physics is wrong"* — an independent implementation would have diverged.
+> *"your input field is coarse"* — an independent implementation agrees to a few hundred metres,
+> and **both** are still limited by HYCOM.
 
 The second is our position, and this is the only independent evidence we have for it. It is also
-the direct measurement behind **§8.5's rank 4**: the integration scheme is not a meaningful error
-source. Two different schemes, RK2 and RK4, written by different people, disagree by **two orders
-of magnitude less than our own precision radius.**
+the direct measurement behind **§8.5's rank 4**: two different schemes, RK2 and RK4, written by
+different people, disagree by **two orders of magnitude less than our own r50 of 8.84 km.**
 
-**The line:** *"We ran the same field through OpenDrift's RK4. The origin moved 118 metres. Our
-uncertainty is the ocean model, not our code."*
+**The line:** *"We ran the same fields through MET Norway's OpenDrift with its RK4 scheme, on every
+case. On our hero case the origin moved 550 metres over a 140-kilometre rewind. Our uncertainty is
+the ocean model, not our code."*
+
+D4's Tier 1 asked for **one** case reported honestly; Tier 2 asked for all five as a second
+opinion. **Seven are done.**
 
 ### Making it apples-to-apples — every switch, and why
 
-OpenDrift is a much larger model, so most of its processes had to be turned **off** or the
+OpenDrift is a much larger model, so most of its processes had to be turned **off**, or the
 comparison would measure somebody else's turbulence scheme against our advection:
 
 | Setting | Value | Why |
 |---|---|---|
-| `general:use_auto_landmask` | False | OpenDrift ships its own GSHHG mask. A stranded particle is a *stopped* particle — two coastlines would read as a physics disagreement. Our side runs `step.integrate` with no stranding to match |
-| `drift:advection_scheme` | `runge-kutta4` | **OpenDrift's default is Euler.** Comparing our RK2 to their Euler would measure two schemes, not two implementations. RK4 is the strictest available check |
+| `drift:advection_scheme` | `runge-kutta4` | **OpenDrift's default is Euler.** Comparing our RK2 against their Euler would measure two schemes, not two implementations. RK4 is the strictest available check |
+| `general:use_auto_landmask` | False | OpenDrift ships its own GSHHG mask. A stranded particle is a *stopped* particle, so two coastlines would read as a physics disagreement. Our side runs `step.integrate` with no stranding to match |
 | `drift:vertical_advection` | False | **defaults to True** |
 | `drift:vertical_mixing`, `drift:stokes_drift` | False | we model neither |
 | `horizontal_diffusivity` | 0 | random-walk diffusion would make the comparison stochastic |
 | `wind_drift_factor` | 0.03 | our single empirical constant, matched exactly |
 
-Particle identity was verified rather than assumed: **OpenDrift returns the trajectories in a
-different order than seeded.** Matching by index gave a nonsense 6.1 km disagreement at t = 0 —
-which is just the length of the seed line. A KD-tree match on the t0 positions is a verified
-bijection, 3000/3000, with a 0.21 m residual.
+**Particle identity is proved, not assumed.** OpenDrift returns trajectories in a different order
+than they were seeded; matching by index gave a nonsense 6.1 km disagreement at t = 0 on case-000,
+which is simply the length of the seed line. Pairing is recovered from the t0 positions, conflicts
+resolved closest-first (two seeds centimetres apart both resolved to one trajectory on Farallones —
+2999 of 3000), and the result is **refused outright** unless it is a bijection whose worst matched
+pair is under a metre. Measured t0 residual: **0.19–0.22 m** on every case.
 
-### Two silent-failure traps found inside OpenDrift, worth one slide
+### Three silent-failure traps found doing this, worth one slide
 
-Both are the same shape as the frozen-field bug in 8.7, and neither would have raised anything:
+All three are the same shape as the frozen-field bug in 8.7 — a run that completes and writes
+plausible output while being wrong. Two are in OpenDrift; the third was ours.
 
-1. **`environment:fallback:x_sea_water_velocity` ships as `0`.** A particle outside reader
-   coverage keeps integrating through a **dead ocean** — it simply stops moving and the run still
-   completes and still writes output. Setting the fallbacks to `None` instead is what made our
-   missing-wind problem raise an exception rather than quietly produce a wind-free trajectory and
-   a large spurious disagreement with us.
-2. **`reader_netCDF_CF_generic` silently truncates a file with a non-uniform final timestep.** A
-   3 h pad appended to the hourly wind file moved its `end_time` from 00:00Z back to **23:00Z** —
+1. **`environment:fallback:x_sea_water_velocity` ships as `0`.** A particle outside reader coverage
+   keeps integrating through a **dead ocean** — it simply stops moving, and the run still completes.
+   Setting the fallbacks to `None` is what made a missing-wind problem raise an exception instead of
+   quietly producing a wind-free trajectory and a large, entirely spurious disagreement with us.
+2. **`reader_netCDF_CF_generic` silently truncates a file with a non-uniform final timestep.** A 3 h
+   pad appended to the hourly wind file moved its `end_time` from 00:00Z back to **23:00Z**,
    discarding the real last snapshot along with the pad, announced only at INFO level.
+3. **Ours: a missing `detections.geojson` fell back to the bounds centre**, seeding 3000 *identical*
+   particles. Every trajectory came out the same and the spread statistics were meaningless; the
+   only thing that noticed was the pairing check, which reported it as a matching failure and hid
+   the cause. The fallback is now loud and says the output is a wiring test, not a result.
 
-We hit both in an afternoon, on a mature and widely used model. That is the honest context for our
-own guard work: this class of bug is not a beginner's mistake, it is what particle tracking is
-actually like.
+We hit all three in an afternoon, two of them in a mature and widely used model. That is the honest
+context for our own guard work: this class of bug is not a beginner's mistake, it is what particle
+tracking is actually like.
 
-**Reproduce:** `/tmp/claude-0/odenv/bin/python pipeline/drift/opendrift_compare.py`
-(OpenDrift is NOT added to `requirements.txt` — it pulls ~90 packages including Cartopy and
-netCDF4, and it is a comparison tool, not a runtime dependency. `opendrift_compare.py` is
-committed so the number is reproducible; the venv is not.)
+**Reproduce:** `python pipeline/drift/compare_opendrift.py --case <id>` (needs OpenDrift installed;
+it is deliberately **not** in `requirements.txt` — ~90 packages including Cartopy and netCDF4, and
+it is a comparison tool, not a runtime dependency). Per-case results are written to
+`out/opendrift_<case>.json`.
+
+## 8.4b Jacksonville is ONE slick, and that changes the hero number
+
+Soum's ruling, 13 Sept: `case-jacksonville-2024`'s three oil features are **one slick with genuine
+breaks**, not over-segmentation. His evidence is not our detector's behaviour — **Cerulean's own
+polygon for the same slick is an 18-part MultiPolygon, 31.2 km long.** An operational detector
+fragments the same ribbon eighteen ways. The ribbon really breaks.
+
+Seeding from the highest-confidence feature alone took **15 km of a 34 km ribbon.**
+
+### The merge decision is measured, and it refuses on two cases
+
+Four gates, on every oil feature's vertices projected onto the set's shared principal axis:
+
+| case | aspect | axis covered | max gap | max perp | decision |
+|---|---|---|---|---|---|
+| `case-jacksonville-2024` | **17.9** | **99%** | 0.16 km | 0.20 km | **MERGED** |
+| `case-mumbai-2023` | 4.5 | 85% | 2.46 km | 1.16 km | not merged |
+| `case-gulf-alaska-2023` | **2.5** | **49%** | 3.89 km | 0.92 km | not merged |
+
+**The thresholds come from the library, not from taste.** Jacksonville and Gulf of Alaska land on
+opposite sides of all four, so the gates sit between them — and Mumbai falls outside deliberately,
+because 85% coverage with a 2.5 km gap and 1.2 km of perpendicular scatter is genuinely unclear,
+and a merge that moves the seed should not happen on a guess. All four numbers print either way.
+
+### What it did to the answer — and this one is material
+
+| | det-01 alone | **merged ribbon** | change |
+|---|---|---|---|
+| origin centroid | (−79.6977, 29.0386) | (−79.7318, 29.0299) | **moved 3.46 km** |
+| r50 | 11.30 km | **12.76 km** | +12.9% |
+| r90 | 27.61 km | **32.50 km** | +17.7% |
+
+**3.46 km is 27% of r50.** Unlike the coastline upgrade (0.53 km) and the PCA axis fix (0.02 km),
+this is *not* immaterial — it is a real change to the hero case's answer, and it is the correct one.
+`discharge_class` also becomes **authoritative** rather than a `shape_class` fallback: det-02 is
+`chronic`, so the merged ribbon is `chronic`, so the origin is seeded as a **line segment** — which
+is the physically right reading of a 34 km broken ribbon left by a vessel under way.
+
+### Two things Soum's numbers tell us about which quantity to trust
+
+Our outline over-extends: **IoU 0.483, recall 0.825, precision 0.537.** So compare the two
+quantities C3.1 could match against, both against Cerulean's polygon for the same slick:
+
+| | Cerulean | ours | ratio |
+|---|---|---|---|
+| **major axis** | 31.2 km | 34.58 km | **×1.11** |
+| area | 4.55 km² | 7.12 km² | **×1.57** |
+
+**Over-extension widens a ribbon far more than it lengthens it.** So A1's ruling — match the major
+axis, not the area — is not only right about the physics (a divergence-free flow preserves area),
+it is also **five times less sensitive to detector precision error.** That is a second, independent
+argument for the same decision, and it is worth one line on the slide.
+
+### `elongation` must never be inverted, and the merged slick enforces it
+
+Soum, 13 Sept: `elongation` is `cv2.fitEllipse` major/minor computed in **pixel** coordinates — a
+shape descriptor feeding `shape_class`, not a geometric aspect ratio. Two independent reasons it is
+not ours to invert: the fitted ellipse's minor axis spans **the bow of the curve**, not the filament
+width (hence solidity 0.22, a convex hull 4.5× the area); and Jacksonville's pixels are
+**8.62 × 10.0 m**, ~14% anisotropic, so the same ellipse fitted in km gives 9.07 rather than 7.93.
+
+**The two independent width measurements agree to 5%**: his area ÷ fitted-major is **272 m**, our
+area ÷ measured-length is **258 m**. Inverting `elongation` instead would have given **~2.2 km** —
+an **8× width error straight into the age band.** The merged slick therefore carries
+`elongation: None`, which forces `age.py` down its measured-from-polygon path. Pinned by test 9j.
+
+### And the time window became a measurement
+
+`time_window_method` on Jacksonville is **`convergence`**, not `bounded`:
+
+```
+2024-07-29T23:21:29Z  ->  2024-07-30T07:43:59Z     span 8.38 h
+```
+
+Against `case-000`'s `bounded` 16.00 h bracket. §8.5 predicted this could happen — Jacksonville's
+HYCOM is 3-hourly rather than daily, so there is temporal structure for the ensemble spread to
+squeeze — and on the hero case **it fired.** That directly answers A3's *"the time window is your
+weakest defensible claim and the UI renders it as a headline."* On this case it is no longer a
+bracket. **Check per case; case-000 is still `bounded`.**
 
 ---
 
