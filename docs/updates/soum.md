@@ -15,6 +15,80 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-13 14:30] Phase 6.1 — nine cases PASS, k_sigma correction, and the contract gap measured
+
+**Done:** Built the two Zenodo benchmark bundles (`case-lookalike-zenodo`, `case-nospill-zenodo`)
+with `benchmark_scene.py`, leaving Akshat's `meta.json` files byte-identical (md5 verified before
+and after). Both carry `provenance: "benchmark"`, so they are the **first and only cases to
+exercise the Layer 1 + Layer 2 network path** — all seven live cases route classical, so that
+branch had never run on a real bundle. It works: the gate closes at P(oil) 0.002 and 0.000
+against the 0.143 threshold and both correctly emit zero oil features. All nine cases PASS.
+
+| # | case | regions | oil | ships | discharge |
+|---|---|---|---|---|---|
+| 1 | jacksonville | 23 | 3 | 2 | 1 chronic |
+| 2 | farallones | 2 | 1 | 0 | 1 chronic |
+| 3 | huntington | 9 | 1 | 43 | — |
+| 4 | gulf-alaska | 13 | 3 | 0 | 2 chronic |
+| 5 | mumbai | 13 | 3 | 21 | — |
+| 6 | jamnagar | 2 | 1 | 3 | — |
+| 7 | ennore-lookalike | 29 | **0** | 72 | — |
+| 8 | lookalike-zenodo | 0 | **0** | 1 detected, **0 in bundle** | — |
+| 9 | nospill-zenodo | 0 | **0** | 31 detected, **0 in bundle** | — |
+
+**Files:** `cases/case-lookalike-zenodo/*`, `cases/case-nospill-zenodo/*`, `pipeline/detect/run.py`.
+
+**Run:**
+```bash
+python pipeline/detect/run.py --case case-lookalike-zenodo
+python pipeline/export/build_case.py --case case-lookalike-zenodo --stage detect
+python scripts/validate_case.py cases/case-lookalike-zenodo
+```
+
+**CORRECTION to commit 72064c8.** That message claimed `k_sigma 8.0 -> 4.0` was "applied to all
+seven at once". It was not. `run.py` duplicated the default as a literal `8.0` in its own
+argparse, which silently shadowed `ships.DEFAULT_K_SIGMA`, so the module read correctly in review
+while the pipeline kept using 8.0 — the fix was inert. The seven-case numbers in that commit were
+k=8 plus the land mask. `run.py` now **imports** `DEFAULT_MIN_DB` and `DEFAULT_K_SIGMA` from
+`ships.py` so the two cannot drift again. Ship counts move under a genuinely active k=4:
+jacksonville 0->2, jamnagar 1->3, mumbai 20->21, huntington 41->43, ennore 18->72. Same class of
+failure as a root-anchored gitignore pattern: a stated fact that is not in effect.
+
+**Open — Akshat's ruling, blocking nothing but costing evidence.** The §6.3 contract gap logged
+on 08-Sep as a prediction is now **measured, and larger than reported in chat**. `ship_detections`
+lives inside a detection's `properties`, so a case with zero oil detections has nowhere to put its
+ships. Both benchmark bundles have `features = 0`, top-level keys `['features', 'type']`, and
+`ship_detections` appears **zero times** in either file:
+
+- `case-lookalike-zenodo` — detector finds **1** radar contact, 0 reach the bundle
+- `case-nospill-zenodo` — detector finds **31** radar contacts, 0 reach the bundle
+
+That is **32 contacts silently dropped**, not the 1 first reported — the earlier figure read the
+bundle rather than the detector. This bites hardest in the scenario that matters most: *no oil
+plus a radar contact* is the dark-vessel case, so the contract cannot express our best evidence
+precisely where NTRO cares. Minimal additive fix would be `ship_detections` as a top-level key on
+the FeatureCollection, beside `features`. **Not implemented — §6.3 is frozen and CLAUDE.md
+forbids extending a schema unilaterally.**
+
+**Open — VH slide, for Urooz.** Both benchmark scenes have **usable** cross-pol (sea VH −21.9 and
+−11.6 dB, above the ~−24 dB IW noise floor) while all seven live cases sit at −27.0 to −38.5 dB
+and do not. D3's VV-only fallback is therefore universal on live data. The contrast is what makes
+"VH is the discriminator" a **conditional finding** rather than a retreat, and the slide must say
+so with the numbers.
+
+**Open — margin distribution, owed to Akshat, previously only in chat.** The 20 oil detections
+span confidence 0.500–0.755, median 0.578. His proposed 0.75/0.45 bands yield 1 strong / 19
+moderate / 0 weak — degenerate. Recommend **two bands expressed in dB**, which is what the
+detector actually measures: clear ≤ −4.5 dB contrast (conf ≥ 0.625), marginal −3.0 to −4.5 dB.
+
+**Open — Gulf of Alaska finds no radar contact** even under k=4: threshold −8.06 dB, scene peaks
+−8.79 dB. Reported, not tuned away (A6, D2b).
+
+**Next:** Cerulean IoU on the five cases carrying `cerulean_slick.geojson`. Unblocked — detections
+are committed and pushed, so A6's sealed-answer protocol is satisfied.
+
+---
+
 ## [2026-09-13 09:20] Phase 6.0 — merged a9087b0, fixed the -inf bug at source, Stage 1 pushed
 
 **Done:** Merged Akshat's unblock commit. Fixed the `-inf` nodata bug in `features.py` at the
