@@ -18,7 +18,7 @@ first; everything below it is history.*
 | Person | Has what they need? | Next move |
 |---|---|---|
 | **Soum** | ✅ 7 scenes: `sar_vv_vh.tif` (2-band float32, 10 m), `sar.png`, `bounds.json` with the per-case dB clamp | Run Stage 1 on `case-jacksonville-2024` |
-| **Anushka** | ✅ real `detection_time` + bounds on all 7 | Fetch fields; seeding waits on Soum's polygons |
+| **Anushka** | ✅ real `detection_time` + bounds on all 7; age estimation + adaptive pad/edge guard merged (2026-09-13) | Fetch fields; seeding waits on Soum's polygons. **A1–A5 in `STAGE2_AGE_DECISION_BRIEF.md` await planning-account ratification** |
 | **Jaiveer** | ✅ dates, boxes, `ais_source`; D27–D31 ruled; GFW confirmed working | Phase 8 curve **with the per-component ablation** |
 | **Harshita** | ✅ frontend loads all 7 cases; `sync_web_cases.py` feeds the browser | Detect screen's "stage pending" state |
 | **Urooz** | ✅ never blocked | Research |
@@ -59,6 +59,14 @@ python scripts/sync_web_cases.py                           # then Harshita QAs i
 
 ## Open, in priority order
 
+- **Planning-account ratification needed: `docs/STAGE2_AGE_DECISION_BRIEF.md` A1–A5.** Merged
+  2026-09-13, code-complete and tested (7/7, 48/48), but five methodology calls are explicitly
+  routed to Akshat and not decided by this account — see the dated entry below for the full list.
+  Two of them (A2, A5) change what an age number on a slide would say.
+- **Ask routed to Soum** (not yet sent): `contrast_centre_db` / `contrast_edge_db` per detection,
+  and Huntington's real slick major axis as soon as it exists — see the entry below for the
+  ready-to-send text.
+- **Ask routed to Urooz** (not yet sent): primary citation for the Fay gravity-viscous constant.
 - **Soum owes the no-spill scene** (`case-nospill-zenodo` is scaffolded and deliberately held out
   of `index.json` until it lands).
 - **Three questions to Jaiveer** are in the reply drafted below — the "eleven of 52" one affects a
@@ -70,6 +78,70 @@ python scripts/sync_web_cases.py                           # then Harshita QAs i
   confirming its identity now would be the same mistake as verifying its AIS density would have
   been for case 1.
 - ~~GFW Arabian Sea coverage for cases 5–6~~ — **done 2026-09-12**, see below.
+
+---
+
+## [2026-09-13] Integration-account pass — merged Anushka's Stage 2 (age + robustness), decisions routed not ruled
+
+**Context:** running as the integration account per `HANDOFF_ALT_ACCOUNT.md` — pipeline/merges/
+validation only, no schema changes or rulings. `git fetch --all` found `origin/anushka` had
+advanced (`e27f0ee..c1b250b`) since the last pass; `origin/jaiveer-phase2` and `origin/harshita`
+were already fully merged (no diff vs `main`); still no `origin/soum` branch.
+
+**Merged:** two Stage 2 phases — age estimation (`pipeline/drift/age.py`, C3.1–C3.4 + C4 combine)
+and robustness (adaptive field-box pad sized at the box's poleward edge, a loud edge guard that
+blocks a bundle from being written if any particle ends within 10 km of the field-box wall, and
+`geo_tests.py` covering the antimeridian, negative longitude, and the cos(lat) ratio at 59.56° N).
+Predicted zero conflicts (`git merge-tree`) and merged clean. Only the four already-frozen
+`origin.json` age keys are written — no contract change.
+
+**Verified independently rather than trusting the branch's own numbers:**
+```bash
+python pipeline/drift/tests.py           # 7/7 suites, 48/48 assertions -- matches her log exactly
+python scripts/test_validator.py         # still 21/21
+python scripts/validate_case.py cases/   # still: only detections.geojson missing, x7
+```
+All three matched. Pushed `main` (`b91eecf..3745d89`). Deleted the stale local
+`akshat/v4-case-library` branch pointer (no unique commits, fully contained in `main`).
+
+**Routed to the planning account, not decided here — `docs/STAGE2_AGE_DECISION_BRIEF.md`:**
+- **A1** — ratify that C3.1 matches modelled *major-axis length*, not `area_km2` (a 2D
+  incompressible flow preserves area; it doesn't preserve extent). No contract change, already
+  shipped.
+- **A2** — ratify the exact patch-aspect inversion `γ = sqrt(a + 1/a − 2)` in place of the brief's
+  `sqrt(1+(St)²)`. **Changes every elongation-based age estimate by ~3.2×.** Already shipped;
+  needs sign-off before it's quoted anywhere.
+- **A3** — ratify that the Fay estimator is a *regime test*, not an age estimator, at SAR scale
+  (it's circular without an independently-reported volume, and even with one it undershoots
+  observed slick areas by 14×+ on the one case checked). Optional: add a numeric volume field to
+  `verification.official_finding` (currently free text, e.g. `"588 barrels"`) — ~10 min if wanted.
+- **A4** — routes to Urooz: cite the Fay gravity-viscous constant (currently an uncited
+  secondary-literature value; the whole spreading estimate scales linearly with it) or drop Fay
+  from the deck.
+- **A5** — decide what the age-validation claim (`03_ANUSHKA_DRIFT.md` step 1.6) becomes now that
+  only Huntington has a documented incident time to check against (Golden Ray is a continuous
+  release with no single detection time, Ennore has no detection, cases 4–5 don't exist yet) — so
+  it's currently "N of 1", not "N of 4". Worth knowing before the number arrives: a 2.8 h-old
+  slick sits in C3.1's known **overestimation** regime, so the one case with ground truth is also
+  the estimator's documented weak spot — a result to state on purpose, not a surprise to explain
+  away later.
+
+**Two asks ready to send to Soum (not sent — relay only, drafted for whichever session posts it):**
+> 1. Two new floats per detection: `contrast_centre_db` and `contrast_edge_db` — sampled inside
+>    the polygon and in an annulus just inside its boundary. Without these the weathering flag
+>    (C3.4) can only ever return `unknown`; with them it classifies and the threshold gets
+>    calibrated on the validation cases.
+> 2. Huntington's real slick major axis, the moment `detections.geojson` exists for it — it's the
+>    number that decides whether the shear-dispersion age estimator (C3.1) produces a band at all
+>    (measured reachable range on real HYCOM is ~0.8–1.3 km; Huntington's oil was only ~2.8 h old,
+>    so this is genuinely uncertain either way).
+
+**One ask ready to send to Urooz:** primary citation for the Fay gravity-viscous spreading
+constant (the 1.1–1.5 range currently in the code traces to secondary literature, not a checked
+primary source) — same as A4 above.
+
+**State after this pass:** critical path is unchanged — Soum's `detections.geojson` on
+`case-jacksonville-2024` is still the one thing blocking every case from going past `detect`.
 
 ---
 

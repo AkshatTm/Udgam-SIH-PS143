@@ -4,6 +4,55 @@
 
 ---
 
+## [2026-09-13] Integration-account pass — merged Anushka's Stage 2, routed A1–A5 instead of ruling on them
+
+**Done:** Running under the integration-account role (`HANDOFF_ALT_ACCOUNT.md`): pipeline/merge/
+validate only, no rulings. `git fetch --all` found `origin/anushka` had two new tested phases
+(age estimation + the adaptive field-box pad/edge guard/high-latitude tests) not yet in `main`;
+`origin/jaiveer-phase2` and `origin/harshita` were already fully merged. Predicted a clean merge
+(`git merge-tree`, zero conflicts), merged, and verified independently rather than trusting the
+branch's own log: `pipeline/drift/tests.py` 7/7 suites (48/48 assertions) matched exactly,
+`test_validator.py` still 21/21, `validate_case.py cases/` still fails only on the expected
+missing `detections.geojson` across all seven cases. Pushed (`b91eecf..3745d89`). Deleted the
+stale local `akshat/v4-case-library` branch (no unique commits).
+
+**Deliberately not decided here** — five methodology calls in the new
+`docs/STAGE2_AGE_DECISION_BRIEF.md` (A1–A5) are explicitly addressed to the planning account.
+Two matter most: **A2** changes every elongation-based age estimate by ~3.2× versus the original
+brief (already shipped, needs sign-off before it's quoted anywhere), and **A5** is that the
+age-validation claim is currently "1 of 1" (only Huntington has a documented incident time),
+not the "4 cases" framing the plan assumed — worth deciding what that claim becomes before it's
+on a slide. Full list, plus the routed-not-sent asks to Soum (two new contrast fields per
+detection + Huntington's real major axis) and Urooz (a citation for the Fay constant), is in
+`docs/updates/_INTEGRATION.md`'s dated entry — read that before ratifying anything by memory.
+
+**Files touched:** merge of `pipeline/drift/{age.py,age_tests.py,geo_tests.py,check_gee.py,
+fetch_fields.py,run.py,step.py,tests.py}` (Anushka's, all new/modified) ·
+`docs/STAGE2_AGE_DECISION_BRIEF.md`, `docs/STAGE2_COMPONENT_REPORT.md` (new, Anushka's) ·
+`docs/updates/anushka.md` (her entries) · `docs/updates/_INTEGRATION.md`, `docs/updates/akshat.md`
+(this entry)
+
+**Run command:**
+```bash
+git fetch --all && git log --oneline main..origin/anushka   # confirms what's new before merging
+git merge origin/anushka --no-edit
+python pipeline/drift/tests.py            # 7/7, 48/48
+python scripts/test_validator.py          # 21/21
+python scripts/validate_case.py cases/    # fails only on detections.geojson x7
+```
+
+**Open issues / for the planning account:**
+- Rule on A1–A5 in `docs/STAGE2_AGE_DECISION_BRIEF.md` — A2 and A5 are the ones that change what
+  goes on a slide.
+- Send the routed asks to Soum and Urooz (text is in `_INTEGRATION.md`, not sent from here).
+- Everything else is unchanged from the prior entry: Soum's `detections.geojson` is still the
+  critical-path item; no `origin/soum` branch exists yet.
+
+**Next:** planning account rules on A1–A5 → Soum delivers `case-jacksonville-2024` detections →
+first real four-stage bundle becomes possible.
+
+---
+
 ## [2026-09-12] Doc-regression fix + GFW coverage confirmed + case-1 flag resolved
 
 **Done:** Found that commit `626acce` ("Update master plan and per-person docs", pushed to
