@@ -35,10 +35,35 @@ from fields import load_case_field
 
 
 def slick_outline(case_id):
-    """Highest-confidence oil polygon from the case bundle, for scale and orientation."""
+    """Highest-confidence oil polygon from the case bundle, for scale and orientation.
+
+    Returns (ring_or_None, source_label, note). The note is the point: this used to return a
+    bare None when there was no detections.geojson, so the outline silently vanished while the
+    closing guidance still told you to check that "the red slick outline sits in water". A
+    sanity check you cannot see is worse than no sanity check, because you tick it off anyway.
+
+    Falls back to cerulean_slick.geojson where a case carries one -- SkyTruth's reference
+    polygon for the same feature. It is drawn in a DIFFERENT colour and labelled as theirs.
+    It is a comparison target, NOT ground truth and NOT a NAAP detection (docs/ANSWERS.README),
+    and nothing may ever seed from it.
+    """
     path = REPO / "cases" / case_id / "detections.geojson"
     if not path.exists():
-        return None
+        cer = REPO / "cases" / case_id / "cerulean_slick.geojson"
+        if cer.exists():
+            fc = json.loads(cer.read_text())
+            feats = fc.get("features") or []
+            if feats:
+                geom = feats[0]["geometry"]
+                c = geom["coordinates"]
+                ring = c[0] if geom["type"] == "Polygon" else c[0][0]
+                return (np.array(ring), "cerulean",
+                        "no detections.geojson yet -- drawing SkyTruth Cerulean's REFERENCE "
+                        "polygon instead. It is not a NAAP detection and nothing seeds from it.")
+        return (None, None,
+                "no detections.geojson for this case, so NO slick outline is drawn. "
+                "Stage 1 has not delivered yet -- do not read this plot as if the slick "
+                "were shown on it.")
     fc = json.loads(path.read_text())
     # The property is "classification", not "class" (docs/CONTRACTS.md). This read the wrong
     # key until 2026-09-07: `.get("class", "oil")` returned the default for EVERY feature, so
@@ -47,11 +72,13 @@ def slick_outline(case_id):
     oil = [f for f in fc.get("features", [])
            if (f.get("properties") or {}).get("classification") == "oil"]
     if not oil:
-        return None
+        return (None, None,
+                "detections.geojson has ZERO oil features, so no outline is drawn. That is "
+                "the no-spill / look-alike state and it is a designed answer, not a failure.")
     best = max(oil, key=lambda f: f.get("properties", {}).get("confidence", 0))
     geom = best["geometry"]
     ring = geom["coordinates"][0] if geom["type"] == "Polygon" else geom["coordinates"][0][0]
-    return np.array(ring)
+    return np.array(ring), "naap", None
 
 
 def main():
@@ -85,9 +112,13 @@ def main():
         ax.set_aspect(1.0 / np.cos(np.deg2rad(float(f.clat.mean()))))
         ax.set_xlabel("longitude (E)")
         ax.set_title(title)
-        ring = slick_outline(a.case)
+        ring, ring_src, ring_note = slick_outline(a.case)
         if ring is not None:
-            ax.plot(ring[:, 0], ring[:, 1], color="crimson", lw=1.8, zorder=5)
+            colour = "crimson" if ring_src == "naap" else "deepskyblue"
+            label = ("NAAP detection" if ring_src == "naap"
+                     else "Cerulean reference (NOT a NAAP detection)")
+            ax.plot(ring[:, 0], ring[:, 1], color=colour, lw=1.8, zorder=5, label=label)
+            ax.legend(loc="lower left", fontsize=7.5, framealpha=0.85)
     axes[0].set_ylabel("latitude (N)")
 
     q = axes[0].quiver(LON, LAT, u, v, spd, cmap="viridis", clim=(0, 1.2),
@@ -109,8 +140,15 @@ def main():
     fig.tight_layout()
     fig.savefig(out, dpi=130, bbox_inches="tight")
     print(f"\n  wrote {out.relative_to(REPO)}")
-    print("\n  Look for: grey land on the WEST, arrows under ~1.5 m/s not marching inland,")
-    print("  a smoothly varying field, and the red slick outline sitting in water.")
+    print("\n  Look for: land shaded grey on the correct side, arrows not marching inland,")
+    print("  and a smoothly varying field. Work out the expected upstream direction for THIS")
+    print("  case before you run it (03_ANUSHKA_DRIFT.md Phase 5.3), then compare.")
+    if ring is None:
+        print(f"\n  !! NO SLICK OUTLINE: {ring_note}")
+    elif ring_src == "cerulean":
+        print(f"\n  !! OUTLINE IS NOT OURS: {ring_note}")
+    else:
+        print("  The crimson outline is NAAP's own highest-confidence oil detection.")
     return 0
 
 
