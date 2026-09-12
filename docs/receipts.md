@@ -54,7 +54,11 @@ the old per-feature shape had nowhere to put them.
 **Every one of these is an unattributed radar contact, not a dark vessel** (Master §6.3, D34). A
 vessel is "dark" only once an AIS cross-check at a known time finds no match — that is Stage 3's
 output, not Stage 1's. The two Zenodo cases have no acquisition time, so their darkness is `null`.
-The single Delta contact sits in the raster's top pixel row beside land, among charted platforms.
+The single Delta contact is a genuine return — peak −5.93 dB against a sea of −29.46 dB (σ 0.793), **29.7σ** — so something bright is there; *what* it is has not been established. Checking it against a public offshore-infrastructure dataset is the way to answer that, and has not been done.
+
+**No edge rule, no `edge` flag** (ruled 13 Sept, on Soum's evidence). Only 2 of 173 contacts lie within 2 px of a raster edge, and one is Ennore's +10.27 dB, 60 px target in a working port — a border-rejection rule would spend a confident true positive to remove one doubtful contact. The usual CFAR objection to edge targets (a truncated background window) does not apply: `ships._sea_level()` takes the median and MAD over every valid pixel in the scene, so an edge contact is tested against exactly the statistics a centre-of-scene one is. The remaining doubt is identity, which the "unattributed" label already carries.
+
+**On Zenodo scenes the ship threshold is set by the absolute floor alone.** `lookalike-zenodo`: floor −10.0 dB vs scene-relative −26.3 dB (sea + 4σ), so `k_sigma` is inert and `DEFAULT_MIN_DB` decides — a hull at, say, −12 dB on a −29 dB sea (≈ 22σ) would be missed. The floor was set on GEE exports (~−20 dB sea). Recorded as a known limitation, not tuned before the freeze.
 
 **Case 4 (Alaska) — the dark-vessel case — gets NO contact from our detector.** Scene threshold
 −8.06 dB, brightest pixel −8.79 dB; reported, not tuned away. Its dark-vessel contact (4.5 km from
@@ -62,11 +66,12 @@ the slick, ~40 m) is **Cerulean's detection, not NAAP's.** It may be shown as Ce
 and cross-checked against, but never rendered or narrated as something our detector found.
 
 **The satellite-case rule threshold is −3.0 dB, and it is not recorded in any bundle.** It is passed
-by hand (`--rule-contrast -3.0 --rule-elongation 2.5`); without the flag `run.py` defaults to −0.5,
-which is the Zenodo-domain value. Verified 13 Sept by back-solving every shipped feature's
-confidence and contrast against `run.py`'s margin formula: all seven live cases resolve to −3.0.
-The frontend's "clear / marginal" bands (≤ −4.5 dB / −4.5 to −3.0 dB) depend on that. **Any rerun
-that drops the flag changes the classifications and silently invalidates those labels.**
+by hand (`--rule-contrast -3.0 --rule-elongation 2.5`). Since `20594df` (Soum, 13 Sept) omitting
+either flag on the classical path is a **hard error** rather than a silent fall-through to the
+Zenodo-domain −0.5, so a *forgotten* flag can no longer reach a bundle. A *different* value still
+can, and the bundle would not say so. Verified after Soum's D34 rerun by back-solving every shipped
+feature's confidence and contrast against `run.py`'s margin formula: all seven live cases resolve
+to −3.0. The frontend's "clear / marginal" bands (≤ −4.5 dB / −4.5 to −3.0 dB) pin that value.
 
 **Archived:** `case-ennore-2017` — `S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04`,
 2017-01-29 00:31:32Z, +1.0 d, dawn low-wind, **no clear slick in GRD**. Moved to `cases/_archive/`

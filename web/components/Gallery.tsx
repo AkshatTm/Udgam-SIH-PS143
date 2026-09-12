@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { loadGallery, type GalleryCase } from "@/lib/cases";
+import { formatAcquisitionDate, loadGallery, type GalleryCase } from "@/lib/cases";
 
 const TAGLINE =
   "Satellite forensics: we find oil spills from space, run the ocean backwards to find where they started, and identify the ship responsible.";
@@ -18,17 +18,6 @@ const CASE_TYPE_BADGE: Record<NonNullable<GalleryCase["caseType"]>, string> = {
   lookalike: "LOOK-ALIKE",
   nospill: "NO SPILL",
 };
-
-function fmtDate(iso: string): string | null {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
 
 /** Thumbnail with a neutral placeholder — used both when no thumbnail is declared and when a
  *  declared one fails to load. Never a broken-image icon. */
@@ -70,7 +59,7 @@ function CaseCard({ c, emphasised }: { c: GalleryCase; emphasised: boolean }) {
     );
   }
 
-  const date = c.detectionTime ? fmtDate(c.detectionTime) : null;
+  const date = c.detectionTime ? formatAcquisitionDate(c.detectionTime) : null;
   const showTagRow = emphasised || !!c.caseType;
 
   return (

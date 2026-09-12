@@ -2,6 +2,7 @@
 
 import { useAppStore } from "@/lib/store";
 import { ACT_LABELS } from "@/lib/contracts";
+import { formatAcquisitionDate } from "@/lib/cases";
 
 // Case switching moved to the Gallery (Screen 0) with the five-screen flow — the header no
 // longer carries case pills. It is the wordmark, the current case, the stage breadcrumb, and
@@ -40,12 +41,7 @@ export default function Header() {
         <span className="shrink-0 font-mono text-[10px] text-white/30">
           {meta.satellite}
           {" · "}
-          {new Date(meta.detection_time).toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            timeZone: "UTC",
-          })}
+          {formatAcquisitionDate(meta.detection_time) ?? "—"}
         </span>
       )}
     </header>

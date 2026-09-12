@@ -16,7 +16,7 @@ Naap: oil spill detection → backward drift to origin → vessel attribution, f
 6. File schemas live in `docs/00_MASTER_PLAN.md` Part 6 (§6.1–6.9) — the live contract the validator enforces. `docs/CONTRACTS.md` is the v1 record, kept for history. They are frozen. If something genuinely cannot be expressed, ask Akshat — do not extend a schema unilaterally.
 
 ## The case library and the sealed answers
-Seven live cases in `cases/index.json`, presentation order, strongest first; an eighth waits on Soum's no-spill nomination. `cases/_archive/` is retired work — not indexed, not validated. **Cases are named after places, never vessels** — naming a bundle after the ship that caused it hands away the answer. Every documented outcome lives in `docs/ANSWERS.md`, which is gitignored and held by Akshat alone (`docs/ANSWERS.README.md` explains why). If you come across attribution data — Cerulean's API returns it alongside the polygon — do not paste it into the repo or the group chat.
+Nine live cases in `cases/index.json`, presentation order, strongest first: seven satellite exports, then the two Zenodo Part III benchmark tiles (`provenance: "benchmark"`, real location, no acquisition time). `cases/_archive/` is retired work — not indexed, not validated. **Cases are named after places, never vessels** — naming a bundle after the ship that caused it hands away the answer. Every documented outcome lives in `docs/ANSWERS.md`, which is gitignored and held by Akshat alone (`docs/ANSWERS.README.md` explains why). If you come across attribution data — Cerulean's API returns it alongside the polygon — do not paste it into the repo or the group chat.
 
 ## Before you hand anything over
 ```bash

@@ -16,6 +16,25 @@ export type Difficulty = "easy" | "medium" | "hard";
  *  CaseWorkspace), so this is deliberately empty — it hardcodes no case. */
 export const DEFAULT_CASE_ID = "";
 
+/** The acquisition date as shown on screen — or null for a value that won't parse.
+ *
+ *  `1970-01-01T00:00:00Z` is the repo's DELIBERATE sentinel for "acquisition time unknown": the
+ *  Zenodo benchmark tiles carry no timestamp (the only TIFF tag is AREA_OR_POINT), and the
+ *  contract requires a valid UTC string, so the epoch stands in. Formatted naively it renders as
+ *  "01 Jan 1970" — a fabricated date presented to a judge as when the satellite passed. The
+ *  sentinel is recognised here, in one place, and said out loud instead. */
+export function formatAcquisitionDate(iso: string): string | null {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  if (t === 0) return "time unknown";
+  return new Date(t).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export interface CaseIndex {
   /** Presentation order, strongest case first. */
   cases: string[];

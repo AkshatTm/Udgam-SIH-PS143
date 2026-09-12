@@ -58,5 +58,5 @@ matplotlib==3.11.1
 #     cartopy drags in GEOS and PROJ, which is not a thing to install on six laptops now.
 #     It replaces a 9 km land mask derived from the velocity field's own validity, which is
 #     wrong inside San Pedro Bay (case-huntington-2021) and off Mumbai (case-mumbai-2023).
-#     AKSHAT: confirm this one, or Phase 4 comes back out.
+#     CONFIRMED by Akshat, 13 Sept — the last dependency before the 15 Sept 05:00 freeze.
 global-land-mask==1.0.0

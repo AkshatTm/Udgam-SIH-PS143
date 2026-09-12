@@ -180,8 +180,9 @@ function DischargeBadge({ value }: { value: DischargeClass }) {
  * The classical rule's contrast threshold on every `satellite` bundle. It is passed to run.py as
  * `--rule-contrast -3.0` and NOT recorded in the bundle, so it is pinned here — verified 13 Sept by
  * back-solving each shipped feature's (confidence, contrast_db) against run.py's margin formula:
- * all seven live cases resolve to −3.0. If a rerun ever omits the flag, run.py's default is −0.5
- * and this label becomes wrong — rerun the back-solve before trusting it again.
+ * all seven live cases resolve to −3.0, re-checked after the D34 rerun. run.py now refuses to run
+ * the classical path without the flag, but a rerun with a DIFFERENT value would still make this
+ * label wrong without the bundle saying so — rerun the back-solve after any detector rerun.
  */
 const RULE_CONTRAST_DB = -3.0;
 /** Clear/marginal boundary. run.py maps contrast linearly: conf = 0.5 + 0.25·(−3.0 − c)/3.0,
