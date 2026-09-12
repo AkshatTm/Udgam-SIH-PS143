@@ -1,6 +1,6 @@
 # RECEIPTS — provenance for every number and pixel we show
 
-*Owner: Akshat. Must be complete before the freeze.*
+*Owner: Akshat. Must be complete before the demo.*
 
 **Why this file exists:** a judge asks "is this real data?" and the answer has to be a scene id
 on screen within five seconds, not a story. Internals are binding — whatever we show on

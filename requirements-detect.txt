@@ -13,9 +13,8 @@
 #   2. torch+cu124 is ~2.5 GB. Five people who never run the detector should not download it to
 #      get numpy. requirements.txt stays the thing everyone installs and it stays small.
 #
-# Root CLAUDE.md: "No new dependencies once the pipeline is assembling; none at all after the
-# freeze." Freeze is 15 Sept 05:00. This is pinned on 13 Sept, inside the window, and it is the
-# last one — Akshat.
+# Root CLAUDE.md: a new dependency is pinned with its justification next to it and announced to
+# the group. This file is that justification; pinned 13 Sept — Akshat.
 #
 # Verified by Soum on an RTX 4050, Python 3.13.5, CUDA 12.4 build. The repo standard is Python
 # 3.11 (requirements.txt) and both packages publish cp311 wheels, so the venv everyone else has

@@ -159,7 +159,7 @@ def integrate_stranding(positions, t0, field, n_steps, timestep_minutes=15,
 
     Deliberately a SEPARATE function rather than a flag on integrate(). integrate() is called
     from run.py, tests.py, age.py, geo_tests.py and ensemble.run_once; changing its return
-    arity three days before a freeze to add an optional feature is how a working component
+    arity late in integration to add an optional feature is how a working component
     stops working. This one is additive and nothing that exists has to change.
 
     Stranding is STICKY. Once a particle touches land it stops and stays stopped, and it is

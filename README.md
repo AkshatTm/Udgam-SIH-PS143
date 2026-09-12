@@ -33,7 +33,7 @@ Violating these is how this project dies. They are not preferences.
 3. **Units:** distances km, areas km², speeds m/s, angles degrees clockwise from north.
 4. **Precision:** coordinates to 5 decimal places max in JSON (≈1 m; keeps files small).
 5. **Python 3.11** + venv, deps pinned in `requirements.txt`. **Node 20 LTS** for `web/`.
-   No new dependencies once the pipeline is assembling; none at all after the freeze.
+   A new dependency is pinned with its justification next to it and announced to the group.
 
 Full schemas: **[`docs/00_MASTER_PLAN.md`](docs/00_MASTER_PLAN.md) Part 6** — the live frozen
 contract; [`docs/CONTRACTS.md`](docs/CONTRACTS.md) is the v1 record. Changes go through Akshat.

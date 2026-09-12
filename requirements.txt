@@ -9,8 +9,8 @@
 # version-specific bug stays diagnosable. Versions below are what was installed and verified
 # on 2026-09-06.
 #
-# NO NEW DEPENDENCIES AFTER TUE 8 SEPT in the pipeline; none anywhere after the freeze.
-# Adding one late means six laptops silently disagree at the worst possible moment.
+# A new dependency goes in PINNED, with its justification written next to it, and is announced
+# to the group. Unannounced, six laptops silently disagree at the worst possible moment.
 #
 # Nothing in THIS file needs a GPU, and installing it is all five of you have to do.
 #
@@ -52,11 +52,11 @@ pandas==3.0.5
 matplotlib==3.11.1
 
 # --- real coastline (Anushka, Stage 2 Phase 4). GSHHG shoreline at ~1 km.
-#     ADDED 2026-09-12, AFTER the no-new-dependencies date above. Named rather than slipped in:
+#     ADDED 2026-09-12. Named rather than slipped in:
 #     decision D7 approves the coastline upgrade, and the upgrade cannot happen without a
 #     shoreline dataset. Chosen over cartopy deliberately -- this is 2.6 MB of pure numpy,
 #     cartopy drags in GEOS and PROJ, which is not a thing to install on six laptops now.
 #     It replaces a 9 km land mask derived from the velocity field's own validity, which is
 #     wrong inside San Pedro Bay (case-huntington-2021) and off Mumbai (case-mumbai-2023).
-#     CONFIRMED by Akshat, 13 Sept — the last dependency before the 15 Sept 05:00 freeze.
+#     CONFIRMED by Akshat, 13 Sept.
 global-land-mask==1.0.0

@@ -12,7 +12,7 @@ Naap: oil spill detection → backward drift to origin → vessel attribution, f
 2. Timestamps are **UTC ISO 8601 with trailing `Z`**, timezone-aware. Naive datetimes are a bug.
 3. Units: km, km², m/s, degrees clockwise from north. Coordinates rounded to 5 dp in JSON.
 4. **`null` ≠ `0`.** A not-applicable score is `null`; a measured zero is `0`. On a `gfw_hourly` case the `gap` and `slowdown` components are structurally unmeasurable and must be `null` — a zero there is an honesty bug, and the validator now fails on it.
-5. Python 3.11 + venv; Node 20 for `web/`. Pinned deps. **No new dependencies once the pipeline is assembling; none at all after the freeze.**
+5. Python 3.11 + venv; Node 20 for `web/`. Pinned deps. **A new dependency is pinned with its justification written next to it, and announced to the group** — so every laptop installs the same thing.
 6. File schemas live in `docs/00_MASTER_PLAN.md` Part 6 (§6.1–6.9) — the live contract the validator enforces. `docs/CONTRACTS.md` is the v1 record, kept for history. They are frozen. If something genuinely cannot be expressed, ask Akshat — do not extend a schema unilaterally.
 
 ## The case library and the sealed answers
