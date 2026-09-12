@@ -65,8 +65,78 @@ python scripts/sync_web_cases.py                           # then Harshita QAs i
   slide number.
 - **`verification.json` for all six spill cases** — Akshat's, by hand, after each bundle validates.
 - **Mumbai's "natural seep" claim** is unsourced and must not ship until it is (D19 amended).
-- **Vessel names/flags/IMOs for cases 1 and 2** need confirming from the Cerulean slick pages; the
-  CHN-vs-Singapore flag conflict on the case-1 MMSI is unresolved in `ANSWERS.md`.
+- ~~Vessel names/flags/IMOs for cases 1 and 2 need confirming~~ — **case 1 done 2026-09-12**, see
+  below. Case 2's vessel deliberately stays unchecked — it is the headline blind result (D31) and
+  confirming its identity now would be the same mistake as verifying its AIS density would have
+  been for case 1.
+- ~~GFW Arabian Sea coverage for cases 5–6~~ — **done 2026-09-12**, see below.
+
+---
+
+## [2026-09-12] Doc-regression fix (commit `626acce`) + GFW coverage confirmed + case-1 flag resolved
+
+### The seam failure this entry exists to record
+
+A prior session's commit `626acce` ("Update master plan and per-person docs") **silently
+overwrote** `00_MASTER_PLAN.md`, `01_AKSHAT_INTEGRATION.md`, `03_ANUSHKA_DRIFT.md`,
+`04_HARSHITA_FRONTEND.md`, `05_HARSHITA_INTEGRATION.md` and `06_JAIVEER_AIS.md` with a stale
+snapshot that predated D23–D31, the case renames, and the Cerulean-API case-onboarding — almost
+certainly written from a cached copy of the docs rather than the files actually on disk. Already
+pushed to `origin/main` before this was caught.
+
+**What it actually broke, not just "was out of date":**
+- **Reintroduced the vessel names *Menuett* and *Panagia Thalass…* directly into the shared,
+  pushed Master Plan** (table row + prose, cases 1 and 2) and into Anushka's doc. Case 2 is the
+  **headline blind result** (D31) — this is a live blind-evaluation leak in a document the whole
+  team reads, not a cosmetic staleness issue.
+- **Reintroduced Jaiveer's original `trajectory` spec** ("compare course to the bearing toward the
+  origin *at closest approach*") as current guidance in `06_JAIVEER_AIS.md`, after it had been
+  found geometrically unsatisfiable, fixed, and blessed (D27). Anyone re-reading that doc for the
+  formula gets the broken one back.
+- Deleted D23–D31 wholesale (nine rulings) and reset several closed items (GFW token, NOAA
+  density, scene ids) back to "blocking"/"pending" text.
+
+**Fix:** `git revert 626acce` for six of the seven files (exact match to `e1379b9`, verified with
+`git diff e1379b9 -- <file>` = empty). Kept one genuine, non-leaking improvement `626acce` made to
+`02_SOUM_DETECTION.md` (an updated, real run command for `case-jacksonville-2024` + a
+`build_case.py`/TRAPS#21 reminder) by cherry-picking just that file's current content instead of
+reverting it. Verified zero hits for the sealed vessel names anywhere outside the gitignored
+`docs/ANSWERS.md`. Committed as `084d4c2` and pushed — `origin/main` no longer carries the leak.
+
+**Lesson for whoever picks this up next, including a fresh AI session:** if you are asked to
+"update the master plan" or any frozen-contract doc, **diff your intended output against what's
+actually on disk (or the latest committed version) before writing it** — do not regenerate a
+long-lived doc from a remembered/cached version of its own content. This is the doc equivalent of
+TRAPS #21 (validating `out/` while the real file lives in `cases/`): a plausible-looking write to
+the right path that is actually stale.
+
+### GFW Arabian Sea coverage — ✅ confirmed, cases 5–6 keep `attribute`
+
+`GFW_API_TOKEN` was already populated in `.env` (782 chars) this session. Ran
+`python scripts/gfw_probe.py --all`:
+
+| Case | Date | Presence | AIS-disabling events | SAR presence |
+|---|---|---|---|---|
+| case-mumbai-2023 | 2023-09-03 | ✅ | ✅ 10,992 returned | ✅ |
+| case-jamnagar-2024 | 2024-02-23 | ✅ | ✅ 9,638 returned | ✅ |
+
+Already recorded in `docs/receipts.md` (pre-existing, untouched by the regression). Propagated the
+"done" status into Master Part 14 and `01_AKSHAT_INTEGRATION.md` A4/§1.5, which still read
+"token empty" / "coverage unchecked" from the `e1379b9` baseline.
+
+⚠️ **Open sub-item for Jaiveer:** the AIS-disabling-events counts (~10–11k) look like a wide-area
+or global count, not local to the case bbox — unconfirmed whether that endpoint accepts a
+region/bbox filter server-side. Filter client-side by position before using it as a local gap
+statistic.
+
+### Case 1 vessel flag — ✅ resolved
+
+`docs/ANSWERS.md` flagged a CHN-vs-MID-563(Singapore) inconsistency on the case-1 MMSI. Cross-
+checked the MMSI/IMO pair against three independent AIS registries (VesselTracker, VesselFinder,
+MyShipTracking) — the old "CHN" note was simply wrong; flag is Singapore, consistent with MID 563,
+and vessel type is Chemical/Oil Products Tanker (not "Other"). `docs/ANSWERS.md` updated with the
+correction and sources. Case 2's vessel identity was deliberately **not** looked up — see "Open,
+in priority order" above.
 
 ---
 

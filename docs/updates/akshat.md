@@ -4,6 +4,63 @@
 
 ---
 
+## [2026-09-12] Doc-regression fix + GFW coverage confirmed + case-1 flag resolved
+
+**Done:** Found that commit `626acce` ("Update master plan and per-person docs", pushed to
+`origin/main` before this session) had silently overwritten `00_MASTER_PLAN.md`,
+`01_AKSHAT_INTEGRATION.md`, `03_ANUSHKA_DRIFT.md`, `04_HARSHITA_FRONTEND.md`,
+`05_HARSHITA_INTEGRATION.md` and `06_JAIVEER_AIS.md` with a stale pre-v4 snapshot — deleting D23–
+D31, **reintroducing the vessel names *Menuett* and *Panagia Thalass…* into the shared Master
+Plan** (a live blind-eval leak on case 2, the headline blind result), and reintroducing Jaiveer's
+already-fixed, geometrically-broken `trajectory` spec as current guidance. Reverted six files to
+`e1379b9` (exact match, verified by diff), kept `02_SOUM_DETECTION.md`'s genuine improvement from
+that commit, verified zero vessel-name hits outside `docs/ANSWERS.md`, committed (`084d4c2`) and
+pushed. Full writeup in `docs/updates/_INTEGRATION.md`.
+
+Then cleared two items that were stale in the just-restored docs but already resolved in reality:
+**GFW Arabian Sea coverage** — token was already in `.env`; ran `gfw_probe.py --all`, presence +
+AIS-disabling events + SAR presence all answer for both `case-mumbai-2023` and
+`case-jamnagar-2024`, so both keep `attribute`. Flagged one open sub-item for Jaiveer: the gap-
+events count (~10–11k) looks unfiltered by bbox, needs client-side filtering before use as a local
+statistic. **Case-1 vessel flag** — cross-checked the MMSI/IMO against three independent AIS
+registries; the old "CHN" note was wrong, MID 563/Singapore is correct, vessel type corrected too.
+`docs/ANSWERS.md` updated. Case 2's vessel was deliberately not looked up (D31).
+
+Propagated both closures into Master Part 14 and `01_AKSHAT_INTEGRATION.md` A4/§1.5.
+`test_validator.py` still 21/21; `validate_case.py cases/` still fails only on the expected
+missing `detections.geojson` across all seven live cases (no regressions from the doc revert,
+since it touched no code or case data).
+
+**Files touched:** `docs/00_MASTER_PLAN.md`, `docs/01_AKSHAT_INTEGRATION.md`,
+`docs/02_SOUM_DETECTION.md`, `docs/03_ANUSHKA_DRIFT.md`, `docs/04_HARSHITA_FRONTEND.md`,
+`docs/05_HARSHITA_INTEGRATION.md`, `docs/06_JAIVEER_AIS.md` (revert commit `084d4c2`) ·
+`docs/00_MASTER_PLAN.md`, `docs/01_AKSHAT_INTEGRATION.md` (status updates, this commit) ·
+`docs/ANSWERS.md` (gitignored, not pushed) · `docs/updates/_INTEGRATION.md`
+
+**Run command:**
+```bash
+git log --oneline -5 -- docs/01_AKSHAT_INTEGRATION.md   # confirms 626acce sits directly on e1379b9
+git diff e1379b9 -- docs/00_MASTER_PLAN.md               # empty after the revert = exact match
+python scripts/gfw_probe.py --all                         # presence/events/SAR all OK for cases 5-6
+python scripts/test_validator.py                          # 21/21
+python scripts/validate_case.py cases/                    # fails only on detections.geojson × 7
+```
+
+**Open issues / for you:**
+- **Check `origin/main` teammates may have already pulled `626acce`.** If anyone branched off it,
+  their branch carries the vessel names and the broken formula — worth a one-line heads-up to
+  rebase onto `084d4c2` or later.
+- **Send Jaiveer the GFW gap-events bbox-filtering caveat** — not yet confirmed whether the
+  endpoint filters server-side at all.
+- Everything else open is unchanged from the previous entry: per-case announcements, Soum's
+  no-spill nomination, Mumbai's unsourced natural-seep claim, `verification.json` for all six
+  spill cases (still deliberately unwritten — see `verification/README.md`).
+
+**Next:** confirm no teammate branch is built on the bad commit → Soum's `detections.geojson` on
+Jacksonville is still the critical-path item → first real four-stage bundle.
+
+---
+
 ## [2026-09-12] Phase 1/2 — Master Plan v4: eight-case library onboarded, six scenes exported, answers sealed
 
 **Done:** Replaced the v3 planning docs with **Master Plan v4** and **01_AKSHAT_INTEGRATION v3**,

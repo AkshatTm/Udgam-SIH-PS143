@@ -772,12 +772,13 @@ up in ten seconds. The absence we are pointing at is enforcement, not observatio
 |---|---|---|---|
 | ~~Verify NOAA AIS density at Jacksonville's position~~ | Jaiveer | — | **DONE** — 69 s interval, holds to 240 km, no thinning. Hero confirmed, no replan. §3.2 |
 | **Phase 8 injected-offender curve, with a per-component ablation** | **Jaiveer** | any weight change; the honesty slide | **high** — two components measured near-inert, and nothing moves without this |
-| **Put the GFW token in `.env`** — `GFW_API_TOKEN` is present but empty | Akshat | `gfw_probe.py`, and whether cases 5–6 keep `attribute` | **high** |
+| ~~Put the GFW token in `.env`~~ | Akshat | — | **DONE** — token loaded, 782 chars |
 | ~~Full Sentinel-1 scene ids for cases 1, 2, 4, 5~~ | Akshat | — | **DONE** — all six resolved from the Cerulean API (D23), §3.2 |
 | ~~Download the Cerulean record for every case~~ | Akshat | — | **DONE** — `scripts/fetch_cerulean.py`, polygons in each bundle |
 | Confirm VH availability per case via `bandNames()` | Akshat | Soum's best model | high — runs with each export |
-| GFW Arabian Sea coverage check for cases 5 and 6 | Akshat | whether `attribute` runs at all on the Indian cases | high — token is in hand |
+| ~~GFW Arabian Sea coverage check for cases 5 and 6~~ | Akshat | — | **DONE** — `gfw_probe.py --all`, 2026-09-12: presence, gap events and SAR-detection endpoints all answer for both `2023-09-03` (Mumbai) and `2024-02-23` (Jamnagar). Cases 5–6 keep `attribute`. ⚠️ Gap-events endpoint returns a large unfiltered count (~10–11k) — **not yet confirmed it accepts a bbox/region filter**; Jaiveer must filter client-side before using it, or the "events" figure is national, not local. |
 | **Source the Mumbai "natural seep area" warning, or drop it** (§3.2, D19) | Akshat | whether `natural_seep` fires on any case | high |
+| ~~Confirm the case-1 vessel flag~~ | Akshat | — | **DONE** — cross-checked against three independent AIS databases; the old "CHN" note was wrong, MID `563` (Singapore) is correct. Detail in `docs/ANSWERS.md`. |
 | Nominate the no-spill scene from Zenodo Part 3 | Soum | one demo screen | medium — case 8 is held out of `index.json` until it lands |
 | Read Dasari et al. 2021 and resolve the Ennore contradiction (D18) | Akshat | whether Ennore 2017 returns from `cases/_archive/` | medium |
 | Project name | Urooz | deck, UI header, repo | medium |

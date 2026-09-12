@@ -76,9 +76,11 @@ saw it, even named candidates, and **nothing happened.** Never say "no record an
 | A12 | Confirm **2-band VV+VH GeoTIFF** exports | Soum | ✅ shipped (D14) |
 | A13 | Approve `natural_seep` as a fourth `source_type` (D19) | — | ✅ ruled |
 | A14 | Approve `ais_source` on `meta.json` (D20) | — | ✅ ruled + validated |
-| A15 | Tell Jaiveer to **verify NOAA density at Jacksonville** | Jaiveer | ⬜ **still blocking — send it** |
-| A16 | Tell the team `docs/ANSWERS.md` exists and you hold it | everyone | ⬜ send with the case broadcast |
-| A17 | Broadcast **D23–D26** | everyone | ⬜ new, send with the case broadcast |
+| A15 | Tell Jaiveer to **verify NOAA density at Jacksonville** | Jaiveer | ✅ done — 69 s interval, holds to 240 km, hero confirmed |
+| A16 | Tell the team `docs/ANSWERS.md` exists and you hold it | everyone | ✅ sent |
+| A17 | Broadcast **D23–D26** | everyone | ✅ sent |
+| A18 | GFW token in `.env` + Arabian Sea coverage check for cases 5–6 | Akshat | ✅ done 2026-09-12 — `gfw_probe.py --all`: presence, gap-events and SAR-detection endpoints all answer for both cases; `attribute` stays live on 5–6. Gap-events count is large and its bbox-filtering is unconfirmed — flagged to Jaiveer, do not treat the raw count as local |
+| A19 | Confirm case-1 vessel flag (CHN vs the MID-563 Singapore mismatch) | Akshat | ✅ done — cross-checked 3 independent AIS registries; old "CHN" note was wrong, MID 563/Singapore is correct. `docs/ANSWERS.md` updated |
 
 ## A5. Problems that are still live
 
@@ -142,13 +144,18 @@ record it in `bounds.json` (`vh_available`).
 Global Fishing Watch). Required whenever `attribute` is in `acts_available`, and the validator now
 enforces it. It decides which of Jaiveer's scoring components can fire at all (D20).
 
-### 1.5 Global Fishing Watch — token in hand, coverage unchecked ⬜
-Token goes in `.env` as `GFW_API_TOKEN`; `.env` is already gitignored. Run
-`scripts/gfw_probe.py` for **2023-09-03** and **2024-02-23** over the Arabian Sea.
+### 1.5 Global Fishing Watch ✅ DONE — coverage confirmed for both Indian cases
+Token is in `.env` (`GFW_API_TOKEN`, gitignored). `scripts/gfw_probe.py --all` run 2026-09-12:
+presence, AIS-disabling events, and SAR vessel-detections all answer for **2023-09-03** (Mumbai)
+and **2024-02-23** (Jamnagar) over the Arabian Sea box. **Cases 5 and 6 keep `attribute`** — the
+Part I contingency below did not trigger.
 
-**A correction to carry:** the GFW report in circulation claims the AIS Vessel Presence dataset returns MMSI, name, IMO and positions. **It does not.** GFW's own documentation says it *"shows vessel presence patterns and movement corridors, but does not provide individual vessel positions"* — it is a gridded layer served through the 4Wings tile API. For tracks you want the **Vessels API** and the **Events API**; the latter includes **AIS-disabling events**, which is Jaiveer's gap analysis already productised on GFW's full-resolution underlying data, so gap analysis may still be reachable *through that endpoint* even though it is impossible from the hourly presence layer. There is also a **SAR vessel detections** endpoint that flags non-broadcasting vessels — use it to *validate* Soum's ship detector, never to replace it, because building it ourselves is the differentiator.
+⚠️ **One caveat to carry into Jaiveer's scoring:** the gap-events endpoint returned a large count
+(~10–11k events) per case with no confirmation yet that it accepts a bbox/region filter — that
+figure may be a wide-area or global count, not local to the case box. Jaiveer must filter
+client-side by position before treating it as a local gap statistic.
 
-If coverage fails, cases 5 and 6 drop to `detect + trace` and the Indian story becomes *"the query reduces to one database lookup, and the database does not exist"* — which is still a strong screen. See Part I.
+**The correction that still stands:** the GFW report in circulation claims the AIS Vessel Presence dataset returns MMSI, name, IMO and positions. **It does not.** GFW's own documentation says it *"shows vessel presence patterns and movement corridors, but does not provide individual vessel positions"* — it is a gridded layer served through the 4Wings tile API. For tracks you want the **Vessels API** and the **Events API**; the latter includes **AIS-disabling events**, which is Jaiveer's gap analysis already productised on GFW's full-resolution underlying data. There is also a **SAR vessel detections** endpoint that flags non-broadcasting vessels — use it to *validate* Soum's ship detector, never to replace it, because building it ourselves is the differentiator.
 
 ### 1.6 The no-spill scene ⬜
 Ask Soum for one clean-ocean scene from Zenodo Part 3. Case 8 is scaffolded and **held out of
