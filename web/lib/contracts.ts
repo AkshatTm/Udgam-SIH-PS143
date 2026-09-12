@@ -189,6 +189,9 @@ export interface RawFunnel {
   in_window: number;
   plausible: number;
   scored: number;
+  /** Optional (Master §6.7, absent from the v1/CONTRACTS.md shape) — vessels excluded before
+   *  scoring for having fewer than 5 AIS position reports. Not part of the narrowing sequence
+   *  above; a side count, not a fifth stage. */
   dropped_short_track?: number;
 }
 
@@ -196,13 +199,15 @@ export interface RawFunnel {
 export type SourceType = "vessel" | "dark_vessel" | "infrastructure" | "natural_seep";
 
 /**
- * Per-component scores. **A `null` is NOT a zero** — it means the component could not be
- * measured on this case, the remaining weights renormalised without it, and the bar must
- * render "n/a". Gated to null by: `gap`/`slowdown` on a gfw_hourly case or a vessel that was
- * not under way (D9, D20); `trajectory` when the vessel was never seen outside radius_90_km
- * (D27); `type_prior` when every candidate shares a type class (D28).
+ * Master §6.7 — the per-component score breakdown behind a suspect's overall `score`. Each
+ * key is optional/nullable: absent or `null` both mean "not applicable for this vessel/case"
+ * (e.g. `gap`/`slowdown` on a gfw_hourly case) — never a fabricated 0. Values, when present,
+ * are in [0, 1] like `score`. Gated to null by: `gap`/`slowdown` on a gfw_hourly case or a
+ * vessel that was not under way (D9, D20); `trajectory` when the vessel was never seen outside
+ * radius_90_km (D27); `type_prior` when every candidate shares a type class (D28). The index
+ * signature lets a producer add a new component without a contract break.
  */
-export interface RawComponents {
+export interface RawSuspectComponents {
   proximity?: number | null;
   parity?: number | null;
   temporality?: number | null;
@@ -213,17 +218,28 @@ export interface RawComponents {
   [component: string]: number | null | undefined;
 }
 
+/** Master §6.7, `06_JAIVEER_AIS.md:374-379` — cross-case vessel history. `cases` are OTHER
+ *  case ids where this same vessel was also scored; `best_rank` is its best (lowest) rank
+ *  across those. Not validator-enforced anywhere (unlike dark_vessels/infrastructure) — this
+ *  is a documented-but-unvalidated shape, same category as `dropped_short_track`. Jaiveer's own
+ *  doc calls this "a flag to investigate, never as corroboration" — never overclaim it. */
+export interface RawRepeatOffender {
+  cases: string[];
+  best_rank: number;
+}
+
 export interface RawSuspect {
   source_type?: SourceType;
   mmsi: string;
   name: string;
   vessel_type?: string;
   score: number; // [0, 1]
-  components?: RawComponents;
+  components?: RawSuspectComponents;
   /** Why a component reads the way it does — keyed by component name. Explanation, not
    *  evidence: it never adds a fact the card is not already showing. Render it wherever a
    *  bar is "n/a", because an unexplained "n/a" reads as a broken feature (D29). */
   component_notes?: Record<string, string>;
+  repeat_offender?: RawRepeatOffender;
   closest_km: number;
   closest_time?: string; // UTC ISO 8601, trailing Z
   grid_probability?: number;
@@ -232,12 +248,12 @@ export interface RawSuspect {
   /** Closest approach happened within one reporting interval of the search-box edge, so the
    *  track is cut off and closest_km may be understated. Surface it, don't hide it. */
   edge_truncated?: boolean;
-  repeat_offender?: { cases: string[]; best_rank: number };
   reasons: string[];
 }
 
-/** Radar sees a ship; AIS reports nothing. It has NO identity — `mmsi` is always null and an
- *  invented one is a contract violation the validator rejects. */
+/** Master §6.7, validator `check_dark_vessels` — a radar contact with NO corresponding AIS
+ *  broadcast. `mmsi` is always null/absent by definition (no AIS = no identity) and the
+ *  validator rejects a non-null value outright. Only `lon`/`lat`/`score` are required. */
 export interface RawDarkVessel {
   source_type?: "dark_vessel";
   mmsi?: null;
@@ -245,19 +261,22 @@ export interface RawDarkVessel {
   lon: number;
   lat: number;
   est_length_m?: number;
-  score: number;
+  score: number; // [0, 1]
   angular_deviation_deg?: number;
   reasons?: string[];
 }
 
-/** A pipeline, platform or wreck — stationary. Turns "no vessel responsible" from a miss into
- *  the correct answer (D10). */
+/** Master §6.7, validator (`suspects.json/infrastructure[i]`) — a fixed, named facility (pipeline,
+ *  platform, wreck) scored against the origin. No `mmsi` (stationary, no AIS identity). Unlike
+ *  `RawDarkVessel`, `name` is required — the validator's `need_keys` demands it. There is no
+ *  `distance`/`facility_type`/`relevance` field anywhere in the contract; only `reasons[]`
+ *  (producer prose) explains the finding. */
 export interface RawInfrastructure {
   source_type?: "infrastructure";
   name: string;
   lon: number;
   lat: number;
-  score: number;
+  score: number; // [0, 1]
   reasons?: string[];
 }
 
@@ -279,7 +298,10 @@ export interface RawExcludedVessel {
 export interface RawSuspectsBundle {
   funnel: RawFunnel;
   suspects: RawSuspect[];
+  /** Optional (Master §6.7, absent from the v1/CONTRACTS.md shape) — radar contacts with no
+   *  AIS. Absent entirely on every fixture that currently exists. */
   dark_vessels?: RawDarkVessel[];
+  /** Optional (Master §6.7) — fixed infrastructure findings. Absent on every current fixture. */
   infrastructure?: RawInfrastructure[];
   natural_seep?: RawNaturalSeep;
   excluded: RawExcludedVessel[];

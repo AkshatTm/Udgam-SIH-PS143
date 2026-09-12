@@ -9,13 +9,45 @@
 // is a cross-file, presentation-time decision made in the UI (ContextPanel), not a parsing
 // concern here. This loader only asserts that suspects.json is internally well-formed.
 
-import type { RawExcludedVessel, RawFunnel, RawSuspect, RawSuspectsBundle } from "./contracts";
+import type {
+  RawDarkVessel,
+  RawInfrastructure,
+  RawExcludedVessel,
+  RawFunnel,
+  RawRepeatOffender,
+  RawSuspect,
+  RawSuspectComponents,
+  RawSuspectsBundle,
+} from "./contracts";
 
 export interface Funnel {
   inRegion: number;
   inWindow: number;
   plausible: number;
   scored: number;
+  /** null when the bundle doesn't carry this field — never a fabricated 0. A side count
+   *  (vessels dropped for <5 AIS reports), not a fifth narrowing stage. */
+  droppedShortTrack: number | null;
+}
+
+/** Parsed per-component breakdown. Each field is `null` when the raw bundle omits it or sets
+ *  it `null` — the two are treated identically ("not applicable"), never coerced to 0. */
+export interface SuspectComponents {
+  proximity: number | null;
+  parity: number | null;
+  temporality: number | null;
+  trajectory: number | null;
+  gap: number | null;
+  slowdown: number | null;
+  typePrior: number | null;
+}
+
+/** Cross-case vessel history (Master §6.7, docs/04 Phase 3.7). `cases` are OTHER case ids this
+ *  same vessel was also scored in — never dates, never incident descriptions, since none exist
+ *  in the contract. Not validator-enforced; may never be populated by any real bundle. */
+export interface RepeatOffender {
+  cases: string[];
+  bestRank: number;
 }
 
 export interface Suspect {
@@ -23,6 +55,12 @@ export interface Suspect {
   name: string;
   vesselType?: string;
   score: number;
+  /** null when the bundle carries no `components` breakdown at all (e.g. the v1 shape) —
+   *  distinct from a present breakdown whose individual fields are null. */
+  components: SuspectComponents | null;
+  /** null when this suspect carries no repeat-offender record at all — never inferred from
+   *  score, mmsi recurrence, or anything else computed client-side. */
+  repeatOffender: RepeatOffender | null;
   closestKm: number;
   closestTime?: string;
   headingConsistent?: boolean;
@@ -37,11 +75,40 @@ export interface ExcludedVessel {
   reason: string;
 }
 
+/** A radar contact with no AIS broadcast (Master §6.7). Deliberately has no `mmsi` field at
+ *  all — one never exists for a dark vessel, so there is nothing to carry forward or render. */
+export interface DarkVessel {
+  name: string | null;
+  lon: number;
+  lat: number;
+  estLengthM: number | null;
+  score: number;
+  angularDeviationDeg: number | null;
+  reasons: string[];
+}
+
+/** A fixed, named facility scored against the origin (Master §6.7). Like `DarkVessel`, no
+ *  `mmsi` — stationary infrastructure has no AIS identity either. Unlike `DarkVessel`, `name`
+ *  is always present (validator-required). No distance/relevance field exists in the contract
+ *  — only the raw position and the producer's own `reasons`. */
+export interface Infrastructure {
+  name: string;
+  lon: number;
+  lat: number;
+  score: number;
+  reasons: string[];
+}
+
 export interface SuspectsBundle {
   funnel: Funnel;
   /** Sorted by descending score, exactly as the file provides — never re-sorted here. */
   suspects: Suspect[];
   excluded: ExcludedVessel[];
+  /** Always an array — absent-on-the-wire and present-but-empty both mean "no dark vessels for
+   *  this case," which is the same thing to render (nothing). */
+  darkVessels: DarkVessel[];
+  /** Always an array, same convention as darkVessels. */
+  infrastructure: Infrastructure[];
   /** docs/04 D2 — Stage 3 deliberately refused to attribute. When true, `suspects` is empty. */
   abstained: boolean;
   /** The case's stated reason for abstaining, exactly as supplied. `null` when not abstaining
@@ -81,6 +148,55 @@ function validateFunnel(f: RawFunnel, id: string): void {
     if (seq[i] > seq[i - 1]) {
       throw new Error(`${where}: counts must never increase down the funnel — got [${seq.join(", ")}]`);
     }
+  }
+  if (f.dropped_short_track !== undefined) {
+    if (!Number.isInteger(f.dropped_short_track) || f.dropped_short_track < 0) {
+      throw new Error(
+        `${where}.dropped_short_track must be a non-negative integer when present (got ${f.dropped_short_track})`,
+      );
+    }
+  }
+}
+
+const COMPONENT_KEYS = [
+  "proximity",
+  "parity",
+  "temporality",
+  "trajectory",
+  "gap",
+  "slowdown",
+  "type_prior",
+] as const;
+
+function validateComponents(c: RawSuspectComponents, where: string): void {
+  if (!c || typeof c !== "object") {
+    throw new Error(`${where}.components: must be an object when present`);
+  }
+  for (const k of COMPONENT_KEYS) {
+    const v = c[k];
+    if (v === undefined || v === null) continue;
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 1) {
+      throw new Error(`${where}.components.${k} must be a finite number in [0, 1] or null (got ${v})`);
+    }
+  }
+}
+
+// The claim "repeat offender" only means something with actual supporting cases — an empty
+// `cases` array would assert the label while citing zero evidence for it.
+function validateRepeatOffender(ro: RawRepeatOffender, where: string): void {
+  if (!ro || typeof ro !== "object") {
+    throw new Error(`${where}.repeat_offender: must be an object when present`);
+  }
+  if (!Array.isArray(ro.cases) || ro.cases.length === 0) {
+    throw new Error(`${where}.repeat_offender.cases: must be a non-empty array — a repeat-offender claim needs at least one other case as evidence`);
+  }
+  for (const c of ro.cases) {
+    if (typeof c !== "string" || c.trim().length === 0) {
+      throw new Error(`${where}.repeat_offender.cases: contains a non-string or empty case id`);
+    }
+  }
+  if (!Number.isInteger(ro.best_rank) || ro.best_rank < 1) {
+    throw new Error(`${where}.repeat_offender.best_rank: must be a positive integer (got ${ro.best_rank})`);
   }
 }
 
@@ -122,6 +238,12 @@ function validateSuspect(s: RawSuspect, i: number, id: string): void {
   if (s.heading_consistent !== undefined && typeof s.heading_consistent !== "boolean") {
     throw new Error(`${where}: "heading_consistent" must be a boolean`);
   }
+  if (s.components !== undefined) {
+    validateComponents(s.components, where);
+  }
+  if (s.repeat_offender !== undefined) {
+    validateRepeatOffender(s.repeat_offender, where);
+  }
 }
 
 function validateExcluded(e: RawExcludedVessel, i: number, id: string): void {
@@ -139,6 +261,71 @@ function validateExcluded(e: RawExcludedVessel, i: number, id: string): void {
   }
 }
 
+// Mirrors the lon/lat range + swap-guard already used in vessels.ts / loadCase.ts — never
+// trust a coordinate pair without checking it, even on an optional field.
+function validateDarkVessel(dv: RawDarkVessel, i: number, id: string): void {
+  const where = `${id}/suspects.json/dark_vessels[${i}]`;
+  if (typeof dv.lon !== "number" || !Number.isFinite(dv.lon) || dv.lon < -180 || dv.lon > 180) {
+    throw new Error(`${where}: "lon" must be a finite number in [-180, 180]`);
+  }
+  if (typeof dv.lat !== "number" || !Number.isFinite(dv.lat) || dv.lat < -90 || dv.lat > 90) {
+    throw new Error(`${where}: "lat" must be a finite number in [-90, 90]`);
+  }
+  if (typeof dv.score !== "number" || !Number.isFinite(dv.score) || dv.score < 0 || dv.score > 1) {
+    throw new Error(`${where}: "score" must be a finite number in [0, 1]`);
+  }
+  // A dark vessel has no AIS identity by definition — the validator (check_dark_vessels)
+  // rejects a non-null mmsi outright, and so does this loader.
+  if (dv.mmsi !== undefined && dv.mmsi !== null) {
+    throw new Error(`${where}: a dark vessel has no AIS identity — "mmsi" must be null or absent`);
+  }
+  if (dv.est_length_m !== undefined && (typeof dv.est_length_m !== "number" || !Number.isFinite(dv.est_length_m) || dv.est_length_m < 0)) {
+    throw new Error(`${where}: "est_length_m" must be a non-negative finite number when present`);
+  }
+  if (
+    dv.angular_deviation_deg !== undefined &&
+    (typeof dv.angular_deviation_deg !== "number" || !Number.isFinite(dv.angular_deviation_deg))
+  ) {
+    throw new Error(`${where}: "angular_deviation_deg" must be a finite number when present`);
+  }
+  if (dv.reasons !== undefined) {
+    if (!Array.isArray(dv.reasons)) {
+      throw new Error(`${where}: "reasons" must be an array when present`);
+    }
+    for (const r of dv.reasons) {
+      if (typeof r !== "string" || r.trim().length === 0) {
+        throw new Error(`${where}: "reasons" contains an empty string`);
+      }
+    }
+  }
+}
+
+function validateInfrastructure(inf: RawInfrastructure, i: number, id: string): void {
+  const where = `${id}/suspects.json/infrastructure[${i}]`;
+  if (typeof inf.name !== "string" || inf.name.trim().length === 0) {
+    throw new Error(`${where}: "name" must be a non-empty string`);
+  }
+  if (typeof inf.lon !== "number" || !Number.isFinite(inf.lon) || inf.lon < -180 || inf.lon > 180) {
+    throw new Error(`${where}: "lon" must be a finite number in [-180, 180]`);
+  }
+  if (typeof inf.lat !== "number" || !Number.isFinite(inf.lat) || inf.lat < -90 || inf.lat > 90) {
+    throw new Error(`${where}: "lat" must be a finite number in [-90, 90]`);
+  }
+  if (typeof inf.score !== "number" || !Number.isFinite(inf.score) || inf.score < 0 || inf.score > 1) {
+    throw new Error(`${where}: "score" must be a finite number in [0, 1]`);
+  }
+  if (inf.reasons !== undefined) {
+    if (!Array.isArray(inf.reasons)) {
+      throw new Error(`${where}: "reasons" must be an array when present`);
+    }
+    for (const r of inf.reasons) {
+      if (typeof r !== "string" || r.trim().length === 0) {
+        throw new Error(`${where}: "reasons" contains an empty string`);
+      }
+    }
+  }
+}
+
 export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
   const raw = await fetchJson<RawSuspectsBundle>(`/cases/${id}/suspects.json`);
   const where = `${id}/suspects.json`;
@@ -151,6 +338,14 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
   if (!Array.isArray(raw.excluded)) {
     throw new Error(`${where}: "excluded" must be an array`);
   }
+  if (raw.dark_vessels !== undefined && !Array.isArray(raw.dark_vessels)) {
+    throw new Error(`${where}: "dark_vessels" must be an array when present`);
+  }
+  (raw.dark_vessels ?? []).forEach((dv, i) => validateDarkVessel(dv, i, id));
+  if (raw.infrastructure !== undefined && !Array.isArray(raw.infrastructure)) {
+    throw new Error(`${where}: "infrastructure" must be an array when present`);
+  }
+  (raw.infrastructure ?? []).forEach((inf, i) => validateInfrastructure(inf, i, id));
 
   validateFunnel(raw.funnel, id);
   if (raw.funnel.scored !== raw.suspects.length) {
@@ -205,12 +400,28 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
       inWindow: raw.funnel.in_window,
       plausible: raw.funnel.plausible,
       scored: raw.funnel.scored,
+      droppedShortTrack:
+        raw.funnel.dropped_short_track !== undefined ? raw.funnel.dropped_short_track : null,
     },
     suspects: raw.suspects.map((s) => ({
       mmsi: s.mmsi,
       name: s.name,
       vesselType: s.vessel_type,
       score: s.score,
+      components: s.components
+        ? {
+            proximity: s.components.proximity ?? null,
+            parity: s.components.parity ?? null,
+            temporality: s.components.temporality ?? null,
+            trajectory: s.components.trajectory ?? null,
+            gap: s.components.gap ?? null,
+            slowdown: s.components.slowdown ?? null,
+            typePrior: s.components.type_prior ?? null,
+          }
+        : null,
+      repeatOffender: s.repeat_offender
+        ? { cases: s.repeat_offender.cases, bestRank: s.repeat_offender.best_rank }
+        : null,
       closestKm: s.closest_km,
       closestTime: s.closest_time,
       headingConsistent: s.heading_consistent,
@@ -222,6 +433,22 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
       name: e.name,
       closestKm: e.closest_km,
       reason: e.reason,
+    })),
+    darkVessels: (raw.dark_vessels ?? []).map((dv) => ({
+      name: dv.name ?? null,
+      lon: dv.lon,
+      lat: dv.lat,
+      estLengthM: dv.est_length_m ?? null,
+      score: dv.score,
+      angularDeviationDeg: dv.angular_deviation_deg ?? null,
+      reasons: dv.reasons ?? [],
+    })),
+    infrastructure: (raw.infrastructure ?? []).map((inf) => ({
+      name: inf.name,
+      lon: inf.lon,
+      lat: inf.lat,
+      score: inf.score,
+      reasons: inf.reasons ?? [],
     })),
     abstained,
     abstainReason,

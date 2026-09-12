@@ -11,7 +11,15 @@ import {
 import { useAppStore } from "@/lib/store";
 import type { DetectionProperties } from "@/lib/contracts";
 import type { OriginBundle } from "@/lib/origin";
-import type { ExcludedVessel, Funnel, Suspect, SuspectsBundle } from "@/lib/suspects";
+import type {
+  DarkVessel,
+  ExcludedVessel,
+  Funnel,
+  Infrastructure,
+  Suspect,
+  SuspectComponents,
+  SuspectsBundle,
+} from "@/lib/suspects";
 import InfoDot from "@/components/InfoDot";
 
 // Classification colours — same hex as the map detection polygons.
@@ -435,21 +443,92 @@ function FunnelBar({ funnel }: { funnel: Funnel }) {
   );
 }
 
-function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
+const COMPONENT_LABELS: { key: keyof SuspectComponents; label: string }[] = [
+  { key: "proximity", label: "Proximity" },
+  { key: "parity", label: "Parity" },
+  { key: "temporality", label: "Temporality" },
+  { key: "trajectory", label: "Trajectory" },
+  { key: "gap", label: "Gap" },
+  { key: "slowdown", label: "Slowdown" },
+  { key: "typePrior", label: "Type prior" },
+];
+
+/** Score-component breakdown behind a suspect's overall score (docs/04 Phase 3.2, Master
+ * §6.7). Same bar-track visual language as FunnelBar — no new visual system. A `null`
+ * component (e.g. `gap`/`slowdown` on a gfw_hourly case) renders "n/a" with NO bar underneath:
+ * a zero-width bar would claim a measurement that was never possible. */
+function ComponentBars({ components }: { components: SuspectComponents }) {
   return (
-    <div className="rounded border border-white/[0.08] p-3">
+    <div className="mt-2 space-y-1.5">
+      {COMPONENT_LABELS.map(({ key, label }) => {
+        const v = components[key];
+        return (
+          <div key={key}>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[10px] text-white/45">{label}</span>
+              <span className="font-mono text-[10px] text-white/70 tabular-nums">
+                {v === null ? "n/a" : v.toFixed(2)}
+              </span>
+            </div>
+            {v !== null && (
+              <div className="mt-0.5 h-1 rounded-full bg-white/[0.06]">
+                <div
+                  className="h-1 rounded-full bg-[#f97316]"
+                  style={{ width: `${Math.max(2, Math.min(100, v * 100))}%` }}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
+  // docs/04 Phase 3.3 — hover lifts through the same store selectedDetectionId already uses,
+  // no new state mechanism. MapView reads hoveredSuspectMmsi to emphasise/dim the matching
+  // vessel track; leaving the card clears it, restoring normal styling everywhere.
+  const hoveredSuspectMmsi = useAppStore((st) => st.hoveredSuspectMmsi);
+  const setHoveredSuspect = useAppStore((st) => st.setHoveredSuspect);
+  const isHovered = hoveredSuspectMmsi === s.mmsi;
+  return (
+    <div
+      className={`rounded border p-3 transition-colors ${
+        isHovered ? "border-[#f97316]/60 bg-[#f97316]/[0.04]" : "border-white/[0.08]"
+      }`}
+      onMouseEnter={() => setHoveredSuspect(s.mmsi)}
+      onMouseLeave={() => setHoveredSuspect(null)}
+    >
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
             Suspect {String(rank).padStart(2, "0")}
           </div>
-          <div className="mt-0.5 text-[14px] font-semibold leading-tight text-white/90">
-            {s.name}
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className="text-[14px] font-semibold leading-tight text-white/90">
+              {s.name}
+            </span>
+            {/* docs/04 Phase 3.7 — badge near identity, per the roadmap's own placement ask.
+                Only ever rendered from a real repeat_offender record — never inferred from
+                score, mmsi recurrence, or anything computed here. */}
+            {s.repeatOffender && (
+              <span className="inline-flex shrink-0 items-center rounded-full border border-[#f97316]/40 bg-[#f97316]/10 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-[#f97316]">
+                Repeat
+              </span>
+            )}
           </div>
           <div className="mt-0.5 font-mono text-[10px] text-white/40">
             MMSI {s.mmsi}
             {s.vesselType ? ` · ${s.vesselType}` : ""}
           </div>
+          {s.repeatOffender && (
+            <p className="mt-1 text-[10px] leading-relaxed text-[#f97316]/70">
+              Also scored in {s.repeatOffender.cases.length} other case
+              {s.repeatOffender.cases.length === 1 ? "" : "s"} — best rank #
+              {s.repeatOffender.bestRank}
+            </p>
+          )}
         </div>
         <div className="shrink-0 font-mono text-[15px] font-semibold text-[#f97316]">
           {fmt(s.score * 100, 0)}%
@@ -478,6 +557,17 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
         )}
       </div>
 
+      {/* null (no `components` on this bundle at all) → section hidden entirely, never a
+          fabricated breakdown. Present-but-per-field-null is handled inside ComponentBars. */}
+      {s.components && (
+        <>
+          <div className="mt-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-white/30">
+            Score Breakdown
+          </div>
+          <ComponentBars components={s.components} />
+        </>
+      )}
+
       <ul className="mt-2 space-y-1">
         {s.reasons.map((r, i) => (
           <li key={i} className="flex gap-1.5 text-[10px] leading-snug text-white/50">
@@ -504,6 +594,68 @@ function ExcludedCard({ e }: { e: ExcludedVessel }) {
         {e.closestKm !== undefined ? ` · ${fmt(e.closestKm, 1)} km` : ""}
       </div>
       <p className="mt-1.5 text-[10px] leading-relaxed text-white/40">{e.reason}</p>
+    </div>
+  );
+}
+
+// Same rose accent as the map's dark-vessel ScatterplotLayer (MapView.tsx DARK_VESSEL_COLOR) —
+// the card and the marker are visibly the same thing. No MMSI row: a dark vessel has no AIS
+// identity by definition (docs/04 Phase 3.5, Master §6.7), so there is nothing to show there.
+function DarkVesselCard({ v }: { v: DarkVessel }) {
+  return (
+    <div className="rounded border border-[#f43f5e]/25 bg-[#f43f5e]/[0.05] p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[13px] font-medium text-[#fda4af]">
+          {v.name ?? `Radar contact ${fmt(v.lat, 3)}°, ${fmt(v.lon, 3)}°`}
+        </div>
+        <div className="shrink-0 font-mono text-[13px] font-semibold text-[#fda4af]">
+          {fmt(v.score * 100, 0)}%
+        </div>
+      </div>
+      <div className="mt-1 space-y-0.5">
+        {v.estLengthM !== null && <Row label="Estimated length" value={`${fmt(v.estLengthM, 0)} m`} />}
+        {v.angularDeviationDeg !== null && (
+          <Row label="Bearing deviation" value={`${fmt(v.angularDeviationDeg, 0)}°`} />
+        )}
+      </div>
+      {v.reasons.length > 0 && (
+        <ul className="mt-1.5 space-y-1">
+          {v.reasons.map((r, i) => (
+            <li key={i} className="flex gap-1.5 text-[10px] leading-snug text-[#fda4af]/70">
+              <span className="shrink-0 text-[#fda4af]/40">–</span>
+              <span>{r}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Same violet accent as the map's infrastructure ScatterplotLayer (MapView.tsx
+// INFRASTRUCTURE_COLOR). No MMSI row (stationary, no AIS identity — same reasoning as
+// DarkVesselCard). Wording stays neutral ("Infrastructure Finding") — proximity is not
+// attribution, and any causal claim comes only from the producer's own `reasons` text,
+// never from a label this component invents.
+function InfrastructureCard({ f }: { f: Infrastructure }) {
+  return (
+    <div className="rounded border border-[#a78bfa]/25 bg-[#a78bfa]/[0.05] p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[13px] font-medium text-[#c4b5fd]">{f.name}</div>
+        <div className="shrink-0 font-mono text-[13px] font-semibold text-[#c4b5fd]">
+          {fmt(f.score * 100, 0)}%
+        </div>
+      </div>
+      {f.reasons.length > 0 && (
+        <ul className="mt-1.5 space-y-1">
+          {f.reasons.map((r, i) => (
+            <li key={i} className="flex gap-1.5 text-[10px] leading-snug text-[#c4b5fd]/70">
+              <span className="shrink-0 text-[#c4b5fd]/40">–</span>
+              <span>{r}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -542,6 +694,14 @@ function AttributeCard({
       <SectionLabel>Attribution Funnel</SectionLabel>
       <div className="mt-2">
         <FunnelBar funnel={suspects.funnel} />
+        {/* A side count, not a fifth narrowing stage — kept out of FunnelBar's bars so it can
+            never be misread as part of the in_region→scored sequence. null (field absent) ≠ 0
+            (field present and zero) — see Funnel.droppedShortTrack. */}
+        {suspects.funnel.droppedShortTrack !== null && (
+          <p className="mt-2 text-[10px] leading-relaxed text-white/45">
+            {suspects.funnel.droppedShortTrack} excluded — fewer than 5 AIS reports
+          </p>
+        )}
       </div>
 
       <Divider />
@@ -591,10 +751,42 @@ function AttributeCard({
 
           <SectionLabel>Excluded</SectionLabel>
           <div className="mt-2 space-y-2">
-            {suspects.excluded.map((e) => (
-              <ExcludedCard key={e.mmsi} e={e} />
-            ))}
+            {suspects.excluded.length === 0 ? (
+              <p className="text-[11px] text-white/35">No vessels excluded.</p>
+            ) : (
+              suspects.excluded.map((e) => <ExcludedCard key={e.mmsi} e={e} />)
+            )}
           </div>
+
+          {/* docs/04 Phase 3.5 — hidden entirely when empty, same convention as Score
+              Breakdown: a rare/exceptional category should not clutter the panel with a
+              "none" message the way Suspects/Excluded (always-expected sections) do. */}
+          {suspects.darkVessels.length > 0 && (
+            <>
+              <Divider />
+              <SectionLabel>Dark Vessels</SectionLabel>
+              <div className="mt-2 space-y-2">
+                {suspects.darkVessels.map((v, i) => (
+                  <DarkVesselCard key={i} v={v} />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* docs/04 Phase 3.6 — same hidden-when-empty convention as Dark Vessels/Score
+              Breakdown. Order (Suspects → Excluded → Dark Vessels → Infrastructure) matches
+              docs/04 Screen 3 exactly. */}
+          {suspects.infrastructure.length > 0 && (
+            <>
+              <Divider />
+              <SectionLabel>Infrastructure</SectionLabel>
+              <div className="mt-2 space-y-2">
+                {suspects.infrastructure.map((f, i) => (
+                  <InfrastructureCard key={i} f={f} />
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

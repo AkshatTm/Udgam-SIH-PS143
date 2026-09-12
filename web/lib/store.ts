@@ -72,6 +72,10 @@ export interface AppState {
 
   activeStage: Act;
   selectedDetectionId: string | null;
+  /** docs/04 Phase 3.3 — the mmsi of the suspect card currently hovered in Attribute, or `null`.
+   *  Purely transient UI state (same family as `selectedDetectionId`); MapView reads it to
+   *  emphasise/dim the matching vessel track. Never persisted, never drives any data fetch. */
+  hoveredSuspectMmsi: string | null;
 
   layers: Record<LayerId, boolean>;
   tNorm: number; // 0..1, 1 = "T-0 detect". Bound to an integer timestep via lib/timestep.ts.
@@ -85,6 +89,7 @@ export interface AppState {
   loadVerification: () => Promise<void>;
   setStage: (stage: Act) => void;
   selectDetection: (id: string | null) => void;
+  setHoveredSuspect: (mmsi: string | null) => void;
   toggleLayer: (id: LayerId) => void;
   setTNorm: (t: number) => void;
   setPlaying: (p: boolean) => void;
@@ -155,6 +160,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   activeStage: "detect",
   selectedDetectionId: null,
+  hoveredSuspectMmsi: null,
 
   layers: {
     sar: true,
@@ -177,6 +183,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       status: "loading",
       error: null,
       selectedDetectionId: null,
+      hoveredSuspectMmsi: null,
       // Reset Stage 1 state for the incoming case, so a pending banner from the previous
       // case can never bleed onto one whose detections did load.
       detections: null,
@@ -347,6 +354,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectDetection: (id) => set({ selectedDetectionId: id }),
+  setHoveredSuspect: (mmsi) => set({ hoveredSuspectMmsi: mmsi }),
 
   toggleLayer: (id) =>
     set((s) => ({ layers: { ...s.layers, [id]: !s.layers[id] } })),
@@ -389,6 +397,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       error: null,
       // Re-seed the best-oil pick so Detect is never blank on re-entry (docs/04 C1).
       selectedDetectionId: s.detections ? bestOilDetectionId(s.detections) : null,
+      hoveredSuspectMmsi: null,
     };
     if (s.status === "ready") {
       // Case fully loaded — keep every bundle (and its ready/error status) in memory. Re-picking

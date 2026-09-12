@@ -107,6 +107,29 @@ const VESSEL_WIDTH_SUSPECT = 1.8;
 const VESSEL_WIDTH_TOP_SUSPECT = 3;
 const VESSEL_WIDTH_EXCLUDED = 1;
 
+// docs/04 Phase 3.5 — dark vessels (Master §6.7). A radar contact with no AIS at all: a point,
+// never a track, never linked to `vessels.geojson`. Deliberately its own colour family (rose),
+// unused everywhere else in this app (blue = vessel, amber = particle/origin, red = oil,
+// grey = look-alike/excluded) — an alert marker must not read as any of those.
+interface DarkVesselMapItem {
+  position: LonLat;
+}
+const DARK_VESSEL_COLOR: [number, number, number, number] = [244, 63, 94, 235];
+const DARK_VESSEL_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
+const DARK_VESSEL_RADIUS_PX = 7;
+
+// docs/04 Phase 3.6 — infrastructure findings (Master §6.7). Also a stationary point with no
+// AIS identity, but a distinct category from a dark vessel (a named, known facility being
+// scored — not an anomaly). Its own colour (violet) — unclaimed by any other layer in this
+// app (blue = vessel, amber = particle/origin, red = oil, grey = look-alike/excluded, rose =
+// dark vessel) — so the two "no-AIS point" categories never read as the same thing on the map.
+interface InfrastructureMapItem {
+  position: LonLat;
+}
+const INFRASTRUCTURE_COLOR: [number, number, number, number] = [167, 139, 250, 235];
+const INFRASTRUCTURE_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
+const INFRASTRUCTURE_RADIUS_PX = 7;
+
 const vesselTrackPath = (d: VesselMapItem): LonLat[] => d.path;
 const vesselTrackColor = (d: VesselMapItem): [number, number, number, number] => {
   switch (d.role) {
@@ -195,6 +218,9 @@ export default function MapView() {
   const vessels = useAppStore((s) => s.vessels);
   const vesselsVisible = useAppStore((s) => s.layers.vessels);
   const suspects = useAppStore((s) => s.suspects);
+  // docs/04 Phase 3.3 — hover-to-highlight. Purely presentational: never touches vesselItems
+  // (the parsed track geometry), never refetches, never rebuilds the map or its camera.
+  const hoveredMmsi = useAppStore((s) => s.hoveredSuspectMmsi);
 
   // Role (top suspect / suspect / excluded) is only ever attached once origin.abstain is
   // confirmed false — see the comment on VesselRole above. `origin` is read from the store
@@ -220,19 +246,86 @@ export default function MapView() {
 
   const vesselLayer = useMemo(() => {
     if (!vesselsVisible || vesselItems.length === 0) return null;
+    // Edge case: a hovered mmsi with no matching track (shouldn't happen — Master §6.7 requires
+    // every suspect mmsi to have a track — but defended anyway) falls back to plain role styling
+    // for every track, rather than dimming everything with nothing highlighted.
+    const hoveredMmsiValid =
+      hoveredMmsi !== null && vesselItems.some((v) => v.mmsi === hoveredMmsi);
+    const getColor = (d: VesselMapItem): [number, number, number, number] => {
+      const [r, g, b, a] = vesselTrackColor(d);
+      if (!hoveredMmsiValid) return [r, g, b, a];
+      return d.mmsi === hoveredMmsi ? [r, g, b, 255] : [r, g, b, Math.round(a * 0.25)];
+    };
+    const getWidth = (d: VesselMapItem): number => {
+      const w = vesselTrackWidth(d);
+      if (!hoveredMmsiValid) return w;
+      return d.mmsi === hoveredMmsi ? w + 2 : Math.max(0.6, w * 0.6);
+    };
     return new PathLayer<VesselMapItem>({
       id: "vessels",
       data: vesselItems,
       getPath: vesselTrackPath,
-      getColor: vesselTrackColor,
-      getWidth: vesselTrackWidth,
+      getColor,
+      getWidth,
       widthUnits: "pixels",
       widthMinPixels: 1,
       capRounded: true,
       jointRounded: true,
       pickable: false,
+      updateTriggers: { getColor: [hoveredMmsi], getWidth: [hoveredMmsi] },
     });
-  }, [vesselItems, vesselsVisible]);
+  }, [vesselItems, vesselsVisible, hoveredMmsi]);
+
+  // docs/04 Phase 3.5 — dark-vessel markers. Independent of `vesselsVisible` on purpose: the
+  // whole point of the AIS-off reveal (docs/05 §3.3) is that toggling the AIS track layer off
+  // leaves this marker alone with nothing beneath it. No mmsi exists to share with the hover
+  // highlight (Phase 3.3) or the vessel PathLayer, so the two features cannot collide.
+  const darkVesselItems = useMemo(() => {
+    if (!suspects) return [] as DarkVesselMapItem[];
+    return suspects.darkVessels.map((dv) => ({ position: [dv.lon, dv.lat] as LonLat }));
+  }, [suspects]);
+
+  const darkVesselLayer = useMemo(() => {
+    if (darkVesselItems.length === 0) return null;
+    return new ScatterplotLayer<DarkVesselMapItem>({
+      id: "dark-vessels",
+      data: darkVesselItems,
+      getPosition: (d) => d.position,
+      getFillColor: DARK_VESSEL_COLOR,
+      getLineColor: DARK_VESSEL_LINE_COLOR,
+      getRadius: DARK_VESSEL_RADIUS_PX,
+      radiusUnits: "pixels",
+      lineWidthUnits: "pixels",
+      getLineWidth: 1.5,
+      stroked: true,
+      pickable: false,
+    });
+  }, [darkVesselItems]);
+
+  // docs/04 Phase 3.6 — infrastructure markers. Same independent-of-`vesselsVisible` reasoning
+  // as dark vessels doesn't apply here (no toggle-driven reveal is described for infrastructure
+  // in any doc) — it simply renders whenever the bundle has findings, like the dark-vessel layer.
+  const infrastructureItems = useMemo(() => {
+    if (!suspects) return [] as InfrastructureMapItem[];
+    return suspects.infrastructure.map((inf) => ({ position: [inf.lon, inf.lat] as LonLat }));
+  }, [suspects]);
+
+  const infrastructureLayer = useMemo(() => {
+    if (infrastructureItems.length === 0) return null;
+    return new ScatterplotLayer<InfrastructureMapItem>({
+      id: "infrastructure",
+      data: infrastructureItems,
+      getPosition: (d) => d.position,
+      getFillColor: INFRASTRUCTURE_COLOR,
+      getLineColor: INFRASTRUCTURE_LINE_COLOR,
+      getRadius: INFRASTRUCTURE_RADIUS_PX,
+      radiusUnits: "pixels",
+      lineWidthUnits: "pixels",
+      getLineWidth: 1.5,
+      stroked: true,
+      pickable: false,
+    });
+  }, [infrastructureItems]);
 
   // Create the map exactly once.
   useEffect(() => {
@@ -447,11 +540,21 @@ export default function MapView() {
   }, [particles, particlesVisible, t]);
 
   // Push the composed list into the deck overlay. Order is bottom→top: origin bitmap, rings,
-  // vessel tracks, particles. Runs only when one of the memoised pieces actually changes — never on a
-  // bare animation frame — and never re-renders the map container.
+  // vessel tracks, particles, dark-vessel markers, infrastructure markers (both point layers
+  // drawn last so neither is ever hidden under a track line). Runs only when one of the
+  // memoised pieces actually changes — never on a bare animation frame — and never re-renders
+  // the map container.
   useEffect(() => {
-    overlayRef.current?.setProps({ layers: [...originLayerList, vesselLayer, particleLayer] });
-  }, [originLayerList, vesselLayer, particleLayer]);
+    overlayRef.current?.setProps({
+      layers: [
+        ...originLayerList,
+        vesselLayer,
+        particleLayer,
+        darkVesselLayer,
+        infrastructureLayer,
+      ],
+    });
+  }, [originLayerList, vesselLayer, particleLayer, darkVesselLayer, infrastructureLayer]);
 
   // SAR source follows the active case / bounds.
   useEffect(() => {
