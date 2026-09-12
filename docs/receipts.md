@@ -58,7 +58,7 @@ The single Delta contact is a genuine return — peak −5.93 dB against a sea o
 
 **No edge rule, no `edge` flag** (ruled 13 Sept, on Soum's evidence). Only 2 of 173 contacts lie within 2 px of a raster edge, and one is Ennore's +10.27 dB, 60 px target in a working port — a border-rejection rule would spend a confident true positive to remove one doubtful contact. The usual CFAR objection to edge targets (a truncated background window) does not apply: `ships._sea_level()` takes the median and MAD over every valid pixel in the scene, so an edge contact is tested against exactly the statistics a centre-of-scene one is. The remaining doubt is identity, which the "unattributed" label already carries.
 
-**On Zenodo scenes the ship threshold is set by the absolute floor alone.** `lookalike-zenodo`: floor −10.0 dB vs scene-relative −26.3 dB (sea + 4σ), so `k_sigma` is inert and `DEFAULT_MIN_DB` decides — a hull at, say, −12 dB on a −29 dB sea (≈ 22σ) would be missed. The floor was set on GEE exports (~−20 dB sea). Recorded as a known limitation, not tuned before the freeze.
+**On Zenodo scenes the ship threshold is set by the absolute floor alone.** `lookalike-zenodo`: floor −10.0 dB vs scene-relative −26.3 dB (sea + 4σ), so `k_sigma` is inert and `DEFAULT_MIN_DB` decides — a hull at, say, −12 dB on a −29 dB sea (≈ 22σ) would be missed. The floor was set on GEE exports (~−20 dB sea). Recorded as a known limitation, not tuned.
 
 **Case 4 (Alaska) — the dark-vessel case — gets NO contact from our detector.** Scene threshold
 −8.06 dB, brightest pixel −8.79 dB; reported, not tuned away. Its dark-vessel contact (4.5 km from

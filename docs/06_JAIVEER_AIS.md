@@ -569,7 +569,7 @@ python scripts/validate_case.py cases/case-huntington-2021
 ```
 
 ## E3. Data
-NOAA Marine Cadastre AIS — `coast.noaa.gov/htdata/CMSP/AISDataHandler/<year>/`, one zipped CSV per day, all US waters, no registration. **Not** the AccessAIS map tool: it needs an emailed order (an external dependency at freeze time) and it pre-filters, which means our own bbox filter — the thing producing the funnel's `in_region` count — never gets exercised on real volume.
+NOAA Marine Cadastre AIS — `coast.noaa.gov/htdata/CMSP/AISDataHandler/<year>/`, one zipped CSV per day, all US waters, no registration. **Not** the AccessAIS map tool: it needs an emailed order (an external dependency close to the demo) and it pre-filters, which means our own bbox filter — the thing producing the funnel's `in_region` count — never gets exercised on real volume.
 
 Sentinels to null: SOG 102.3, COG 360.0, Heading 511.
 
