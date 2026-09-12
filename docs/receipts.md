@@ -147,12 +147,23 @@ error explicitly rather than folding it into a coverage verdict.
 
 | What | Collection | Bands | Note |
 |---|---|---|---|
-| Currents | `HYCOM/sea_water_velocity` | `velocity_u_0`, `velocity_v_0` | **Scaled integer: catalog units m/s, scale 0.001 — divided by 1000.** Daily (24 h cadence), 0.08°, ends 2024-09-05 in GEE. Ennore field: median 0.48 m/s, max 1.10 m/s |
+| Currents | `HYCOM/sea_water_velocity` | `velocity_u_0`, `velocity_v_0` | **Scaled integer: catalog units m/s, scale 0.001 — divided by 1000.** 0.08°, ends 2024-09-05 in GEE. **Cadence varies by case and era:** the Ennore 2017 cache held daily snapshots; Jacksonville's holds ten at **3-hour** spacing (Anushka, `docs/STAGE2_NUMBERS.md` §8.5). Check per case; do not quote "daily" as a rule. Ennore field: median 0.48 m/s, max 1.10 m/s |
 | Wind | `ECMWF/ERA5/HOURLY` | `u_component_of_wind_10m`, `v_component_of_wind_10m` | signed components, not speed/bearing |
 
 Drift physics: surface oil moves at current + **3%** of wind speed (the "3% rule"), RK2,
 dt = 15 min, **50**-run ensemble. Field cache: `data/fields/<case>.npz` — `TODO` confirm which
-time span was pulled per case.
+time span was pulled per case (Anushka: the caches live on her machine; she refetched all six
+with `--forward-hours 24` so each brackets t0).
+
+**Independent-implementation check — OpenDrift (Anushka, `docs/STAGE2_NUMBERS.md` §8.4).**
+`case-000`, 3000 particles, 24 h backward, our RK2 against OpenDrift's RK4 on the identical cached
+field: origin centroids **118 m** apart, median per-particle disagreement **161 m**, worst of 3000
+**958 m**, against our own r50 of 8.84 km. OpenDrift's own landmask, vertical mixing, Stokes drift
+and diffusivity were switched off so only the integrator differs. Reproduce with
+`python pipeline/drift/opendrift_compare.py` in an environment with OpenDrift installed (it is
+deliberately not in `requirements.txt`; the version used is printed by the script and saved in its
+output). **Proves the physics implementation, not the answer** — there is no ground truth for
+origin position on any case.
 
 ## Training data
 
@@ -175,9 +186,35 @@ split would flatter us). See Master Plan Part 12.
 | Look-alike rejection rate | **0.940** | all 450 Part III scenes |
 | Clean-ocean rejection rate | **0.987** | all 450 Part III scenes |
 | Oil recall | **0.927** | all 450 Part III scenes |
-| Oil-class IoU (positives only) | `TODO` | Part III holdout |
-| Classical baseline F1 (ablation) | `TODO` | same holdout |
-| Training rows | `TODO` | `data/labels/features.csv` |
+| Oil-class IoU, U-Net (Layer 2), gated by Layer 1 | **0.435** | Part III holdout, 138 / 150 oil scenes reached the U-Net |
+| Oil-class IoU, U-Net, ungated (not shipped) | 0.449 | Part III, 145 / 150 — costs look-alike rejection 0.94 → 0.46, which is why it is gated |
+| Classical baseline F1 (ablation) | **~0.1** — quote it that way, never to three decimals | same holdout, row-level on detected regions (0.085 in `eval_part3.json`; only 80 positives, so one detection moves it ~0.02) |
+| Training rows (classical RandomForest) | **76,721** rows / 3,867 positives / 2,535 scenes | `data/labels/features_train.csv`, Parts I+II |
+
+**Layer 2's IoU definition is the strictest available:** oil class only, background excluded from
+numerator and denominator, pooled over whole 2048×2048 scenes (`pipeline/detect/eval_part3.json`,
+`unet_meta.json`). **There is no "23% accuracy" figure for Layer 2** — Soum searched every eval file;
+it was a crossed wire with Stage 2's 23% `wind_share`. Do not put 23% on a detection slide.
+
+## Detection on real incidents — IoU against SkyTruth Cerulean
+
+Soum, commit `0dce618`, validated in `18e986a`. Tool `pipeline/detect/iou_cerulean.py`, raw numbers
+`pipeline/detect/iou_cerulean.json`. Computed on the **shipped classical detections**, nothing
+retuned after the Cerulean polygons were seen (Part H). Both polygon sets burned onto the scene's own
+affine grid; the method reproduces Cerulean's own stated `area` to within 0.8% on all five.
+
+| case | IoU | recall | precision | ours km² | Cerulean km² |
+|---|---|---|---|---|---|
+| mumbai | 0.728 | 0.942 | 0.762 | 9.60 | 7.77 |
+| farallones | 0.624 | 0.796 | 0.742 | 4.13 | 3.85 |
+| jacksonville | 0.483 | 0.825 | 0.537 | 6.97 | 4.54 |
+| jamnagar | 0.452 | 0.916 | 0.471 | 3.10 | 1.59 |
+| gulf-alaska | 0.165 | 0.797 | 0.173 | 1.23 | 0.27 |
+
+**Median 0.483, range 0.165–0.728, n = 5.** Cerulean's polygon is another algorithm's output, not
+ground truth — say *"agreement with SkyTruth Cerulean's operational detection"*, never "accuracy".
+Pattern worth stating: recall is high everywhere (0.80–0.94) and precision is what varies, i.e. our
+outlines run larger than theirs. Huntington and Ennore-lookalike have no Cerulean record.
 
 **Provenance of these five numbers** (Soum, 13 Sept). Trained on Parts I+II with an 85/15
 by-scene validation split; evaluated on all 450 Part III scenes. **Both the threshold and the
@@ -250,9 +287,12 @@ sometimes zero. We group by MMSI as-is and do not attempt identity resolution. O
 
 ## Incident references
 
-**Ennore, 28 January 2017** — collision between MT Dawn Kanchipuram and MT Maple off Kamarajar
-(Ennore) Port, Chennai; heavy fuel oil released, extensive shoreline impact.
-- `TODO` — paste 2–3 citable references (news / Coast Guard / NGT report) with URLs.
+**Ennore, 28 January 2017** (archived case, not in the demo) — collision in the early hours of
+28 January between the tankers **BW Maple** (carrying LPG) and **Dawn Kanchipuram** (carrying
+petroleum oil lubricant) off Kamarajar (Ennore) Port, Chennai; around 74 km of coastline affected,
+tar balls collected along a 12 km stretch.
+- Down To Earth, 4 Feb 2017: https://www.downtoearth.org.in/coverage/environment/chennai-oil-spill-planning-assessment-and-action-inadequate-56980 (verified 13 Sept 2026: names both tankers, the 74 km / 12 km figures, and an NGT application)
+- `TODO` — one official reference (Coast Guard / DG Shipping / NGT order) before this case is ever un-archived.
 
 **Huntington Beach / San Pedro Bay Pipeline, 1–2 October 2021** — pipeline P00547 (operator
 Amplify Energy / Beta Offshore) ruptured ~4.5 nm off Huntington Beach; 588 barrels of crude,
@@ -288,9 +328,13 @@ https://cerulean.skytruth.org/slicks/3477622), 0.2 km from our GEE point on the 
 scorer rated below zero, with no human review. Their record is **independent corroboration that
 the slick is real**; the thing that is missing is anyone acting on it. See decision D24.
 
-**Ennore / CPCL, 4 December 2023** — oil release during Cyclone Michaung. Our case 7 is the
-2023-11-30 pass, four days *before* it, used as a correct-rejection case.
-- `TODO` — paste 2–3 citable references for the December 2023 CPCL release with URLs.
+**Ennore / CPCL, 4–5 December 2023** — oil released from Chennai Petroleum Corporation Limited's
+refinery at Manali into floodwater during Cyclone Michaung, spreading at sea from the Kosasthalaiyar
+river mouth to Kasimedu harbour, about 20 km². The NGT Southern Bench took the case up (O.A. 180 of
+2023). CPCL's stated position was that there was no pipeline leak. Our case 7 is the 2023-11-30
+pass, four days *before* it, used as a correct-rejection case.
+- The Week, 13 Dec 2023: https://www.theweek.in/news/india/2023/12/13/ennore-residents-battle-health-issues-and-loss-of-livelihood-amid-blame-game-over-oil-spill.html (verified 13 Sept 2026: CPCL Manali refinery as source, Cyclone Michaung flooding, ~20 km² from Kosasthalaiyar to Kasimedu, NGT directions, CPCL's denial)
+- NGT Southern Zone, O.A. No. 180 of 2023, report by the Tamil Nadu Pollution Control Board: https://www.greentribunal.gov.in/sites/default/files/news_updates/OA%20180%20of%202023%20Report%20by%20TNPCB.pdf (primary filing; located 13 Sept 2026, file too large to open in this pass — `TODO` read it and pin the release date and quantity before quoting either)
 
 ---
 
