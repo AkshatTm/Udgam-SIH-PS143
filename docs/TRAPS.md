@@ -103,6 +103,27 @@ Gulf of Alaska at **59.5degN** is the other trap: a degree of longitude there is
 ## 20. Fixing a bundle by hand · everyone
 Editing a JSON output to make the validator pass means the same bug returns on the next run, at the worst possible moment. **Fix the producing code. Always.**
 
+## 21. A PASS that validated somebody else's files · everyone
+**This has already happened here.** A stage wrote its output to `pipeline/*/out/` (gitignored) while `validate_case.py` reads `cases/<id>/`. The validator ran, went green, and was measuring the fixture bundle the whole time. Nobody did anything wrong — the two paths were never written down in the same place — but a green check on the wrong file is the most dangerous state in this project, because it converts "unchecked" into "checked and fine".
+
+- **Fix:** the case folder is the hand-off medium. Publish into it before you validate:
+  `python pipeline/export/build_case.py --case <id> --stage <act>`.
+- **Check:** `validate_case.py` prints the directory it is reading on its first line. **Read that line.** If it is not the directory your stage just wrote to, the PASS is meaningless.
+
+## 22. GeoTIFF nodata is `-inf`, not a very low dB value · Soum, Akshat
+`sar_vv_vh.tif` is clipped to a rectangle, but a Sentinel-1 scene footprint is a slanted parallelogram — so some exports have real nodata in the corners. **Jamnagar is 86% covered and Farallones 82%**; the rest of each raster is `-inf`, flagged as the file's nodata value.
+
+Treated as backscatter, `-inf` is the darkest thing in the scene by an infinite margin, and **a dark-spot detector will happily report the missing corner as an enormous slick.** Mask on `np.isfinite()` before any statistic — a median or a percentile over a band containing `-inf` is meaningless too.
+
+- **Check:** `rasterio` reports `ds.nodata == -inf`. Coverage per case is recorded in `docs/receipts.md` and in each `meta.json`.
+
+## 23. A component that scores the same for everybody · Jaiveer, Harshita
+`type_prior` returned **1.00 for all 17 vessels** in an offshore lane, because an offshore lane is all tankers and cargo. It ranked nobody above anybody, and it silently added its full weight to every score on screen. `trajectory`, once its geometry was fixed, did nearly the same thing at 1.00 for 13 of 15.
+
+A constant is not a score. **If a component cannot discriminate on this case, it is `null`, not a number** (D27, D28) — and `null` renders "n/a" with a `component_notes` line saying why, never a zero bar.
+
+- **Check:** `validate_case.py` now warns when a non-null component holds the identical value for every scored suspect. Take that warning seriously; it means a bar on the card is decoration.
+
 ---
 
 ## Escalation

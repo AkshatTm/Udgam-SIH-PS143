@@ -21,6 +21,10 @@ export interface AppState {
   meta: CaseMeta | null;
   bounds: Bounds | null;
   detections: DetectionCollection | null;
+  /** The case offers `detect` but Stage 1 has not written detections.geojson yet. The Detect
+   *  screen shows the SAR scene and says so, instead of rendering an empty map that reads as
+   *  a broken feature. Distinct from `detections: null` on a case with no `detect` act. */
+  detectionsPending: boolean;
 
   // Phase 2 particle playback. The bundle is fetched + parsed once per case and then only
   // indexed by timestep — never re-fetched or re-parsed while the slider moves.
@@ -84,7 +88,8 @@ export interface AppState {
 
 /** The `id` of the highest-confidence `"oil"` detection (first in file order on a tie), or
  *  `null` when the scene has no oil features. Reads the collection only — never mutates it. */
-function bestOilDetectionId(d: DetectionCollection): string | null {
+function bestOilDetectionId(d: DetectionCollection | null): string | null {
+  if (d === null) return null;
   let bestId: string | null = null;
   let bestConf = -Infinity;
   for (const f of d.features) {
@@ -107,6 +112,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   meta: null,
   bounds: null,
   detections: null,
+  detectionsPending: false,
 
   particles: null,
   particlesStatus: "idle",
@@ -151,6 +157,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       status: "loading",
       error: null,
       selectedDetectionId: null,
+      // Reset Stage 1 state for the incoming case, so a pending banner from the previous
+      // case can never bleed onto one whose detections did load.
+      detections: null,
+      detectionsPending: false,
       // Reset playback state for the incoming case.
       particles: null,
       particlesStatus: "idle",
@@ -172,7 +182,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       suspectsError: null,
     });
     try {
-      const { meta, bounds, detections } = await loadCase(id);
+      const { meta, bounds, detections, detectionsPending } = await loadCase(id);
       // Guard against a stale response if the case was switched mid-fetch.
       if (get().activeCaseId !== id) return;
       const activeStage: Act = meta.acts_available.includes(get().activeStage)
@@ -183,6 +193,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         meta,
         bounds,
         detections,
+        detectionsPending,
         activeStage,
         // Detect arrives with the best oil detection already selected (docs/04 C1).
         selectedDetectionId: bestOilDetectionId(detections),

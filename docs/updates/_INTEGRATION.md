@@ -8,6 +8,107 @@ log; this file is only for the joins.
 
 ---
 
+# ▶ START HERE — state of the world, 2026-09-12
+
+*Written for whoever picks integration up next, including a fresh AI session. Read this section
+first; everything below it is history.*
+
+## Nobody is blocked on Akshat any more
+
+| Person | Has what they need? | Next move |
+|---|---|---|
+| **Soum** | ✅ 7 scenes: `sar_vv_vh.tif` (2-band float32, 10 m), `sar.png`, `bounds.json` with the per-case dB clamp | Run Stage 1 on `case-jacksonville-2024` |
+| **Anushka** | ✅ real `detection_time` + bounds on all 7 | Fetch fields; seeding waits on Soum's polygons |
+| **Jaiveer** | ✅ dates, boxes, `ais_source`; D27–D31 ruled; GFW confirmed working | Phase 8 curve **with the per-component ablation** |
+| **Harshita** | ✅ frontend loads all 7 cases; `sync_web_cases.py` feeds the browser | Detect screen's "stage pending" state |
+| **Urooz** | ✅ never blocked | Research |
+
+**The critical path now runs between teammates, not through Akshat:** Soum's detections gate
+Anushka's seeding, and her `origin.json` gates Jaiveer's scoring.
+
+## The loop, per case
+
+```bash
+python pipeline/detect/run.py         --case <id>          # Soum
+python pipeline/export/build_case.py  --case <id> --stage detect
+python pipeline/drift/run.py          --case <id>          # Anushka
+python pipeline/export/build_case.py  --case <id> --stage trace
+python pipeline/attribute/run.py      --case <id>          # Jaiveer
+python pipeline/export/build_case.py  --case <id>
+python scripts/validate_case.py cases/<id>                 # must PASS
+python scripts/sync_web_cases.py                           # then Harshita QAs it
+```
+
+**`build_case.py` is not optional.** A stage that writes to `out/` and a validator that reads
+`cases/<id>/` gave us a green PASS on the wrong files once already (TRAPS #21).
+
+## Standing rules that must survive the account switch
+
+1. **Weights and thresholds are set on injected scenarios only, never on a real case** (D27, D31).
+   Case 1 is formally open for diagnostics; it is still not a tuning set.
+2. **`docs/ANSWERS.md` is never committed.** It is gitignored. `git check-ignore` it before any
+   commit that touches `docs/`.
+3. **`verification.json` is written only after a bundle validates** — it contains the answer, and
+   it ships inside the bundle (`verification/README.md`).
+4. **Cases are named after places, never vessels.** A case id that looks like a ship's name is a
+   bug; report it, do not rename it back.
+5. **Master Plan §6 is the contract. `docs/CONTRACTS.md` mirrors it** — change Master first and
+   mirror in the same commit, or the drift starts again.
+6. **Before claiming any negative result, check for a published positive one.** This project has
+   nearly shipped three false negatives (Ennore, Jamnagar, and GFW below).
+
+## Open, in priority order
+
+- **Soum owes the no-spill scene** (`case-nospill-zenodo` is scaffolded and deliberately held out
+  of `index.json` until it lands).
+- **Three questions to Jaiveer** are in the reply drafted below — the "eleven of 52" one affects a
+  slide number.
+- **`verification.json` for all six spill cases** — Akshat's, by hand, after each bundle validates.
+- **Mumbai's "natural seep" claim** is unsourced and must not ship until it is (D19 amended).
+- **Vessel names/flags/IMOs for cases 1 and 2** need confirming from the Cerulean slick pages; the
+  CHN-vs-Singapore flag conflict on the case-1 MMSI is unresolved in `ANSWERS.md`.
+
+---
+
+## [2026-09-12] Final unblock pass — pushed, frontend fixed, GFW confirmed
+
+**Everything is on `origin/main`.** Two sessions of work were sitting on a local branch where
+nobody could see it; `main` is fast-forwarded and pushed, ~123 MB of GeoTIFFs included.
+
+**Frontend unblocked — and this is a logged ONE-OFF exception to D1.** Akshat's call. `web/` is
+Harshita's, and the next `web/` bug still routes to her; this was done here only because it was
+blocking four people's work from being visible at all.
+
+- `loadCase.ts` fetched `detections.geojson` unconditionally and threw, so **all seven cases
+  crashed the Detect screen.** Now gated on the `detect` act, and **a 404 degrades to
+  `detections: null` + `detectionsPending`** instead of throwing. **Malformed JSON still throws** —
+  missing ≠ broken, and that distinction is the whole point of `fetchJsonIfPresent`.
+- `store.ts` carries `detectionsPending` and resets it per case, so Harshita can render *"Stage 1
+  has not produced detections for this case yet"* rather than an empty map that reads as broken.
+- `contracts.ts` was still mirroring the **v1** contract — missing `case_type`, `gallery`,
+  `ais_source`, `known_origin`, `component_notes`, `discharge_class`, `ship_detections`, the origin
+  age block, the four source types and the whole verification bundle. All added. `tsc --noEmit`
+  and `next build` both clean; all 7 case routes return 200 with thumbnails.
+
+**`scripts/sync_web_cases.py` (new).** Nothing copied bundles into `web/public/cases/`, so the app
+could not see `cases/` at all. Skips `sar_vv_vh.tif`: **3.9 MB copied instead of 127 MB.**
+
+**`docs/CONTRACTS.md` brought current to v4** with a precedence banner — Master §6 wins, mirror in
+the same commit. It had been frozen at v1, which is exactly how `contracts.ts` drifted.
+
+**GFW works. Cases 5 and 6 keep `attribute`.** And a false negative was caught in the act: the
+first probe returned 403 everywhere and the script concluded *"no usable GFW coverage"*. It was
+**Cloudflare error 1010 — urllib's user-agent is banned outright.** A transport failure, nothing to
+do with the token or the data. With a normal user-agent all three endpoints answer for both cases.
+**Two demo cases were one unexamined error message away from being dropped.** The script now names
+that error instead of folding it into a coverage verdict.
+
+**TRAPS #21–23 added:** the PASS that validated the wrong directory; GeoTIFF nodata is `-inf` and a
+dark-spot detector will call it an enormous slick; and a component that scores identically for
+every suspect is decoration, not evidence.
+
+---
+
 ## [2026-09-12] Jaiveer's Phase 0/1 — hero confirmed, two specs broken, blindness declared per case
 
 ### The seam failure, which is what this file is for

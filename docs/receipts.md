@@ -56,6 +56,28 @@ lives only in the sealed `docs/ANSWERS.md` (Master Part 16, D21).
 `public.slick_to_source`, `public.source_vessel` and `public.source_type` return **403** — vessel
 names, flags and IMOs are not available through the API and come from the per-slick web page.
 
+## Global Fishing Watch (cases 5 and 6 only)
+
+API v3, `gateway.api.globalfishingwatch.org`. **Free, self-registration, NON-COMMERCIAL USE
+ONLY** — that condition is real and belongs on the data-provenance slide. Token in `.env` as
+`GFW_API_TOKEN`, gitignored. Probed 2026-09-12 with `scripts/gfw_probe.py --all`:
+
+| Case | Date | Presence | AIS-disabling events | SAR presence |
+|---|---|---|---|---|
+| case-mumbai-2023 | 2023-09-03 | ✅ responds | ✅ 10,992 returned (global, unfiltered) | ✅ responds |
+| case-jamnagar-2024 | 2024-02-23 | ✅ responds | ✅ 9,638 returned (global, unfiltered) | ✅ responds |
+
+**Cases 5 and 6 keep `attribute`.** `gap` and `slowdown` still come back `null` — that is hourly
+sampling (D20), not a coverage failure, and the card says "n/a".
+
+⚠️ **A false negative we nearly recorded here.** The first probe returned HTTP 403 on every
+endpoint and the script concluded *"no usable GFW coverage — cases 5 and 6 drop to detect+trace."*
+It was **Cloudflare error 1010, "browser signature banned"** — the gateway rejecting urllib's
+default `Python-urllib/3.11` user-agent. A transport failure, saying nothing about the token or
+the data. Sending a normal user-agent returned all three endpoints. **Two demo cases were one
+unexamined error message away from being dropped for no reason.** `gfw_probe.py` now names that
+error explicitly rather than folding it into a coverage verdict.
+
 ## Ocean and atmosphere (Google Earth Engine)
 
 | What | Collection | Bands | Note |

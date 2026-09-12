@@ -71,6 +71,15 @@ def load_token():
         "  .env is gitignored, so it will not be pushed.")
 
 
+# GFW's gateway sits behind Cloudflare, which bans urllib's default "Python-urllib/3.x"
+# user-agent outright: Cloudflare error 1010, "browser signature banned", HTTP 403. That is a
+# TRANSPORT failure and says nothing whatsoever about the token or about data coverage — the
+# first run of this script reported "no GFW coverage" because of it, which would have dropped
+# two cases from the demo for no reason. Send a normal user-agent.
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+
+
 def call(path, token, method="GET", body=None, params=None):
     url = f"{BASE}{path}"
     if params:
@@ -80,14 +89,20 @@ def call(path, token, method="GET", body=None, params=None):
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Accept", "application/json")
+    req.add_header("User-Agent", UA)
     if data:
         req.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             return True, json.load(r)
     except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", "replace")[:600]
-        return False, f"HTTP {e.code} {e.reason}\n      {url}\n      {detail}"
+        detail = e.read().decode("utf-8", "replace")
+        if "1010" in detail or "browser_signature_banned" in detail:
+            return False, (f"HTTP {e.code} — CLOUDFLARE BLOCKED THE CLIENT, not a data or token "
+                           f"problem (error 1010, browser signature banned).\n"
+                           f"      This says NOTHING about coverage. Do not record it as one.\n"
+                           f"      {url}")
+        return False, f"HTTP {e.code} {e.reason}\n      {url}\n      {detail[:600]}"
     except Exception as e:
         return False, f"{type(e).__name__}: {e}\n      {url}"
 
