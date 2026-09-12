@@ -86,14 +86,19 @@ def main():
                     (clon, clat), color=colour, fontsize=7,
                     xytext=(4, 4), textcoords="offset points")
 
-    ships = []
-    for f in gj.get("features", []):
-        ships = f["properties"].get("ship_detections") or ships
-        if ships:
-            break
+    # Master 6.3 / D34: contacts are top-level on the FeatureCollection. Fall back to the
+    # deprecated per-feature copy only for a bundle written before the move.
+    ships = gj.get("ship_detections")
+    if ships is None:
+        ships = []
+        for f in gj.get("features", []):
+            ships = f["properties"].get("ship_detections") or ships
+            if ships:
+                break
     if ships:
         ax.plot([s["lon"] for s in ships], [s["lat"] for s in ships],
-                "x", color="#00e5ff", ms=7, mew=1.4, label=f"{len(ships)} radar contacts")
+                "x", color="#00e5ff", ms=7, mew=1.4,
+                label=f"{len(ships)} radar contacts (unattributed)")
         ax.legend(loc="lower right", framealpha=0.7)
 
     hemi = (f"{'E' if bounds['west'] > 0 else 'W'} / "

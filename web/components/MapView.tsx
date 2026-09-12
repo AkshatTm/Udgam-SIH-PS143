@@ -130,10 +130,11 @@ const INFRASTRUCTURE_COLOR: [number, number, number, number] = [167, 139, 250, 2
 const INFRASTRUCTURE_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
 const INFRASTRUCTURE_RADIUS_PX = 7;
 
-// docs/04 Phase 5.3 — ship_detections (Master §6.3). Soum's RAW radar ship contacts nested per
-// detection feature — NOT the same list as suspects.json's `dark_vessels` (Jaiveer's already
-// AIS-cross-checked "no match" subset, Phase 3.5 above). This renders every candidate contact
-// the detector found, independent of any attribution result. Its own colour (teal) — unclaimed
+// docs/04 Phase 5.3 — ship_detections (Master §6.3, D34). Soum's RAW radar contacts for the whole
+// scene, top-level on the FeatureCollection. UNATTRIBUTED — NOT the same list as suspects.json's
+// `dark_vessels` (Jaiveer's already AIS-cross-checked "no match" subset, Phase 3.5 above). A
+// contact is never "dark" until that check has run at a known time. This renders every candidate
+// contact the detector found, independent of any attribution result. Its own colour (teal) — unclaimed
 // by any existing layer (blue = vessel, amber = particle/origin, red = oil, grey =
 // look-alike/excluded, rose = dark vessel, violet = infrastructure).
 interface ShipDetectionMapItem {
@@ -340,16 +341,25 @@ export default function MapView() {
     });
   }, [infrastructureItems]);
 
-  // docs/04 Phase 5.3 — ship_detections, flattened across every detection feature's own
-  // `ship_detections` list (Master §6.3). Independent of `selectedDetectionId` and of
-  // `acts_available` gating already applied upstream in loadCase.ts — `detections` is null on a
-  // D16 known-origin case, which this guards the same way `darkVesselItems`/`infrastructureItems`
-  // guard on a null `suspects`.
+  // docs/04 Phase 5.3 — ship_detections (Master §6.3, D34). Read the top-level scene list. Only a
+  // bundle written before D34 lacks it; those carry the SAME full scene list on every feature, so
+  // the fallback flattens AND deduplicates by position — flattening alone drew each contact once
+  // per feature (Ennore: 72 contacts rendered as 2,088 stacked markers). Independent of
+  // `selectedDetectionId` and of `acts_available` gating already applied upstream in loadCase.ts —
+  // `detections` is null on a D16 known-origin case, which this guards the same way
+  // `darkVesselItems`/`infrastructureItems` guard on a null `suspects`.
   const shipDetectionItems = useMemo(() => {
     if (!detections) return [] as ShipDetectionMapItem[];
+    if (detections.ship_detections) {
+      return detections.ship_detections.map((sd) => ({ position: [sd.lon, sd.lat] as LonLat }));
+    }
+    const seen = new Set<string>();
     const items: ShipDetectionMapItem[] = [];
     for (const f of detections.features) {
       for (const sd of f.properties.ship_detections ?? []) {
+        const key = `${sd.lon},${sd.lat}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
         items.push({ position: [sd.lon, sd.lat] });
       }
     }

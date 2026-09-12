@@ -145,17 +145,29 @@ FeatureCollection. Each feature:
     "contrast_db": -6.2,
     "shape_class": "linear",
     "discharge_class": "chronic",
-    "centroid": [-118.15, 33.62],
-    "ship_detections": [
-      {"lon": -118.104, "lat": 33.602, "px_area": 340, "peak_db": -4.2}
-    ]
+    "centroid": [-118.15, 33.62]
   } }
+```
+
+The scene's radar contacts sit **beside** `features`, on the FeatureCollection (D34):
+
+```json
+{ "type": "FeatureCollection",
+  "ship_detections": [
+    {"lon": -118.104, "lat": 33.602, "px_area": 340, "peak_db": -4.2}
+  ],
+  "features": [ ... ] }
 ```
 
 `classification` ∈ `oil | lookalike` — **not** "none", **not** "oil_spill".
 `shape_class` ∈ `linear | blob` · `discharge_class` ∈ `chronic | acute | unknown`.
 `confidence` ∈ [0,1] · `contrast_db` **negative** for a dark spot · `elongation` **≥ 1.0**.
-`ship_detections` may be `[]` — valid and common.
+`ship_detections` is **top-level and scene-level** (D34): absent = the ship detector was not run
+or not recorded, `[]` = it ran and found none. The per-feature `properties.ship_detections` of v1
+is deprecated — still accepted, no longer written, and must agree with the top-level list if both
+appear. It moved because a scene with zero detections had nowhere to put its contacts.
+**A radar contact is not a dark vessel:** darkness needs an AIS cross-check at a known time, so a
+contact without one is *unattributed*. Master §6.3 is the live contract; this file is the v1 record.
 
 **A no-spill case is a FeatureCollection with zero `oil` features.** Look-alikes may still be
 present, and showing them greyed with the reason they were rejected is the point of the screen.

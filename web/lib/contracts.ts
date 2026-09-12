@@ -108,10 +108,9 @@ export interface DetectionProperties {
    *  badge — never inferred from geometry on the frontend. */
   discharge_class?: DischargeClass;
   centroid: LonLat;
-  /** Master §6.3, docs/04 Phase 5.3 — raw radar ship contacts near this detection (Soum's
-   *  output). May be `[]` — valid and common. NOT suspects.json's `dark_vessels` (Jaiveer's
-   *  already AIS-cross-checked subset) — this is the unfiltered candidate set, rendered as its
-   *  own independent map layer. */
+  /** DEPRECATED (Master §6.3, D34) — the per-feature copy of the scene's radar contacts. Older
+   *  bundles carry the SAME full scene list on every feature; read
+   *  `DetectionCollection.ship_detections` instead and fall back to this only when that is absent. */
   ship_detections?: ShipDetection[];
 }
 
@@ -123,6 +122,14 @@ export interface DetectionFeature {
 
 export interface DetectionCollection {
   type: "FeatureCollection";
+  /** Master §6.3, D34 — the scene's raw radar contacts, top-level beside `features`, so a scene
+   *  with zero detections can still carry them. Absent = the ship detector's result was not
+   *  recorded (unknown); `[]` = it ran and found none.
+   *
+   *  These are UNATTRIBUTED contacts. NOT suspects.json's `dark_vessels` — a contact is only
+   *  "dark" after an AIS cross-check at a known time, which is Jaiveer's output, not Soum's.
+   *  Never label one a dark vessel. */
+  ship_detections?: ShipDetection[];
   features: DetectionFeature[];
 }
 

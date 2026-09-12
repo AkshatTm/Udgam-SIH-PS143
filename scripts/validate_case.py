@@ -321,6 +321,59 @@ def check_detections(d, box):
     if oil == 0:
         warn("detections.geojson: zero 'oil' features — correct for a no-spill case, "
              "an error for any case with 'trace' in acts_available")
+    check_ship_detections(g, feats, box)
+
+
+def _check_contacts(ships, box, where):
+    """One list of radar contacts: [{lon, lat, px_area, peak_db}, ...]."""
+    if not isinstance(ships, list):
+        err(f"{where}: must be a list")
+        return False
+    for i, s in enumerate(ships):
+        w = f"{where}[{i}]"
+        if not need_keys(s, ["lon", "lat", "px_area", "peak_db"], w):
+            continue
+        lon, lat, px, pk = s["lon"], s["lat"], s["px_area"], s["peak_db"]
+        if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in (lon, lat, px, pk)):
+            err(f"{w}: lon, lat, px_area and peak_db must all be finite numbers")
+            continue
+        if px <= 0:
+            err(f"{w}: px_area must be positive")
+        if box:
+            box.check(float(lon), float(lat), w)
+    return True
+
+
+def check_ship_detections(g, feats, box):
+    """Master §6.3 / D34. Radar contacts are a SCENE-level observation, so the canonical list is
+    top-level on the FeatureCollection — the only place a scene with zero detections can keep
+    them. Both Zenodo bundles silently dropped theirs (1 and 31) under the old per-feature shape.
+    Absent = the detector was not run or not recorded; [] = it ran and found none (null ≠ 0).
+    The per-feature copy is deprecated: accepted, never written by run.py, and must agree."""
+    top = g.get("ship_detections")
+    if top is None:
+        warn("detections.geojson: no top-level ship_detections — the ship detector's result is "
+             "not recorded, so contacts on this scene are unknown, not absent (Master §6.3, D34). "
+             "Re-run pipeline/detect/run.py.")
+    elif not _check_contacts(top, box, "detections.geojson/ship_detections"):
+        return
+
+    canon = json.dumps(top, sort_keys=True) if top is not None else None
+    legacy = 0
+    for i, f in enumerate(feats):
+        per = (f.get("properties") or {}).get("ship_detections")
+        if per is None:
+            continue
+        legacy += 1
+        w = f"detections.geojson[{i}]/properties/ship_detections"
+        if not _check_contacts(per, box, w):
+            continue
+        if canon is not None and json.dumps(per, sort_keys=True) != canon:
+            warn(f"{w}: disagrees with the top-level ship_detections — two lists for one scene, "
+                 "and the map will draw whichever it reads")
+    if legacy:
+        warn(f"detections.geojson: {legacy} feature(s) still carry the deprecated per-feature "
+             "ship_detections (D34). Harmless, but re-run run.py so the scene list lives once.")
 
 
 def check_particles(d, box, meta, fname="particles.json", expect="backward", required=True):

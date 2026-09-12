@@ -177,25 +177,46 @@ function DischargeBadge({ value }: { value: DischargeClass }) {
 // ─── Detect stage card ────────────────────────────────────────────────────────
 
 /**
+ * The classical rule's contrast threshold on every `satellite` bundle. It is passed to run.py as
+ * `--rule-contrast -3.0` and NOT recorded in the bundle, so it is pinned here — verified 13 Sept by
+ * back-solving each shipped feature's (confidence, contrast_db) against run.py's margin formula:
+ * all seven live cases resolve to −3.0. If a rerun ever omits the flag, run.py's default is −0.5
+ * and this label becomes wrong — rerun the back-solve before trusting it again.
+ */
+const RULE_CONTRAST_DB = -3.0;
+/** Clear/marginal boundary. run.py maps contrast linearly: conf = 0.5 + 0.25·(−3.0 − c)/3.0,
+ *  so −4.5 dB is exactly confidence 0.625. */
+const CLEAR_CONTRAST_DB = -4.5;
+
+/**
  * `confidence` is [0,1] on every case — and it is NOT the same quantity on every case.
  * Master §6.3 / D33: on `provenance: "benchmark"` the CNN scene classifier produced it and it is
  * a calibrated probability, so a percentage is honest. On `satellite` (our seven GEE cases, i.e.
  * everything we show on stage) the classical rule path produced it, and it is a MARGIN from the
  * decision boundary. Printing "87% confidence" there asserts a calibration nobody has measured.
  *
- * So: percentage for benchmark, qualitative band for satellite. Same number, different claim.
+ * So on `satellite` we show the quantity the rule actually measures — dB of contrast — in two
+ * bands (Soum, 13 Sept). A three-band split on the [0,1] number collapsed to 1/11/0 on the 12 live
+ * oil detections. A look-alike is not banded: it may have been rejected on elongation or area, not
+ * contrast, so a contrast band would imply a reason we did not check.
  */
 function confidenceLabel(
-  confidence: number,
+  p: DetectionProperties,
   provenance: Provenance | undefined,
 ): string {
-  if (!Number.isFinite(confidence)) return "— confidence";
   if (provenance === "benchmark") {
-    return `${Math.round(confidence * 100)}% confidence`;
+    return Number.isFinite(p.confidence)
+      ? `${Math.round(p.confidence * 100)}% confidence`
+      : "— confidence";
   }
-  const band =
-    confidence >= 0.75 ? "strong" : confidence >= 0.45 ? "moderate" : "weak";
-  return `${band} rule margin`;
+  const c = p.contrast_db;
+  if (!Number.isFinite(c)) return "— rule margin";
+  const db = `${c.toFixed(1)} dB`;
+  const rule = `${RULE_CONTRAST_DB.toFixed(1)} dB rule`;
+  if (p.classification !== "oil") return `not oil under rule · ${db} contrast`;
+  if (c === RULE_CONTRAST_DB) return `at threshold · ${rule}`;
+  if (c <= CLEAR_CONTRAST_DB) return `clear · ${db} vs ${rule}`;
+  return `marginal · ${db} vs ${rule}`;
 }
 
 function DetectionCard({ p }: { p: DetectionProperties }) {
@@ -221,7 +242,7 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
           {isOil ? "Oil Slick" : "Look-alike"}
         </div>
         <div className="mt-0.5 font-mono text-[11px] text-white/50">
-          {confidenceLabel(p.confidence, provenance)}
+          {confidenceLabel(p, provenance)}
         </div>
         {p.discharge_class && <DischargeBadge value={p.discharge_class} />}
       </div>

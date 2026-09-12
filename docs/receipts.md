@@ -43,6 +43,31 @@ matched every scene in both corpora and therefore discriminated nothing. Replace
 **dB clamps for these two are per-scene from their own P2/P98**, like every other case, and
 neither is the default: `case-lookalike-zenodo` `[-31, -16]` · `case-nospill-zenodo` `[-28, -14]`.
 
+**Radar contacts per case — under the ship detector's genuinely active `k_sigma = 4`** (Soum,
+13 Sept). Commit `72064c8` claimed k=4 but `run.py` shadowed it with a literal 8.0; those earlier
+counts are dead. Current: jacksonville **2** · farallones **0** · huntington **43** · gulf-alaska
+**0** · mumbai **21** · jamnagar **3** · ennore-lookalike **72** · lookalike-zenodo **1** ·
+nospill-zenodo **31**. The last two were silently dropped from their bundles until D34 moved
+`ship_detections` to the top level of the FeatureCollection — both scenes have zero detections, so
+the old per-feature shape had nowhere to put them.
+
+**Every one of these is an unattributed radar contact, not a dark vessel** (Master §6.3, D34). A
+vessel is "dark" only once an AIS cross-check at a known time finds no match — that is Stage 3's
+output, not Stage 1's. The two Zenodo cases have no acquisition time, so their darkness is `null`.
+The single Delta contact sits in the raster's top pixel row beside land, among charted platforms.
+
+**Case 4 (Alaska) — the dark-vessel case — gets NO contact from our detector.** Scene threshold
+−8.06 dB, brightest pixel −8.79 dB; reported, not tuned away. Its dark-vessel contact (4.5 km from
+the slick, ~40 m) is **Cerulean's detection, not NAAP's.** It may be shown as Cerulean's reference
+and cross-checked against, but never rendered or narrated as something our detector found.
+
+**The satellite-case rule threshold is −3.0 dB, and it is not recorded in any bundle.** It is passed
+by hand (`--rule-contrast -3.0 --rule-elongation 2.5`); without the flag `run.py` defaults to −0.5,
+which is the Zenodo-domain value. Verified 13 Sept by back-solving every shipped feature's
+confidence and contrast against `run.py`'s margin formula: all seven live cases resolve to −3.0.
+The frontend's "clear / marginal" bands (≤ −4.5 dB / −4.5 to −3.0 dB) depend on that. **Any rerun
+that drops the flag changes the classifications and silently invalidates those labels.**
+
 **Archived:** `case-ennore-2017` — `S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04`,
 2017-01-29 00:31:32Z, +1.0 d, dawn low-wind, **no clear slick in GRD**. Moved to `cases/_archive/`
 pending the SLC retry that decision D18 requires. **Dropped entirely:** `case-golden-ray-2021` (D17).

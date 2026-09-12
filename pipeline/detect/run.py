@@ -521,10 +521,12 @@ def main():
                 "shape_class": r["shape_class"],
                 "discharge_class": classify_discharge(r),
                 "centroid": centroid_lonlat(r, transform),
-                # Scene-level radar contacts, carried on every feature because
-                # the contract nests them in properties (Master 6.3). Jaiveer
-                # reads the list from any one feature.
-                "ship_detections": ships,
+                # ship_detections is NOT written here any more (Master 6.3, D34).
+                # Contacts are a scene-level observation; they live once, top-level
+                # on the FeatureCollection below. Copying the scene list onto every
+                # feature lost it entirely on a zero-detection scene (both Zenodo
+                # cases: 1 and 31 contacts dropped) and made the map draw each
+                # contact once per feature (Ennore: 72 contacts, 2,088 markers).
             }
             if "vh_contrast_db" in r:
                 props["vh_contrast_db"] = round(float(r["vh_contrast_db"]), 3)
@@ -542,8 +544,14 @@ def main():
 
     out_path = Path(a.out) if a.out else (OUT / "detections.geojson")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(
-        {"type": "FeatureCollection", "features": features_out}, indent=1))
+    # Top-level, beside `features`: valid GeoJSON (RFC 7946 §6.1 foreign member).
+    # [] means the detector ran and found nothing; --no-ships omits the key, because
+    # a detector that did not run found nothing only in the sense of null, not 0.
+    collection = {"type": "FeatureCollection"}
+    if not a.no_ships:
+        collection["ship_detections"] = ships
+    collection["features"] = features_out
+    out_path.write_text(json.dumps(collection, indent=1))
 
     n_oil = sum(1 for f in features_out if f["properties"]["classification"] == "oil")
     n_chronic = sum(1 for f in features_out if f["properties"]["discharge_class"] == "chronic")
