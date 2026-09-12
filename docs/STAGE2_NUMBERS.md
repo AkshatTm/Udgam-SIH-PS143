@@ -160,8 +160,9 @@ either already happened or was about to.
 | **Candidate-age coverage** | age candidates beyond the cache silently flatten the extent curve | dropped 6 of 18 candidates on case-000, taking monotonicity failures from 20/20 to 5/20 |
 | **Cross-case plotting** | one case's cloud rendered under another's name — a leftover **Ennore** cloud was written as `heatmap_case-jacksonville-2024.png`, **160 degrees of longitude** apart, and nothing tripped | refuses on a `t0` mismatch (§6.4) or an out-of-region centroid |
 | **Coastline stranding** | a beached particle held at zero velocity is indistinguishable from one in slow water, and contributes an ordinary-looking endpoint | GSHHG at ~1 km; **1.36%** stranded on case-000, reported as `stranded_fraction` |
+| **Drift mix** (6th, 13 Sept) | a wind-dominated origin is indistinguishable from a flipped sign, and the two have opposite remedies — Alaska rewinds *opposite* the current atlas and nothing said why | `wind_share` in `origin.json`; **23%** on case-000, **81%** on Alaska's field; warns at ≥50% |
 
-**Test suite: 10 suites, 65 assertions, green.** Including four that exist only to pin down where
+**Test suite: 11 suites, 70 assertions, green.** Including four that exist only to pin down where
 the implementation had to depart from the brief, so a departure is testable rather than a comment
 nobody reads.
 

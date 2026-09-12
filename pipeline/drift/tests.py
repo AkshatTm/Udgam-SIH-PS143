@@ -32,6 +32,7 @@ import branch_tests
 import coast_tests
 import forward_tests
 import geo_tests
+import mix_tests
 
 T0 = datetime(2017, 1, 29, 0, 14, 0, tzinfo=timezone.utc)   # Ennore detection time
 ENNORE = [80.35, 13.25]
@@ -287,7 +288,8 @@ def main():
               ("7  geographic conventions", lambda: geo_tests.run(check)),
               ("8  coastline + stranding", lambda: coast_tests.run(check)),
               ("9  forward drift + seeding geometry", lambda: forward_tests.run(check)),
-              ("10 untested branches: blob, no-spill, abstain", lambda: branch_tests.run(check))]
+              ("10 untested branches: blob, no-spill, abstain", lambda: branch_tests.run(check)),
+              ("11 drift mix diagnostic (Phase 5.3)", lambda: mix_tests.run(check))]
 
     passed = 0
     for name, fn in suites:

@@ -35,6 +35,7 @@ import numpy as np
 import coastline
 import ensemble as ens
 from fields import load_case_field, make_fake
+import step
 from step import (assert_displacement_plausible, assert_field_covers,
                   assert_inside_field_box, displacement_km, edge_distance_km,
                   integrate, integrate_stranding)
@@ -148,8 +149,60 @@ def write_particles(path, t0, positions, dt_min):
         "positions": positions}))
 
 
+def wind_share_of_drift(field, history, times, wind_coeff=step.WIND_COEFF):
+    """What fraction of the drift that actually moved this cloud came from the wind term?
+
+    Phase 5.3 found this the hard way. `case-gulf-alaska-2023` rewinds to an origin in the WEST
+    where the brief predicted EAST, and neither the integrator nor any guard was wrong: the
+    Alaska Current is simply absent from that field (24 h mean 0.041 m/s, direction wandering
+    with no preferred heading) and a persistent easterly 4-6.5 m/s wind supplies 81% of the
+    drift vector. The brief's prediction came from a basin-scale current climatology, which does
+    not describe a 9 km HYCOM cell on one afternoon.
+
+    Nothing in the output said so. A reviewer comparing the origin against a current atlas would
+    have called it a sign error, and the only way to tell them apart was to decompose the field
+    by hand. So it is decomposed here, once, along the control trajectory -- sampling the path
+    the cloud took rather than a fixed point, because on a weak-current case the two differ
+    (Huntington's origin bearing moves 143 degrees between a t0 sample and a window mean).
+
+    The number is a DIAGNOSTIC, not an error bar. It does not widen the cloud and does not
+    reduce confidence in the answer: the ensemble already perturbs the coefficient over
+    U(0.025, 0.035), and across that honest range the origin direction moves at most 5 degrees
+    on every case in the library. What a high share means is narrower and more useful -- that
+    the answer rests on ERA5 and the 3% rule rather than on HYCOM, so it should be checked
+    against a wind reanalysis and NOT against a current atlas.
+
+    Returns None on a SYNTHETIC field, rather than 0.0. Every field class here implements
+    get_wind -- the analytic and constant ones just return their configured constant, which is
+    (0, 0) by default -- so `hasattr` is not the test. The test is whether the wind came from
+    ERA5 at all, and the idiom for that in this file is already `bbox`: a real fetched field has
+    a box, the lab fields do not. On a lab field the share would be a true statement about a
+    field that is not an ocean, and writing it into origin.json would invite exactly the
+    misreading the field exists to prevent (CONTRACTS.md 6.5, the rule stranded_fraction
+    follows: absence hides a row, a false number misinforms one).
+    """
+    if getattr(field, "bbox", None) is None or not hasattr(field, "get_wind"):
+        return None
+    pos = np.asarray(history, dtype=np.float64)
+    cur_mag, wind_mag = [], []
+    for i, when in enumerate(times[:len(pos)]):
+        lons, lats = pos[i][:, 0], pos[i][:, 1]
+        cu, cv = field.get_uv(lons, lats, when)
+        wu, wv = field.get_wind(lons, lats, when)
+        cu, cv = np.asarray(cu, float), np.asarray(cv, float)
+        wu, wv = np.asarray(wu, float), np.asarray(wv, float)
+        if not np.isfinite(wu).any():
+            return None
+        cur_mag.append(np.nanmean(np.hypot(cu, cv)))
+        wind_mag.append(wind_coeff * np.nanmean(np.hypot(wu, wv)))
+    c, w = float(np.mean(cur_mag)), float(np.mean(wind_mag))
+    if c + w <= 0.0:
+        return None
+    return w / (c + w), c, w
+
+
 def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_steps,
-                 n_runs, stranded_fraction=None):
+                 n_runs, stranded_fraction=None, wind_share=None):
     """The real thing: a histogram of every ensemble endpoint, radii measured from the raw
     points, and a time window that is honest about whether it was measured or bounded."""
     (clon, clat), r50, r90 = ens.radii_km(endpoints)
@@ -184,6 +237,10 @@ def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_ste
     # make: absence hides a UI row, a false zero misinforms one (CONTRACTS.md 6.5).
     if stranded_fraction is not None:
         doc["stranded_fraction"] = round(float(stranded_fraction), 4)
+    # Phase 5.3. Says which input the answer actually rests on -- see wind_share_of_drift().
+    # Omitted, never zeroed, when the field has no wind term.
+    if wind_share is not None:
+        doc["wind_share"] = round(float(wind_share), 4)
     path.write_text(json.dumps(doc))
     return clon, clat, r50, r90, method, doc["abstain"]
 
@@ -420,6 +477,21 @@ def main():
     span_h = (a.steps - 1) * a.timestep_minutes / 60.0    # states recorded, not steps taken
 
     # ---- control run: the animation ---------------------------------------------------
+    # The BACKWARD run needs coverage too, and did not check it. Jacksonville is the case that
+    # showed why: fetched with filterDate(start, t0), its last HYCOM snapshot lands 2.36 h
+    # BEFORE t0, because the 3-hourly snapshots go ...18:00, 21:00, 00:00 and t0 is 23:21. So
+    # the first 2.36 h of the rewind -- the end NEAREST the detection, where the answer is most
+    # sensitive -- ran through a frozen field, silently. --forward-hours fixes both directions
+    # at once, because it pulls the snapshots that bracket t0 instead of stopping short of it.
+    from step import FieldTimeSpan
+    try:
+        cov = assert_field_covers(field, t0, t0 - timedelta(hours=span_h), "backward run")
+        if cov is not None and cov[2] > 0.0:
+            print(f"              coverage  field spans {cov[0]:%Y-%m-%dT%H:%MZ} -> "
+                  f"{cov[1]:%Y-%m-%dT%H:%MZ}  (overhang {cov[2]:.2f} h, tolerated)")
+    except FieldTimeSpan as exc:
+        raise SystemExit(str(exc))
+
     land = coastline.is_land if coastline.available() else None
     print(f"              coast  {coastline.describe()}")
     if not coastline.available():
@@ -463,12 +535,28 @@ def main():
         print(f"              edge guard  closest particle sits {margin:.1f} km inside the "
               f"field box (limit 10 km)")
 
+    # ---- Phase 5.3: which input is the answer resting on? -----------------------------
+    ws = wind_share_of_drift(field, history, times)
+    wind_share = None
+    if ws is not None:
+        wind_share, c_mag, w_mag = ws
+        print(f"              drift mix  current {c_mag:.3f} m/s + 0.03xwind {w_mag:.3f} m/s "
+              f"= wind is {100 * wind_share:.0f}% of the drift")
+        if wind_share >= 0.5:
+            print(f"              !! WIND-DOMINATED CASE  the origin direction is set by ERA5 "
+                  f"and the 0.03 rule, NOT by HYCOM.")
+            print(f"              Check it against a WIND reanalysis. A current atlas will "
+                  f"disagree and that disagreement is not an error.")
+            print(f"              (Ensemble already spans U(0.025, 0.035); direction moves "
+                  f"<=5 deg across that range, so this is a provenance note, not a wider cloud.)")
+
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     write_particles(out_dir / "particles.json", t0, positions, a.timestep_minutes)
     clon, clat, r50, r90, method, abstain = write_origin(
         out_dir / "origin.json", endpoints, conv_idx, members,
-        t0, a.timestep_minutes, a.steps, a.runs, stranded_fraction=strand_frac)
+        t0, a.timestep_minutes, a.steps, a.runs, stranded_fraction=strand_frac,
+        wind_share=wind_share)
 
     # The endpoint pool, kept so plot_heatmap.py can draw the cloud without rerunning 50 runs.
     np.savez_compressed(out_dir / f"ensemble_{a.case}.npz",
