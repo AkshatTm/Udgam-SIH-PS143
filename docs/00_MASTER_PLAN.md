@@ -382,7 +382,15 @@ so Soum can invert it exactly; `vh_available` says whether `sar_vv_vh.tif` has a
 three scalars above — what `gee_scene.py` writes and what every consumer already reads. See D26.)*
 
 ## 6.3 `detections.geojson`
-FeatureCollection. Each feature:
+FeatureCollection, with the scene's radar contacts beside `features` (D34):
+```json
+{ "type": "FeatureCollection",
+  "ship_detections": [
+    {"lon": -118.104, "lat": 33.602, "px_area": 340, "peak_db": -4.2}
+  ],
+  "features": [ ... ] }
+```
+Each feature:
 ```json
 { "type": "Feature",
   "geometry": {"type": "Polygon", "coordinates": [[[lon,lat], ...]]},
@@ -396,10 +404,7 @@ FeatureCollection. Each feature:
     "contrast_db": -6.2,
     "shape_class": "linear",
     "discharge_class": "chronic",
-    "centroid": [-118.15, 33.62],
-    "ship_detections": [
-      {"lon": -118.104, "lat": 33.602, "px_area": 340, "peak_db": -4.2}
-    ]
+    "centroid": [-118.15, 33.62]
   } }
 ```
 `classification` ∈ `oil | lookalike` — not "none", not "oil_spill".
@@ -414,12 +419,29 @@ of anything. The range is [0,1] in both, which is exactly why this is dangerous:
 identical in JSON and mean different things.
 
 **The frontend must not render a `satellite` confidence as a model confidence bar.** A bar
-asserts calibration we have not measured on those seven cases. Show the margin as a qualitative
-band (weak / moderate / strong) with the rule named, and reserve the numeric bar for
-`provenance: "benchmark"`. No new field for this: `provenance` already separates the two paths
-one-to-one. If they ever cross — a model scoring a satellite case — that stops being true and we
-add an explicit `confidence_kind` then, not before.
-`ship_detections` may be `[]` — that is valid and common.
+asserts calibration we have not measured on those seven cases. Show the margin **in the unit
+the rule actually measures — dB of contrast** — as one of two bands, with the value and the rule
+named: **clear** at `contrast_db ≤ −4.5` and **marginal** between −4.5 and the −3.0 dB rule, with
+a detection sitting exactly on −3.0 labelled *at threshold*. (The rule maps contrast linearly,
+`conf = 0.5 + 0.25·(−3.0 − contrast)/3.0`, so −4.5 dB is exactly confidence 0.625.) A
+three-band split on the [0,1] number was tried and collapsed: 1 strong, 11 moderate, 0 weak on
+the 12 live oil detections. Reserve the percentage for `provenance: "benchmark"`. No new field
+for this: `provenance` already separates the two paths one-to-one. If they ever cross — a model
+scoring a satellite case — that stops being true and we add an explicit `confidence_kind` then,
+not before.
+
+**`ship_detections` is scene-level and lives on the FeatureCollection, not in a feature (D34).**
+Radar contacts are an observation about the scene, not about any one slick. Top-level
+`ship_detections` is the canonical list: **absent** means the ship detector was not run or not
+recorded, **`[]`** means it ran and found nothing — `null ≠ 0` applies here too. Each entry needs
+finite `lon`/`lat` inside `bounds.json`, `px_area > 0` and a finite `peak_db`. The old per-feature
+`properties.ship_detections` is **deprecated**: still accepted for back-compat, never written by
+`run.py`, and if both are present they must agree.
+
+**A radar contact is not a dark vessel.** Darkness is the *absence of an AIS match*, which needs
+an AIS cross-check at a known acquisition time. A contact on a case with no AIS, or with the 1970
+`detection_time` sentinel, is an **unattributed radar contact** — its darkness is `null`, not
+`true`, and it is labelled that way on screen and in notes.
 A no-spill case is a FeatureCollection with **zero `oil` features**; look-alikes may still be present.
 
 ## 6.4 `particles.json` and `particles_forward.json`
@@ -686,6 +708,7 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 | D30 | **The gap story moves from case 1 to case 4** | Case 1's Part 3 line — "the only case that exercises gap detection" — was **false**, and measurably so: 714 broadcasts covering 14.0 of 14 hours inside Cerulean's own window, longest silence 130 seconds. Case 4's dark vessel carries the argument better anyway, because a ship that never speaks at all is a stronger version of the same point and it is actually present in the data. Recorded at the same time, before the scoring run: on case 1 the `gap` component gives full marks to a **competing candidate** (7.4 km, 12.5 kn, 142 minutes silent) and zero to the documented vessel, so **case 1 may return `partial` or `miss`**. Writing that down in advance is worth more than explaining it afterwards. |
 | D31 | **Blindness is declared per case, never claimed globally** | Verifying AIS density at case 1 *required* identifying the vessel — the check and the answer are the same operation, so that case was never going to stay blind. Separately, Alaska's and Mumbai's source identifiers and coordinates were sitting in §3.2 of a document the whole team reads. Both are now stated openly per case (Part 16) rather than papered over with a blanket claim a panel could take apart in one question. **Case 1 is open**: its documented vessel may be used for diagnostics and worked examples, but **no weight or threshold may be chosen using it** — weights are set on injected scenarios only. Case 2 becomes the headline blind result. |
 | D33 | **Detector routing moves to an explicit `meta.provenance` field; the CRS sniff is deleted** | Stage 1 has two detection paths (classical CV + RandomForest for our GEE exports, CNN scene classifier for the Zenodo corpus) and `scene_provenance()` chose between them by testing whether the GeoTIFF had a CRS. That test was **always false**: Zenodo Part III tiles carry EPSG:4326 and a real geotransform exactly like a GEE export, so the sniff matched both corpora and discriminated nothing — every Zenodo bundle would have gone down the classical path. Two rules were violated at once: routing on the *absence* of a property is an invisible tripwire, and the same false premise had been written into `benchmark_scene.py`, which was emitting a Null Island placeholder box for scenes that are georeferenced. `provenance` ∈ `satellite \| benchmark`, optional, absent means `satellite` so nothing needs backfilling. It also carries a second meaning we were going to need anyway: it is what tells the frontend whether `confidence` is a model probability or a rule margin (§6.3). Found by Soum, 13 Sept. |
+| D34 | **Radar contacts move to a top-level `ship_detections` on the FeatureCollection; a contact is never called a dark vessel without an AIS check** | `ship_detections` was nested in each detection's `properties`, but it is a scene-level observation: `run.py` already copied the identical full list onto every feature, so a scene with zero detections had nowhere to put its contacts — both Zenodo bundles silently dropped them (1 on `case-lookalike-zenodo`, 31 on `case-nospill-zenodo`, measured by Soum and reproduced independently) — and the map flattened every feature's copy, drawing Ennore's 72 contacts as 2,088 stacked markers. Top-level key is canonical (absent = not recorded, `[]` = ran and found none); per-feature copy deprecated, accepted, no longer written. **Soum's framing was declined:** he called a no-oil-plus-contact scene the dark-vessel case. Darkness is an absent AIS match and needs AIS at a known time; the Zenodo cases have neither (1970 sentinel), and the Delta contact is a genuine return (29.7σ above the sea) whose identity is unestablished — a structure-or-vessel question no geometric rule can answer. The library's dark-vessel case is Alaska (case 4) — and there our detector finds **no** contact (threshold −8.06, peak −8.79 dB), so its dark-vessel contact is Cerulean's and must never be shown as a NAAP detection. Found by Soum, 13 Sept. |
 
 ---
 

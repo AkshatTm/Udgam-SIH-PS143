@@ -1,0 +1,32 @@
+{
+  "feature_set": "v1_absolute",
+  "role": "VV-only fallback (D3)",
+  "features": [
+    "area_km2",
+    "elongation",
+    "edge_gradient",
+    "solidity",
+    "is_linear",
+    "contrast_db",
+    "mean_depth_db",
+    "max_depth_db"
+  ],
+  "threshold": 0.34,
+  "trained_on": "Zenodo Parts I+II (features_train.csv)",
+  "tested_on": "Zenodo Part III (features_test.csv)",
+  "metrics_part3": {
+    "name": "v1_absolute",
+    "threshold": 0.34,
+    "precision": 0.049,
+    "recall": 0.05,
+    "f1": 0.05,
+    "tp": 4,
+    "fp": 77,
+    "fn": 76,
+    "tn": 3928,
+    "scene_recall": "4/36",
+    "scene_recall_frac": 0.111,
+    "val_f1": 0.3458
+  },
+  "use_when": "scene VH sea level at or below the sensor noise floor, or VH contrast near zero where VV contrast is strong"
+}

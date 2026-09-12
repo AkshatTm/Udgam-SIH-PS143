@@ -1,10 +1,12 @@
 [
   "area_km2",
-  "contrast_db",
-  "mean_depth_db",
-  "max_depth_db",
   "elongation",
   "edge_gradient",
   "solidity",
-  "is_linear"
+  "is_linear",
+  "contrast_db",
+  "mean_depth_db",
+  "max_depth_db",
+  "vh_contrast_db",
+  "vh_mean_depth_db"
 ]

@@ -129,6 +129,12 @@ def prepare(db, pixel_area_km2, bright_ceiling_db=-10.0, bright_dilate_px=5,
 # Depth map
 # ---------------------------------------------------------------------------
 
+# Background ring around a region: dilate out to RING_OUT, punch out RING_IN so
+# the slick's own soft edge does not contaminate its background estimate.
+RING_OUT = 25
+RING_IN = 5
+
+
 def _closing(img, size):
     k = cv2.getStructuringElement(cv2.MORPH_RECT, (size, size))
     return cv2.morphologyEx(img, cv2.MORPH_CLOSE, k)
@@ -197,12 +203,23 @@ def clean_mask(mask, close_size=7):
 
 
 def extract_regions(mask, pixel_area_km2, depth=None, db=None, valid=None,
+                    db_vh=None, depth_vh=None,
                     min_km2=0.05, max_km2=500.0, min_extent_px=80):
     """Connected components, size-filtered. A region survives if its area is
     >= min_km2 OR its bounding box is >= min_extent_px on its longer side —
     the second rule exists because a 2-px-wide, 1-km-long discharge streak
     is only ~200 px of area and would otherwise be thrown away as noise.
-    Same dict shape as v1 plus depth/contrast stats for features.py."""
+    Same dict shape as v1 plus depth/contrast stats for features.py.
+
+    db_vh / depth_vh — the VH band and its depth map, on the SAME pixel grid.
+    When given, vh_contrast_db and vh_mean_depth_db are measured from the very
+    same region mask and the very same background ring as the VV statistics.
+    That is deliberate: the earlier version paired VV and VH regions across two
+    separate detector runs by |area_px| proximity, which silently attached the
+    wrong VH numbers to a region whenever two regions had similar areas — and
+    vh_mean_depth_db is the single most important feature in the classifier, so
+    the corruption was invisible and expensive. There is no matching step left
+    to get wrong."""
     num, labels, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
     regions = []
     for i in range(1, num):
@@ -224,11 +241,40 @@ def extract_regions(mask, pixel_area_km2, depth=None, db=None, valid=None,
         if depth is not None:
             r["mean_depth_db"] = float(depth[rm].mean())
             r["max_depth_db"] = float(depth[rm].max())
+        if depth_vh is not None:
+            r["vh_mean_depth_db"] = float(depth_vh[rm].mean())
         if db is not None and valid is not None:
-            ring = ndi.binary_dilation(rm, iterations=25) & ~ndi.binary_dilation(rm, iterations=5) & valid
-            inside = db[rm & np.isfinite(db)]
-            if inside.size and ring.any():
-                r["contrast_db"] = float(np.median(inside) - np.median(db[ring]))
+            # ONE ring, reused for every band. See the docstring.
+            #
+            # Computed inside a window cropped to the region's bounding box plus
+            # a RING_OUT+1 margin, not over the whole scene. A 25-iteration
+            # binary_dilation on a 2048x2048 array is ~100M operations, and a
+            # Part 1 scene can hold 40 regions needing two dilations each — that
+            # is ~8 billion operations per scene, and it dropped the label run to
+            # 0.12 scene/s. The dilated mask can never reach past the margin, so
+            # the cropped result is IDENTICAL, not approximate.
+            y0 = max(0, stats[i, cv2.CC_STAT_TOP] - RING_OUT - 1)
+            x0 = max(0, stats[i, cv2.CC_STAT_LEFT] - RING_OUT - 1)
+            y1 = min(rm.shape[0], stats[i, cv2.CC_STAT_TOP]
+                     + stats[i, cv2.CC_STAT_HEIGHT] + RING_OUT + 1)
+            x1 = min(rm.shape[1], stats[i, cv2.CC_STAT_LEFT]
+                     + stats[i, cv2.CC_STAT_WIDTH] + RING_OUT + 1)
+            sub = (slice(y0, y1), slice(x0, x1))
+            rm_s = rm[sub]
+            ring_s = (ndi.binary_dilation(rm_s, iterations=RING_OUT)
+                      & ~ndi.binary_dilation(rm_s, iterations=RING_IN)
+                      & valid[sub])
+            if ring_s.any():
+                db_s = db[sub]
+                inside = db_s[rm_s & np.isfinite(db_s)]
+                if inside.size:
+                    r["contrast_db"] = float(np.median(inside) - np.median(db_s[ring_s]))
+                if db_vh is not None:
+                    vh_s = db_vh[sub]
+                    inside_vh = vh_s[rm_s & np.isfinite(vh_s)]
+                    ring_vh = vh_s[ring_s & np.isfinite(vh_s)]
+                    if inside_vh.size and ring_vh.size:
+                        r["vh_contrast_db"] = float(np.median(inside_vh) - np.median(ring_vh))
         regions.append(r)
     return regions
 
@@ -237,7 +283,7 @@ def extract_regions(mask, pixel_area_km2, depth=None, db=None, valid=None,
 # End-to-end
 # ---------------------------------------------------------------------------
 
-def detect_array(db, pixel_area_km2, scales=(41, 121, 361), smooth_px=3, bg_sigma=3.0,
+def detect_array(db, pixel_area_km2, db_vh=None, scales=(41, 121, 361), smooth_px=3, bg_sigma=3.0,
                  t_high_db=2.0, t_low_db=1.0, k_high=3.0, k_low=1.5,
                  close_size=11, min_km2=0.05, max_km2=500.0, min_extent_px=80,
                  return_debug=False,
@@ -246,7 +292,12 @@ def detect_array(db, pixel_area_km2, scales=(41, 121, 361), smooth_px=3, bg_sigm
         high = noise_median + max(t_high_db, k_high * noise_mad)
         low  = noise_median + max(t_low_db,  k_low  * noise_mad)
     i.e. 'at least this many dB below the sea, AND clearly above this scene's
-    own noise'. Tune t_high_db first (1.5-3.0); leave the k's alone."""
+    own noise'. Tune t_high_db first (1.5-3.0); leave the k's alone.
+
+    db_vh — optional VH band on the same grid. Detection stays VV-only (that is
+    the validated path); VH only contributes the two supplemental features, and
+    it gets its own prepare()/depth_map() because its sea level sits several dB
+    below VV, but the region masks and the background ring come from VV."""
     filled, valid, land, sea_ref = prepare(db, pixel_area_km2, **prepare_kw)
     depth = depth_map(filled, scales=scales, smooth_px=smooth_px, bg_sigma=bg_sigma)
     med, mad = noise_floor(depth, valid)
@@ -254,20 +305,32 @@ def detect_array(db, pixel_area_km2, scales=(41, 121, 361), smooth_px=3, bg_sigm
     low = med + max(t_low_db, k_low * mad)
     mask = hysteresis(depth, low, high, valid)
     mask = clean_mask(mask, close_size=close_size) & valid
+
+    depth_vh = None
+    if db_vh is not None:
+        if db_vh.shape != db.shape:
+            raise ValueError(f"db_vh shape {db_vh.shape} != db shape {db.shape}")
+        filled_vh, _, _, _ = prepare(db_vh, pixel_area_km2, **prepare_kw)
+        depth_vh = depth_map(filled_vh, scales=scales, smooth_px=smooth_px, bg_sigma=bg_sigma)
+
     regions = extract_regions(mask, pixel_area_km2, depth=depth, db=db, valid=valid,
+                              db_vh=db_vh, depth_vh=depth_vh,
                               min_km2=min_km2, max_km2=max_km2, min_extent_px=min_extent_px)
     info = {"sea_ref_db": sea_ref, "noise_median": med, "noise_mad": mad,
             "t_high": high, "t_low": low, "land_frac": float(land.mean()),
             "valid_frac": float(valid.mean())}
     if return_debug:
-        return regions, {"depth": depth, "valid": valid, "land": land, "mask": mask, **info}
+        return regions, {"depth": depth, "valid": valid, "land": land, "mask": mask,
+                         "depth_vh": depth_vh, **info}
     return regions, info
 
 
-def detect(path, band=1, **kw):
-    """Scene path -> (regions, db). Same signature as v1 so callers don't change."""
+def detect(path, band=1, vh_band=None, **kw):
+    """Scene path -> (regions, db). Same signature as v1 so callers don't change.
+    Pass vh_band=2 to also load VH and get the two vh_* features per region."""
     db, pixel_area_km2 = load_scene(path, band=band)
-    regions, _ = detect_array(db, pixel_area_km2, **kw)
+    db_vh = load_scene(path, band=vh_band)[0] if vh_band else None
+    regions, _ = detect_array(db, pixel_area_km2, db_vh=db_vh, **kw)
     return regions, db
 
 

@@ -2,6 +2,95 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-13] D34 follow-up — rerun verified, edge rule declined, Zenodo indexed, sentinel date fixed
+
+**Done:**
+- **Soum's D34 rerun (`20594df`) verified.** All nine cases PASS with the D34 warnings gone. Every
+  bundle carries a top-level `ship_detections`, and no feature carries its own copy. The rule
+  threshold back-solves to −3.0 on all seven satellite cases. The forgotten-flag guard is a hard
+  error.
+- **Edge rule and `edge` flag declined, on Soum's evidence.** Checked independently: 2 of 173
+  contacts sit at the edge, one of them Ennore's +10.27 dB port target. `_sea_level()` uses global
+  median/MAD, so the truncated-window objection doesn't apply. The Delta contact is 29.7σ.
+- **Corrected my own unverified claim.** I had written "among charted platforms" (D34, receipts,
+  case notes) without checking any platform dataset.
+- **Both Zenodo cases added to `index.json`** at slots 8–9. Before that could happen, fixed the
+  header and gallery card, which would have rendered the 1970 sentinel as "01 Jan 1970". One helper
+  now shows "time unknown".
+- **Ruled that the rule threshold gets recorded in the bundle after the freeze,** not before.
+- **Confirmed Anushka's `global-land-mask`** dependency.
+
+**Files touched:** `cases/index.json` · `CLAUDE.md` · `requirements.txt` ·
+`web/lib/cases.ts` (`formatAcquisitionDate`) · `web/components/{Header,Gallery,ContextPanel}.tsx` ·
+`docs/00_MASTER_PLAN.md` (D34 wording) · `docs/receipts.md` · `cases/case-lookalike-zenodo/meta.json`
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-lookalike-zenodo
+```
+Expected output: `PASS (1 warning(s))`. The warning is zero oil features, which is correct for a
+look-alike.
+
+**Checkpoint artefact:** all nine PASS · `tsc --noEmit` clean · edge and back-solve scripts in the
+session scratchpad.
+
+**Open issues:**
+- **No browser check yet** of a zero-detection benchmark case. These are the first cases with
+  `provenance: benchmark`, zero features and the time sentinel ever loaded in the UI. Open both
+  before the demo.
+- The ship detector's absolute −10 dB floor alone sets the threshold on Zenodo scenes
+  (`k_sigma` is inert there). Known limitation, recorded in receipts, not tuned.
+- The Delta contact's identity is unchecked against any infrastructure dataset.
+- Recording the rule threshold in the bundle is deferred to October.
+
+**Next:** a browser pass over cases 8 and 9, then the full nine-case demo run.
+
+## [2026-09-13] D34 — scene-level ship_detections; "dark vessel" framing declined; dB confidence bands
+
+**Done:** Ruled on Soum's §6.3 gap. `ship_detections` moves to the top level of the
+`detections.geojson` FeatureCollection. Both Zenodo bundles had silently dropped their contacts
+(1 + 31), and the map was drawing each contact once per feature (Ennore: 72 contacts → 2,088
+markers). Declined his framing that a no-oil-plus-contact scene is "the dark-vessel case":
+darkness needs AIS at a known time, and neither Zenodo case has one. The Delta contact sits in the
+raster's top pixel row beside land, and our detector finds *no* contact on Alaska, the real
+dark-vessel case. Replaced my invented 0.75/0.45 confidence bands with Soum's two dB bands.
+
+**Files touched:** `docs/00_MASTER_PLAN.md` (§6.3, D34) · `docs/CONTRACTS.md` ·
+`scripts/validate_case.py` (top-level contact checks; legacy warn-only) · `pipeline/detect/run.py`
+(writes top-level, stops the per-feature copy) · `scripts/plot_detections.py` ·
+`web/lib/{contracts,loadCase}.ts` · `web/components/MapView.tsx` (dedupe) ·
+`web/components/ContextPanel.tsx` (dB bands) · `cases/case-{lookalike,nospill}-zenodo/meta.json` ·
+`docs/receipts.md`
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/case-nospill-zenodo
+```
+Expected output: `PASS (2 warning(s))`. The warnings say the top-level list is not recorded yet;
+they go away when Soum reruns.
+
+**Checkpoint artefact:**
+- All nine live cases PASS.
+- `ships.py` and `features.py` self-tests pass.
+- `tsc --noEmit` is clean.
+- Reproduced Soum's contact counts read-only (1 and 31).
+- Back-solved the rule threshold from every shipped feature: −3.0 on all seven live cases.
+
+**Open issues:**
+- **run.py's new output is untested here.** `run.py` imports torch at module load, even on the
+  classical path, and this venv has none. It passes `py_compile`; Soum's rerun is the real test.
+- **Rerun hazard.** The −3.0 dB rule is passed by hand and recorded nowhere in the bundle.
+  Without `--rule-contrast -3.0 --rule-elongation 2.5`, run.py uses −0.5 and reclassifies
+  everything, and the frontend bands go silently wrong.
+- **Soum's margin paragraph says "20 oil, median 0.578".** His own table and the bundles say 12,
+  median 0.645. Nothing may quote 20.
+- **Zenodo cases are still not in `cases/index.json`.** Presentation order is undecided.
+- **Asked Soum:** should `detect_ships` reject contacts touching the raster border? That would
+  remove the Delta contact.
+
+**Next:** Soum reruns all nine with the flags, then rerun the back-solve and the validator. The
+D34 warnings should disappear.
+
 ## [2026-09-13 ~11:00] Unblocking Soum's Stage 1 push — provenance field, gitignore, three corrections
 
 **Done:** Soum's reply to `HANDOFF_SOUM_CASES.md` answered all four questions and returned three

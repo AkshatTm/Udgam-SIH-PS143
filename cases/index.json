@@ -6,7 +6,9 @@
     "case-gulf-alaska-2023",
     "case-mumbai-2023",
     "case-jamnagar-2024",
-    "case-ennore-lookalike-2023"
+    "case-ennore-lookalike-2023",
+    "case-lookalike-zenodo",
+    "case-nospill-zenodo"
   ],
   "default": "case-jacksonville-2024"
 }
