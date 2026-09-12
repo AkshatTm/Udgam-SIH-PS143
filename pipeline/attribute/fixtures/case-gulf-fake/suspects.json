@@ -1,0 +1,74 @@
+{
+  "funnel": {
+    "in_region": 987,
+    "in_window": 899,
+    "plausible": 17,
+    "scored": 2,
+    "dropped_short_track": 15
+  },
+  "suspects": [
+    {
+      "source_type": "vessel",
+      "mmsi": "000000101",
+      "name": "FAKE ATLAS",
+      "vessel_type": "tanker",
+      "score": 0.82,
+      "components": {
+        "proximity": 0.91,
+        "parity": null,
+        "temporality": null,
+        "trajectory": 1.0,
+        "gap": 1.0,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "closest_km": 3.1,
+      "closest_time": "2023-01-25T03:00:00Z",
+      "grid_probability": 0.91,
+      "heading_consistent": true,
+      "ais_gap_minutes": 85,
+      "edge_truncated": false,
+      "reasons": [
+        "STUB \u2014 inside the high-probability origin region during the window",
+        "STUB \u2014 85-minute transponder gap overlapping the window"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "000000104",
+      "name": "FAKE CORAL",
+      "vessel_type": "cargo",
+      "score": 0.41,
+      "components": {
+        "proximity": 0.44,
+        "parity": null,
+        "temporality": null,
+        "trajectory": 1.0,
+        "gap": 0.0,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "closest_km": 8.7,
+      "closest_time": "2023-01-25T15:00:00Z",
+      "grid_probability": 0.44,
+      "heading_consistent": true,
+      "ais_gap_minutes": 0,
+      "edge_truncated": false,
+      "reasons": [
+        "STUB \u2014 inside the origin cloud, no transponder gap"
+      ]
+    }
+  ],
+  "dark_vessels": [],
+  "infrastructure": [],
+  "excluded": [
+    {
+      "mmsi": "000000103",
+      "name": "FAKE PELICAN",
+      "closest_km": 6.4,
+      "reason": "STUB \u2014 heading away from the origin throughout the window"
+    }
+  ],
+  "abstained": false,
+  "abstain_reason": null
+}

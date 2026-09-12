@@ -42,7 +42,8 @@ vessels.geojson / suspects.json travel to the team.
 import argparse
 import json
 import math
-from datetime import datetime, timedelta, timezone
+import re
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import duckdb
@@ -104,6 +105,85 @@ def has_cargo_column(csv_path):
     with open(csv_path, encoding="utf-8", errors="replace") as f:
         header = [h.strip().lower() for h in f.readline().split(",")]
     return "cargo" in header
+
+
+NOAA_DAY_RE = re.compile(r"AIS_(\d{4})_(\d{2})_(\d{2})", re.IGNORECASE)
+
+
+def first_row_date(csv_path):
+    """UTC date of the first data row. Two lines read, not the whole file.
+
+    Read from the data rather than the filename because a renamed or re-saved file
+    is exactly the case a filename check would wave through.
+    """
+    with open(csv_path, encoding="utf-8", errors="replace") as f:
+        header = [h.strip().lower() for h in f.readline().split(",")]
+        if "basedatetime" not in header:
+            return None
+        col = header.index("basedatetime")
+        row = f.readline()
+    if not row:
+        return None
+    try:
+        return datetime.fromisoformat(row.split(",")[col].strip().replace("Z", "")).date()
+    except (ValueError, IndexError):
+        return None
+
+
+def check_consecutive_days(csv_paths):
+    """Refuse a set of daily files that is not one consecutive run of days.
+
+    This is a hard stop, not a warning, because the failure is silent and looks like
+    a result. tracks.py measures transponder silence with lag(ts) over the merged
+    rows. Ingest 25 Jan together with 16 Feb and every vessel in the file acquires a
+    three-week gap: max_gap_minutes stops meaning anything and the `gap` component
+    fires on the entire fleet as a plausible signal rather than as an error.
+    Risk D6; docs/06_JAIVEER_AIS.md Phase 9.1.
+
+    'Consecutive' is the rule, not 'narrow'. An incident +/- 2 days is a five-day
+    span and must pass; what must fail is a hole in the middle of it, so the test is
+    on each adjacent pair, never on the total span.
+    """
+    dated = []
+    for p in csv_paths:
+        d = first_row_date(p)
+        if d is None:
+            print(f"note: no readable BaseDateTime in {Path(p).name} — "
+                  "day continuity NOT checked for this run.\n")
+            return
+        name_match = NOAA_DAY_RE.search(Path(p).name)
+        if name_match:
+            named = date(*(int(g) for g in name_match.groups()))
+            if named != d:
+                raise SystemExit(
+                    f"{Path(p).name} is named for {named} but its first row is {d}.\n"
+                    "  The file has been renamed or the wrong day was downloaded. Fix the\n"
+                    "  filename or re-download before ingesting — a mislabelled day is how\n"
+                    "  the wrong window silently gets scored.")
+        dated.append((d, Path(p).name))
+
+    dated.sort()
+    for (d1, n1), (d2, n2) in zip(dated, dated[1:]):
+        span = (d2 - d1).days
+        if span == 0:
+            raise SystemExit(
+                f"{n1} and {n2} both cover {d1}.\n"
+                "  Ingesting the same day twice duplicates every position report and\n"
+                "  corrupts the reporting intervals. Pass each day once.")
+        if span > 1:
+            missing = ", ".join(str(d1 + timedelta(days=i)) for i in range(1, min(span, 6)))
+            raise SystemExit(
+                f"{n1} ({d1}) and {n2} ({d2}) are {span} days apart — not consecutive.\n"
+                f"  Missing: {missing}{' ...' if span > 6 else ''}\n"
+                "  Merging them would record the whole hole as a transponder gap for every\n"
+                "  vessel, and the `gap` component would fire on the entire fleet. Download\n"
+                "  the intervening days, or ingest each run into its own Parquet.")
+
+    days = [d for d, _ in dated]
+    if len(days) == 1:
+        print(f"days    {days[0]} (single day)")
+    else:
+        print(f"days    {days[0]} .. {days[-1]} — {len(days)} consecutive days")
 
 
 def ingest(csv_paths, bbox, window, out_path, keep_cargo):
@@ -211,6 +291,8 @@ def main():
     for p in args.csv:
         if not Path(p).exists():
             raise SystemExit(f"no such file: {p}")
+
+    check_consecutive_days(args.csv)
 
     if args.from_origin:
         bbox, window, abstain = box_from_origin(args.from_origin, args.pad_hours)
