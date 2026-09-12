@@ -4,7 +4,7 @@ Stage 2 known-answer tests. Owner: Anushka.
 
     python pipeline/drift/tests.py
 
-Seven tests. They must stay green on every change, forever, including after the real GEE
+Eight tests. They must stay green on every change, forever, including after the real GEE
 fields land in Phase 2. Wrong-but-running code is the failure mode of this component --
 these exist so nobody has to catch a units bug by eye.
 
@@ -28,6 +28,7 @@ from step import (ImplausibleDrift, assert_displacement_plausible, assert_speed_
                   displacement_km, deg_to_m, drift_velocity, integrate)
 
 import age_tests
+import coast_tests
 import geo_tests
 
 T0 = datetime(2017, 1, 29, 0, 14, 0, tzinfo=timezone.utc)   # Ennore detection time
@@ -281,7 +282,8 @@ def main():
               ("4  plausibility guards", test_4_plausibility_guards),
               ("5  ensemble + origin grid", test_5_ensemble_and_grid),
               ("6  age estimation", lambda: age_tests.run(check)),
-              ("7  geographic conventions", lambda: geo_tests.run(check))]
+              ("7  geographic conventions", lambda: geo_tests.run(check)),
+              ("8  coastline + stranding", lambda: coast_tests.run(check))]
 
     passed = 0
     for name, fn in suites:

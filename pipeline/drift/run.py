@@ -32,10 +32,12 @@ from pathlib import Path
 
 import numpy as np
 
+import coastline
 import ensemble as ens
 from fields import load_case_field, make_fake
 from step import (assert_displacement_plausible, assert_inside_field_box,
-                  displacement_km, edge_distance_km, integrate)
+                  displacement_km, edge_distance_km, integrate,
+                  integrate_stranding)
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -112,7 +114,8 @@ def write_particles(path, t0, positions, dt_min):
         "positions": positions}))
 
 
-def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_steps, n_runs):
+def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_steps,
+                 n_runs, stranded_fraction=None):
     """The real thing: a histogram of every ensemble endpoint, radii measured from the raw
     points, and a time window that is honest about whether it was measured or bounded."""
     (clon, clat), r50, r90 = ens.radii_km(endpoints)
@@ -141,6 +144,12 @@ def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_ste
         # somewhere else; nothing breaks if the frontend ignores it.
         "time_window_method": method,
     }
+    # Phase 4.3. A high fraction is itself a signal -- it means the slick may have originated
+    # ashore, or the rewind is running past a coastline. Either is worth surfacing, not hiding.
+    # Omitted entirely when there is no real coastline, because 0.0 would be a claim we cannot
+    # make: absence hides a UI row, a false zero misinforms one (CONTRACTS.md 6.5).
+    if stranded_fraction is not None:
+        doc["stranded_fraction"] = round(float(stranded_fraction), 4)
     path.write_text(json.dumps(doc))
     return clon, clat, r50, r90, method, doc["abstain"]
 
@@ -205,8 +214,12 @@ def main():
     span_h = (a.steps - 1) * a.timestep_minutes / 60.0    # states recorded, not steps taken
 
     # ---- control run: the animation ---------------------------------------------------
-    history, times = integrate(seed, t0, field, a.steps, a.timestep_minutes,
-                               direction="backward")
+    land = coastline.is_land if coastline.available() else None
+    print(f"              coast  {coastline.describe()}")
+    if not coastline.available():
+        print(f"              NOTE   {coastline.why_unavailable()}")
+    history, times, stranded_ctl = integrate_stranding(
+        seed, t0, field, a.steps, a.timestep_minutes, direction="backward", is_land=land)
     positions = np.round(history, 5).tolist()
 
     # ---- ensemble: the answer ---------------------------------------------------------
@@ -217,7 +230,12 @@ def main():
             print(f"              ensemble {done}/{total}", flush=True)
 
     endpoints, conv_idx, members = ens.run_ensemble(
-        seed, t0, field, a.steps, a.timestep_minutes, n_runs=a.runs, rng=nprng, progress=tick)
+        seed, t0, field, a.steps, a.timestep_minutes, n_runs=a.runs, rng=nprng, progress=tick,
+        is_land=land)
+    # the reported fraction is the ENSEMBLE's, not the control run's: origin.json describes the
+    # cloud, and the cloud is the ensemble
+    strand_frac = (float(np.mean([m["stranded_fraction"] for m in members]))
+                   if land is not None else None)
 
     # ---- the loud edge guard (Phase 3.1) ----------------------------------------------
     # Runs BEFORE anything is written. A cloud whose particles reached the wall must not be
@@ -236,7 +254,7 @@ def main():
     write_particles(out_dir / "particles.json", t0, positions, a.timestep_minutes)
     clon, clat, r50, r90, method, abstain = write_origin(
         out_dir / "origin.json", endpoints, conv_idx, members,
-        t0, a.timestep_minutes, a.steps, a.runs)
+        t0, a.timestep_minutes, a.steps, a.runs, stranded_fraction=strand_frac)
 
     # The endpoint pool, kept so plot_heatmap.py can draw the cloud without rerunning 50 runs.
     np.savez_compressed(out_dir / f"ensemble_{a.case}.npz",
@@ -267,6 +285,14 @@ def main():
     print(f"              origin ({clon:.4f}, {clat:.4f})  "
           f"r50={r50:.1f} km  r90={r90:.1f} km  abstain={abstain}")
     print(f"              time_window method={method}")
+    if strand_frac is not None:
+        ctl = float(np.mean(stranded_ctl))
+        print(f"              stranded  {strand_frac * 100:.2f}% of ensemble endpoints "
+              f"({ctl * 100:.2f}% of the control run) reached land and were held")
+        if strand_frac > 0.10:
+            print(f"              !! {strand_frac * 100:.0f}% stranded is high. Either the slick "
+                  f"originated ashore or the rewind runs past a coastline -- look at the "
+                  f"heatmap before believing the origin.")
 
 
 if __name__ == "__main__":

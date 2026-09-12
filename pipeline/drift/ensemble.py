@@ -38,6 +38,7 @@ WIND_COEFF_HI = 0.035
 CURRENT_SIGMA = 0.15
 SEED_JITTER_KM = 0.3
 ABSTAIN_RADIUS_KM = 40.0        # a cloud wider than this refuses attribution
+LAST_STRANDED = None            # bool[n] from the most recent run_once (Phase 4)
 
 
 class PerturbedField:
@@ -91,7 +92,7 @@ def jitter_seed(seed_pos, rng, jitter_km=SEED_JITTER_KM):
 
 
 def run_once(seed_pos, t0, field, n_steps, timestep_minutes=15, wind_coeff=0.03,
-             direction="backward", keep_history=False):
+             direction="backward", keep_history=False, is_land=None):
     """One member. Returns (final_positions, spread_curve, history_or_None).
 
     `n_steps` counts STORED POSITIONS: 97 at 15 min is exactly 24.0 h, because the seed state
@@ -103,6 +104,11 @@ def run_once(seed_pos, t0, field, n_steps, timestep_minutes=15, wind_coeff=0.03,
     dt = sign * float(timestep_minutes) * 60.0
 
     pos = as_positions(seed_pos).copy()
+    # Phase 4: stranding, sticky. Kept local so the return signature does not change --
+    # the fraction is read back through the module-level LAST_STRANDED below.
+    stranded = np.zeros(pos.shape[0], dtype=bool)
+    if is_land is not None:
+        stranded |= is_land(pos[:, 0], pos[:, 1])
     spread = np.empty(n_steps, dtype=np.float64)
     history = np.empty((n_steps, pos.shape[0], 2)) if keep_history else None
     times = []
@@ -115,9 +121,15 @@ def run_once(seed_pos, t0, field, n_steps, timestep_minutes=15, wind_coeff=0.03,
         spread[k] = spread_km(pos)
         if k == n_steps - 1:
             break
-        pos = rk2_step(pos, t, dt, field, wind_coeff=wind_coeff)
+        moved = rk2_step(pos, t, dt, field, wind_coeff=wind_coeff)
+        if is_land is not None:
+            stranded |= is_land(moved[:, 0], moved[:, 1])
+            moved[stranded] = pos[stranded]        # hold at the last wet position
+        pos = moved
         t = t + timedelta(seconds=dt)
 
+    global LAST_STRANDED
+    LAST_STRANDED = stranded
     return pos, spread, history, times
 
 
@@ -151,7 +163,7 @@ def _stratified_draws(n, rng):
 
 
 def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=50,
-                 rng=None, progress=None):
+                 rng=None, progress=None, is_land=None):
     """The 50 runs. Returns (endpoints [n_runs*n, 2], conv_idx [n_runs], members).
 
     `endpoints` is every final position from every member pooled together -- 150,000 points
@@ -176,10 +188,13 @@ def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=
         start = jitter_seed(seed_pos, rng)
 
         final, spread, _, _ = run_once(start, t0, field, n_steps, timestep_minutes,
-                                       wind_coeff=wind_coeff)
+                                       wind_coeff=wind_coeff, is_land=is_land)
+        stranded_frac = (float(np.mean(LAST_STRANDED))
+                         if LAST_STRANDED is not None and is_land is not None else 0.0)
         endpoints.append(final)
         conv_idx.append(int(np.argmin(spread)))
         members.append({"run": r, "wind_coeff": wind_coeff, "current_scale": scale,
+                        "stranded_fraction": stranded_frac,
                         "spread_start_km": float(spread[0]),
                         "spread_min_km": float(spread.min()),
                         "spread_end_km": float(spread[-1]),

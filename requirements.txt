@@ -45,3 +45,13 @@ pandas==3.0.5
 # --- sanity plots. Every drift phase ends in a picture; that is how
 #     wrong-but-running code gets caught cheaply.
 matplotlib==3.11.1
+
+# --- real coastline (Anushka, Stage 2 Phase 4). GSHHG shoreline at ~1 km.
+#     ADDED 2026-09-12, AFTER the no-new-dependencies date above. Named rather than slipped in:
+#     decision D7 approves the coastline upgrade, and the upgrade cannot happen without a
+#     shoreline dataset. Chosen over cartopy deliberately -- this is 2.6 MB of pure numpy,
+#     cartopy drags in GEOS and PROJ, which is not a thing to install on six laptops now.
+#     It replaces a 9 km land mask derived from the velocity field's own validity, which is
+#     wrong inside San Pedro Bay (case-huntington-2021) and off Mumbai (case-mumbai-2023).
+#     AKSHAT: confirm this one, or Phase 4 comes back out.
+global-land-mask==1.0.0

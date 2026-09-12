@@ -150,6 +150,59 @@ def integrate(positions, t0, field, n_steps, timestep_minutes=15, direction="bac
     return history, times
 
 
+def integrate_stranding(positions, t0, field, n_steps, timestep_minutes=15,
+                        direction="backward", wind_coeff=WIND_COEFF, guard=True,
+                        is_land=None):
+    """integrate(), but particles that reach land STRAND: frozen in place and flagged.
+
+    Returns (history, times, stranded) where `stranded` is a bool array [n].
+
+    Deliberately a SEPARATE function rather than a flag on integrate(). integrate() is called
+    from run.py, tests.py, age.py, geo_tests.py and ensemble.run_once; changing its return
+    arity three days before a freeze to add an optional feature is how a working component
+    stops working. This one is additive and nothing that exists has to change.
+
+    Stranding is STICKY. Once a particle touches land it stops and stays stopped, and it is
+    still stopped at the end of the run. In a backward run that is the honest model: the
+    reconstruction cannot say where a beached parcel came from, so it must not invent a
+    velocity that carries it inland and back out again. (Phase 4.2)
+    """
+    from datetime import timedelta
+
+    if direction not in ("forward", "backward"):
+        raise ValueError(f"direction must be 'forward' or 'backward', got {direction!r}")
+    if n_steps < 1:
+        raise ValueError("n_steps must be at least 1")
+
+    t = require_aware(t0)
+    sign = -1.0 if direction == "backward" else 1.0
+    dt = sign * float(timestep_minutes) * 60.0
+
+    pos = as_positions(positions).copy()
+    stranded = np.zeros(pos.shape[0], dtype=bool)
+    if is_land is not None:
+        stranded |= is_land(pos[:, 0], pos[:, 1])       # seeded on land is already stranded
+
+    history = np.empty((n_steps, pos.shape[0], 2), dtype=np.float64)
+    times = []
+
+    for k in range(n_steps):
+        history[k] = pos
+        times.append(t)
+        if k == n_steps - 1:
+            break
+        moved = rk2_step(pos, t, dt, field, wind_coeff, guard)
+        if is_land is not None:
+            newly = is_land(moved[:, 0], moved[:, 1])
+            stranded |= newly
+            # a stranded particle keeps its LAST WET position; it does not step onto land
+            moved[stranded] = pos[stranded]
+        pos = moved
+        t = t + timedelta(seconds=dt)
+
+    return history, times, stranded
+
+
 # --------------------------------------------------------------------------------------
 # Permanent plausibility guards (test 4). These run on fake fields AND on the real GEE
 # fields from Phase 2 onward. They are the thing that catches the HYCOM mis-scaling bug
