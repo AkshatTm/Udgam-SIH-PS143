@@ -15,6 +15,325 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-13 19:40] Phase 6.5 — answering Akshat's handoff: §1 confirmed, §6 named, three stale numbers caught
+
+**This entry is written to be quoted from.** Every number below carries its metric, its split and
+its count, per Master §12.
+
+---
+
+### §1 CONFIRMED — every live case on `main` is classical output, not Layer 2
+
+**No live case has ever gone through the networks.** Verified three ways: `meta.provenance` is
+**absent** on all seven live bundles (D33: absent = satellite → classical), every run printed
+`path : classical detector + stated rule (auto, by provenance)`, and the reran numbers reproduce
+the committed bundles exactly. Anushka's seeds are safe.
+
+The exact command behind every live case on `main`:
+
+```bash
+python pipeline/detect/run.py --case <case_id> --rule-contrast -3.0 --rule-elongation 2.5
+python pipeline/export/build_case.py --case <case_id> --stage detect
+```
+
+`--min-oil-km2` was **not** passed; it takes its default of `0.10`, which is the value in your
+handoff. Stating that precisely because "the default happened to be right" and "I passed the flag"
+are different facts and only one of them is true.
+
+**⚠️ Correction to your §1 mechanism.** You wrote that routing works because *"the Layer 1+2
+networks only run on the CRS-less Zenodo tiles."* **The Zenodo tiles are not CRS-less.** All nine
+bundles, benchmark included, are EPSG:4326 with real geotransforms — `benchmark_scene.py` writes
+the true affine, which is exactly why `case-lookalike-zenodo`'s contact lands at the Mississippi
+Delta rather than at pixel coordinates. Routing is by **`meta.provenance` (D33)**, never by CRS.
+The CRS-sniffing heuristic was the *broken* version D33 replaced. Your conclusion is right and the
+mechanism is not, and the difference bites: under your stated mechanism, giving a Zenodo bundle a
+CRS would move it to the classical path. It would not. Only `meta.provenance` moves it.
+
+### §2 / §3 / §5 — accepted
+
+- **Layer 2 stays off live cases for the demo.** The bar is now a real number: classical scores
+  **median IoU 0.483** against Cerulean (below). Layer 2 has to beat that *on real scenes*, by
+  Monday 12:00, with both numbers side by side, or it appears in the deck through Zenodo held-out
+  numbers only. That outcome is fine and I am not going to force it.
+- **No live-case rerun without telling you first.** Noted and binding. (Today's D34 rerun of all
+  nine was the one you asked for in that handoff.)
+- **`contrast_centre_db` / `contrast_edge_db`: not building them.**
+- **`discharge_class`: confirmed and not touched.** Across all oil features in the library:
+  **4 `chronic`, 8 `unknown`, ZERO `acute`.** Anushka's age estimators refusing on every case is
+  correct behaviour, not a bug. Worth knowing why: `acute` is common among *look-alike* features
+  (ennore 28, jacksonville 18, huntington 8) and absent among oil ones, so the class only carries
+  meaning after classification. I am not reclassifying anything to make an estimator fire.
+
+### §4 DONE — IoU against Cerulean, five cases
+
+Delivered in `0dce618`; tool is `pipeline/detect/iou_cerulean.py`, raw numbers in
+`pipeline/detect/iou_cerulean.json`. Computed on the **shipped classical detections**, nothing
+retuned after seeing the polygons.
+
+| case | IoU | recall | precision | ours km² | theirs km² | their conf |
+|---|---|---|---|---|---|---|
+| mumbai | 0.728 | 0.942 | 0.762 | 9.60 | 7.77 | 0.93 |
+| farallones | 0.624 | 0.796 | 0.742 | 4.13 | 3.85 | 0.93 |
+| jacksonville | 0.483 | 0.825 | 0.537 | 6.97 | 4.54 | 0.80 |
+| jamnagar | 0.452 | 0.916 | 0.471 | 3.10 | 1.59 | 0.84 |
+| gulf-alaska | 0.165 | 0.797 | 0.173 | 1.23 | 0.27 | 0.76 |
+
+**Median 0.483, range 0.165–0.728.** Method: both polygon sets burned onto the scene's own affine
+grid; validated against Cerulean's own stated `area` property to within 0.8% on all five.
+
+**On your Farallones note** — you said the scene holds several Cerulean slicks and the bundled one
+is the ~19.6 km slick, so a much larger detection elsewhere is a different slick, not a miss. Our
+Farallones excess is **1.07 km² and majority-margin around their polygon**, not a separate large
+blob, so we are not being charged for the other slick. Good that you flagged it; it would have
+been an easy wrong conclusion.
+
+### §6 — named numbers, each with metric, split and count
+
+**Layer 1, scene classifier (CNN, 63,873 params, `both32` variant):**
+
+| metric | value | split | count |
+|---|---|---|---|
+| scene accuracy | **0.951** | Zenodo Part III holdout | 450 scenes (139 TP, 11 FP, 11 FN, 289 TN) |
+| oil recall | **0.927** | Part III | 139 / 150 oil scenes |
+| look-alike rejection | **0.940** | Part III | 141 / 150 look-alike scenes |
+| clean-ocean rejection | **0.987** | Part III | 148 / 150 no-oil scenes |
+
+Gate threshold **0.1427**, selected on a validation split of Parts I+II by PR curve under a 0.90
+recall floor — *not* on Part III. Trained on Parts I+II, tested only on Part III (D1).
+
+**⚠️ Stale number in `docs/updates/soum_case_nominations.md` line 7** — it says look-alike
+rejection **0.960**. That is the *pre-domain-augmentation* classifier. The shipped model is
+**0.940**. The augmentation traded look-alike rejection 0.960 → 0.940 for oil recall
+0.893 → 0.927 and accuracy 0.947 → 0.951. Net positive, but it is a trade and the deck must not
+quote the old rejection figure beside the new accuracy figure. **Use 0.940.**
+
+**Layer 2, U-Net (depth 7, focal α=0.75 γ=2.0, binarised at 0.5):**
+
+| metric | value | split | count |
+|---|---|---|---|
+| IoU, oil class only | **0.435** | Zenodo Part III, **gated** by Layer 1 | 138 / 150 oil scenes reached |
+| IoU, oil class only | 0.449 | Part III, **ungated** | 145 / 150 scenes |
+| IoU, oil class only | **0.679** | validation tiles, Parts I+II | 4,299 tiles |
+
+Ungated buys +0.014 IoU and costs **look-alike rejection 0.94 → 0.46** — which is why D2 gates it.
+
+**⚠️ There is no "23% accuracy" anywhere in my work.** I searched every doc, eval JSON and CSV.
+The only 23% in the repo is Stage 2's `wind_share` on case-000 in `docs/STAGE2_NUMBERS.md` — I
+think the wires crossed with Anushka's number. **Layer 2 has exactly one headline: 0.435 IoU,
+oil-class-only, on the gated Part III holdout.** Please strike the 23%.
+
+Note the definition, because it is the strictest available and the gap to the authors' "96%" is
+mostly definitional: ours is **oil-class IoU with background excluded from both numerator and
+denominator, pooled over whole 2048×2048 scenes**. Decomposing that gap is §E5 item 3, still open.
+
+**Classical path:** the five per-case IoUs above.
+
+### §6 VH sentence — close, but I want it more precise before I defend it
+
+Your draft: *"VH is the strongest single feature on the Zenodo benchmark."* I never measured
+per-feature importance, so I can't defend "strongest single feature". What I measured is a
+feature-set ablation, and it says something sharper: **VH improves precision, not recall.**
+
+| feature set | val F1 | Part III precision | Part III recall |
+|---|---|---|---|
+| `v1_absolute` (8 features, no VH) | 0.346 | 0.049 | 0.05 (4/36 scenes) |
+| **`v2_vh` (+ 2 VH features)** | **0.643** | **0.286** | 0.05 (4/36 scenes) |
+
+Recall is **identical**. VH does not help us find slicks; it helps us reject look-alikes — 5.8×
+the precision at the same recall. The sentence I will defend:
+
+> *"Adding the two VH features nearly doubles validation F1 (0.346 → 0.643) and lifts Part III
+> precision 5.8× (0.049 → 0.286) at unchanged recall: on the Zenodo benchmark, cross-pol is what
+> separates oil from look-alikes. On our own Sentinel-1 exports the sea sits at −27.0 to −38.5 dB
+> in VH, below the ~−24 dB IW noise floor, so those features would carry noise and real-scene
+> detection runs VV-only (D3). Both Zenodo benchmark bundles have usable VH (−21.9, −11.6 dB) —
+> the contrast is what makes this a conditional finding rather than a retreat."*
+
+### §7 — margin distribution DONE; and the environment is not what the docs say
+
+- **Rule-margin distribution: delivered** (Phase 6.3 entry). 12 oil detections, confidence
+  0.509–0.755, median 0.645. Your 0.75/0.45 bands collapse to 1/11/0; the dB bands you adopted
+  split them **7 clear / 5 marginal**.
+- **⚠️ torch resolution: it is a real, working install — but on Python 3.13.5, not 3.11.** This
+  venv is `venv\Scripts\python.exe` → **Python 3.13.5**, with `torch 2.6.0+cu124`,
+  `torchvision 0.21.0+cu124`, `cuda_available = True`. Every model in this repo was trained and is
+  served on 3.13. `requirements.txt` and `CLAUDE.md` both say **Python 3.11**. So the 3.11
+  resolution you asked about is *still* only index-verified — I verified 3.13 by using it. This is
+  precisely the "six laptops silently disagree" risk that file warns about, and it is your call
+  whether the documented version changes to 3.13 or I stand up a 3.11 venv to prove the pin. Say
+  which and I will do it before Monday.
+
+### §8 — blindness holds
+
+I have opened `cerulean_slick.geojson` for IoU and nothing else. No news, no reports, no AIS, no
+attribution. `docs/receipts.md`'s visual slick descriptions remain unread.
+
+**Files:** `docs/updates/soum.md`.
+
+**Next:** §E5 item 3 — decompose the 0.435-vs-96% metric gap in `evaluate.py`, no retraining.
+
+---
+
+## [2026-09-13 18:20] Phase 6.4 — Cerulean IoU on five cases: the first external number Stage 1 has
+
+**Done:** Wrote `pipeline/detect/iou_cerulean.py` and ran it on the five bundles carrying
+`cerulean_slick.geojson`. This converts every IoU we own from benchmark-only to a comparison
+against the polygon an operational detector produced **for the same acquisition** — all five
+`slick_timestamp` values match `meta.detection_time` exactly, so it is the same satellite pass.
+
+**Files:** `pipeline/detect/iou_cerulean.py`, `pipeline/detect/iou_cerulean.json`.
+
+**Run:** `python pipeline/detect/iou_cerulean.py --all --json pipeline/detect/iou_cerulean.json`
+
+| case | IoU | recall | precision | ours km² | theirs km² | their conf |
+|---|---|---|---|---|---|---|
+| mumbai | **0.728** | 0.942 | 0.762 | 9.60 | 7.77 | 0.93 |
+| farallones | **0.624** | 0.796 | 0.742 | 4.13 | 3.85 | 0.93 |
+| jacksonville | **0.483** | 0.825 | 0.537 | 6.97 | 4.54 | 0.80 |
+| jamnagar | **0.452** | 0.916 | 0.471 | 3.10 | 1.59 | 0.84 |
+| gulf-alaska | **0.165** | 0.797 | 0.173 | 1.23 | 0.27 | 0.76 |
+
+**Median IoU 0.483, range 0.165–0.728.**
+
+**What this number is:** agreement between two independent detectors on one acquisition. It is
+**not** accuracy against ground truth — SkyTruth state plainly that SAR alone cannot definitively
+identify oil, and that note is carried inside every one of these files. Where we disagree the
+polygon is not automatically right. Say it that way on the slide; "IoU vs Cerulean" alone invites
+a judge to hear "ground truth", which we would not be able to defend.
+
+**The shape of the disagreement is the actual finding, and it is favourable.** Recall is high and
+uniform — **0.796 to 0.942** on all five — while precision ranges 0.173 to 0.762. We are not
+missing slicks. We cover 80–94% of every polygon they drew, and our area exceeds theirs on all
+five cases. **IoU here is limited by over-extent, not by misses**, which is the better failure
+direction for a detector whose job is to not miss a spill.
+
+Decomposing our excess area (pixels we call oil that they do not), by whether it sits within
+12 px of their polygon or somewhere else entirely:
+
+| case | excess km² | margin around theirs | disjoint elsewhere | of theirs we missed |
+|---|---|---|---|---|
+| farallones | 1.07 | **85%** | 15% | 0.79 km² |
+| mumbai | 2.28 | **85%** | 15% | 0.45 km² |
+| jacksonville | 3.22 | 61% | 39% | 0.79 km² |
+| jamnagar | 1.64 | 59% | 41% | 0.13 km² |
+| gulf-alaska | 1.02 | 8% | **92%** | 0.05 km² |
+
+**Caveat on those percentages, added after a challenge: 12 px is an arbitrary radius and the
+figures move with it.** Sweeping it 6 / 12 / 25 / 50 px, the margin share runs farallones
+70/85/93/99%, mumbai 65/85/97/100%, jacksonville 50/61/69/77%, jamnagar 44/59/77/91% — and
+gulf-alaska 7/8/10/12%. So **the exact 85% is not a measurement, it is a function of the radius**,
+and should not be quoted as one. What IS robust is the *ordering*, which is identical at every
+radius, and Alaska's isolation: its excess stays ~90% disjoint even at 50 px, while every other
+case becomes majority-margin by 12 px. Quote the ranking and Alaska's separation, not the number.
+
+On the two cases where they are most confident, our excess is overwhelmingly a slightly fatter
+outline around the same slick. Their polygons are filamentary — `polsby_popper` 0.0095–0.103 and
+`fill_factor` 0.046–0.28 — while our morphological detector traces the whole dark patch. Different
+conventions for the same object, not a different object.
+
+**Alaska is the exception and behaves exactly as its caveat predicts.** 92% of our excess is
+*disjoint* from their polygon — separate dark regions, not a fatter outline. This is the case
+Cerulean's own human reviewer classed **AMBIGUOUS**. Two detectors disagreeing about which dark
+patch is the slick, on the one scene a human reviewer could not call, is a coherent result rather
+than an embarrassing one. **It gets reported. It is not tuned.**
+
+**The classifier earns its place — this is an ablation against an external reference.** Counting
+every dark region the detector found instead of only those Layer 3 called oil, IoU falls on all
+five: jacksonville 0.483 → 0.362, farallones 0.624 → 0.618, alaska 0.165 → 0.041, mumbai
+0.728 → 0.661, jamnagar 0.452 → 0.443. The classifier discards regions an operational detector
+also excluded, which is the first evidence for it that does not come from our own labels.
+
+**One observation, deliberately undersold: our IoU tracks their confidence.** Ordered by their
+`machine_confidence` — 0.93, 0.93, 0.84, 0.80, 0.76 — our IoU runs 0.728, 0.624, 0.452, 0.483,
+0.165. Pearson r = 0.904 (p = 0.035), Spearman ρ = 0.800 (p = 0.104). **n = 5, one Spearman test
+is not significant, and the correlation is carried largely by Alaska sitting low on both axes.**
+It is suggestive that both detectors find the same scenes hard — which would mean the gap is scene
+difficulty rather than a broken detector — but **it is an observation, not a result, and must not
+be put on a slide as a statistic.**
+
+**Method notes.** Both polygon sets are burned onto the scene's own affine grid rather than
+intersected as vectors: our detections are pixel regions traced to contours, so a vector
+intersection would measure contour-tracing artefacts as much as real disagreement, and rasterising
+matches how `evaluate.py` scores the U-Net so the two IoU figures in the deck mean the same thing.
+All five scenes are EPSG:4326 and the script exits rather than guessing if one is not. Every
+Cerulean file also carries `role='centerline'` LineStrings — dropped explicitly, since zero-area
+geometries would contribute nothing to the union while looking like they had been counted. Checked
+before trusting any of it: **100% of every Cerulean polygon falls inside our exported crop**, so no
+case is being penalised for a slick our bbox cut in half.
+
+**Two validations run after the fact, because the whole item finished far faster than the ~1 h
+budgeted and "the hard parts did not happen" is not the same as "nothing was missed".** It was
+fast because all five scenes are already EPSG:4326 (no reprojection), nothing was clipped, and
+every timestamp matched — three contingencies the estimate had budgeted for. The two checks that
+*should* have run before I reported anything:
+
+1. **Does my rasterisation reproduce Cerulean's own stated areas?** This was the real risk: their
+   polygons are filamentary (`polsby_popper` down to 0.0095), and `all_touched=False` can drop a
+   filament thinner than the gap between pixel centres, which would silently shrink their mask and
+   flatter our precision. Burned area vs the `area` property they ship: jacksonville −0.2%,
+   farallones −0.0%, gulf-alaska −0.5%, mumbai +0.5%, jamnagar +0.8%. **Nothing is being lost**,
+   and interior rings are handled.
+2. **Does my rasterisation of OUR oil match our own `area_km2` properties?** Within 2.1% on four
+   cases; gulf-alaska is +6.7%, which is expected rather than wrong — its regions are the smallest
+   in the library on a ~5 × 10 m pixel, so boundary pixels are a larger share of a small shape
+   (≈ 4/√7600 ≈ 4.6% for a region that size). Our own oil polygons **do not overlap each other**
+   on any case (0.000 km² double-counted), so the union is not hiding a double count.
+
+**A6 satisfied:** the polygons stayed sealed until all nine detections were committed and pushed
+(`20594df`). `iou_cerulean.py` reads `detections.geojson` and never writes one; nothing here can
+re-tune a threshold.
+
+**Next:** the U-Net metric question (§E5 item 3) — add background IoU, mean IoU, per-tile IoU and
+Dice to `evaluate.py`, each printed with its definition named, so the 0.435-vs-96% gap can be
+decomposed before any slide claims it.
+
+---
+
+## [2026-09-13 17:05] Phase 6.3 — D34 closed out: Akshat's two corrections applied, decisions recorded
+
+**Done:** Merged `7d89a76`. Both Zenodo cases are now in `cases/index.json` at slots 8 and 9, so
+the library is **9 indexed cases**. Applied both things Akshat asked for:
+
+1. **Margin paragraph** — already corrected in `20594df`, before his handoff was written. The only
+   two surviving mentions of "20 / 0.578" are inside blocks that explicitly label the figure wrong
+   and explain its provenance. Nothing in the log can put 20 on a slide.
+2. **Contact total: 173, not 174.** His count is right and mine was arithmetic sloppiness:
+   72 + 43 + 31 + 21 + 3 + 2 + 1 + 0 + 0 = 173. Corrected — the edge finding is **2 of 173**.
+
+**Files:** `docs/updates/soum.md`.
+
+**His correction, recorded because it changes the shared record.** Akshat withdrew the claim that
+the Delta contact sits "among charted platforms" — he had not checked any platform dataset at that
+coordinate, and it was an inference written as a fact. `receipts.md`, D34 and the case notes now
+say only what was measured. My own reasoning never rested on it: the argument was that geometry
+cannot establish a contact's identity, which holds whatever is or isn't charted there. What
+survives unchanged is that it is **not** a dark vessel — darkness needs an AIS check at a known
+acquisition time, and that scene has none.
+
+**Decided by Akshat, not to be reopened before the freeze:**
+- **No edge rule and no `edge` flag.** My answer accepted in full, including the point that
+  windowed-CFAR's edge objection does not apply to a globally-estimated background.
+- **Do not change `DEFAULT_MIN_DB` before the freeze.** The floor-binding limitation on Zenodo
+  scenes is recorded in `receipts.md`: a −12 dB hull on a −29 dB sea (≈22σ) would be missed. A
+  scene-relative floor for benchmark scenes is October work and must ship with a before/after
+  contact count on Part III.
+- **Recording `--rule-contrast` in the bundle waits until October.** The frontend pins −3.0 as
+  `RULE_CONTRAST_DB` and every bundle matches it today. **Standing rule I owe him: if I ever rerun
+  a satellite case with anything but `--rule-contrast -3.0 --rule-elongation 2.5`, tell him before
+  pushing** — the bands would be wrong on screen and the bundle would not reveal it.
+
+**Guard rails through the demo (his, logged so they survive this chat):** no detector changes after
+15 Sept 05:00 unless it is a bug fix and he is told first; **Alaska stays at zero contacts** and the
+dark-vessel contact shown on that case is **Cerulean's**, never ours; and **nothing is called a
+"dark vessel" at Stage 1** — every contact we emit is unattributed, only Stage 3 can call one dark.
+
+**Next:** Cerulean IoU on the five cases carrying `cerulean_slick.geojson` (jacksonville,
+farallones, gulf-alaska, jamnagar, mumbai). Comparison target, not ground truth; gulf-alaska was
+classed AMBIGUOUS by Cerulean's own reviewer, so a poor IoU there is the expected result and gets
+reported, not hidden.
+
+---
+
 ## [2026-09-13 16:10] Phase 6.2 — D34 adopted, all nine reran, and the rerun hazard closed in code
 
 **Done:** Merged Akshat's `c001423` (D34). Reran all nine cases; `ship_detections` is now
@@ -52,7 +371,7 @@ Phase 6.1 entry below. The shipped figure is **12, median 0.645**; 20 was the pr
 rule-passing count. Akshat is right that nobody should quote 20.
 
 **Answering his question — should `detect_ships` reject contacts touching the scene edge? No.**
-Measured across all nine cases: only **2 of 174** contacts sit within 2 px of an edge, and one of
+Measured across all nine cases: only **2 of 173** contacts sit within 2 px of an edge, and one of
 them is Ennore's **+10.27 dB, 60 px** target in a working port — almost certainly a real ship. A
 blanket edge rule spends a confident true positive to remove one questionable contact.
 
