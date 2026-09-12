@@ -357,6 +357,16 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
         Earliest and latest the oil could plausibly have entered the water — a
         bracket, not a single measured release time.
       </p>
+      {origin.timeWindowMethod === "bounded" && (
+        <p className="mt-2 text-[10px] leading-relaxed text-white/45">
+          Search bracket (not a measured release time)
+        </p>
+      )}
+      {origin.timeWindowMethod === "convergence" && (
+        <p className="mt-2 text-[10px] leading-relaxed text-white/45">
+          Measured estimate
+        </p>
+      )}
 
       {/* Origin-confidence state. The two branches are genuinely distinct:
           abstain === true  → the origin cloud is too diffuse to attribute from,

@@ -24,6 +24,7 @@ export interface OriginBundle {
   radius50Km: number;
   radius90Km: number;
   timeWindow: [string, string]; // [start, end] — doubles as the age statement
+  timeWindowMethod: "bounded" | "convergence" | null;
   ensembleRuns: number;
   abstain: boolean;
 }
@@ -251,6 +252,15 @@ function validate(raw: RawOriginBundle, id: string): void {
     throw new Error(`${where}: time_window start (${tw[0]}) is after end (${tw[1]})`);
   }
 
+  // time_window_method (optional) — "bounded" | "convergence"
+  if (raw.time_window_method !== undefined && raw.time_window_method !== null) {
+    if (raw.time_window_method !== "bounded" && raw.time_window_method !== "convergence") {
+      throw new Error(
+        `${where}: "time_window_method" must be "bounded" or "convergence" (got "${raw.time_window_method}")`,
+      );
+    }
+  }
+
   // ensemble_runs — a positive integer count of drift runs.
   if (!Number.isInteger(raw.ensemble_runs) || raw.ensemble_runs < 1) {
     throw new Error(`${where}: "ensemble_runs" must be a positive integer (got ${raw.ensemble_runs})`);
@@ -279,6 +289,12 @@ export async function loadOriginBundle(id: string): Promise<OriginBundle> {
     radius50Km: raw.radius_50_km,
     radius90Km: raw.radius_90_km,
     timeWindow: [raw.time_window[0], raw.time_window[1]],
+    timeWindowMethod:
+      raw.time_window_method === "bounded"
+        ? "bounded"
+        : raw.time_window_method === "convergence"
+          ? "convergence"
+          : null,
     ensembleRuns: raw.ensemble_runs,
     abstain: raw.abstain,
   };
