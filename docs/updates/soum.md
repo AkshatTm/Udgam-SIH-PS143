@@ -15,6 +15,102 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-13 22:15] Phase 6.8 — the networks DO transfer. It was a channel-order bug, and I had it wrong.
+
+**Akshat asked whether he needed to re-export the cases in Zenodo's format. The answer is no — his
+exports are correct. But the question sent me to compare the two side by side, and there is a bug.
+It is in how we read the Zenodo files, not in his exports.**
+
+**Nothing was retrained and no bundle was touched** (his §3 rule). All work in `scratch/`.
+
+### The finding
+
+Over ocean, cross-pol is always below co-pol — 6–10 dB below, by physics. Across **297 Part III
+scenes**, Zenodo's **band 1 is 8.15 dB DARKER than band 2**, and band 1 < band 2 in **290 of 297**.
+Band 1 median-of-medians is **−28.21 dB**, band 2 is **−20.12 dB**.
+
+- Band 1 sits exactly where VH belongs. Band 2 sits exactly where VV belongs.
+- **Zenodo is band 1 = VH, band 2 = VV.**
+- `build_cache.py:107-108` and `make_labels.py:151` read band 1 as VV. So does everything built
+  from them.
+- Akshat's GEE exports are band 1 = VV, band 2 = VH — **correct**, and confirmed by the physics
+  (farallones VV −18.0 / VH −27.0; huntington −20.2 / −27.8; alaska −18.3 / −27.3, all a clean
+  +7.6 to +9.0 dB co-pol-over-cross-pol).
+
+So the networks were trained with the channels in one order and shown the other order at inference.
+
+### What happens when the channels are matched
+
+| case | P(oil) as shipped | P(oil) corrected | U-Net px as shipped | corrected |
+|---|---|---|---|---|
+| jacksonville | 0.0019 | **0.9992** | 0 | 41,598 |
+| mumbai | 0.0050 | **0.9999** | 0 | 63,922 |
+| farallones | 0.0016 | **0.9993** | 0 | 21,396 |
+| jamnagar | 0.0028 | **0.9997** | 0 | 15,710 |
+| gulf-alaska | 0.0023 | **0.9575** | 0 | 10,125 |
+| huntington | 0.0141 | **0.8364** | 0 | 15,644 |
+| **ennore (look-alike)** | 0.0103 | **0.0021** | 0 | **0** |
+
+Every spill case fires. **The look-alike still rejects, and rejects harder than before.** That last
+row is what makes this a fix rather than a threshold being blown open.
+
+### ⚠️ This invalidates a large block of my own earlier work
+
+I concluded the networks "do not transfer to GEE exports" and built a decision on it. **That
+conclusion was wrong.** They transfer fine. Everything I ruled out one at a time — VH noise floor,
+ground scale at 80/60/40 m/px, bright-ship masking, nodata fill, slick size, domain augmentation —
+was chasing a symptom of a channel swap. The domain-augmentation retrain that moved Huntington
+0.0025 → 0.0141 was treating the wrong disease.
+
+**D33 provenance routing was built on this false premise.** It still produces correct output, but
+its stated justification is now wrong.
+
+### What it does NOT change: the demo decision still stands, for a different reason
+
+Layer 2 with corrected channels, against Cerulean:
+
+| case | Layer 2 | classical | |
+|---|---|---|---|
+| jacksonville | **0.504** | 0.483 | L2 ahead |
+| jamnagar | **0.613** | 0.452 | L2 ahead |
+| mumbai | 0.681 | **0.728** | classical ahead |
+| farallones | 0.344 | **0.624** | classical ahead |
+| gulf-alaska | 0.024 | **0.165** | classical ahead |
+| **median** | **0.504** | **0.483** | |
+
+Ahead on the median by 0.021, **behind on three of five cases**. That is not a clear win, and
+swapping the live pipeline 29 hours from freeze for +0.021 median while losing three cases is a bad
+trade. **Recommend live cases stay classical** — now on evidence rather than on a false premise.
+
+The two are complementary, which is worth a sentence in the deck: classical has recall 0.80–0.94
+but precision 0.17–0.76 (over-extends); Layer 2 has precision 0.76–0.92 but recall 0.37–0.73
+(under-extends).
+
+### ⚠️ What it DOES break: two claims that must come off the deck as written
+
+1. **"VH is the discriminator" — the novelty slide.** The feature named `vh_mean_depth_db`
+   (importance 0.3155, rank 1) was computed from Zenodo **band 2, which is VV**. The channel names
+   in the feature importances are swapped. **What survives:** adding the second polarisation
+   nearly doubled validation F1 (0.346 → 0.643) and raised Part III precision 5.8× at identical
+   recall. That ablation is real and channel-agnostic. **What does not survive:** naming which
+   polarisation did it, and the physics story attached to that name.
+2. **"The networks do not transfer to real Sentinel-1 exports."** Delete it. It is false.
+
+**Benchmark numbers are unaffected** — training and evaluation both used the same (mislabelled)
+convention, so 0.951 scene accuracy and 0.435 IoU are internally consistent and still stand. Only
+the channel *names* were wrong.
+
+### Open, and it is Akshat's call
+
+Fixing the naming properly means re-reading Zenodo as (VH, VV) and rebuilding the cache, the label
+CSVs and both models — a full retrain, well past the freeze. **Not proposing that now.** The
+options before Tuesday are: (a) ship as-is, live cases classical, and remove the two broken claims
+from the deck; or (b) also swap the channel order at inference so the benchmark bundles use the
+matched order. (a) is my recommendation — it changes nothing that runs and only removes claims we
+cannot defend.
+
+---
+
 ## [2026-09-13 21:30] Phase 6.7 — Layer 2 measured against Akshat's bar: it scores zero, and retraining cannot help
 
 **Done:** Measured, not assumed, what Layer 2 does on real scenes. Akshat's §2 ruling said Layer 2
