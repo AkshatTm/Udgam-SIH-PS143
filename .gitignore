@@ -36,12 +36,16 @@ pipeline/*/out/
 # CODE, not weights — the training scripts and the eval JSONs are the reproducible artefact,
 # and a 300-tree unbounded RandomForest is cheaper to retrain than to store. No LFS: the quota
 # is shared, the objects outlive the repo, and nothing in the demo loads these files.
-models/*
-!models/.gitkeep
+# NOTE (Soum, 13 Sept): these patterns must be **/models/*, not models/*. A gitignore pattern
+# containing a slash is anchored to the directory holding the .gitignore, so "models/*" matches
+# only a top-level models/ — which does not exist. The real path is pipeline/detect/models/, so
+# the 534 MB stayed fully stageable and the push would have been rejected by GitHub.
+**/models/*
+!**/models/.gitkeep
 # ...except the small ones the demo actually needs, and every metric file, which is evidence
 # and must be in the repo whether or not the weights are (CLAUDE.md: "internals are binding").
-!models/*.json
-!models/scene_classifier.pt
+!**/models/*.json
+!**/models/scene_classifier.pt
 
 # Throwaway end-to-end smoke / dry-run bundles (scripts/make_case000.py --scene-only)
 cases/case-smoke/

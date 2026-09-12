@@ -1,0 +1,78 @@
+{
+  "feature_set": "v2_vh",
+  "selected_because": "best validation F1 (0.643)",
+  "features": [
+    "area_km2",
+    "elongation",
+    "edge_gradient",
+    "solidity",
+    "is_linear",
+    "contrast_db",
+    "mean_depth_db",
+    "max_depth_db",
+    "vh_contrast_db",
+    "vh_mean_depth_db"
+  ],
+  "threshold": 0.4866666666666667,
+  "trained_on": "Zenodo Parts I+II (features_train.csv)",
+  "tested_on": "Zenodo Part III (features_test.csv)",
+  "threshold_selected_on": "validation split of Parts I+II, PR curve",
+  "metrics_part3": {
+    "name": "v2_vh",
+    "threshold": 0.4867,
+    "precision": 0.286,
+    "recall": 0.05,
+    "f1": 0.085,
+    "tp": 4,
+    "fp": 10,
+    "fn": 76,
+    "tn": 3995,
+    "scene_recall": "4/36",
+    "scene_recall_frac": 0.111,
+    "val_f1": 0.6431
+  },
+  "all_feature_sets": [
+    {
+      "name": "v1_absolute",
+      "threshold": 0.34,
+      "precision": 0.049,
+      "recall": 0.05,
+      "f1": 0.05,
+      "tp": 4,
+      "fp": 77,
+      "fn": 76,
+      "tn": 3928,
+      "scene_recall": "4/36",
+      "scene_recall_frac": 0.111,
+      "val_f1": 0.3458
+    },
+    {
+      "name": "v2_vh",
+      "threshold": 0.4867,
+      "precision": 0.286,
+      "recall": 0.05,
+      "f1": 0.085,
+      "tp": 4,
+      "fp": 10,
+      "fn": 76,
+      "tn": 3995,
+      "scene_recall": "4/36",
+      "scene_recall_frac": 0.111,
+      "val_f1": 0.6431
+    },
+    {
+      "name": "v3_relative",
+      "threshold": 0.5033,
+      "precision": 0.038,
+      "recall": 0.013,
+      "f1": 0.019,
+      "tp": 1,
+      "fp": 25,
+      "fn": 79,
+      "tn": 3980,
+      "scene_recall": "1/36",
+      "scene_recall_frac": 0.028,
+      "val_f1": 0.6244
+    }
+  ]
+}

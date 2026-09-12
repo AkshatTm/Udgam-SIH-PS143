@@ -55,10 +55,20 @@ def add_shape_features(region: dict, db: np.ndarray) -> dict:
     # ------------------------------------------------------------------
     # 1. Sobel gradient magnitude  --  computed on NaN-filled image
     # ------------------------------------------------------------------
-    # Fill NaNs with nanmean before Sobel: cv2.Sobel propagates NaN,
-    # which would silently corrupt every edge_gradient value (TRAPS #11).
+    # Fill invalid pixels before Sobel: cv2.Sobel propagates them, which would
+    # silently corrupt every edge_gradient value (TRAPS #11).
+    #
+    # Mask first, then mean. np.nanmean was used here and is WRONG: it ignores
+    # NaN but NOT +/-inf, so on any scene whose nodata is -inf — which is every
+    # GEE export Akshat ships (TRAPS #22) — it returns -inf, db_filled is filled
+    # with -inf, Sobel emits inf along every valid/nodata boundary, and any
+    # region whose contour touches that boundary gets edge_gradient = inf.
+    # json.dumps then writes a bare `Infinity`, which json.loads accepts and
+    # JSON.parse rejects, so the bundle passes every Python check and dies in the
+    # browser with "Unexpected token I" (TRAPS #24). Measured on Farallones,
+    # Jamnagar and Huntington, which carry 16.5% / 14.0% / 13.9% nodata.
     finite_mask = np.isfinite(db)
-    fill_val = float(np.nanmean(db)) if finite_mask.any() else 0.0
+    fill_val = float(np.mean(db[finite_mask])) if finite_mask.any() else 0.0
     db_filled = np.where(finite_mask, db, fill_val).astype(np.float64)
 
     gx = cv2.Sobel(db_filled, cv2.CV_64F, 1, 0, ksize=3)
@@ -136,11 +146,24 @@ def _solidity(contour: np.ndarray, area_px: int) -> float:
 # Batch helper
 # ---------------------------------------------------------------------------
 
+SENTINEL = -1.0
+
+
 def add_shape_features_batch(regions: list, db: np.ndarray) -> list:
-    """Apply add_shape_features to every region; never aborts the batch."""
+    """Apply add_shape_features to every region; never aborts the batch.
+
+    Also replaces any non-finite feature value with the -1.0 sentinel. inf is not
+    an exception, so the try/except below never sees it, and an inf reaching
+    json.dumps produces invalid JSON (TRAPS #24).
+    """
     for r in regions:
         try:
             add_shape_features(r, db)
+            for key in ("elongation", "edge_gradient", "solidity"):
+                v = r.get(key)
+                if isinstance(v, float) and not np.isfinite(v):
+                    r[key] = SENTINEL
+                    r["_nonfinite"] = r.get("_nonfinite", []) + [key]
         except Exception as exc:
             for key in ("elongation", "edge_gradient", "solidity"):
                 if key not in r:
@@ -157,6 +180,7 @@ def add_shape_features_batch(regions: list, db: np.ndarray) -> list:
 
 if __name__ == "__main__":
     import sys, os
+    import json as _json
 
     print("=" * 62)
     print("PART 1 -- Synthetic shapes")
@@ -221,6 +245,31 @@ if __name__ == "__main__":
         print(f"    solidity      = {r['solidity']:.3f}")
         print(f"    shape_class   = {r['shape_class']}")
 
+    # ---------------------------------------------------------------
+    # -inf nodata regression (TRAPS #22 / #24)
+    # A GEE export's nodata is -inf, not a low dB value. This is the exact
+    # shape that used to emit a bare `Infinity` into detections.geojson.
+    # ---------------------------------------------------------------
+    db4 = _fresh_sea()
+    db4[:, :120] = -np.inf                     # nodata wedge, like a real export
+    m4 = np.zeros((H, W), np.uint8)
+    cv2.ellipse(m4, (150, 256), (120, 12), 0, 0, 360, 1, -1)   # contour touches it
+    db4[m4 > 0] -= 4.0
+    r4 = _region_from_mask(m4.astype(bool), db4, "nodata-touching")
+    if r4 is not None:
+        add_shape_features_batch([r4], db4)
+        print("")
+        print("  nodata-touching region (-inf wedge)")
+        print(f"    elongation    = {r4['elongation']:.3f}")
+        print(f"    edge_gradient = {r4['edge_gradient']:.4f} dB/px")
+        try:
+            _json.loads(_json.dumps({k: r4[k] for k in
+                                     ("elongation", "edge_gradient", "solidity")},
+                                    allow_nan=False))
+            print("    [PASS] serialises as strict JSON (no Infinity/NaN)")
+        except ValueError as _e:
+            print(f"    [FAIL] non-strict JSON: {_e}")
+
     # --- assertions ---
     fail = False
     if r1 is not None and r1["elongation"] <= 5:
@@ -233,6 +282,8 @@ if __name__ == "__main__":
         print(f"\n[FAIL] circle shape_class should be blob"); fail=True
     if r1 is not None and r1["shape_class"] != "linear":
         print(f"\n[FAIL] ellipse shape_class should be linear"); fail=True
+    if r4 is not None and not np.isfinite(r4["edge_gradient"]):
+        print("[FAIL] -inf leaked into edge_gradient:", r4["edge_gradient"]); fail = True
     if not fail:
         print("\n  [PASS] all synthetic shape assertions hold")
 
@@ -260,7 +311,7 @@ if __name__ == "__main__":
 
     for sid in SCENES:
         img_p  = os.path.join(DATA, "Images", "Oil", sid + ".tif")
-        msk_p  = os.path.join(DATA, "Mask",   "Oil", sid + "_segmentation.tif")
+        msk_p  = os.path.join(DATA, "Mask", "Oil", sid + ".tif")   # Parts 1+2 naming
 
         if not os.path.exists(img_p):
             print(f"\n  [SKIP] {sid} -- file not found"); continue

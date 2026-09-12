@@ -1,0 +1,166 @@
+{
+  "variant": "paper_avg32",
+  "config": {
+    "filters": 32,
+    "pool": "avg"
+  },
+  "threshold": 0.43422478437423706,
+  "min_recall_floor": 0.9,
+  "threshold_selected_on": "validation split of Parts I+II, PR curve",
+  "variant_selected_on": "validation loss",
+  "trained_on": "Zenodo Parts I+II",
+  "tested_on": "Zenodo Part III",
+  "n_parameters": 59777,
+  "validation": {
+    "threshold": 0.4342,
+    "scene_accuracy": 0.9792,
+    "oil_recall": 0.9777,
+    "lookalike_rejection": 0.9592,
+    "cleanocean_rejection": 1.0,
+    "tp": 175,
+    "fp": 4,
+    "fn": 4,
+    "tn": 202,
+    "per_class": {
+      "Oil": {
+        "n": 179,
+        "recall": 0.9776536312849162
+      },
+      "Lookalike": {
+        "n": 98,
+        "rejection": 0.9591836734693877
+      },
+      "No oil": {
+        "n": 108,
+        "rejection": 1.0
+      }
+    }
+  },
+  "part3": {
+    "threshold": 0.4342,
+    "scene_accuracy": 0.9467,
+    "oil_recall": 0.8933,
+    "lookalike_rejection": 0.96,
+    "cleanocean_rejection": 0.9867,
+    "tp": 134,
+    "fp": 8,
+    "fn": 16,
+    "tn": 292,
+    "per_class": {
+      "Oil": {
+        "n": 150,
+        "recall": 0.8933333333333333
+      },
+      "Lookalike": {
+        "n": 150,
+        "rejection": 0.96
+      },
+      "No oil": {
+        "n": 150,
+        "rejection": 0.9866666666666667
+      }
+    }
+  },
+  "all_variants_part3": {
+    "paper_avg32": {
+      "threshold": 0.4342,
+      "scene_accuracy": 0.9467,
+      "oil_recall": 0.8933,
+      "lookalike_rejection": 0.96,
+      "cleanocean_rejection": 0.9867,
+      "tp": 134,
+      "fp": 8,
+      "fn": 16,
+      "tn": 292,
+      "per_class": {
+        "Oil": {
+          "n": 150,
+          "recall": 0.8933333333333333
+        },
+        "Lookalike": {
+          "n": 150,
+          "rejection": 0.96
+        },
+        "No oil": {
+          "n": 150,
+          "rejection": 0.9866666666666667
+        }
+      }
+    },
+    "max32": {
+      "threshold": 0.4342,
+      "scene_accuracy": 0.9444,
+      "oil_recall": 0.8733,
+      "lookalike_rejection": 0.9733,
+      "cleanocean_rejection": 0.9867,
+      "tp": 131,
+      "fp": 6,
+      "fn": 19,
+      "tn": 294,
+      "per_class": {
+        "Oil": {
+          "n": 150,
+          "recall": 0.8733333333333333
+        },
+        "Lookalike": {
+          "n": 150,
+          "rejection": 0.9733333333333334
+        },
+        "No oil": {
+          "n": 150,
+          "rejection": 0.9866666666666667
+        }
+      }
+    },
+    "both32": {
+      "threshold": 0.4342,
+      "scene_accuracy": 0.9467,
+      "oil_recall": 0.88,
+      "lookalike_rejection": 0.9733,
+      "cleanocean_rejection": 0.9867,
+      "tp": 132,
+      "fp": 6,
+      "fn": 18,
+      "tn": 294,
+      "per_class": {
+        "Oil": {
+          "n": 150,
+          "recall": 0.88
+        },
+        "Lookalike": {
+          "n": 150,
+          "rejection": 0.9733333333333334
+        },
+        "No oil": {
+          "n": 150,
+          "rejection": 0.9866666666666667
+        }
+      }
+    },
+    "both_wide": {
+      "threshold": 0.4342,
+      "scene_accuracy": 0.9444,
+      "oil_recall": 0.86,
+      "lookalike_rejection": 0.9867,
+      "cleanocean_rejection": 0.9867,
+      "tp": 129,
+      "fp": 4,
+      "fn": 21,
+      "tn": 296,
+      "per_class": {
+        "Oil": {
+          "n": 150,
+          "recall": 0.86
+        },
+        "Lookalike": {
+          "n": 150,
+          "rejection": 0.9866666666666667
+        },
+        "No oil": {
+          "n": 150,
+          "rejection": 0.9866666666666667
+        }
+      }
+    }
+  }
+}
