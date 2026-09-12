@@ -12,22 +12,49 @@ on screen within five seconds, not a story. Internals are binding — whatever w
 
 ## Sentinel-1 SAR scenes (Google Earth Engine, `COPERNICUS/S1_GRD`)
 
-| Case | `system:index` | Acquired (UTC) | Days after incident | Mode / pol | Notes |
+**All seven scene ids below are full and confirmed.** Every one was verified against GEE with
+`bandNames()` on 2026-09-12: all carry `['VV', 'VH', 'angle']`, so no case runs VV-only.
+
+| # | Case | `system:index` | Acquired (UTC) | Mode / pol / pass | Notes |
 |---|---|---|---|---|---|
-| case-ennore-2017 | `S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04` | 2017-01-29 00:31:32Z | +1.0 d | IW / VV+VH | 06:01 IST, dawn low-wind. Full coverage of Ennore. **No clear slick** — see _INTEGRATION 2026-09-09. Akshat working it. |
-| case-huntington-2021 | `S1A_IW_GRDH_1SDV_20211002T015821_20211002T015850_039934_04B9C9_2BF9` | 2021-10-02 01:58:21Z | +0.1 d (first alarm 1 Oct 23:10Z) | IW / VV+VH | **Clear sharp comma-shaped slick**, ~8–10 dB VV depression at core. S1A ascending, oil still leaking. HERO detection case. |
-| case-golden-ray-2021 | `S1A_IW_GRDH_1SDV_20210808T232953_20210808T233018_039145_049EAB_C7D5` | 2021-08-08 23:29:53Z | +9 d | IW / VV+VH | Only S1 coverage of the sound (12-day ascending repeat). Enclosed calm water, **no SAR-visible slick**. Wreck cluster clearly imaged. Infrastructure case, trace-from-known-source. |
-| case 4 (vessel, US) | `TODO` | `TODO` | `TODO` | — | Urooz: SkyTruth Cerulean `cerulean.skytruth.org` / `api.cerulean.skytruth.org`, US waters, clean linear slick + named vessel, Oct 2014–Sep 2024 |
-| case 5 (vessel, US) | `TODO` | `TODO` | `TODO` | — | second, ideally a different basin |
-| case 6 (look-alike) | `TODO` | — | — | — | Zenodo Part III `Lookalike/` folder, Soum picks |
-| case 7 (no-spill) | `TODO` | — | — | — | Zenodo Part III `No oil/` folder, Soum picks |
+| 1 | case-jacksonville-2024 | `S1A_IW_GRDH_1SDV_20240730T232129_20240730T232154_054997_06B32C_7973` | 2024-07-30 23:21:29Z | IW / VV+VH / ASC, rel. orbit 150 | HERO. Open ocean ~100 km offshore. **Long sinuous chronic slick**, full scene height. Cerulean slick 3046293 (31.17 km, 4.55 km²). |
+| 2 | case-farallones-2023 | `S1A_IW_GRDH_1SDV_20230317T142442_20230317T142507_047685_05BA4D_AFD8` | 2023-03-17 14:24:42Z | IW / VV+VH / DESC, rel. orbit 13 | **Ruler-straight discharge line** NW–SE. Cerulean slick 3687325 (19.63 km, 3.85 km²). Three other slicks share this scene — ours is the 19.6 km one. |
+| 3 | case-huntington-2021 | `S1A_IW_GRDH_1SDV_20211002T015821_20211002T015850_039934_04B9C9_2BF9` | 2021-10-02 01:58:21Z | IW / VV+VH / ASC, rel. orbit 137 | +0.1 d after first alarm (1 Oct 23:10Z). **Clear comma-shaped slick**, ~8–10 dB VV depression. Not in Cerulean — NTSB is its ground truth. |
+| 4 | case-gulf-alaska-2023 | `S1A_IW_GRDH_1SDV_20230516T155708_20230516T155736_048561_05D74A_DCBF` | 2023-05-16 15:57:08Z | IW / VV+VH / DESC, rel. orbit 14 | Dark-vessel cross-check. Cerulean slick 3630124 (2.48 km, 0.27 km²), **human-reviewed as `AMBIGUOUS`** — stated openly, see Master §3.2. |
+| 5 | case-mumbai-2023 | `S1A_IW_GRDH_1SDV_20230903T010333_20230903T010358_050156_06095B_9215` | 2023-09-03 01:03:33Z | IW / VV+VH / DESC, rel. orbit 34 | Dark slick with broad head + long tail, plus **bright point targets** (ships/platforms). Cerulean slick 3612640 (20.55 km, 7.74 km²). |
+| 6 | case-jamnagar-2024 | `S1A_IW_GRDH_1SDV_20240223T011114_20240223T011139_052679_065FA4_546D` | 2024-02-23 01:11:14Z | IW / VV+VH / DESC, rel. orbit 107 | **Hook-shaped slick**, found independently in GEE. Measured: slick VV −25.41 / VH −47.36; clean water VV −17.24 / VH −33.12 → ~8 dB VV depression. Cerulean also logged it (3477622). |
+| 7 | case-ennore-lookalike-2023 | `S1A_IW_GRDH_1SDV_20231130T003201_20231130T003226_051439_06353D_343D` | 2023-11-30 00:32:01Z | IW / VV+VH / DESC | **−3.98 d before** the 4 Dec 2023 CPCL spill. `find_scenes.py` over 2023-11-20..12-10 returned **exactly one pass** in twenty days. Chennai coast, anchored vessels, dark low-wind patches that cannot be oil. |
+| 8 | case-nospill-zenodo | `TODO — Soum` | — | — | Zenodo Part III `No oil/` folder. Held out of `cases/index.json` until nominated. |
+
+**Archived:** `case-ennore-2017` — `S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04`,
+2017-01-29 00:31:32Z, +1.0 d, dawn low-wind, **no clear slick in GRD**. Moved to `cases/_archive/`
+pending the SLC retry that decision D18 requires. **Dropped entirely:** `case-golden-ray-2021` (D17).
 
 Export settings actually used (these must match what `bounds.json` records):
-- `sar_vv_vh.tif`: **2-band float32 GeoTIFF, dB, unclamped**, `--tif-scale 10` m/px — Soum's real input
-- `sar.png` / `thumb.png`: band **VV**, dB-clamped 8-bit, `--png-scale 20–25` m/px — display only. Clamp recorded per case in `bounds.json` (`db_min`/`db_max`). Huntington: `[-25, -5]`, Golden Ray: `[-24, -4]`, Ennore: `[-20, -6]`.
-- `bounds.json` also records `vh_available` (all three US-relevant scenes: VV+VH present)
-- command: `python pipeline/export/gee_scene.py --project <id> --scene <index> --case <id> --bbox W S E N`
+- `sar_vv_vh.tif`: **2-band float32 GeoTIFF, dB, unclamped**, `--tif-scale 10` m/px on every case — Soum's real input. Band 1 = VV, band 2 = VH, labelled in the file. **Nodata is `-inf`, not a low dB value** — Jamnagar and Farallones have scene-edge nodata (86% and 82% coverage); treating it as backscatter would read as a huge false slick.
+- `sar.png` / `thumb.png`: band **VV**, dB-clamped 8-bit, `--png-scale 25` m/px — display only.
+- **The dB clamp is per case and derived, not guessed.** Each was taken from that box's own VV percentiles sampled in GEE at 60 m, then rounded: jacksonville `[-32, -19]` · farallones `[-28, -14]` · huntington `[-25, -5]` · gulf-alaska `[-29, -14]` · mumbai `[-28, -15]` · jamnagar `[-26, -13]` · ennore-lookalike `[-27, 0]` (wider because the box contains the Chennai coast, where land runs to +4 dB). Recorded per case in `bounds.json` as `db_min`/`db_max`. **Changing one is a broadcast, not a silent edit.**
+- `bounds.json` also records `vh_available` — `true` on all seven.
+- Export boxes are the Cerulean slick polygon's own bbox padded 0.03–0.05°, then adjusted where the scene footprint cut into the box. They are recorded in each `meta.json`.
+- **GEE's direct-download ceiling is 50,331,648 bytes (48 MiB)**, and the request is billed at **5 bytes per band-pixel** (float32 + a 1-byte validity mask). A GeoTIFF exported in EPSG:4326 has **no cos(lat) term** — the degree step is `scale / 111320` on both axes — so a high-latitude box is ~1/cos(lat) larger than a ground-square estimate suggests. `gee_scene.py` now predicts the exact raster.
+- command: `python pipeline/export/gee_scene.py --project quizzer-dev-487316 --scene <index> --case <id> --bbox W S E N --png-scale 25 --db-min <m> --db-max <M>`
 - generalised finder: `python scripts/find_scenes.py --project <id> --bbox W S E N --start <d> --end <d> [--incident <d>]`
+
+## SkyTruth Cerulean (case onboarding + segmentation reference)
+
+Public OGC Features API, **no key, no authentication**: `https://api.cerulean.skytruth.org`,
+collection `public.slick_plus`. Wrapped by `scripts/fetch_cerulean.py`. Fetched 2026-09-12.
+
+Each bundle carries `cerulean_slick.geojson` — their polygon plus centerline for the same
+feature. It is a **comparison target for Stage 1, not ground truth and not a NAAP detection**,
+and it ships with that wording inside the file. Cerulean themselves state that SAR alone cannot
+definitively identify oil slicks and that detections are *potential* slicks; we repeat that.
+
+Source attribution returned by the same API is **deliberately excluded from every bundle** and
+lives only in the sealed `docs/ANSWERS.md` (Master Part 16, D21).
+
+`public.slick_to_source`, `public.source_vessel` and `public.source_type` return **403** — vessel
+names, flags and IMOs are not available through the API and come from the per-slick web page.
 
 ## Ocean and atmosphere (Google Earth Engine)
 
@@ -106,9 +133,25 @@ officer's ballast-entry error → inadequate stability). Salvage operator T&T Sa
 - Georgia Public Broadcasting coverage (31 Jul–6 Aug 2021): https://www.gpb.org/news/2021/08/06/changing-tides-spread-oil-golden-ray-wreck-st-simons-beaches-marshes
 - SkyTruth (published optical imagery of the plume): https://skytruth.org
 
-**Cases 4 & 5 (transiting-vessel discharges, US waters)** — `TODO`, Urooz researching via
-SkyTruth Cerulean. Carry the caveat: *"SkyTruth Cerulean attributed this slick to vessel X"*,
-never *"vessel X was proven responsible"*.
+**Golden Ray is dropped (D17)** and the reference block above is kept only because the archived
+Ennore bundle still cites it. No Golden Ray material appears in the demo.
+
+**Cases 1, 2, 4 and 5 (Cerulean-sourced)** — the attribution for each exists and is held in the
+sealed `docs/ANSWERS.md`. When it reaches `verification.json` it carries the caveat:
+*"SkyTruth Cerulean attributed this slick to vessel X"*, never *"vessel X was proven
+responsible"*, and `source_type` is `algorithmic_attribution`, never `official_investigation`.
+
+**Jamnagar, 23 February 2024 — the case whose finding is an absence.** No investigation, no
+named party, no enforcement. State it that way and **never** as "no record anywhere": SkyTruth
+Cerulean's detector independently logged this slick (`3477622`,
+https://cerulean.skytruth.org/slicks/3477622), 0.2 km from our GEE point on the same scene, at
+0.838 machine confidence, and attached four candidate vessels — every one of which their own
+scorer rated below zero, with no human review. Their record is **independent corroboration that
+the slick is real**; the thing that is missing is anyone acting on it. See decision D24.
+
+**Ennore / CPCL, 4 December 2023** — oil release during Cyclone Michaung. Our case 7 is the
+2023-11-30 pass, four days *before* it, used as a correct-rejection case.
+- `TODO` — paste 2–3 citable references for the December 2023 CPCL release with URLs.
 
 ---
 

@@ -9,5 +9,6 @@
     "trace",
     "attribute"
   ],
+  "ais_source": "noaa_dense",
   "notes": "Synthetic. Never shown to a judge. Regenerate with scripts/make_case000.py."
 }

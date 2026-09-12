@@ -1,7 +1,8 @@
-# NAAP — MASTER PLAN v3
+# NAAP — MASTER PLAN v4
 ## SIH 2026 · PS 26143 · Final demo: 15 September, 17:00
 
-> **This supersedes v1 and v2 completely.** It is the single source of truth for architecture, contracts, ownership, dependencies and decisions.
+> **This supersedes v1, v2 and v3 completely.** It is the single source of truth for architecture,
+> contracts, ownership, dependencies and decisions.
 >
 > **How to use it.** Read Parts 1–5 once, fully. Keep Part 6 (contracts) open while you code — that is where integration fails. Check Part 8 before you say you are blocked. If your personal document conflicts with this one, this one wins. If this one conflicts with reality, tell Akshat — never improvise a schema.
 >
@@ -45,6 +46,11 @@ Internals are binding — **whatever we present on 15 September we defend before
 
 Precomputation is fine and we say so openly: *"the pipeline runs offline and exports a case bundle; the interface plays it back — that's why it scrubs instantly and can't break on venue wifi."* Fabricated results are not fine.
 
+**And the corollary, learned the hard way twice (D18, D24): before claiming any negative result about
+a documented incident — "no SAR-visible slick", "no record of this spill" — check whether somebody
+has already published a positive one.** A judge asking *"where's the paper that says the opposite?"*
+is a much worse moment than a paragraph explaining why our product and theirs differ.
+
 ---
 
 # PART 2 — THE DEMO
@@ -79,15 +85,20 @@ Precomputation is fine and we say so openly: *"the pipeline runs offline and exp
 
 # PART 3 — THE CASE LIBRARY
 
-| # | Case | Type | Acts | Role |
-|---|---|---|---|---|
-| 1 | **Ennore, Chennai — 29 Jan 2017** | spill | trace, verify | India relevance. **No SAR-visible slick (dawn, low wind) — trace is seeded from the documented collision position via `meta.known_origin`, D16.** INCOIS published a drift model we benchmark against. **No free AIS for Indian waters — no attribution, and we say why.** |
-| 2 | **Huntington Beach / San Pedro Bay — Oct 2021** | spill | all | **Infrastructure + exoneration case.** NTSB MIR-24-01 names MSC DANIT and BEIJING. |
-| 3 | **Golden Ray, St Simons Sound — Aug 2021** | spill | all | Fixed wreck source. SkyTruth published imagery. |
-| 4 | **TBD — vessel source, US waters** | spill | all | A transiting-vessel discharge |
-| 5 | **TBD — vessel source, US waters** | spill | all | Second, ideally a different basin |
-| 6 | **Look-alike scene** (Zenodo Part 3) | lookalike | detect | System correctly says "not oil" |
-| 7 | **No-spill scene** (Zenodo Part 3) | nospill | detect | System correctly says "nothing here" |
+**Eight bundles, six of them spill cases. Every one is real data — there is no synthetic case.** Each earns its slot by proving something the others cannot.
+
+| # | Case | Type | Acts | AIS | Proves |
+|---|---|---|---|---|---|
+| 1 | **Jacksonville transit — 30 Jul 2024** · Atlantic, ~100 km off Jacksonville | spill | all | `noaa_dense` | **HERO.** The full chain on a transiting vessel, and the **only case that exercises gap detection on real dense AIS** — Cerulean records 1 AIS-off event. |
+| 2 | **Farallones — 17 Mar 2023** · Pacific, off San Francisco | spill | all | `noaa_dense` | Not a fluke: different basin, different year, same pipeline. **Also the hero backup** if Jacksonville's offshore AIS coverage fails. |
+| 3 | **Huntington Beach — 2 Oct 2021** · San Pedro Bay | spill | all | `noaa_dense` | **Infrastructure + exoneration.** That we *don't* name a ship when a ship isn't the answer. The only case with a federal investigation as ground truth (NTSB MIR-24-01). |
+| 4 | **Alaska dark vessel — 16 May 2023** · Gulf of Alaska | spill | all | `noaa_dense` | **Radar-versus-transponder cross-check, on real data.** A 40 m contact 4.5 km from the slick, dark to Cerulean's commercial AIS. |
+| 5 | **Mumbai — 3 Sep 2023** · Indian EEZ | spill | detect, trace, attribute, verify | `gfw_hourly` | **A contested source type on one detection** — five infrastructure candidates and a dark vessel, while the model's own class says "vessel" and no human ever reviewed it. Deciding *what kind of thing* did this is the whole point. |
+| 6 | **Jamnagar — 23 Feb 2024** · Arabian Sea | spill | detect, trace, attribute, verify | `gfw_hourly` | **The gap.** A deliberate discharge that an automated detector logged and nobody ever investigated. Found independently by us in an afternoon on free data. |
+| 7 | **Look-alike — Ennore, 30 Nov 2023** | lookalike | detect | — | Correct rejection. Same coast and sensor as a real spill, with dark patches that **cannot** be oil because the spill had not happened yet. |
+| 8 | **No-spill scene** (Zenodo Part 3) | nospill | detect | — | Correct rejection on clean ocean. |
+
+**Presentation order is 1 → 8 and it is deliberate.** The judge watches the chain complete three times (1–3) before seeing it stop for want of AIS (5–6). The Indian gap then reads as a missing input rather than a weakness in the system, because they have already seen what that input does elsewhere. Jamnagar is the last real case, so it is what they walk away remembering.
 
 ## 3.1 The four hard constraints on every US case
 1. **US waters** — NOAA Marine Cadastre AIS is free and bulk-downloadable; Indian coastal AIS is not published
@@ -95,25 +106,82 @@ Precomputation is fine and we say so openly: *"the pipeline runs offline and exp
 3. **Sentinel-1 coverage confirmed** by running the finder script, not assumed
 4. **A citable official finding** — NTSB, USCG, or a documented press account naming the vessel
 
-## 3.2 Ennore — CONFIRMED
-```
-Scene:  S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04
-Time:   2017-01-29 00:31:32 UTC  =  06:01 IST, the morning after the collision
-Bands:  VV + VH + angle     Mode: IW
-Box:    approx [80.0, 12.9, 80.8, 13.6]
-```
-Four Sentinel-1 passes exist over the box between 28 Jan and 15 Feb 2017, all IW, all VV+VH. Two of the four are adjacent frames of the same orbit pass 25 s apart; the frame grid does not align to the lat/lon box, so two catch only a sliver. `..._6D04` is the one with full coverage. Fallback: `..._49A5` (10 Feb).
+## 3.2 Confirmed scenes
 
-**Still to confirm:** that a dark feature is actually visible on the water. A scene with no visible slick is not a hero case whatever the metadata says.
+**All six scene ids are now full and confirmed** — resolved from Cerulean's public API (D23), not
+from the truncated strings in its detail panel. Every one carries VV+VH, IW mode.
 
-## 3.3 Finding cases 4 and 5
-**SkyTruth's Cerulean public map** (`cerulean.skytruth.org`) is a searchable database of slick detections already attributed to named vessels. Filter to US waters, take two with clean linear slicks, and the Cerulean record becomes the verification source.
+**Jacksonville** — the hero. `2024-07-30 23:21:29 UTC`, 30.384 N −79.634 W, 31.2 km slick, 4.55 km², US EEZ.
+Scene `S1A_IW_GRDH_1SDV_20240730T232129_20240730T232154_054997_06B32C_7973`.
+Cerulean slick `3046293`, class *"Vessel, coincident"*, machine confidence 0.795.
+⚠️ **Open risk:** ~100 km offshore, where NOAA's terrestrial receivers thin. Jaiveer verifies coverage before this is locked as hero (§14).
+
+**Farallones** — second case and hero backup. `2023-03-17 14:24:42 UTC`, 37.807 N −123.886 W, 19.6 km, 3.85 km², US EEZ.
+Scene `S1A_IW_GRDH_1SDV_20230317T142442_20230317T142507_047685_05BA4D_AFD8`. Cerulean slick `3687325`, class *"Vessel, coincident"*.
+**Note:** the same scene carries three other, larger slicks (`3687317`, `3687321`). Ours is the 19.6 km one — the export box must be tight enough that Soum's detector is scored against the right feature.
+
+**Huntington Beach** — `S1A_IW_GRDH_1SDV_20211002T015821_20211002T015850_039934_04B9C9_2BF9`,
+`2021-10-02 01:58:21 UTC`, +2.8 h after the first leak alarm. **Not in Cerulean** — its ground truth is the NTSB report, which is stronger.
+**Clear comma-shaped slick**: sea median −20.9 dB VV, slick core −28 to −32 dB, ~8–10 dB depression with a crisp boundary. Exported with a dB clamp of **[−25, −5]**, not the default [−25, 0].
+
+**Alaska dark vessel** — `S1A_IW_GRDH_1SDV_20230516T155708_20230516T155736_048561_05D74A_DCBF`,
+`2023-05-16 15:57:08 UTC`, 59.555 N −142.714 W, 2.5 km, 0.27 km², US EEZ (Alaska). Cerulean slick `3630124`, class *"Ambiguous"*.
+Dark vessel `D38.5238724` at 59.546 N −142.639 W, estimated length 40 m ± 20%.
+**The 4.5 km offset between contact and slick is the point** — that displacement is what the backward reconstruction has to recover.
+Cerulean attaches the same dark vessel to five separate slicks on this scene, which is corroboration, not five findings.
+⚠️ **Say this one out loud before a judge does:** Cerulean's human reviewer marked this slick
+**`AMBIGUOUS`** — *"not clear after human review if the detection is oil or some other slick."* That is
+not a reason to drop the case; it is a reason to present it precisely. **Our claim is about the
+radar-versus-transponder cross-check, not about certainty that this is oil** — and a case where an
+expert reviewer hedged is the most honest possible place to show what our VH channel and our
+explainability bars actually add. If Soum's classifier also hedges here, that is a result, not a failure.
+
+**Mumbai** — `S1A_IW_GRDH_1SDV_20230903T010333_20230903T010358_050156_06095B_9215`,
+`2023-09-03 01:03:33 UTC`, 18.518 N 72.198 E, 20.55 km, 7.74 km², Indian EEZ. Cerulean slick `3612640`.
+Carries **five infrastructure candidates** (including structure `121229`) and **one dark vessel**
+(`D244.865585`), while Cerulean's model class for the slick itself is `VESSEL` and no human reviewer
+ever looked at it. Three source hypotheses, no agreement between them, nobody adjudicating — which is
+precisely the situation source classification exists for.
+
+⚠️ **The "natural seep area" warning is NOT confirmed and must not be presented until it is.**
+Cerulean's API exposes four AOI layers — EEZ, IHO Sea Areas, Marine Protected Area, User-generated —
+and **no seep layer**. Their `cls` table does carry a `NATURAL` class *"such as oil seeps"*, but this
+slick is classed `VESSEL`, not `NATURAL`. Either the warning came from somewhere else in their web UI
+or it was misread. **Akshat: find the source or drop the claim.** The `natural_seep` source type
+itself stays in the schema regardless — see D19.
+
+**Jamnagar** — `S1A_IW_GRDH_1SDV_20240223T011114_20240223T011139_052679_065FA4_546D`,
+`2024-02-23 01:11:14 UTC`, DESCENDING, relative orbit 107, VV+VH, IW. Slick at **20.14617 N 71.89911 E**, hook-shaped with vessel-track geometry.
+**Measured by us, independently, in GEE**: inside VV −25.41 / VH −47.36 dB; clean water ~5 km away VV −17.24 / VH −33.12. **~8 dB VV depression.**
+The VH figure is at or below Sentinel-1's noise floor, so it **corroborates rather than proves** — VV is the primary evidence, and we say that.
+**Cerulean also logged this slick** (`3477622`, 7.97 km, 1.58 km², machine confidence 0.838, 0.2 km from our point) with four candidate MMSIs attached. That is independent confirmation the feature is real — and nobody investigated it anyway. See **D24**.
+
+**Look-alike** — Ennore, `2023-11-30 00:32 UTC`, VV+VH. Four days *before* the December 2023 CPCL spill, so its dark patches are provably not oil.
+
+## 3.3 What every case must satisfy, and how these were found
+
+**Cerulean.** SkyTruth's public map (`cerulean.skytruth.org`) is a searchable database of slick detections already attributed to vessels, infrastructure or dark vessels. Cases 1, 2, 4 and 5 came from it, using the date filter **inside the HYCOM window** and the source filters — including the **"Dark vessels only"** toggle, which is how case 4 was found.
+
+**It also has a public OGC API at `api.cerulean.skytruth.org` — no key, no auth (D23).** The
+`public.slick_plus` collection returns the full Sentinel-1 scene id, the slick polygon, the
+centerline, length/area/confidence, and the attributed source ids, filtered by `bbox` and `datetime`.
+`scripts/fetch_cerulean.py` wraps it. The `public.slick_to_source`, `public.source_vessel` and
+`public.source_type` tables return 403 — vessel names, flags and IMOs come from the per-slick web page.
+
+**How to read their fields, because three of our claims turned on this:**
+- `cls` is the **model's** class: `1 NOT_OIL · 2 ANTHRO · 3 NATURAL (seeps) · 4 INFRA · 5 VESSEL · 9 AMBIGUOUS · 10 LAND · 11 SEA_ICE · 12 ARTEFACT`.
+- `hitl_cls` is the **human reviewer's** class, and it is often absent — nobody looked. `8 COIN_VESSEL` is their strongest ("responsible party highly likely to be determined"); `9 AMBIGUOUS` means a trained reviewer could not tell whether it was oil.
+- `source_type_1/2/3_ids` are **vessel MMSIs / infrastructure ids / dark-vessel ids** respectively.
+- `aoi_type_1/2/3_ids` are **EEZ / IHO sea area / Marine Protected Area** — there is **no seep layer**.
+- `max_source_collated_score` is their confidence in the best source. It can be **negative**, which means their own scorer found nothing convincing. Jamnagar's is **−0.909**.
 
 Two caveats that must carry into `verification.json`:
 - Cerulean is **another algorithm's output, not court-proven ground truth.** Write *"SkyTruth Cerulean attributed this slick to vessel X"*, never *"vessel X was proven responsible"*.
-- Cerulean is **prior art** — see Part 11.
+- Cerulean is **prior art** — see Part 11. Using it to find cases is normal research practice; we cite it and state the four things we do differently.
 
-Fallbacks: NOAA Incident News archive, USCG investigation reports.
+**A dark-vessel case will never have a news story.** That is definitional, not bad luck: if a journalist could write about it, the vessel was not dark. Case 4 is presented that way deliberately — see Part 12.
+
+**Download the Cerulean record for every case.** The slick polygon it contains is **ground truth for Soum's segmentation on a real incident**, which is a much stronger claim than benchmark-only IoU. It ships in the bundle as `cerulean_slick.geojson`. **The attributed source ids do not** — they are the answer, and they live only in `docs/ANSWERS.md` (Part 16).
 
 ---
 
@@ -132,6 +200,7 @@ cases/<case_id>/
   sar_vv_vh.tif             2-band float32 dB GeoTIFF  ← Soum's real input
   bounds.json               geographic bounds + the dB clamp used
   thumb.png                 gallery preview
+  cerulean_slick.geojson    SkyTruth's polygon — IoU reference, optional, never the answer
   detections.geojson        Stage 1 → Stage 2, and → frontend
   particles.json            Stage 2 → frontend (the rewind)
   particles_forward.json    Stage 2 → frontend (forward prediction)
@@ -140,34 +209,55 @@ cases/<case_id>/
   suspects.json             Stage 3 → frontend
   verification.json         Stage 4 → frontend
 cases/index.json            the gallery list
+cases/_archive/             retired cases — never in the index, never validated
 ```
 
-## 4.3 Stage 1's internal architecture *(changed in v3)*
+## 4.3 Stage 1's internal architecture
 Three layers, not two:
 ```
 Layer 1  scene classifier (small CNN)   "is there oil here at all?"   → headline accuracy
 Layer 2  U-Net segmentation             "exactly which pixels?"       → IoU, and the polygon
 Layer 3  classical hand-crafted features "why, and what shape?"        → the explainability bars
 ```
-The classifier gates the U-Net because the dataset's own authors found U-Net **segments erroneously on look-alike images**. Without the gate, cases 6 and 7 come back with hallucinated oil — and those two cases exist specifically to prove the system can say no.
+The classifier gates the U-Net because the dataset's own authors found U-Net **segments erroneously on look-alike images**. Without the gate, cases 7 and 8 come back with hallucinated oil — and those two cases exist specifically to prove the system can say no.
 
 The classical detector survives as the **ablation baseline**, the **fallback**, and the **ship detector**.
 
-## 4.4 Stage 2's model, and OpenDrift *(decided in v3)*
+## 4.4 Stage 2's model, and OpenDrift
 Production is our own **reduced-order surface advection model**: `velocity = current + 0.03 × wind`, RK2, 15-minute steps, backward via negative dt, 50-member stratified ensemble.
 
 **We do not switch to OpenDrift and we do not switch between models at a threshold.** We run both and render both clouds. Where they agree that is independent confirmation from MET Norway's operational tool; where they diverge, the pattern diagnoses which physics accounts for it.
 
 **Why ours stays in production:** it is validated (5 suites, 20 assertions, exact to 0.000%), the stratified ensemble is the product and OpenDrift gives one trajectory per run, two other people consume its output, and because Anushka wrote every line her guard caught a 10× unit error before a single particle moved.
 
-## 4.5 Stage 3's three source types *(new in v3)*
+## 4.5 Stage 3's four source types
 | Type | Meaning | Our cases |
 |---|---|---|
-| `vessel` | Broadcasting ship near the origin at the right time | 4, 5 |
-| `dark_vessel` | Radar sees a ship; AIS reports nothing | our best differentiator |
-| `infrastructure` | Pipeline, platform or wreck — stationary | **2, 3** |
+| `vessel` | Broadcasting ship near the origin at the right time | 1, 2 |
+| `dark_vessel` | Radar sees a ship; AIS reports nothing | **4**, and one of the sources on 5 |
+| `infrastructure` | Pipeline, platform or wreck — stationary | **3**, and one of the sources on 5 |
+| `natural_seep` | Geological seepage — oil nobody spilled | **no case currently uses it** — see §3.2 |
 
-Without the infrastructure module the correct answer on Huntington Beach is "no vessel responsible", which reads as failure. **With it, the answer is "the source is fixed infrastructure and all transiting vessels are excluded" — which is a hit**, and it is what the NTSB concluded.
+**A system that can only consider vessels will name a vessel even when the source is a pipeline.** That is a false accusation and it is the worst failure mode we have — which is why source classification runs *before* attribution:
+
+```
+origin reconstructed
+  → fixed infrastructure at the origin?        → infrastructure
+  → known natural seep area?                   → natural_seep
+  → radar ship with no AIS?                    → dark_vessel
+  → otherwise score the AIS fleet              → vessel
+```
+
+Without it the correct answer on Huntington Beach is "no vessel responsible", which reads as failure. **With it, the answer is "the source is fixed infrastructure and all transiting vessels are excluded" — which is a hit**, and it is what the NTSB concluded.
+
+`natural_seep` exists because a system that cannot say *"some of this may be geological"* will always
+name a culprit, and distinguishing seeps from discharges is a real operational problem for enforcement.
+It stays in the schema and the scorer as the fourth class. **It is not claimed on any case in the
+library** — the Mumbai seep warning could not be substantiated against Cerulean's API (§3.2), and we do
+not put an unsourced flag on a screen. If the source turns up, Mumbai gets it back; if it does not, the
+class ships as designed capability with an honest *"not triggered on these six scenes."*
+
+**On stage:** *"Before we name a ship, we ask whether a ship is even the right kind of answer."*
 
 ---
 
@@ -199,11 +289,12 @@ Violating these is how the project dies. They are in `CLAUDE.md` too.
   "case_type": "spill",
   "satellite": "Sentinel-1A",
   "scene_id": "<GEE system:index — the real one>",
-  "detection_time": "2021-10-03T01:52:00Z",
+  "detection_time": "2021-10-02T01:58:21Z",
   "acts_available": ["detect", "trace", "attribute", "verify"],
+  "ais_source": "noaa_dense",
   "known_origin": {
     "lon": -81.40, "lat": 31.13,
-    "label": "M/V Golden Ray wreck, mid-channel St Simons Sound",
+    "label": "documented fixed source",
     "source_url": "https://www.ntsb.gov/..."
   },
   "gallery": {
@@ -224,16 +315,31 @@ without `detect`, and `detections.geojson` is not required. The frontend must re
 as *seeded from a documented source*, never as a NAAP detection. Allowed (and coord-checked) on
 a normal detection case too, as a ground-truth pin.
 
+**`ais_source` (required when `attribute` is available).** `noaa_dense | gfw_hourly`.
+NOAA Marine Cadastre reports at a ~71-second median interval; Global Fishing Watch's AIS Vessel
+Presence gives **one position per vessel per hour** — roughly 50× sparser. At 12 knots a ship covers
+about 22 km in an hour, so on a `gfw_hourly` case the `gap` component is **structurally impossible**
+(you cannot see a 30-minute silence in hourly data) and `slowdown` is very coarse. Those components
+return `null`, not zero, and the remaining weights renormalise. The frontend renders them "n/a".
+Say it openly: *"attribution confidence depends on AIS sampling density, and we state which source
+each case used."* See D20.
+
 Dependency rules the validator enforces: `trace` requires `detect` **or** `meta.known_origin`;
-`attribute` requires `trace`; `verify` requires `verification.json` to exist.
+`attribute` requires `trace`; `verify` requires `verification.json` to exist; `attribute` requires
+`ais_source`.
 
 ## 6.2 `bounds.json`
 ```json
-{ "west": -118.30, "south": 33.50, "east": -117.80, "north": 33.80,
-  "width_px": 1400, "height_px": 1400,
-  "db_clamp": [-25, 0] }
+{ "west": -118.17, "south": 33.585, "east": -118.05, "north": 33.70,
+  "width_px": 505, "height_px": 577,
+  "db_min": -25.0, "db_max": -5.0,
+  "vh_available": true }
 ```
-Pixel (0,0) is **top-left = (west, north)**. `db_clamp` records the stretch used for `sar.png` so Soum can invert it exactly. **If the clamp changes that is a broadcast, not a silent edit.**
+Pixel (0,0) is **top-left = (west, north)**. `db_min`/`db_max` record the stretch used for `sar.png`
+so Soum can invert it exactly; `vh_available` says whether `sar_vv_vh.tif` has a second band.
+**If the clamp changes that is a broadcast, not a silent edit.**
+*(v3 and earlier described this field as a `db_clamp: [min, max]` pair. The shipped shape is the
+three scalars above — what `gee_scene.py` writes and what every consumer already reads. See D26.)*
 
 ## 6.3 `detections.geojson`
 FeatureCollection. Each feature:
@@ -264,7 +370,7 @@ A no-spill case is a FeatureCollection with **zero `oil` features**; look-alikes
 
 ## 6.4 `particles.json` and `particles_forward.json`
 ```json
-{ "t0": "2021-10-03T01:52:00Z",
+{ "t0": "2021-10-02T01:58:21Z",
   "direction": "backward",
   "timestep_minutes": 15,
   "n_steps": 97,
@@ -283,7 +389,7 @@ A no-spill case is a FeatureCollection with **zero `oil` features**; look-alikes
   "centroid": [-118.21, 33.71],
   "radius_50_km": 4.2,
   "radius_90_km": 11.8,
-  "time_window": ["2021-10-02T08:00:00Z", "2021-10-02T20:00:00Z"],
+  "time_window": ["2021-10-01T08:00:00Z", "2021-10-01T20:00:00Z"],
   "time_window_method": "bounded",
   "ensemble_runs": 50,
   "abstain": false,
@@ -314,7 +420,7 @@ FeatureCollection of LineString tracks:
 ```
 Plausible-set vessels only. Decimate to ≤500 rendered points, endpoints preserved; `n_points` reports the **undecimated** count.
 
-## 6.7 `suspects.json` *(extended in v3)*
+## 6.7 `suspects.json`
 ```json
 {
   "funnel": {"in_region": 412, "in_window": 63, "plausible": 12, "scored": 3,
@@ -326,7 +432,7 @@ Plausible-set vessels only. Decimate to ≤500 rendered points, endpoints preser
       "components": {"proximity": 0.91, "parity": 0.74, "temporality": 0.63,
                      "trajectory": 1.0, "gap": 1.0, "slowdown": null,
                      "type_prior": 1.0},
-      "closest_km": 3.1, "closest_time": "2021-10-02T14:20:00Z",
+      "closest_km": 3.1, "closest_time": "2021-10-01T14:20:00Z",
       "grid_probability": 0.91,
       "heading_consistent": true, "ais_gap_minutes": 85,
       "edge_truncated": false,
@@ -347,6 +453,11 @@ Plausible-set vessels only. Decimate to ≤500 rendered points, endpoints preser
       "reasons": ["origin probability peak lies on the pipeline right-of-way",
                   "no vessel scored above threshold"] }
   ],
+  "natural_seep": {
+    "flagged": true,
+    "source": "SkyTruth Cerulean known-seep layer",
+    "note": "Detection falls in an area with documented natural seepage. Some or all of this feature may be geological."
+  },
   "excluded": [
     { "mmsi": "367999999", "name": "OTHER SHIP", "closest_km": 6.4,
       "reason": "heading away from the origin throughout the window" }
@@ -357,6 +468,8 @@ Plausible-set vessels only. Decimate to ≤500 rendered points, endpoints preser
 ```
 Funnel counts must **decrease monotonically**. Suspects sorted by descending score. Every suspect `mmsi` must have a matching track in `vessels.geojson` — the validator enforces this, and it is what makes the honesty rule mechanical.
 **`components` values are `null` when not applicable.** Dark vessels have `mmsi: null` and never an invented identity.
+`source_type` ∈ `vessel | dark_vessel | infrastructure | natural_seep`.
+**On a `gfw_hourly` case, `gap` and `slowdown` must be `null`** — the validator warns on a number, because a zero where a `null` belongs is an honesty bug, not a display bug (D20).
 `abstained: true` requires `suspects` empty.
 
 ## 6.8 `verification.json`
@@ -386,13 +499,16 @@ Funnel counts must **decrease monotonically**. Suspects sorted by descending sco
 }
 ```
 `verdict` ∈ `hit | partial | miss | not_applicable`. `source_url` must be present and non-empty.
+`source_type` ∈ `official_investigation | algorithmic_attribution | press | none` — Cerulean is
+`algorithmic_attribution`, never `official_investigation`.
 
 ## 6.9 `cases/index.json`
 ```json
-{ "cases": ["case-ennore-2017", "case-huntington-2021", "..."],
-  "default": "case-ennore-2017" }
+{ "cases": ["case-jacksonville-2024", "case-farallones-2023", "..."],
+  "default": "case-jacksonville-2024" }
 ```
 Order is presentation order, strongest first. **The frontend never hardcodes a case list.**
+A case directory that is not listed here is not in the demo. `cases/_archive/` is skipped entirely.
 
 ---
 
@@ -418,7 +534,7 @@ Urooz's former design work moved to Harshita; keep it minimal, clarity over poli
 ## 8.1 Blocked on nobody — start now
 - Soum: download Parts 1+2, tile cache, ship detector, chronic/acute
 - Anushka: age estimators, adaptive pad, negative-longitude test, coastline upgrade
-- Jaiveer: **build a US-located fake origin and everything runs** — scorer, parity, traffic prior, evaluation curve
+- Jaiveer: **verify Jacksonville's AIS density first (§14), then build a US-located fake origin and everything runs** — scorer, parity, traffic prior, evaluation curve
 - Harshita: all five screens, self-guiding UX, `BitmapLayer`, union camera
 - Urooz: all three research tasks
 - Akshat: merge, rulings, validator hardening, `verification.json` research
@@ -465,21 +581,31 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 | # | Decision | Reason |
 |---|---|---|
 | D1 | **Train on Zenodo Parts 1+2, test on Part 3** | Part 3 is the authors' designated test set. Training on it means no clean generalisation estimate, and it is a fifth of the data. |
-| D2 | **Scene classifier gates the U-Net** | The dataset authors report U-Net segments erroneously on look-alikes. The gate is what makes cases 6 and 7 work. |
+| D2 | **Scene classifier gates the U-Net** | The dataset authors report U-Net segments erroneously on look-alikes. The gate is what makes cases 7 and 8 work. |
 | D3 | **Keep the classical feature layer** | It produces the explainability bars. A CNN cannot. It is also the ablation baseline and the ship detector. |
 | D4 | **No CNN before the classical path works** | Classifier first, U-Net second, classical detector supplies polygons meanwhile. |
 | D5 | **Our advection model stays in production; OpenDrift is a second opinion** | Ours is validated, the ensemble is the product, two people consume its output. |
 | D6 | **No model-switch threshold at 48 h or near shore** | The threshold is indefensible without crossover validation, a particle cannot know its future position, and a hybrid cloud is not a coherent uncertainty statement. |
-| D7 | **GSHHG coastline upgrade** | Cheap fix for near shore. Golden Ray and Huntington Beach are both enclosed water. |
+| D7 | **GSHHG coastline upgrade** | Cheap fix for near shore. Huntington Beach is inside San Pedro Bay, where 9 km current cells are partly land. |
 | D8 | **Score the origin grid, not the r50 circle** | Real cloud is 4.38:1 aspect with 44.7% of high-probability mass outside r50. |
 | D9 | **Applicability gating on gap and slowdown** | 64% of gap hits are docked boats; slowdown is structurally inert for 66% of the fleet. Not-applicable ≠ zero. |
-| D10 | **Infrastructure source association** | Two of five cases have a fixed source. Turns Huntington Beach from a miss into a hit. |
+| D10 | **Infrastructure source association** | Two cases have a fixed source. Turns Huntington Beach from a miss into a hit. |
 | D11 | **`BitmapLayer`, not `HeatmapLayer`** | HeatmapLayer re-smooths in screen pixels and renormalises per viewport — the answer would change as a judge zooms. |
 | D12 | **`time_window_method` is in the contract** | Protects a claim we must defend; the frontend needs it to avoid rendering a bracket as a measurement. |
 | D13 | **97 steps, not 96** | `positions[n_steps−1] = t0 − (n_steps−1)×dt`; 97×15 min = exactly 24 h, matching what we say on stage. |
 | D14 | **2-band float32 GeoTIFF exports, not PNG-only** | VH is Soum's strongest feature and the signal is ~1 dB deep; 8-bit quantisation destroys it. |
 | D15 | **Urooz is research lead** | Design work moves to Harshita; her research could outlive the hackathon. |
-| D16 | **`trace` may run without `detect` when `meta.known_origin` is set** | Golden Ray and Ennore have no SAR-visible slick but a citable known source (a wreck; a collision position). The origin is seeded from the documented coordinate, not detected — the Trace and Verify screens say so, and it stays honest because `known_origin` carries a `source_url`. `detections.geojson` is then not required. |
+| D16 | **`trace` may run without `detect` when `meta.known_origin` is set** | Kept for any future case with a citable known source but no SAR-visible slick. The origin is seeded from the documented coordinate, not detected — the Trace and Verify screens say so, and it stays honest because `known_origin` carries a `source_url`. `detections.geojson` is then not required. **No case in the current library uses this path**, since all six spill cases have a visible slick. |
+| D17 | **Golden Ray DROPPED** | No SAR-visible slick, and it made the same infrastructure point Huntington makes better — Huntington has a federal investigation as ground truth. Two cases proving one thing, where one of them has no visible slick, is a wasted slot. |
+| D18 | **Ennore 2017 ARCHIVED, not deleted** | Dasari, Lokam & Nadimikeri, *Mar Pollut Bull* 174(1):113182, DOI 10.1016/j.marpolbul.2021.113182, report **detecting this spill in Sentinel-1A, visible in the VV channel, using Level-1 SLC data.** Our probe used GRD via GEE and found no coherent damping. **We cannot ship a "no SAR-visible slick" claim that contradicts published literature without addressing it.** Read the paper's figure and scene id first. Possible explanations: different product (SLC vs GRD), different scene (4 passes exist in the window), or we probed the wrong part of the scene. |
+| D19 | **`natural_seep` is a fourth source type** | Without a fourth class the system cannot express "some of this may be geological", which is both a real operational distinction and a credibility asset. **Amended v4:** the original justification — *"Cerulean flags case 5 as a known seep area"* — could not be substantiated. Their API exposes four AOI layers (EEZ, IHO, MPA, user-generated) and no seep layer, and the Mumbai slick is classed `VESSEL`, not `NATURAL`. The class stays because the design argument stands on its own; **the Mumbai claim does not ship until sourced.** |
+| D20 | **`ais_source` on every case with `attribute`** | GFW is one position per vessel per hour versus NOAA's ~71 s. `gap` is structurally impossible at hourly sampling and `slowdown` is very coarse. The scorer must know which regime it is in and return `null`, not a misleading zero. |
+| D21 | **Blind evaluation: the answers live in a sealed file only Akshat holds** | If Jaiveer knows which vessel the answer names while tuning weights, he will — without meaning to — tune until that vessel ranks first. Same for Soum with the slick location and Anushka with the origin. That is not dishonesty, it is how anyone works when the target is visible, and it destroys the claim. Teammates are **told the file exists and who holds it** — so they understand why "is this right?" goes unanswered during the week — but never its contents. See Part 16. |
+| D22 | **No synthetic case in the library** | Real dark-vessel cases exist (case 4), so the planned simulated ghost-ship scenario is dropped entirely. Every bundle is real data, which removes the labelling burden and the honesty exposure that came with it. |
+| D23 | **Cerulean's public OGC API is the case-onboarding tool** | `api.cerulean.skytruth.org` needs no key. `public.slick_plus` returns the **full** Sentinel-1 scene id, the slick polygon, the centerline, length/area/confidence and the attributed source ids — which killed the "truncated scene id" blocker outright. Scripted in `scripts/fetch_cerulean.py`. The polygon ships in the bundle as Soum's IoU reference; **the source ids never do** — they are the answer and go to `docs/ANSWERS.md` only. |
+| D24 | **Jamnagar is "never investigated", not "no record anywhere"** | Cerulean independently logged this slick (`3477622`, confidence 0.838, 0.2 km from our GEE point) with four candidate MMSIs. The original claim was checkable and would have failed in front of a judge. The reframe is stronger: an automated detector saw it, even produced candidate vessels, and **nothing happened** — no investigation, no named party, no enforcement. Their detection also becomes independent corroboration that our slick is real, and our detector-vs-theirs comparison becomes a result. Applies the Part 1.5 corollary to ourselves. |
+| D25 | **Golden Ray deleted from the tree; Ennore 2017 archived to `cases/_archive/`** | D17 is final, so Golden Ray leaves the working tree (history keeps it). Ennore 2017 stays on disk pending the SLC retry D18 requires, but out of `cases/index.json` and out of the validator's sweep. The Ennore slot in the live library is now the **30 Nov 2023 look-alike**, which is a different case making a different point. |
+| D26 | **`bounds.json` ships `db_min` / `db_max` / `vh_available`** | v3 §6.2 described a `db_clamp: [min, max]` pair that was never written by `gee_scene.py` nor read by anybody. The contract is corrected to the shipped shape rather than four consumers being changed to match a doc. |
 
 ---
 
@@ -491,7 +617,19 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 
 **`case-000` taught a wrong SHAPE, not just wrong values.** Three people independently reported this. The real origin cloud is a 4.38:1 streak sitting ~98% outside the SAR scene; the fixture is a tidy circle inside it. **Rule: the first time you see real upstream data, re-check every assumption your stub baked in.**
 
-**`validate_case.py` gaps found by the team:** the `Box` pad is so generous the off-scene warning cannot fire; no `area_km2`-versus-polygon check; `origin.bounds` never compared against scene bounds; span check has a fencepost. All Akshat's, all small.
+**`validate_case.py` gaps found by the team:** the `Box` pad is so generous the off-scene warning cannot fire; no `area_km2`-versus-polygon check; `origin.bounds` never compared against scene bounds; span check has a fencepost. All fixed in the v3 hardening pass.
+
+**Ennore 2017 — a published paper may contradict our finding.** See D18. This was caught by Akshat reading around the case rather than by anyone testing the code, and it produced a rule worth carrying:
+> **Before claiming any negative result about a documented incident, check whether someone has already published a positive one.**
+A judge asking *"where's the paper that says the opposite?"* is a much worse moment than a paragraph explaining why our product and theirs differ.
+
+**Jamnagar — we nearly broke that same rule ourselves.** The v4 draft said *"No record anywhere"*.
+A single API query found SkyTruth Cerulean's own detection of the same slick, on the same scene, at
+0.838 confidence. The claim is reframed (D24) and the rule now applies to negatives about *data* as
+well as negatives about *incidents*.
+
+**Indian-waters detection failures — five measured findings, and they are a demo asset, not an embarrassment.** Ennore 2017 Sentinel-1: imaged +1 day, dawn wind below the contrast floor, VV/VH differences swing ±3–6 dB at random. Ennore 2017 optical: Sentinel-2's nearest pass 3 days late, Landsat 8's 8 days late. Ennore 2023 (CPCL / Cyclone Michaung, 4 Dec): the only Sentinel-1 pass in eight weeks fell on 30 November — **four days before the spill**. Ennore 2023 Sentinel-2: nearest usable pass 6 Dec at 87.2% cloud, and an Inspector probe of the visible plume gave B8 451–532 against clean water at 470 — a ~4% delta, so **sediment, not oil**, since oil absorbs strongly in the near-infrared and would read far lower.
+Five failure modes, five different specific causes, two incidents, one coastline. **If detection were reliable and prompt, running the physics backwards would be unnecessary.** That is the argument for the project, stated as evidence.
 
 ---
 
@@ -505,7 +643,8 @@ Three systems will be named by an informed judge. **Never pretend they don't exi
 **SkyTruth Cerulean** — global, automated, ResNet34 U-Net slick detection with AIS attribution, scoring on parity, proximity and temporality over an AIS window from 8 h before the image to 6 h after.
 > *"Cerulean is the closest thing to us and it's excellent. Four differences. We run the physics backwards to reconstruct an origin rather than matching a coincident track — so we can attribute a slick found days later, which matters because Sentinel-1's revisit gap means we usually see slicks late. We use VV and VH; they use VV alone. We use free public AIS; they use commercial. And we publish exclusions, not just matches."*
 
-We borrow their parity/proximity/temporality framework **and cite them for it.**
+We borrow their parity/proximity/temporality framework **and cite them for it.** We also use their
+public API to onboard cases and their polygons as segmentation reference (D23) — and we say so.
 
 Their disclaimer is also our template: they state plainly that SAR alone cannot definitively identify oil slicks and that detections are *potential* slicks. If the leading operational system says that, we say it too.
 
@@ -522,6 +661,11 @@ Every number gets its metric and its split named. **Never a single unqualified p
 **Detection (Soum)** — scene classification accuracy, look-alike rejection rate, oil-class IoU, and the classical baseline F1, all on the Part 3 holdout with a scene-level split. Plus the two-benchmark framing:
 > *"On the dataset's own benchmark the authors achieve 96% IoU. We achieve X on their designated held-out test set. On the harder Krestenitis look-alike benchmark, published state of the art is around 53%. The gap between those numbers is a measure of how much look-alike variety a dataset contains — that gap is our result, not our excuse."*
 
+**Plus a second, harder detection number, free from D23:** IoU against SkyTruth Cerulean's
+operational polygon on five real incidents. *"On the Jacksonville scene our segmentation achieves X IoU
+against the polygon an operational system produced for the same slick"* is a different claim from a
+benchmark score, and a judge understands it immediately.
+
 **Drift (Anushka)** — integrator exactness (18.0000 vs 18.0 km; round trip 0.0001 km), ensemble spread as **precision not accuracy**, age validation against four documented release times, and OpenDrift agreement.
 > *"Across the 50 runs of our uncertainty budget, half the endpoints landed within 8.8 km of the cloud's centre."* **Never** *"accurate to 8.8 km"* — there is no ground truth for origin position.
 
@@ -530,6 +674,20 @@ Every number gets its metric and its split named. **Never a single unqualified p
 
 **The error budget.** Current field resolution dominates; wind coefficient second; omitted physics third and only past 48 h; integration scheme negligible.
 > *"Our uncertainty is a property of the freely available current field, not of our code. A finer regional model would tighten it — that's the roadmap."*
+
+**Sampling density (Jaiveer, cheap and worth doing).** Take the dense NOAA data from a hero case, downsample it to one position per hour, and re-run the scorer. That turns a qualitative caveat into a measured result — *"at hourly sampling the correct vessel fell from rank 1 to rank N, and the gap component became unavailable"* — and it gives the two-regime comparison a number behind it:
+> *"Attribution quality is bounded by AIS sampling density, not by our method. In US waters at 71-second sampling we resolve to a single vessel with a transponder gap as evidence. In Indian waters at hourly sampling we resolve to a small candidate set and cannot assess gaps at all. Same pipeline, same physics — different data. That is the argument for India publishing coastal AIS."*
+
+**Case 4, the dark vessel — lead with the absence, do not apologise for it.**
+> *"This one has no news article, no investigation, no named vessel. That is not a gap in our case — that *is* the case. A ship went dark, discharged, and left. Nobody could identify it because nobody has a system that looks. Radar saw it. The transponder record does not. Our origin reconstruction puts the release four and a half kilometres from where the radar contact sits."*
+
+Honest caveat to state alongside it: a vessel dark to Cerulean's **commercial** AIS is a strong claim; a vessel absent from our **free NOAA** archive might be a coverage hole. Two absences from two independent sources is evidence. One is not.
+
+**Case 6, Jamnagar — the sentence that lands hardest in the whole deck (reframed, D24):**
+> *"February 2024, Arabian Sea, the approach lanes to the largest refinery in the world. A deliberate discharge — eight decibels of damping, the track geometry of a vessel that turned while dumping. We found it in an afternoon, with free public data, on a student laptop. And here's the part that should bother you: an automated system had already flagged it. SkyTruth's detector logged this slick at 0.84 confidence. It listed four candidate vessels and scored every one of them below zero — its own scorer could not choose between them, because it was matching coincident tracks instead of running the physics backwards. No human ever reviewed it. No investigation was opened. No party was named. The problem isn't that nobody saw it — it's that seeing it was never enough."*
+
+**Never say "no record anywhere" about Jamnagar.** Cerulean's record exists and a judge can pull it
+up in ten seconds. The absence we are pointing at is enforcement, not observation.
 
 ---
 
@@ -548,21 +706,54 @@ Every number gets its metric and its split named. **Never a single unqualified p
 
 # PART 14 — OPEN ITEMS
 
-| Item | Owner | Blocks |
-|---|---|---|
-| Confirm a slick is visible in the Ennore scene | Akshat | the hero case |
-| Pick US cases 4 and 5 | Urooz researches → Akshat decides | Jaiveer's AIS download |
-| Confirm VH availability per US case | Akshat | Soum's best model |
-| Nominate cases 6 and 7 from Zenodo Part 3 | Soum | two demo screens |
-| Project name | Urooz | deck, UI header, repo |
-| Deployment cost figure for national coverage | Akshat | a Q&A answer |
-| `docs/receipts.md` complete | Akshat | the "is this real?" question |
+| Item | Owner | Blocks | Priority |
+|---|---|---|---|
+| **Verify NOAA AIS density at Jacksonville's position** (30.384 N −79.634 W, ~100 km offshore) | **Jaiveer** | **the hero case.** Sparse coverage means Farallones becomes hero and the order reshuffles | **BLOCKING** |
+| ~~Full Sentinel-1 scene ids for cases 1, 2, 4, 5~~ | Akshat | — | **DONE** — all six resolved from the Cerulean API (D23), §3.2 |
+| ~~Download the Cerulean record for every case~~ | Akshat | — | **DONE** — `scripts/fetch_cerulean.py`, polygons in each bundle |
+| Confirm VH availability per case via `bandNames()` | Akshat | Soum's best model | high — runs with each export |
+| GFW Arabian Sea coverage check for cases 5 and 6 | Akshat | whether `attribute` runs at all on the Indian cases | high — token is in hand |
+| **Source the Mumbai "natural seep area" warning, or drop it** (§3.2, D19) | Akshat | whether `natural_seep` fires on any case | high |
+| Nominate the no-spill scene from Zenodo Part 3 | Soum | one demo screen | medium — case 8 is held out of `index.json` until it lands |
+| Read Dasari et al. 2021 and resolve the Ennore contradiction (D18) | Akshat | whether Ennore 2017 returns from `cases/_archive/` | medium |
+| Project name | Urooz | deck, UI header, repo | medium |
+| Deployment cost figure for national coverage | Akshat | a Q&A answer | low |
+| `docs/receipts.md` complete | Akshat | the "is this real?" question | before freeze |
 
 ## Deliberately not building
 Repeat-offender tracking at scale · polarimetric decomposition · multi-pass age estimation · live API · auth and multi-user · offline mode. **Stating scope decisions confidently reads as engineering judgement; being caught by them reads as gaps.**
 
 ---
 
+# PART 16 — BLIND EVALUATION
+
+**The answers are sealed.** Every case in the library has a documented outcome — a Cerulean attribution, an NTSB finding, a dark-vessel id. Akshat holds all of them in `docs/ANSWERS.md`, which is **gitignored, not pushed, and not shared.** `docs/ANSWERS.README.md` is committed in its place so everyone knows the file exists.
+
+**Why.** If Jaiveer knows which vessel the answer names while he is tuning weights, he will tune until that vessel ranks first. If Soum knows where the slick is, he will tune the threshold until it appears. If Anushka knows the origin, she will read a wrong cloud as close enough. None of that is dishonesty — it is what anyone does when the target is visible — and it destroys the claim, because "our system identified the vessel" collapses into "we tuned it until it did." A December panel will ask which one happened.
+
+**What each person gets:**
+
+| Person | Gets | Does not get |
+|---|---|---|
+| Soum | `sar_vv_vh.tif`, `sar.png`, `bounds.json`, `ais_source` | Where the slick is. His detector has to find it. **`cerulean_slick.geojson` only after his own polygon exists** — then the IoU comparison is honest. |
+| Anushka | Case list with `detection_time` and bounds; Soum's detections when they land | The documented origin or release time |
+| Jaiveer | Case list with dates and bounding boxes; real `origin.json` when it lands | **The vessel names and MMSIs.** The box is wide enough to contain the culprit plus decoys anyway, at `2 × radius_90_km`. |
+| Harshita | Bundles as they are produced | The answers |
+| **Akshat alone** | `docs/ANSWERS.md` | — |
+
+**Cases are named after PLACES, never after vessels.** `case-jacksonville-2024`, not
+`case-menuett-2024`. The v4 draft named the first two cases after the ships Cerulean attributed them
+to, which handed Jaiveer the answer in the folder name — thirty seconds of AIS search and the blind
+evaluation is over before it starts. Every case id and every case title in every shared document is a
+geographic one. **Do not "fix" these names back.** The vessel names exist in exactly one place, and
+they come out on 15 September.
+
+**Everyone is told the file exists and who holds it.** Hiding its existence would be worse — it explains why "is this right?" goes unanswered during the week, and it makes the verification screen a genuine reveal rather than a restatement. Including when it is wrong.
+
+**Akshat does not answer "is this right?" before a case is complete.** Not a hint, not a nudge, not a raised eyebrow. The moment the stages have run and the bundle validates, he opens the file and the comparison is real.
+
+---
+
 # PART 15 — GLOSSARY
 
-**SAR** — synthetic aperture radar; oil damps capillary waves so slicks appear dark. **VV / VH** — polarisations; ocean clutter damps mainly VV, real oil damps both, so VH is the discriminator. **Look-alike** — algae, calm wind, rain cells that also appear dark; the core difficulty. **dB** — backscatter in decibels. **Damping ratio** — contrast between slicked and clean sea; tracks thickness, not age. **AIS** — ship transponder broadcasts. **MMSI** — vessel id in AIS; imperfect, do not build identity resolution. **Dark vessel** — visible to radar, absent from AIS. **Chronic** — deliberate discharge underway; long, thin, lane-aligned. **Acute** — accident; radial from a point. **HYCOM** — global ocean currents, 0.08° daily, GEE archive ends 2024-09-05, **scale 0.001 → divide by 1000**. **ERA5** — hourly wind reanalysis; signed u/v components. **GEE** — Google Earth Engine. **3% rule** — surface oil moves at current + ~2.5–3.5% of wind speed. **Ensemble** — 50 perturbed reruns; the spread IS the uncertainty. **Abstention** — designed refusal when confidence is insufficient; a feature. **Parity / proximity / temporality** — Cerulean's vessel-scoring metrics, which we borrow and cite. **Verification** — screen 4; our answer against the official finding.
+**SAR** — synthetic aperture radar; oil damps capillary waves so slicks appear dark. **VV / VH** — polarisations; ocean clutter damps mainly VV, real oil damps both, so VH is the discriminator. **Look-alike** — algae, calm wind, rain cells that also appear dark; the core difficulty. **dB** — backscatter in decibels. **Damping ratio** — contrast between slicked and clean sea; tracks thickness, not age. **AIS** — ship transponder broadcasts. **MMSI** — vessel id in AIS; imperfect, do not build identity resolution. **Dark vessel** — visible to radar, absent from AIS. **Chronic** — deliberate discharge underway; long, thin, lane-aligned. **Acute** — accident; radial from a point. **HYCOM** — global ocean currents, 0.08° daily, GEE archive ends 2024-09-05, **scale 0.001 → divide by 1000**. **ERA5** — hourly wind reanalysis; signed u/v components. **GEE** — Google Earth Engine. **3% rule** — surface oil moves at current + ~2.5–3.5% of wind speed. **Ensemble** — 50 perturbed reruns; the spread IS the uncertainty. **Abstention** — designed refusal when confidence is insufficient; a feature. **Parity / proximity / temporality** — Cerulean's vessel-scoring metrics, which we borrow and cite. **Verification** — screen 4; our answer against the official finding. **Natural seep** — geological seepage; oil nobody spilled, and a fourth source class. **GFW** — Global Fishing Watch; free global AIS-derived data, one position per vessel per hour, covering 400,000+ vessels of which the majority are non-fishing. **`ais_source`** — `noaa_dense` (~71 s interval) or `gfw_hourly` (1/hour); decides which scoring components are applicable. **Blind evaluation** — teammates build without knowing the documented answer, which lives in a sealed file only Akshat holds. **`slick_plus`** — Cerulean's public API view carrying scene id, polygon, centerline and attributed sources for every detection in their database.

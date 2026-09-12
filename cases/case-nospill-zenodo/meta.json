@@ -1,0 +1,16 @@
+{
+  "case_id": "case-nospill-zenodo",
+  "title": "Clean ocean — no spill",
+  "short_location": "TODO-SOUM: scene location",
+  "case_type": "nospill",
+  "satellite": "Sentinel-1",
+  "scene_id": "TODO-SOUM",
+  "detection_time": "1970-01-01T00:00:00Z",
+  "acts_available": ["detect"],
+  "gallery": {
+    "thumbnail": "thumb.png",
+    "blurb": "Open water, nothing on it. Does the system know when to say nothing?",
+    "difficulty": "easy"
+  },
+  "notes": "PLACEHOLDER — NOT YET IN cases/index.json, and it must not be added until Soum nominates the scene. Owed by Soum: one clean-ocean scene from Zenodo Part 3 (the authors' designated test set, DOI 10.5281/zenodo.13761290, CC-BY — the attribution is mandatory and must appear on a slide). When it lands, replace scene_id, short_location and detection_time with the real values, export, and add the case id to cases/index.json in position 8. Expected Stage 1 output: a FeatureCollection with zero features classified 'oil'. detection_time is a deliberately obvious epoch placeholder so a real value cannot be mistaken for having arrived."
+}

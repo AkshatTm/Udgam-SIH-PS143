@@ -1,8 +1,12 @@
 {
   "cases": [
+    "case-jacksonville-2024",
+    "case-farallones-2023",
     "case-huntington-2021",
-    "case-ennore-2017",
-    "case-golden-ray-2021"
+    "case-gulf-alaska-2023",
+    "case-mumbai-2023",
+    "case-jamnagar-2024",
+    "case-ennore-lookalike-2023"
   ],
-  "default": "case-huntington-2021"
+  "default": "case-jacksonville-2024"
 }

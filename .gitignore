@@ -51,6 +51,11 @@ credentials.json
 # Per-teammate handoff briefs — shared by hand (WhatsApp), never pushed
 HANDOFF_*.md
 
+# THE SEALED ANSWERS (Master Plan D21 / Part 16). Akshat holds this; nobody else sees it, and
+# it must never reach a branch. docs/ANSWERS.README.md IS committed, so the team knows the
+# file exists and who has it — hiding its existence would be worse than holding it.
+docs/ANSWERS.md
+
 # OS noise
 .DS_Store
 Thumbs.db

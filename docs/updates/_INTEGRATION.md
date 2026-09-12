@@ -8,6 +8,85 @@ log; this file is only for the joins.
 
 ---
 
+## [2026-09-12] v4 case library landed — SEND THESE, ONE PER CASE, NOT BATCHED
+
+Six real scenes are on disk. Three people have been building against fixtures. **Every message
+below unblocks somebody different — send them separately so each lands as its own event.**
+
+### 0. Goes out FIRST, before any case announcement — to Jaiveer
+
+> Before anything else: verify NOAA Marine Cadastre AIS density at **30.384 N, −79.634 W** on
+> **2024-07-30**. That is `case-jacksonville-2024`, our hero, and it sits ~100 km offshore where
+> NOAA leans on terrestrial receivers. If it comes back with a handful of positions instead of
+> hundreds of vessels, **Panagia's case takes the hero slot and the whole presentation order
+> reshuffles** — so this is the one open item that can still force a replan. Nothing else you're
+> doing matters as much today.
+
+### 1. Goes out SECOND — to everyone (rulings + the sealed file)
+
+> Four rulings, all in `docs/00_MASTER_PLAN.md` Part 9:
+> **D23** — SkyTruth Cerulean has a public API (no key). It gave us every full scene id, and it
+> puts their reference polygon in each bundle as `cerulean_slick.geojson`. Soum: that is a
+> comparison target, **not** ground truth, and you get it only after your detector has produced
+> its own polygon — otherwise the IoU number isn't a measurement.
+> **D24** — Jamnagar is "no investigation, no named party, no enforcement". **Never** "no record
+> anywhere" — Cerulean logged it and a judge can pull that up in ten seconds.
+> **D25** — Golden Ray is deleted; Ennore 2017 is archived to `cases/_archive/`. The Ennore slot
+> is now the 30 Nov 2023 look-alike.
+> **D26** — `bounds.json` ships `db_min`/`db_max`/`vh_available`. That is what the exporter has
+> always written; the doc was wrong, not the code.
+>
+> Also: **`docs/ANSWERS.md` exists and I hold it.** Every documented outcome is in it, it is
+> gitignored, and nobody else sees it until 15 September. Read `docs/ANSWERS.README.md` — it
+> explains why, and why I will not answer "is this right?" this week. Two consequences for you:
+> **cases are named after places, never vessels** (if a case id looks like a ship's name, that's a
+> bug — tell me, don't rename it back), and **if you stumble on attribution data, don't paste it in
+> here.** Cerulean's API hands back the polygon and the MMSIs in the same response.
+
+### 2. Then one message per case. Template:
+
+> **`<case_id>` is live.**
+> Scene `<scene_id>` · `<detection_time>` · VV+VH, IW
+> Box `W S E N` · `ais_source: <...>` · acts now: `["detect"]`
+> On disk: `sar_vv_vh.tif` (2-band float32 dB @10 m), `sar.png`, `thumb.png`, `bounds.json`,
+> `cerulean_slick.geojson`
+> **Soum** — real-scene inference unblocked. **Anushka** — `detection_time` is real, fetch fields.
+> **Jaiveer** — AIS window and box are above.
+> `<the one thing that is specific to this case>`
+
+Per-case "one thing", so no message is generic:
+
+| case | the line that must be in its message |
+|---|---|
+| `case-jacksonville-2024` | HERO. ~100 km offshore — hold until the AIS density check comes back. Long sinuous chronic slick, runs the full height of the scene. |
+| `case-farallones-2023` | **Three other Cerulean slicks share this scene**, two of them 6× larger. Ours is the 19.6 km one. A much bigger detection means a different slick, not a better one. |
+| `case-huntington-2021` | Already exported. Its answer is **infrastructure** — naming a transiting vessel here would be wrong, and the NTSB agrees. |
+| `case-gulf-alaska-2023` | 59.5 N — first case where `cos(lat)` bites; a degree of longitude is half as wide as at 30 N. Cerulean's human reviewer called this slick **AMBIGUOUS**; if your classifier hedges here, that's a result. |
+| `case-mumbai-2023` | `gfw_hourly`: `gap` and `slowdown` must be **`null`, never 0**. Scene has bright point targets near the slick head — real ship/platform returns for the detector. |
+| `case-jamnagar-2024` | `gfw_hourly`, same null rule. Scene-edge **nodata is `-inf`** over ~14% of the raster — do not read it as very low backscatter or you'll detect a giant fake slick. |
+| `case-ennore-lookalike-2023` | **Correct answer is zero `oil` features.** Look-alikes are welcome and get shown grey with their rejection reason. Box contains the Chennai coast, so land runs bright (+4 dB). |
+
+### State of every bundle right now
+
+`python scripts/validate_case.py cases/` → all seven fail on **exactly one** thing each:
+`detections.geojson`. No schema errors, no warnings. That is the intended handoff state — the
+next file to exist in any bundle comes from Stage 1.
+
+### Seam risks created by this change, logged so they are not a surprise
+
+- **`web/lib/loadCase.ts` fetches `detections.geojson` unconditionally.** Every case is
+  `acts_available: ["detect"]` with no detections yet, so the gallery will 404 on load until
+  Soum's stage lands. Routed to Harshita: gate the fetch on the act, and render a "stage pending"
+  state rather than throwing.
+- **`case-nospill-zenodo` is scaffolded but deliberately NOT in `cases/index.json`** — it has no
+  scene yet. Do not add it until Soum nominates one, or the gallery gets a dead card.
+- **Case ids changed.** Anything pinned to `case-menuett-2024`, `case-panagia-2023`,
+  `case-alaska-dark-2023`, `case-golden-ray-2021` or `case-ennore-2017` needs updating.
+- **`verification.json` is intentionally absent** on the new cases. It contains the answer, so it
+  gets written after a bundle validates, not before. See `verification/README.md`.
+
+---
+
 ## [2026-09-10] D16 — trace-without-detect via `meta.known_origin`; Golden Ray + Ennore scaffolded
 
 **The ruling (frozen-schema change, Akshat's).** `trace` may now run without `detect` when

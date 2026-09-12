@@ -4,6 +4,111 @@
 
 ---
 
+## [2026-09-12] Phase 1/2 — Master Plan v4: eight-case library onboarded, six scenes exported, answers sealed
+
+**Done:** Replaced the v3 planning docs with **Master Plan v4** and **01_AKSHAT_INTEGRATION v3**,
+then executed the case onboarding they describe. The library is now seven live cases plus one
+waiting on Soum.
+
+**The finding that unblocked everything: SkyTruth Cerulean has a public OGC API** —
+`api.cerulean.skytruth.org`, **no key, no auth**. Collection `public.slick_plus` returns the
+**full** Sentinel-1 scene id, the slick polygon, the centerline, length/area/confidence and the
+attributed source ids, filtered by `bbox` + `datetime`. That killed the BLOCKING "pull the
+truncated scene ids out of the web panel" item outright, and it hands Soum a real-incident IoU
+reference. Wrapped as `scripts/fetch_cerulean.py` (**D23**). Note `public.slick_to_source`,
+`public.source_vessel` and `public.source_type` return 403 — names/flags/IMOs are a browser job.
+
+**All six scene ids resolved and verified in GEE. Every one is VV+VH — no VV-only fallback
+needed.** Six scenes exported at 10 m, 2-band float32, direct download, no Drive round-trip.
+Every PNG eyeballed and every slick is visibly there:
+
+| case | scene time | what the raster shows |
+|---|---|---|
+| `case-jacksonville-2024` | 2024-07-30 23:21:29Z | long sinuous chronic slick, full scene height |
+| `case-farallones-2023` | 2023-03-17 14:24:42Z | ruler-straight discharge line NW–SE |
+| `case-gulf-alaska-2023` | 2023-05-16 15:57:08Z | short dark curve, exactly on the slick bbox |
+| `case-mumbai-2023` | 2023-09-03 01:03:33Z | broad head + long tail, **plus bright ship/platform returns** |
+| `case-jamnagar-2024` | 2024-02-23 01:11:14Z | hook-shaped, textbook vessel-track geometry |
+| `case-ennore-lookalike-2023` | 2023-11-30 00:32:01Z | Chennai coast, anchored ships, dark low-wind patches |
+
+**Three corrections that stopped us shipping something checkable and false:**
+1. **Jamnagar — Cerulean HAD logged it** (slick 3477622, same scene, 0.2 km from the GEE point,
+   0.838 confidence, four candidate MMSIs). The deck line *"No record anywhere"* would have died
+   in front of a judge. Reframed to **"no investigation, no named party, no enforcement"**, which
+   is stronger: their own scorer rated all four candidates **below zero** and no human reviewed
+   it. Their detection now corroborates that our slick is real (**D24**).
+2. **Mumbai's "natural seep area" warning could not be substantiated.** Cerulean's AOI layers are
+   EEZ / IHO / MPA / user-generated — **no seep layer** — and the slick is classed `VESSEL`, not
+   `NATURAL`. The `natural_seep` class stays in the schema; the Mumbai claim does not ship until
+   sourced (**D19 amended**). Also: that slick has **zero vessel candidates**, so "all four source
+   classes on one detection" was wrong — it is five infrastructure candidates and a dark vessel.
+3. **Gulf of Alaska is human-reviewed `AMBIGUOUS`** — a Cerulean analyst could not tell whether it
+   is oil. Kept, and said out loud: our claim there is the radar-vs-transponder cross-check, not
+   certainty that it is oil.
+
+**Blind evaluation nearly broke on naming.** v4 called cases 1 and 2 `case-menuett-2024` and
+`case-panagia-2023` — **the attributed vessels themselves**. Jaiveer would have had the answer from
+the folder name. Renamed to `case-jacksonville-2024` / `case-farallones-2023`, and
+`case-alaska-dark-2023` → `case-gulf-alaska-2023` (`dark` leaked the source type). Every vessel
+name scrubbed from both shared docs (37 mentions).
+
+**`docs/ANSWERS.md` written and sealed** — gitignored, `git check-ignore` verified. Committed
+`docs/ANSWERS.README.md` in its place so the team knows it exists and why (**D21**).
+
+**Validator + exporter hardening:**
+- `ais_source` required when `attribute` is available, enum-checked (**D20**)
+- **`gap`/`slowdown` numeric on a `gfw_hourly` case is now an ERROR**, not a style note
+- `natural_seep` block; `source_type` enum += `natural_seep`
+- `particles_forward.json` validated, including "is it just a copy of the rewind"
+- `origin` age block + `opendrift_comparison`; missing `time_window_method` now warns
+- `test_validator.py` **14/14 → 18/18**
+- `gee_scene.py`: GEE's real ceiling is **50,331,648 bytes at 5 bytes per band-pixel** (float32 +
+  a 1-byte mask), and an EPSG:4326 export has **no cos(lat) term** — the old estimate was wrong in
+  both directions and two exports failed before it was fixed. Now predicts the exact raster.
+  Added `--direct`; fixed the squashed 480×480 thumbnail.
+
+**Files touched:** `docs/00_MASTER_PLAN.md` (v3→v4), `docs/01_AKSHAT_INTEGRATION.md` (v2→v3) ·
+`scripts/fetch_cerulean.py`, `scripts/gfw_probe.py`, `.env.example` (new) ·
+`scripts/validate_case.py`, `scripts/test_validator.py`, `scripts/make_case000.py` ·
+`pipeline/export/gee_scene.py` · `cases/case-{jacksonville-2024,farallones-2023,gulf-alaska-2023,
+mumbai-2023,jamnagar-2024,ennore-lookalike-2023,nospill-zenodo}/` (new), `cases/index.json`,
+`cases/case-huntington-2021/meta.json` · `cases/_archive/` (new, Ennore 2017) ·
+`cases/case-golden-ray-2021/` + its verification (deleted, D17) · `docs/receipts.md`,
+`docs/TRAPS.md`, `CLAUDE.md`, `web/CLAUDE.md`, `docs/PER_DIRECTORY_CLAUDE.md`,
+`verification/README.md` · `.gitignore` · `docs/ANSWERS.README.md` (new)
+
+**Run command:**
+```bash
+python scripts/test_validator.py          # 18/18 caught and named
+python scripts/validate_case.py cases/    # index + 7 cases; ONLY detections.geojson missing
+python scripts/fetch_cerulean.py --case case-jacksonville-2024 --slick 3046293
+```
+Every case now fails on **exactly one** thing — `detections.geojson`, which is Soum's stage.
+Zero schema errors, zero warnings.
+
+**Open issues / for you:**
+- **SEND THE PER-CASE ANNOUNCEMENTS** — drafted in `_INTEGRATION.md`, one message per case, never
+  batched. Three people have been on fixtures for days and six real scenes are now on disk.
+- **Jaiveer first, before anything else:** NOAA AIS density at 30.384 N −79.634 W (~100 km
+  offshore). Still the only item that could force a replan.
+- **GFW token is not on disk.** `scripts/gfw_probe.py` is written but has never made a live call —
+  put the token in `.env` as `GFW_API_TOKEN` and run `--all`. Expect a fixing round on dataset ids.
+- **`verification.json` deliberately NOT written for the new cases.** It ships inside the bundle,
+  so writing it now would publish the answers and end the blind evaluation. The research is
+  already staged in `ANSWERS.md`; it becomes a file after each bundle validates. Reasoning is in
+  `verification/README.md`.
+- **Case 8 needs Soum's no-spill nomination** — scaffolded, held out of `index.json` so the gallery
+  cannot 404.
+- **Confirm the case-1 vessel flag.** The old note says CHN with MMSI `563082600`, but MID 563 is
+  **Singapore**. Settle it on the slick page before it reaches a slide.
+- `acts_available` is `["detect"]` on every case by design — add acts as stages land, so no bundle
+  ever claims a screen it cannot render.
+
+**Next:** announcements out → Jaiveer's density check → Soum's detections on Jacksonville → the
+first bundle that goes all the way through four stages.
+
+---
+
 ## [2026-09-10] Phase 1/3 — D16 ruling: trace-without-detect via `meta.known_origin`; Golden Ray + Ennore scaffolded as known-source cases
 
 **Done:** Ruled and implemented the trace-without-detect contract change the last entry left
