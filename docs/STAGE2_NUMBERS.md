@@ -192,6 +192,88 @@ it is deliberately **not** in `requirements.txt` — ~90 packages including Cart
 it is a comparison tool, not a runtime dependency). Per-case results are written to
 `out/opendrift_<case>.json`.
 
+## 8.4b Jacksonville is ONE slick, and that changes the hero number
+
+Soum's ruling, 13 Sept: `case-jacksonville-2024`'s three oil features are **one slick with genuine
+breaks**, not over-segmentation. His evidence is not our detector's behaviour — **Cerulean's own
+polygon for the same slick is an 18-part MultiPolygon, 31.2 km long.** An operational detector
+fragments the same ribbon eighteen ways. The ribbon really breaks.
+
+Seeding from the highest-confidence feature alone took **15 km of a 34 km ribbon.**
+
+### The merge decision is measured, and it refuses on two cases
+
+Four gates, on every oil feature's vertices projected onto the set's shared principal axis:
+
+| case | aspect | axis covered | max gap | max perp | decision |
+|---|---|---|---|---|---|
+| `case-jacksonville-2024` | **17.9** | **99%** | 0.16 km | 0.20 km | **MERGED** |
+| `case-mumbai-2023` | 4.5 | 85% | 2.46 km | 1.16 km | not merged |
+| `case-gulf-alaska-2023` | **2.5** | **49%** | 3.89 km | 0.92 km | not merged |
+
+**The thresholds come from the library, not from taste.** Jacksonville and Gulf of Alaska land on
+opposite sides of all four, so the gates sit between them — and Mumbai falls outside deliberately,
+because 85% coverage with a 2.5 km gap and 1.2 km of perpendicular scatter is genuinely unclear,
+and a merge that moves the seed should not happen on a guess. All four numbers print either way.
+
+### What it did to the answer — and this one is material
+
+| | det-01 alone | **merged ribbon** | change |
+|---|---|---|---|
+| origin centroid | (−79.6977, 29.0386) | (−79.7318, 29.0299) | **moved 3.46 km** |
+| r50 | 11.30 km | **12.76 km** | +12.9% |
+| r90 | 27.61 km | **32.50 km** | +17.7% |
+
+**3.46 km is 27% of r50.** Unlike the coastline upgrade (0.53 km) and the PCA axis fix (0.02 km),
+this is *not* immaterial — it is a real change to the hero case's answer, and it is the correct one.
+`discharge_class` also becomes **authoritative** rather than a `shape_class` fallback: det-02 is
+`chronic`, so the merged ribbon is `chronic`, so the origin is seeded as a **line segment** — which
+is the physically right reading of a 34 km broken ribbon left by a vessel under way.
+
+### Two things Soum's numbers tell us about which quantity to trust
+
+Our outline over-extends: **IoU 0.483, recall 0.825, precision 0.537.** So compare the two
+quantities C3.1 could match against, both against Cerulean's polygon for the same slick:
+
+| | Cerulean | ours | ratio |
+|---|---|---|---|
+| **major axis** | 31.2 km | 34.58 km | **×1.11** |
+| area | 4.55 km² | 7.12 km² | **×1.57** |
+
+**Over-extension widens a ribbon far more than it lengthens it.** So A1's ruling — match the major
+axis, not the area — is not only right about the physics (a divergence-free flow preserves area),
+it is also **five times less sensitive to detector precision error.** That is a second, independent
+argument for the same decision, and it is worth one line on the slide.
+
+### `elongation` must never be inverted, and the merged slick enforces it
+
+Soum, 13 Sept: `elongation` is `cv2.fitEllipse` major/minor computed in **pixel** coordinates — a
+shape descriptor feeding `shape_class`, not a geometric aspect ratio. Two independent reasons it is
+not ours to invert: the fitted ellipse's minor axis spans **the bow of the curve**, not the filament
+width (hence solidity 0.22, a convex hull 4.5× the area); and Jacksonville's pixels are
+**8.62 × 10.0 m**, ~14% anisotropic, so the same ellipse fitted in km gives 9.07 rather than 7.93.
+
+**The two independent width measurements agree to 5%**: his area ÷ fitted-major is **272 m**, our
+area ÷ measured-length is **258 m**. Inverting `elongation` instead would have given **~2.2 km** —
+an **8× width error straight into the age band.** The merged slick therefore carries
+`elongation: None`, which forces `age.py` down its measured-from-polygon path. Pinned by test 9j.
+
+### And the time window became a measurement
+
+`time_window_method` on Jacksonville is **`convergence`**, not `bounded`:
+
+```
+2024-07-29T23:21:29Z  ->  2024-07-30T07:43:59Z     span 8.38 h
+```
+
+Against `case-000`'s `bounded` 16.00 h bracket. §8.5 predicted this could happen — Jacksonville's
+HYCOM is 3-hourly rather than daily, so there is temporal structure for the ensemble spread to
+squeeze — and on the hero case **it fired.** That directly answers A3's *"the time window is your
+weakest defensible claim and the UI renders it as a headline."* On this case it is no longer a
+bracket. **Check per case; case-000 is still `bounded`.**
+
+---
+
 ## 8.5 The error budget
 
 | Rank | Source | Weight |

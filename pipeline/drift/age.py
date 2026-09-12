@@ -223,11 +223,16 @@ def slick_major_axis_km(feature):
     props = (feature or {}).get("properties") or {}
     geom = (feature or {}).get("geometry") or {}
     coords = geom.get("coordinates")
+    # EVERY part, not just the first. A merged slick is a MultiPolygon, and taking
+    # coordinates[0][0] would have measured 15 km of Jacksonville's 34 km ribbon -- a number
+    # that looks entirely reasonable and is wrong by more than half.
     ring = None
     if geom.get("type") == "Polygon" and coords:
         ring = coords[0]
-    elif geom.get("type") == "MultiPolygon" and coords and coords[0]:
-        ring = coords[0][0]
+    elif geom.get("type") == "MultiPolygon" and coords:
+        rings = [np.asarray(part[0], dtype=np.float64) for part in coords if part]
+        if rings:
+            ring = np.vstack(rings)
 
     derived = observed_major_axis_km(props.get("area_km2"), props.get("elongation"))
     if ring is None:
@@ -992,6 +997,9 @@ def main():
                          "(default <out>/origin.json)")
     ap.add_argument("--candidates", default="2:36:2", metavar="LO:HI:STEP",
                     help="candidate ages in hours for the shear estimator")
+    ap.add_argument("--merge-oil", choices=["auto", "always", "never"], default="auto",
+                    help="must match run.py's setting -- the age is read off the same slick "
+                         "the origin was seeded from")
     ap.add_argument("--volume-m3", type=float, default=None,
                     help="reported release volume, from the OFFICIAL FINDING (588 barrels = "
                          "93.5 m3). C3.2 declines without it rather than deriving volume from "
@@ -1037,7 +1045,13 @@ def main():
     det_path = case_dir / "detections.geojson"
     feat = None
     if det_path.exists():
-        feat = pick_slick(json.loads(det_path.read_text()))
+        # Same slick selection as run.py, so the age is measured on the geometry the origin
+        # was actually seeded from. Importing it rather than re-implementing is the point:
+        # two different answers to "which slick?" is the kind of divergence nobody notices.
+        sys.path.insert(0, str(HERE))
+        from run import merge_oil_features
+        feat, slick_diag = merge_oil_features(json.loads(det_path.read_text()),
+                                              mode=a.merge_oil)
 
     if feat is None:
         # D16: a known_origin case has no detection, so there is no observed area or

@@ -169,4 +169,68 @@ def run(check):
     else:
         print("        (9f, 9g skipped - no coastline available)")
 
+    # --- 9h/9i/9j  a broken ribbon is ONE slick, and the gates decide which -------------
+    # Soum ruled Jacksonville is one slick with genuine breaks (13 Sept): Cerulean's own
+    # polygon for it is an 18-part MultiPolygon, so an operational detector fragments the same
+    # ribbon eighteen ways. Seeding from the highest-confidence part alone took 15 km of a
+    # 34 km ribbon. These pin the decision in both directions on the REAL library geometry,
+    # because a merge rule that fires on everything is as wrong as one that never fires.
+    import json as _json
+    merge_oil_features = R.merge_oil_features
+    merged_discharge_class = R.merged_discharge_class
+    slick_rings = R.slick_rings
+    seed_geometry = R.seed_geometry
+    REPO = R.REPO
+
+    def _oil(case):
+        path = REPO / "cases" / case / "detections.geojson"
+        if not path.exists():
+            return None
+        return _json.loads(path.read_text())
+
+    jax = _oil("case-jacksonville-2024")
+    ak = _oil("case-gulf-alaska-2023")
+    if jax is None or ak is None:
+        print("        (9h, 9i, 9j skipped - real detections not in this working copy)")
+        return ok
+
+    jfeat, jdiag = merge_oil_features(jax, mode="auto", verbose=False)
+    jm = jdiag["metrics"]
+    ok &= check("9h  Jacksonville's three oil features merge into one ribbon",
+                jdiag["decision"].startswith("MERGED")
+                and jfeat["geometry"]["type"] == "MultiPolygon"
+                and len(slick_rings(jfeat)) == 3
+                and jm["aspect"] > 15.0 and jm["coverage"] > 0.98,
+                f"3 features -> one MultiPolygon of {len(slick_rings(jfeat))} parts, "
+                f"{jm['length_km']} km x {jm['width_km']} km, aspect {jm['aspect']}, "
+                f"{100 * jm['coverage']:.0f}% of the axis covered, largest gap "
+                f"{jm['max_gap_km']} km. Seeding det-01 alone would have taken 15 km of it")
+
+    afeat, adiag = merge_oil_features(ak, mode="auto", verbose=False)
+    am = adiag["metrics"]
+    ok &= check("9i  Gulf of Alaska's three do NOT merge, and every gate says why",
+                adiag["decision"].startswith("NOT merged")
+                and afeat["properties"]["id"] == "det-01"
+                and am["aspect"] < 4.0 and am["coverage"] < 0.6,
+                f"aspect {am['aspect']} and only {100 * am['coverage']:.0f}% of a "
+                f"{am['length_km']} km axis covered, with a {am['max_gap_km']} km gap -- so "
+                f"these are separate slicks and it seeds from det-01 alone. Jacksonville and "
+                f"Alaska fall on opposite sides of all four gates, which is where the "
+                f"thresholds come from")
+
+    # A merged slick's class is TAKEN, never averaged (Soum): det-02 is chronic while det-01
+    # and det-03 are unknown, because discharge_class is computed per region from that
+    # region's own elongation. And `elongation` must be None on the merged object, because
+    # inverting a pixel-space fitEllipse ratio gives a ~2.2 km width against a measured 258 m.
+    dc, why = merged_discharge_class([f for f in jax["features"]
+                                      if f["properties"]["classification"] == "oil"])
+    ok &= check("9j  a merged slick takes a defined discharge_class and drops elongation",
+                dc == "chronic" and jfeat["properties"]["discharge_class"] == "chronic"
+                and jfeat["properties"]["elongation"] is None
+                and seed_geometry(jfeat["properties"])[0] == "line",
+                f"parts are ['unknown', 'chronic', 'unknown'] -> {dc!r} ({why}), which seeds a "
+                f"LINE authoritatively rather than falling back to shape_class. elongation is "
+                f"None so age.py must measure the axis off the polygon -- inverting Soum's "
+                f"pixel-space fitEllipse ratio would give a 2.2 km width against 258 m measured")
+
     return ok
