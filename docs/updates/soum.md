@@ -59,6 +59,14 @@ Decomposing our excess area (pixels we call oil that they do not), by whether it
 | jamnagar | 1.64 | 59% | 41% | 0.13 km² |
 | gulf-alaska | 1.02 | 8% | **92%** | 0.05 km² |
 
+**Caveat on those percentages, added after a challenge: 12 px is an arbitrary radius and the
+figures move with it.** Sweeping it 6 / 12 / 25 / 50 px, the margin share runs farallones
+70/85/93/99%, mumbai 65/85/97/100%, jacksonville 50/61/69/77%, jamnagar 44/59/77/91% — and
+gulf-alaska 7/8/10/12%. So **the exact 85% is not a measurement, it is a function of the radius**,
+and should not be quoted as one. What IS robust is the *ordering*, which is identical at every
+radius, and Alaska's isolation: its excess stays ~90% disjoint even at 50 px, while every other
+case becomes majority-margin by 12 px. Quote the ranking and Alaska's separation, not the number.
+
 On the two cases where they are most confident, our excess is overwhelmingly a slightly fatter
 outline around the same slick. Their polygons are filamentary — `polsby_popper` 0.0095–0.103 and
 `fill_factor` 0.046–0.28 — while our morphological detector traces the whole dark patch. Different
@@ -93,6 +101,24 @@ Cerulean file also carries `role='centerline'` LineStrings — dropped explicitl
 geometries would contribute nothing to the union while looking like they had been counted. Checked
 before trusting any of it: **100% of every Cerulean polygon falls inside our exported crop**, so no
 case is being penalised for a slick our bbox cut in half.
+
+**Two validations run after the fact, because the whole item finished far faster than the ~1 h
+budgeted and "the hard parts did not happen" is not the same as "nothing was missed".** It was
+fast because all five scenes are already EPSG:4326 (no reprojection), nothing was clipped, and
+every timestamp matched — three contingencies the estimate had budgeted for. The two checks that
+*should* have run before I reported anything:
+
+1. **Does my rasterisation reproduce Cerulean's own stated areas?** This was the real risk: their
+   polygons are filamentary (`polsby_popper` down to 0.0095), and `all_touched=False` can drop a
+   filament thinner than the gap between pixel centres, which would silently shrink their mask and
+   flatter our precision. Burned area vs the `area` property they ship: jacksonville −0.2%,
+   farallones −0.0%, gulf-alaska −0.5%, mumbai +0.5%, jamnagar +0.8%. **Nothing is being lost**,
+   and interior rings are handled.
+2. **Does my rasterisation of OUR oil match our own `area_km2` properties?** Within 2.1% on four
+   cases; gulf-alaska is +6.7%, which is expected rather than wrong — its regions are the smallest
+   in the library on a ~5 × 10 m pixel, so boundary pixels are a larger share of a small shape
+   (≈ 4/√7600 ≈ 4.6% for a region that size). Our own oil polygons **do not overlap each other**
+   on any case (0.000 km² double-counted), so the union is not hiding a double count.
 
 **A6 satisfied:** the polygons stayed sealed until all nine detections were committed and pushed
 (`20594df`). `iou_cerulean.py` reads `detections.geojson` and never writes one; nothing here can
