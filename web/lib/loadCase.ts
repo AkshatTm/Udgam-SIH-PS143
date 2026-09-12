@@ -8,7 +8,9 @@ import { ALL_ACTS } from "./contracts";
 export interface LoadedCase {
   meta: CaseMeta;
   bounds: Bounds;
-  /** null when Stage 1 has not produced detections for this case yet. */
+  /** null when Stage 1 has not produced detections for this case yet, OR when the case has no
+   *  `detect` act at all (D16 known-origin cases run trace/attribute/verify from a documented
+   *  source with no SAR-visible slick, so there is no detections.geojson to fetch). */
   detections: DetectionCollection | null;
   /** true when the case offers `detect` but detections.geojson is not on disk yet. */
   detectionsPending: boolean;

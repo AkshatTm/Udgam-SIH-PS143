@@ -220,7 +220,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         detectionsPending,
         activeStage,
         // Detect arrives with the best oil detection already selected (docs/04 C1).
-        selectedDetectionId: bestOilDetectionId(detections),
+        // detections is null for a D16 known-origin case (no `detect` act) — nothing to select.
+        selectedDetectionId: detections ? bestOilDetectionId(detections) : null,
       });
       // Fetch the trace-stage bundles in the background — they must not block the map /
       // detections. Both files are required whenever the `trace` act is available (CONTRACTS §1).
