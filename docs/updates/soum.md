@@ -15,6 +15,85 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-13 21:30] Phase 6.7 — Layer 2 measured against Akshat's bar: it scores zero, and retraining cannot help
+
+**Done:** Measured, not assumed, what Layer 2 does on real scenes. Akshat's §2 ruling said Layer 2
+replaces classical on a live case only if it *"beats classical on real scenes, measured as IoU
+against `cerulean_slick.geojson`"*, by Monday 12:00. **That question is now closed by measurement
+rather than by the deadline.** Nothing was retrained and no bundle was touched — all output went
+to `scratch/nets/`.
+
+**Files:** none changed. **Run:** `python pipeline/detect/run.py --case <id> --path networks --out scratch/nets/<id>.geojson`
+
+### 1. Layer 2 vs Cerulean on the five reference cases: **IoU 0.000 on all five**
+
+Forced down the network path, Layer 1 closes the gate on every one at **P(oil) 0.002–0.005**
+against a 0.143 threshold — including Jacksonville's 31 km ribbon, which is unmistakable by eye.
+So Layer 2 never executes. Classical scores **median 0.483** on the same five. The bar cannot be
+cleared.
+
+### 2. Bypassing the gate entirely: the U-Net still predicts **0.00 km²** on all five
+
+| case | P(oil) | U-Net km² | Cerulean km² | IoU |
+|---|---|---|---|---|
+| jacksonville | 0.0019 | **0.00** | 4.54 | 0.000 |
+| farallones | 0.0016 | **0.00** | 3.85 | 0.000 |
+| gulf-alaska | 0.0023 | **0.00** | 0.27 | 0.000 |
+| mumbai | 0.0050 | **0.00** | 7.77 | 0.000 |
+| jamnagar | 0.0028 | **0.00** | 1.59 | 0.000 |
+
+So it is **not** a gating problem that a better Layer 1 would fix. Both layers fail on GEE exports.
+
+### 3. And it cannot be rescued by rethresholding — it is not localising at all
+
+| scene | prob max | prob mean | px > 0.1 | of scene |
+|---|---|---|---|---|
+| jacksonville | 0.269 | 0.164 | 3,662,541 | **99.99%** |
+| mumbai | 0.250 | 0.159 | 4,610,153 | ~99.9% |
+| farallones | 0.230 | 0.107 | 3,854,331 | ~99.9% |
+
+The probability field is **flat at ~0.16–0.27 across the whole scene**. Dropping the threshold to
+0.2 does not reveal a faint slick, it paints the entire raster as oil. This is the signature of
+domain shift — inputs outside the training distribution, so the network returns something near its
+prior everywhere. **There is no threshold that makes this work.**
+
+### 4. The control: in its own domain the U-Net is genuinely good
+
+| Zenodo scene | oil fraction | prob max | IoU |
+|---|---|---|---|
+| P3_Oil_00081 | 0.37% | 0.592 | 0.125 |
+| P3_Oil_00043 | 2.53% | 0.784 | **0.970** |
+| P3_Oil_00103 | 4.32% | 0.835 | **0.836** |
+| P3_Oil_00067 | **78.32%** | 0.374 | **0.000** |
+
+This confirms the large-slick mechanism **directly**, at the probability level: at 78% oil the max
+probability over the entire scene is 0.374 and **not one pixel** crosses 0.5. The slick has become
+its own median under per-scene MAD normalisation and the contrast the model needs is gone.
+
+**A better way to describe Layer 2, still honest:** on typical Part III scenes it reaches
+**IoU 0.97 and 0.84**. Pooled over all 150 positives it is **0.435**, because the 12 scenes above
+30% oil coverage collapse to 0.085 and carry a large share of all oil pixels. Say all three parts
+or none of them.
+
+### Why retraining is the wrong use of the remaining time
+
+- **No demo case is in the failure band.** Measured oil coverage across the library: 0.00%, 1.13%,
+  1.21%, 1.45%, 1.85%, 2.18%, 2.25%, and three at 0%. The >30% band **does not exist here**.
+- **The networks contribute nothing to any live case** — gate closed, and ungated they emit zero
+  pixels. Improving them changes a slide number and nothing a judge sees.
+- On the two benchmark bundles the correct answer is zero oil, and the gate already delivers it.
+
+**Recommendation: freeze the model work.** The remaining risk is not accuracy. It is the
+Python 3.13-vs-3.11 divergence, which is the only open item that can stop Stage 1 running on
+someone else's laptop.
+
+**Post-freeze, ranked:** (1) the normalisation fix for large slicks — the only genuine defect, and
+it is load-bearing so it needs a clean before/after on Part III; (2) domain adaptation for GEE
+exports, which is a research problem, not a fix; (3) classical-path precision, which is **barred
+now** because tuning after seeing the Cerulean polygons is exactly what A6 forbids.
+
+---
+
 ## [2026-09-13 20:30] Phase 6.6 — the 0.435-vs-96% gap decomposed, and it is not what I predicted
 
 **Done:** Plan items 3, 4 and 5. `evaluate.py` now prints every IoU variant **with its definition
