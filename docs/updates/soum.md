@@ -15,6 +15,95 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-13 18:20] Phase 6.4 — Cerulean IoU on five cases: the first external number Stage 1 has
+
+**Done:** Wrote `pipeline/detect/iou_cerulean.py` and ran it on the five bundles carrying
+`cerulean_slick.geojson`. This converts every IoU we own from benchmark-only to a comparison
+against the polygon an operational detector produced **for the same acquisition** — all five
+`slick_timestamp` values match `meta.detection_time` exactly, so it is the same satellite pass.
+
+**Files:** `pipeline/detect/iou_cerulean.py`, `pipeline/detect/iou_cerulean.json`.
+
+**Run:** `python pipeline/detect/iou_cerulean.py --all --json pipeline/detect/iou_cerulean.json`
+
+| case | IoU | recall | precision | ours km² | theirs km² | their conf |
+|---|---|---|---|---|---|---|
+| mumbai | **0.728** | 0.942 | 0.762 | 9.60 | 7.77 | 0.93 |
+| farallones | **0.624** | 0.796 | 0.742 | 4.13 | 3.85 | 0.93 |
+| jacksonville | **0.483** | 0.825 | 0.537 | 6.97 | 4.54 | 0.80 |
+| jamnagar | **0.452** | 0.916 | 0.471 | 3.10 | 1.59 | 0.84 |
+| gulf-alaska | **0.165** | 0.797 | 0.173 | 1.23 | 0.27 | 0.76 |
+
+**Median IoU 0.483, range 0.165–0.728.**
+
+**What this number is:** agreement between two independent detectors on one acquisition. It is
+**not** accuracy against ground truth — SkyTruth state plainly that SAR alone cannot definitively
+identify oil, and that note is carried inside every one of these files. Where we disagree the
+polygon is not automatically right. Say it that way on the slide; "IoU vs Cerulean" alone invites
+a judge to hear "ground truth", which we would not be able to defend.
+
+**The shape of the disagreement is the actual finding, and it is favourable.** Recall is high and
+uniform — **0.796 to 0.942** on all five — while precision ranges 0.173 to 0.762. We are not
+missing slicks. We cover 80–94% of every polygon they drew, and our area exceeds theirs on all
+five cases. **IoU here is limited by over-extent, not by misses**, which is the better failure
+direction for a detector whose job is to not miss a spill.
+
+Decomposing our excess area (pixels we call oil that they do not), by whether it sits within
+12 px of their polygon or somewhere else entirely:
+
+| case | excess km² | margin around theirs | disjoint elsewhere | of theirs we missed |
+|---|---|---|---|---|
+| farallones | 1.07 | **85%** | 15% | 0.79 km² |
+| mumbai | 2.28 | **85%** | 15% | 0.45 km² |
+| jacksonville | 3.22 | 61% | 39% | 0.79 km² |
+| jamnagar | 1.64 | 59% | 41% | 0.13 km² |
+| gulf-alaska | 1.02 | 8% | **92%** | 0.05 km² |
+
+On the two cases where they are most confident, our excess is overwhelmingly a slightly fatter
+outline around the same slick. Their polygons are filamentary — `polsby_popper` 0.0095–0.103 and
+`fill_factor` 0.046–0.28 — while our morphological detector traces the whole dark patch. Different
+conventions for the same object, not a different object.
+
+**Alaska is the exception and behaves exactly as its caveat predicts.** 92% of our excess is
+*disjoint* from their polygon — separate dark regions, not a fatter outline. This is the case
+Cerulean's own human reviewer classed **AMBIGUOUS**. Two detectors disagreeing about which dark
+patch is the slick, on the one scene a human reviewer could not call, is a coherent result rather
+than an embarrassing one. **It gets reported. It is not tuned.**
+
+**The classifier earns its place — this is an ablation against an external reference.** Counting
+every dark region the detector found instead of only those Layer 3 called oil, IoU falls on all
+five: jacksonville 0.483 → 0.362, farallones 0.624 → 0.618, alaska 0.165 → 0.041, mumbai
+0.728 → 0.661, jamnagar 0.452 → 0.443. The classifier discards regions an operational detector
+also excluded, which is the first evidence for it that does not come from our own labels.
+
+**One observation, deliberately undersold: our IoU tracks their confidence.** Ordered by their
+`machine_confidence` — 0.93, 0.93, 0.84, 0.80, 0.76 — our IoU runs 0.728, 0.624, 0.452, 0.483,
+0.165. Pearson r = 0.904 (p = 0.035), Spearman ρ = 0.800 (p = 0.104). **n = 5, one Spearman test
+is not significant, and the correlation is carried largely by Alaska sitting low on both axes.**
+It is suggestive that both detectors find the same scenes hard — which would mean the gap is scene
+difficulty rather than a broken detector — but **it is an observation, not a result, and must not
+be put on a slide as a statistic.**
+
+**Method notes.** Both polygon sets are burned onto the scene's own affine grid rather than
+intersected as vectors: our detections are pixel regions traced to contours, so a vector
+intersection would measure contour-tracing artefacts as much as real disagreement, and rasterising
+matches how `evaluate.py` scores the U-Net so the two IoU figures in the deck mean the same thing.
+All five scenes are EPSG:4326 and the script exits rather than guessing if one is not. Every
+Cerulean file also carries `role='centerline'` LineStrings — dropped explicitly, since zero-area
+geometries would contribute nothing to the union while looking like they had been counted. Checked
+before trusting any of it: **100% of every Cerulean polygon falls inside our exported crop**, so no
+case is being penalised for a slick our bbox cut in half.
+
+**A6 satisfied:** the polygons stayed sealed until all nine detections were committed and pushed
+(`20594df`). `iou_cerulean.py` reads `detections.geojson` and never writes one; nothing here can
+re-tune a threshold.
+
+**Next:** the U-Net metric question (§E5 item 3) — add background IoU, mean IoU, per-tile IoU and
+Dice to `evaluate.py`, each printed with its definition named, so the 0.435-vs-96% gap can be
+decomposed before any slide claims it.
+
+---
+
 ## [2026-09-13 17:05] Phase 6.3 — D34 closed out: Akshat's two corrections applied, decisions recorded
 
 **Done:** Merged `7d89a76`. Both Zenodo cases are now in `cases/index.json` at slots 8 and 9, so
