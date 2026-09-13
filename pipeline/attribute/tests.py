@@ -41,6 +41,8 @@ sys.path.insert(0, str(HERE))
 
 import geo                                     # noqa: E402
 import ingest                                  # noqa: E402
+import infrastructure                          # noqa: E402
+import score                                   # noqa: E402
 from tracks import MAX_INTERP_GAP_MIN, Track, load_tracks   # noqa: E402
 
 UTC = timezone.utc
@@ -619,6 +621,285 @@ class TestGridOnTheRealFixture(unittest.TestCase):
         self.assertGreater(along / max(across, 1e-9), 2.0,
                            f"fixture cloud should be clearly elongated, got "
                            f"{along:.1f} km along vs {across:.1f} km across")
+
+
+class StubTrack:
+    """The minimum `build_outputs` reads off a track. Deliberately not a real Track —
+    these tests are about the scorer's bookkeeping, not about track reconstruction,
+    and a real Track would drag duckdb and a parquet file into a pure-arithmetic test."""
+
+    def __init__(self, mmsi="123456789", name="STUB", vessel_type="cargo"):
+        self.mmsi, self.name, self.vessel_type = mmsi, name, vessel_type
+
+
+def origin_doc(method="convergence",
+               window=("2024-01-01T00:00:00Z", "2024-01-01T10:00:00Z")):
+    """A 2x2 origin grid — the smallest thing `OriginGrid` will accept. Only the
+    window and its method matter to these tests."""
+    return {
+        "bounds": {"west": -95.0, "south": 28.5, "east": -94.0, "north": 29.5},
+        "shape": [2, 2],
+        "values": [0.0, 0.0, 0.0, 1.0],
+        "centroid": [-94.5, 29.0],
+        "radius_50_km": 5.0, "radius_90_km": 12.0,
+        "time_window": list(window),
+        "time_window_method": method,
+        "abstain": False,
+    }
+
+
+class TestWeights(unittest.TestCase):
+    """The seven weights are the contract. A typo here is silent and changes every
+    ranking in the library, so the total is pinned to a literal rather than derived."""
+
+    def test_the_seven_weights_sum_to_one(self):
+        self.assertAlmostEqual(sum(score.WEIGHTS.values()), 1.0, places=9)
+
+    def test_there_are_exactly_seven_components(self):
+        self.assertEqual(len(score.WEIGHTS), 7)
+        self.assertEqual(set(score.WEIGHTS), {
+            "proximity", "parity", "temporality", "trajectory",
+            "gap", "slowdown", "type_prior"})
+
+
+class TestTemporalityGate(unittest.TestCase):
+    """D12 / 6.5: `bounded` is a SEARCH BRACKET, not a measured release time. Every
+    vessel inside a bracket scores much the same, so the number would say nothing and
+    the component declines instead.
+
+    Three of the six real cases are `bounded` (Farallones, Mumbai, Jamnagar), so this
+    gate decides 15% of the score on half the library. Until now it had no test at
+    all, because `make_fake_case.py` could only emit `bounded`.
+    """
+
+    def setUp(self):
+        self.mid = datetime(2024, 1, 1, 5, 0, tzinfo=timezone.utc)
+
+    def test_a_search_bracket_returns_not_applicable(self):
+        g = geo.OriginGrid(origin_doc("bounded"))
+        c = score.component_temporality(None, self.mid, g)
+        self.assertFalse(c.applicable)
+        self.assertIsNone(c.value, "a bracket must give null, never a zero that reads "
+                                   "as a measurement")
+        self.assertIn("bracket", c.note.lower())
+
+    def test_a_measured_window_scores(self):
+        g = geo.OriginGrid(origin_doc("convergence"))
+        c = score.component_temporality(None, self.mid, g)
+        self.assertTrue(c.applicable)
+        self.assertAlmostEqual(c.value, 1.0, places=6,
+                               msg="closest approach at the centre of the window is the "
+                                   "best possible timing")
+
+    def test_the_score_falls_away_toward_the_window_edge(self):
+        g = geo.OriginGrid(origin_doc("convergence"))
+        edge = datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc)   # the far end
+        quarter = datetime(2024, 1, 1, 7, 30, tzinfo=timezone.utc)
+        self.assertAlmostEqual(score.component_temporality(None, edge, g).value,
+                               0.0, places=6)
+        self.assertAlmostEqual(score.component_temporality(None, quarter, g).value,
+                               0.5, places=6)
+
+    def test_an_unknown_method_is_treated_as_a_bracket(self):
+        """Fail closed. A method we do not recognise is not a licence to score."""
+        g = geo.OriginGrid(origin_doc("something_new"))
+        self.assertFalse(score.component_temporality(None, self.mid, g).applicable)
+
+
+class TestHourlySamplingGate(unittest.TestCase):
+    """D20: on `gfw_hourly` there is one position per vessel per hour, so a 30-minute
+    silence and a speed change are both structurally invisible. Frozen convention 4
+    says the answer is `null`, and the validator now FAILS on a zero there.
+
+    Both Indian cases are `gfw_hourly`, so a regression here fails a third of the
+    library. Verified by hand on 13 Sept; pinned here so it stays verified.
+    """
+
+    def test_gap_is_null_not_zero_at_hourly_sampling(self):
+        c = score.component_gap(None, None, None, "gfw_hourly", None)
+        self.assertFalse(c.applicable)
+        self.assertIsNone(c.value)
+        self.assertIn("hourly", c.note.lower())
+
+    def test_slowdown_is_null_not_zero_at_hourly_sampling(self):
+        c = score.component_slowdown(None, None, "gfw_hourly")
+        self.assertFalse(c.applicable)
+        self.assertIsNone(c.value)
+        self.assertIn("hourly", c.note.lower())
+
+
+class TestEvidenceBreadthReachesTheCard(unittest.TestCase):
+    """A renormalised score says nothing about how much evidence stands behind it.
+    Measured on a gfw fixture: 0.981 off two live components out of seven, live weight
+    0.35. The card cannot show that unless the file carries it, so `weight_live`,
+    `components_available` and `components_total` are emitted per suspect.
+    """
+
+    def scored_entry(self, applicable_keys):
+        comps, live = {}, 0.0
+        for k in score.WEIGHTS:
+            if k in applicable_keys:
+                comps[k] = score.Component(1.0, note="measured")
+                live += score.WEIGHTS[k]
+            else:
+                comps[k] = score.Component.not_applicable("not measurable here")
+        return {
+            "track": StubTrack(),
+            "components": comps,
+            "score": 1.0,
+            "weight_live": round(live, 3),
+            "closest_time": datetime(2024, 1, 1, 5, 0, tzinfo=timezone.utc),
+            "closest_km": 3.0,
+            "grid_probability": 1.0,
+            "gap_minutes": 0.0,
+            "edge_truncated": False,
+        }
+
+    def build(self, applicable_keys):
+        doc = score.build_outputs(
+            [self.scored_entry(applicable_keys)],
+            {"in_region": 1, "in_window": 1, "plausible": 1, "scored": 1,
+             "dropped_short_track": 0},
+            geo.OriginGrid(origin_doc()), False, None)
+        return doc["suspects"][0]
+
+    def test_two_live_components_are_reported_as_two_of_seven(self):
+        s = self.build({"proximity", "type_prior"})
+        self.assertEqual(s["components_available"], 2)
+        self.assertEqual(s["components_total"], 7)
+        self.assertAlmostEqual(s["weight_live"], 0.35, places=3,
+                               msg="proximity 0.30 + type_prior 0.05")
+
+    def test_all_seven_live_gives_a_full_weight(self):
+        s = self.build(set(score.WEIGHTS))
+        self.assertEqual(s["components_available"], 7)
+        self.assertAlmostEqual(s["weight_live"], 1.0, places=3)
+
+    def test_components_available_counts_nulls_out(self):
+        s = self.build({"proximity"})
+        nulls = sum(1 for v in s["components"].values() if v is None)
+        self.assertEqual(s["components_available"] + nulls, s["components_total"],
+                         "available + null must account for every component; if these "
+                         "disagree the card is describing a different set than the score")
+
+
+class TestInfrastructure(unittest.TestCase):
+    """Phase 4. Hand-computed geometry: a square slick 0.02 deg on a side at the equator-ish
+    latitude 33.6, so the arithmetic is checkable on paper rather than read back out of the
+    module. The point of these is the refusals as much as the scoring — a structure named with
+    no provenance is the infrastructure version of a vessel name that is not in the AIS file.
+    """
+
+    def square_detection(self, classification="oil"):
+        ring = [[-118.10, 33.60], [-118.08, 33.60], [-118.08, 33.62],
+                [-118.10, 33.62], [-118.10, 33.60]]
+        return {"type": "FeatureCollection", "features": [{
+            "type": "Feature",
+            "geometry": {"type": "Polygon", "coordinates": [ring]},
+            "properties": {"id": "det-01", "classification": classification,
+                           "centroid": [-118.09, 33.61], "area_km2": 4.0},
+        }]}
+
+    def flat_grid(self, value=1.0):
+        """A 3x3 origin grid, uniform, covering the slick and a margin around it."""
+        return geo.OriginGrid({
+            "bounds": {"west": -118.15, "south": 33.55, "east": -118.03, "north": 33.67},
+            "shape": [3, 3],
+            "values": [value] * 9,
+            "centroid": [-118.09, 33.61],
+            "radius_50_km": 1.0, "radius_90_km": 2.0,
+            "time_window": ["2021-10-01T00:00:00Z", "2021-10-01T12:00:00Z"],
+            "time_window_method": "convergence", "abstain": False,
+        })
+
+    def candidate(self, **over):
+        c = {"name": "Test Pipeline", "lon": -118.09, "lat": 33.62,
+             "kind": "pipeline", "source": "unit test"}
+        c.update(over)
+        return {"infrastructure_candidates": [c]}
+
+    # ------------------------------------------------------------------ termini
+    def test_corners_of_a_square_are_the_termini(self):
+        termini, diag = infrastructure.slick_termini(self.square_detection())
+        # The four corners sit at the max radius from the centre; the closing vertex repeats
+        # the first, so five points clear 0.75 * max_radius and no edge midpoint does.
+        self.assertEqual(len(termini), 5)
+        self.assertEqual(diag[0]["terminus_points"], 5)
+        self.assertEqual(diag[0]["perimeter_points"], 5)
+
+    def test_lookalikes_are_not_given_termini(self):
+        termini, diag = infrastructure.slick_termini(self.square_detection("lookalike"))
+        self.assertEqual(termini, [], "a wind shadow is not a slick and has no source end")
+        self.assertEqual(diag, [])
+
+    # ------------------------------------------------------------------ refusals
+    def test_candidate_without_a_source_is_refused(self):
+        with self.assertRaises(SystemExit) as e:
+            infrastructure.load_candidates(self.candidate(source=""))
+        self.assertIn("source", str(e.exception))
+
+    def test_candidate_with_swapped_coordinates_is_refused(self):
+        with self.assertRaises(SystemExit) as e:
+            infrastructure.load_candidates(self.candidate(lon=33.62, lat=-118.09))
+        self.assertIn("longitude", str(e.exception).lower())
+
+    def test_no_candidates_means_no_findings(self):
+        found, diag = infrastructure.find_infrastructure(
+            {}, self.square_detection(), self.flat_grid(), 0.5)
+        self.assertEqual(found, [])
+        self.assertEqual(diag["candidates"], 0)
+        self.assertEqual(diag["termini"], 5,
+                         "termini are still measured — only the naming is withheld")
+
+    # ------------------------------------------------------------------ scoring
+    def test_a_candidate_on_a_terminus_scores_the_full_weight(self):
+        # origin probability 1.0 everywhere, and the candidate sits on the corner
+        # [-118.10, 33.62], so both terms are at their maximum: 0.60 + 0.40 = 1.00.
+        found, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.62), self.square_detection(),
+            self.flat_grid(1.0), None)
+        self.assertEqual(len(found), 1)
+        self.assertAlmostEqual(found[0]["score"], 1.0, places=3)
+        self.assertAlmostEqual(found[0]["terminus_km"], 0.0, places=3)
+
+    def test_distance_from_the_terminus_decays_the_score(self):
+        near, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.62), self.square_detection(),
+            self.flat_grid(1.0), None)
+        far, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.65), self.square_detection(),
+            self.flat_grid(1.0), None)
+        self.assertLess(far[0]["score"], near[0]["score"])
+        self.assertGreater(far[0]["terminus_km"], near[0]["terminus_km"])
+
+    def test_a_candidate_outside_the_origin_cloud_loses_the_origin_term(self):
+        # Far outside the 3x3 grid's bounds, so grid.contains is False and p_origin is 0.0.
+        found, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-119.50, lat=34.90), self.square_detection(),
+            self.flat_grid(1.0), None)
+        self.assertEqual(found, [], "no origin support and no slick nearby is below the floor")
+
+    def test_a_competing_vessel_is_stated_rather_than_deducted(self):
+        """Section 4.3: when both are plausible we report both. The vessel score must shape
+        the reasons and must NOT change the number — a score that quietly moves because
+        something else scored well is not auditable."""
+        alone, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.62), self.square_detection(),
+            self.flat_grid(1.0), None)
+        contested, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.62), self.square_detection(),
+            self.flat_grid(1.0), 0.90)
+        self.assertEqual(alone[0]["score"], contested[0]["score"])
+        self.assertTrue(any("no vessel was scorable" in r for r in alone[0]["reasons"]))
+        self.assertTrue(any("also remains plausible" in r for r in contested[0]["reasons"]))
+
+    def test_every_finding_declares_where_its_coordinate_came_from(self):
+        found, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.62), self.square_detection(),
+            self.flat_grid(1.0), None)
+        self.assertEqual(found[0]["declared_source"], "unit test")
+        self.assertTrue(any("declared case input" in r for r in found[0]["reasons"]),
+                        "the card has to say the position was looked up, not detected")
 
 
 if __name__ == "__main__":

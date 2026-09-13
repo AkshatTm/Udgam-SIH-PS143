@@ -46,6 +46,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import geo
+from infrastructure import INFRA_SCORE_FLOOR, find_infrastructure
 from tracks import MIN_POINTS, load_tracks
 
 HERE = Path(__file__).resolve().parent
@@ -81,10 +82,11 @@ EDGE_DEGREES         = 0.02   # "on the search-box boundary", ~2 km
 # ----------------------------------------------------------------------- abstention
 ABSTAIN_SCORE_FLOOR  = 0.25   # nothing scores convincingly
 ABSTAIN_TIE_FRACTION = 0.03   # top two indistinguishable
-ABSTAIN_MAX_VESSELS  = 40     # density too high to discriminate
+ABSTAIN_MAX_PLAUSIBLE_VESSELS = 40   # density too high to discriminate
 # NOTE the collision the master plan has not resolved: the abstain trigger on cloud
 # size is `radius_90_km > 40` (kilometres) and this one is 40 *vessels*. Two unrelated
-# 40s. Raised with Akshat; renaming one is his call, not something to fix silently.
+# 40s. The one on this side of the fence is now named for what it counts; renaming the
+# other is Akshat's call, since it comes from the plan and not from this file.
 
 TOP_N = 3
 MAX_EXCLUSIONS = 3
@@ -477,9 +479,29 @@ def clipped_feature(track, t0, t1, pad_hours=TRACK_PAD_HOURS):
 
 
 def build_outputs(scored, funnel, grid, abstained, abstain_reason):
+    """`suspects.json` per 6.7, plus three fields that are not in the schema yet.
+
+    `component_notes`, `weight_live` and `components_available` are all additive and
+    all exist for the same reason: **the score alone does not say how much evidence
+    stands behind it.**
+
+    When components are not applicable their weight is redistributed across the rest
+    (D9). That is the honest way to handle missing data, but the number that comes out
+    the other side looks identical whether it rested on seven signals or two. Measured
+    on a `gfw_hourly` fixture: a vessel scored **0.981 with a live weight of 0.35** —
+    proximity and type_prior only, five components unmeasurable. A card rendering
+    "0.98" with no caveat overstates that by a wide margin, and on the two `gfw_hourly`
+    cases it is the normal state rather than an edge case.
+
+    Emitting the numbers is not the fix — the fix is what the card shows, which is
+    Akshat's ruling and Harshita's layout. But the frontend cannot render what it has
+    not been given, so the data ships now and neither of them waits on me. Schema
+    amendment requested; if it is refused these three keys come out together.
+    """
     suspects = []
     for s in scored:
         t = s["track"]
+        applicable = sum(1 for c in s["components"].values() if c.applicable)
         suspects.append({
             "source_type": "vessel",
             "mmsi": t.mmsi,
@@ -489,6 +511,9 @@ def build_outputs(scored, funnel, grid, abstained, abstain_reason):
             "components": {k: (round(c.value, 3) if c.applicable else None)
                            for k, c in s["components"].items()},
             "component_notes": {k: c.note for k, c in s["components"].items()},
+            "weight_live": s["weight_live"],
+            "components_available": applicable,
+            "components_total": len(WEIGHTS),
             "closest_km": s["closest_km"],
             "closest_time": iso(s["closest_time"]),
             "grid_probability": s["grid_probability"],
@@ -514,13 +539,25 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--case", help="case id under cases/")
     g.add_argument("--case-dir", help="explicit path to a case bundle")
-    ap.add_argument("--parquet", required=True, help="output of ingest.py")
+    ap.add_argument("--parquet", help="output of ingest.py")
+    ap.add_argument("--no-ais", action="store_true",
+                    help="run without any AIS at all: fixed-source association only. For a "
+                         "case in a region no AIS archive we hold covers. Must be passed "
+                         "deliberately — it is never inferred from a missing --parquet, "
+                         "because a forgotten argument would otherwise silently produce a "
+                         "bundle that had considered no vessels.")
     ap.add_argument("--out-dir", help="where to write (default: the case bundle itself)")
     ap.add_argument("--top", type=int, default=TOP_N)
     ap.add_argument("--ranking", action="store_true",
                     help="print the full scored ranking, including when we abstain. "
                          "Diagnostics only — it never changes what is written.")
     a = ap.parse_args()
+
+    if bool(a.parquet) == bool(a.no_ais):
+        raise SystemExit(
+            "pass exactly one of --parquet or --no-ais.\n"
+            "  --parquet is the normal path. --no-ais says, deliberately and on the record,\n"
+            "  that no AIS archive covers this region, so no vessel can be considered at all.")
 
     case_dir = Path(a.case_dir) if a.case_dir else REPO / "cases" / a.case
     if not case_dir.is_dir():
@@ -538,9 +575,11 @@ def main():
             "Expected 'noaa_dense' or 'gfw_hourly'.")
 
     discharge_class = None
+    detections_doc = {}
     det_path = case_dir / "detections.geojson"
     if det_path.exists():
-        for f in json.loads(det_path.read_text(encoding="utf-8")).get("features", []):
+        detections_doc = json.loads(det_path.read_text(encoding="utf-8"))
+        for f in detections_doc.get("features", []):
             if (f.get("properties") or {}).get("classification") == "oil":
                 discharge_class = f["properties"].get("discharge_class")
                 break
@@ -551,43 +590,67 @@ def main():
     print(f"window        {iso(t0)} .. {iso(t1)}")
     print(f"ais_source    {ais_source}    discharge_class {discharge_class or '(none)'}")
 
-    tracks = load_tracks(a.parquet)
-    if not tracks:
-        raise SystemExit("no usable tracks in the parquet")
+    if a.no_ais:
+        # ------------------------------------------------- no AIS archive for this region
+        # Mumbai and Jamnagar sit outside NOAA Marine Cadastre, and Gulf of Alaska turns out
+        # to as well — every NOAA daily file stops near 50 N. Without an AIS source there is
+        # no vessel to consider, but the fixed-source and slick geometry are untouched by
+        # that, so Phase 4 still has everything it needs.
+        #
+        # The funnel goes to zeros because the validator compares the four counts and needs
+        # integers; nulls would not survive the monotonic check. That makes the counts the
+        # one place in this file where a zero is doing a null's job, so the claim is stated
+        # in `abstain_reason` instead, in words, where nothing can round it off: the counts
+        # are zero because nothing was searched, NOT because the water was empty. Do not let
+        # a card render "0 vessels in region" without that sentence next to it.
+        tracks, in_window, plausible = {}, [], []
+        in_region = dropped_short = 0
+        box = None
+    else:
+        in_window, plausible = [], []
+        tracks = load_tracks(a.parquet)
+        if not tracks:
+            raise SystemExit("no usable tracks in the parquet")
 
-    import duckdb
-    con = duckdb.connect()
-    n_all, west, east, south, north = con.execute(
-        "SELECT count(DISTINCT mmsi), min(lon), max(lon), min(lat), max(lat) "
-        "FROM read_parquet(?)", [str(a.parquet)]).fetchone()
-    con.close()
-    box = SearchBox(west, south, east, north)
+        import duckdb
+        con = duckdb.connect()
+        n_all, west, east, south, north = con.execute(
+            "SELECT count(DISTINCT mmsi), min(lon), max(lon), min(lat), max(lat) "
+            "FROM read_parquet(?)", [str(a.parquet)]).fetchone()
+        con.close()
+        box = SearchBox(west, south, east, north)
 
-    in_region = n_all
-    dropped_short = n_all - len(tracks)
+        in_region = n_all
+        dropped_short = n_all - len(tracks)
 
-    in_window, plausible = [], []
-    for t in tracks.values():
-        if t.end < t0 or t.start > t1:
-            continue
-        in_window.append(t)
+        for t in tracks.values():
+            if t.end < t0 or t.start > t1:
+                continue
+            in_window.append(t)
 
-    for t in in_window:
-        s = score_vessel(t, grid, t0, t1, ais_source, discharge_class, box)
-        if s and s["grid_probability"] > PLAUSIBLE_GRID_MIN:
-            plausible.append(s)
+        for t in in_window:
+            s = score_vessel(t, grid, t0, t1, ais_source, discharge_class, box)
+            if s and s["grid_probability"] > PLAUSIBLE_GRID_MIN:
+                plausible.append(s)
 
-    plausible.sort(key=lambda s: s["score"], reverse=True)
+        plausible.sort(key=lambda s: s["score"], reverse=True)
 
     # ------------------------------------------------------------------- abstention
     abstained, why = False, None
-    if grid.abstain:
+    if a.no_ais:
+        abstained, why = True, (
+            f"no AIS archive we hold covers this region, so no vessel was considered — the "
+            f"funnel counts are zero because nothing was searched, not because the water was "
+            f"empty. meta.json declares ais_source {ais_source!r}; that data was not "
+            f"obtainable for this case. Fixed-source association is unaffected and is "
+            f"reported below.")
+    elif grid.abstain:
         abstained, why = True, ("Stage 2 flagged the origin cloud as too diffuse to "
                                 "attribute at acceptable confidence")
-    elif len(plausible) > ABSTAIN_MAX_VESSELS:
+    elif len(plausible) > ABSTAIN_MAX_PLAUSIBLE_VESSELS:
         abstained, why = True, (f"{len(plausible)} vessels are plausible; above "
-                                f"{ABSTAIN_MAX_VESSELS} the search area is too crowded to "
-                                "discriminate between them")
+                                f"{ABSTAIN_MAX_PLAUSIBLE_VESSELS} the search area is too "
+                                "crowded to discriminate between them")
     elif not plausible:
         abstained, why = True, "no vessel entered the reconstructed origin during the window"
     elif plausible[0]["score"] < ABSTAIN_SCORE_FLOOR:
@@ -612,6 +675,16 @@ def main():
     }
 
     doc = build_outputs(top, funnel, grid, abstained, why)
+
+    # ---------------------------------------------------------------- fixed infrastructure
+    # Phase 4. This runs regardless of whether we abstained on vessels, and deliberately so:
+    # abstention says "these ships cannot be separated", which is not the same claim as "no
+    # vessel did it" and says nothing at all about a pipeline. Huntington is the case that
+    # makes the difference concrete — the scorer refuses to separate its top two vessels, and
+    # the correct finding there is still a fixed source.
+    best_vessel = plausible[0]["score"] if plausible else None
+    infra, infra_diag = find_infrastructure(meta, detections_doc, grid, best_vessel)
+    doc["infrastructure"] = infra
 
     # -------------------------------------------------------------------- exclusions
     pool = plausible[len(top):] if not abstained else plausible
@@ -667,6 +740,22 @@ def main():
     print(f"\nexclusions    {len(doc['excluded'])}")
     for e in doc["excluded"]:
         print(f"  - {e['name'] or e['mmsi']}: {e['reason']}")
+    print(f"\ninfrastructure {len(infra)} finding(s)   "
+          f"[{infra_diag['candidates']} candidate(s) declared, "
+          f"{infra_diag['termini']} terminus point(s) on the slick]")
+    for f in infra:
+        tkm = "n/a" if f["terminus_km"] is None else f"{f['terminus_km']:.2f} km"
+        print(f"  - {f['name']} ({f['kind']})  score {f['score']:.3f}   "
+              f"origin_p {f['origin_probability']:.2f}   terminus {tkm}")
+        for r in f["reasons"]:
+            print(f"      {r}")
+    for name in infra_diag.get("below_floor", []):
+        print(f"  - {name}: below the {INFRA_SCORE_FLOOR} floor, not reported")
+    if infra_diag["candidates"] == 0 and infra_diag["termini"]:
+        print("  no candidate declared in meta.json/infrastructure_candidates, so nothing is")
+        print("  named. Slick termini were computed and are available; a fixed point with no")
+        print("  declared structure behind it is water the drift model liked, not a finding.")
+
     print(f"\nwrote {out_dir / 'vessels.geojson'}  ({len(features)} tracks)")
     print(f"      {out_dir / 'suspects.json'}")
     print(f"\nNow run:  python scripts/validate_case.py {case_dir}")
