@@ -1191,7 +1191,21 @@ def main():
           f"elongation {round_band(elong_band)}")
     if combined is None:
         print(f"  age_hours = null   age_method = {method}")
-        print("  nothing fired -- the bounded time_window stands, and it is a BRACKET")
+        # READ the window's method, do not assume it. This line used to say "the bounded
+        # time_window stands, and it is a BRACKET" unconditionally -- which on
+        # case-jacksonville-2024 is simply false: its HYCOM is 3-hourly, the ensemble spread
+        # really does converge, and the window is measured. Announcing our own strongest
+        # available claim as our weakest one is a bad way to lose an argument on stage.
+        tw_method = (origin or {}).get("time_window_method", "bounded")
+        if tw_method == "convergence":
+            print("  nothing fired -- but the time_window on this case is MEASURED "
+                  "(method=convergence),")
+            print("  not a bracket. The release window stands on the ensemble's own "
+                  "convergence, not on")
+            print("  the rewind span minus eight hours. Say 'measured', not 'bounded'.")
+        else:
+            print(f"  nothing fired -- the time_window stands (method={tw_method}), "
+                  f"and it is a BRACKET")
     else:
         print(f"  age_hours = [{combined[0]:.1f}, {combined[1]:.1f}]   age_method = {method}")
         if method == "disagreement":
