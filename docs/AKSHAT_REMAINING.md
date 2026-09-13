@@ -307,6 +307,57 @@ open issues.*
 
 <!-- first entry here -->
 
+### 14 Sept (late) — every branch merged into `main`, then deleted
+
+**Done.** `origin` now carries **one branch, `main`.** Deleted tips, recorded so any of them can be
+restored with `git checkout -b <name> <sha>`:
+
+| branch | tip | what happened |
+|---|---|---|
+| `soum` | `e34509f` | merged whole — the Stage 1 accuracy programme, December work |
+| `harshita-latest` | `6f5b73f` | merged whole, plus the asset she left out |
+| `jaiveer-phase2` | `7132132` | ported and reconciled, not taken wholesale |
+| `akshat-takeover` | `5e00611` | already identical to `main` |
+
+- **Soum.** Additive and off the demo path: no `cases/`, no `web/`, no `models/*.pt`. Recorded in
+  the merge message so it is not misread later: **E1's "the channel fix buys nothing" is about
+  U-Net training** (tile IoU spread 0.0093 against fold noise 0.0599), *not* a contradiction of his
+  Phase 6.8 finding that the networks do transfer, which is what D33 and `DECK_NUMBERS.md` rest on.
+- **Harshita.** Land basemap under the SAR raster, origin at full opacity outside Trace,
+  `source_type`/`grid_probability` parsed, and "excluded" → "dropped" on the short-track line —
+  which was calling a sampling drop an exoneration. **She never committed the asset**:
+  `MapView.tsx` sources `/basemap/ne_110m_land.geojson`, which was in no branch and not gitignored,
+  so the map would have 404'd on every load. Fetched the exact Natural Earth file her comment
+  documents and verified it before committing (127 Polygon features, 135 KiB, `[lon, lat]`).
+- **Jaiveer.** He and I did **the same work independently** — D36, D37, the D28 gate, the exclusions
+  fix — from two implementations and two separate AIS extracts, and **the outputs agree exactly**.
+  That cross-check is now in the issue register and is worth a line on stage. His branch also had
+  two defects, both caught by measuring before shipping: the exclusion reason was **false** for
+  almost every vessel it applied to (0 of 23 on Jacksonville, 1 of 65 on Huntington; NAVAJO has 138
+  reports inside the window), and the list was **non-deterministic** (23 and 65 candidates against a
+  cap of 3, in dict order). Both fixed; the corrected sentence is the stronger evidence.
+
+**Result:** Farallones gains its first exclusion, so the library is at **5 warnings, down from 6** —
+three by design on the no-oil cases, plus Mumbai and Jamnagar having nobody to exclude.
+
+**Files touched:** `pipeline/attribute/{score,tests}.py` · `cases/case-{jacksonville-2024,farallones-2023,huntington-2021}/suspects.json` (regenerated) · `web/public/basemap/ne_110m_land.geojson` · `web/components/ContextPanel.tsx` · `docs/STAGE3_ISSUE_REGISTER.md`
+
+**Run command:**
+```bash
+python scripts/test_validator.py && python pipeline/attribute/tests.py
+python scripts/validate_case.py cases/ && python scripts/sync_web_cases.py --clean
+cd web && npx tsc --noEmit && npm run build
+```
+Expected: 26/26 · 105 tests OK · PASS on all 9 · 0 TS errors · compiled.
+
+**Open issues.**
+- Only **3 of 23** (Jacksonville) and **3 of 65** (Huntington) exclusions are shown, capped by
+  `MAX_EXCLUSIONS`. The funnel carries the true counts; a judge reading the card sees three. Display
+  fix, after the demo.
+- Everything else unchanged: **§1A verification prose is still the critical path**, then the demo
+  machine, the fallback video and the rehearsals.
+
+
 ### 14 Sept (late) — Jaiveer's remaining work, done here: AIS rebuilt, Phase 8, GFW
 
 **Done.**
