@@ -361,6 +361,51 @@ class SearchBox:
 
 # ------------------------------------------------------------------------- scoring
 
+def weighted_score(comps):
+    """(score, live_weight) over the applicable components only.
+
+    Renormalise across what could actually be measured. A component we could not measure
+    must not silently drag the score toward zero (D9).
+    """
+    live = sum(WEIGHTS[k] for k, c in comps.items() if c.applicable)
+    total = (sum(WEIGHTS[k] * c.value for k, c in comps.items() if c.applicable) / live
+             if live > 0 else 0.0)
+    return total, live
+
+
+def gate_constant_components(scored, names=("type_prior",)):
+    """D28: a component holding the SAME value for every scored candidate gates to `null`.
+
+    It separates nobody, so all it does is add its full weight to every score on screen.
+    `type_prior` is the case this was ruled for — it returned 1.00 for all 17 vessels in an
+    offshore lane, and on Farallones 1.00 for all three (a tanker and two cargo ships both map
+    to 1.0, so the gate is on the VALUE, not on the type string; that is also what the
+    validator checks).
+
+    Removing a constant is rank-preserving: every score becomes (S - w·c)/(1 - w), which is
+    monotonic in S. So this changes what the cards claim, never who is on them. Scores are
+    recomputed in place. Needs at least two scored candidates — one vessel cannot be constant.
+    """
+    if len(scored) < 2:
+        return []
+    gated = []
+    for name in names:
+        vals = [s["components"][name] for s in scored]
+        if not all(c.applicable for c in vals):
+            continue
+        if len({round(c.value, 6) for c in vals}) != 1:
+            continue
+        for s in scored:
+            s["components"][name] = Component.not_applicable(
+                f"every scored candidate scores {vals[0].value:g} here, so it separates "
+                f"nobody and is not counted (D28)")
+            total, live = weighted_score(s["components"])
+            s["score"] = round(min(1.0, max(0.0, total)), 3)
+            s["weight_live"] = round(live, 3)
+        gated.append(name)
+    return gated
+
+
 def score_vessel(track, grid, t0, t1, ais_source, discharge_class, box):
     """All seven components for one vessel, then the renormalised weighted sum."""
     prox, approach = component_proximity(track, grid, t0, t1)
@@ -378,11 +423,7 @@ def score_vessel(track, grid, t0, t1, ais_source, discharge_class, box):
         "type_prior": component_type_prior(track.vessel_type),
     }
 
-    # Renormalise over the applicable weights only. A component we could not measure
-    # must not silently drag the score toward zero.
-    live = sum(WEIGHTS[k] for k, c in comps.items() if c.applicable)
-    total = (sum(WEIGHTS[k] * c.value for k, c in comps.items() if c.applicable) / live
-             if live > 0 else 0.0)
+    total, live = weighted_score(comps)
 
     return {
         "track": track,
@@ -437,7 +478,8 @@ def exclusion_reason(s):
     if c["gap"].applicable and c["gap"].value == 0 and c["proximity"].value < 0.3:
         return "no transponder gap and continuous coverage through the window"
     if c["proximity"].applicable and c["proximity"].value < 0.15:
-        return "never entered the high-probability region of the origin"
+        return (f"never entered the high-probability region of the origin "
+                f"(peak grid probability {c['proximity'].value:.2f})")
     return None
 
 
@@ -605,11 +647,11 @@ def main():
         # in `abstain_reason` instead, in words, where nothing can round it off: the counts
         # are zero because nothing was searched, NOT because the water was empty. Do not let
         # a card render "0 vessels in region" without that sentence next to it.
-        tracks, in_window, plausible = {}, [], []
+        tracks, in_window, plausible, near_miss = {}, [], [], []
         in_region = dropped_short = 0
         box = None
     else:
-        in_window, plausible = [], []
+        in_window, plausible, near_miss = [], [], []
         tracks = load_tracks(a.parquet)
         if not tracks:
             raise SystemExit("no usable tracks in the parquet")
@@ -632,10 +674,25 @@ def main():
 
         for t in in_window:
             s = score_vessel(t, grid, t0, t1, ais_source, discharge_class, box)
-            if s and s["grid_probability"] > PLAUSIBLE_GRID_MIN:
+            if not s:
+                continue
+            if s["grid_probability"] > PLAUSIBLE_GRID_MIN:
                 plausible.append(s)
+            else:
+                # Scored, but it never touched non-negligible origin probability. These are
+                # the honest exclusions: the funnel dropped them for a stated, measured
+                # reason. Before this they were discarded here, so `excluded[]` could only
+                # ever hold plausible-but-unranked vessels -- and it came out empty on every
+                # real case, because every plausible vessel was also scored onto a card.
+                near_miss.append(s)
 
         plausible.sort(key=lambda s: s["score"], reverse=True)
+        near_miss.sort(key=lambda s: s["grid_probability"], reverse=True)
+        gated = gate_constant_components(plausible)
+        if gated:
+            plausible.sort(key=lambda s: s["score"], reverse=True)
+            print(f"[gate]  {', '.join(gated)} is constant across all "
+                  f"{len(plausible)} scored candidates -> null (D28)")
 
     # ------------------------------------------------------------------- abstention
     abstained, why = False, None
@@ -689,7 +746,10 @@ def main():
     doc["infrastructure"] = infra
 
     # -------------------------------------------------------------------- exclusions
-    pool = plausible[len(top):] if not abstained else plausible
+    # Plausible-but-unranked first (they competed and lost), then the near misses in
+    # descending grid probability (they were dropped by the funnel). Both carry a measured
+    # reason or they are not listed at all -- an exclusion without one is worse than none.
+    pool = (plausible[len(top):] if not abstained else list(plausible)) + near_miss
     for s in pool:
         r = exclusion_reason(s)
         if r:

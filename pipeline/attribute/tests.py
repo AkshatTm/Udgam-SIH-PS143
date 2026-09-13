@@ -783,6 +783,87 @@ class TestEvidenceBreadthReachesTheCard(unittest.TestCase):
                          "disagree the card is describing a different set than the score")
 
 
+class TestConstantComponentGate(unittest.TestCase):
+    """D28. A component with the same value for every scored candidate ranks nobody and
+    adds its full weight to every score on screen. Farallones shipped `type_prior` 1.00 for
+    all three suspects — a tanker and two cargo ships, different type strings, identical
+    value — so the gate is on the VALUE, which is also what the validator checks.
+
+    Hand-computed. Two vessels, all seven components live, everything 1.0 except proximity
+    (0.90 and 0.50) and a constant type_prior of 1.0. Removing a constant of weight 0.05:
+        before  A = 1 - 0.30*0.10 = 0.970          B = 1 - 0.30*0.50 = 0.850
+        after   A = (0.970 - 0.05) / 0.95 = 0.9684 B = (0.850 - 0.05) / 0.95 = 0.8421
+    Ranking is unchanged by construction: (S - w·c)/(1 - w) is monotonic in S.
+    """
+
+    def entry(self, proximity, type_prior):
+        comps = {k: score.Component(1.0, note="measured") for k in score.WEIGHTS}
+        comps["proximity"] = score.Component(proximity, note="measured")
+        comps["type_prior"] = score.Component(type_prior, note="measured")
+        total, live = score.weighted_score(comps)
+        return {"components": comps, "score": round(total, 3), "weight_live": round(live, 3)}
+
+    def test_a_constant_type_prior_gates_to_null_and_rescores(self):
+        a, b = self.entry(0.90, 1.0), self.entry(0.50, 1.0)
+        self.assertEqual(a["score"], 0.97)
+        self.assertEqual(score.gate_constant_components([a, b]), ["type_prior"])
+        self.assertFalse(a["components"]["type_prior"].applicable,
+                         "a component that separates nobody must reach the card as null")
+        self.assertIsNone(a["components"]["type_prior"].value)
+        self.assertAlmostEqual(a["score"], 0.968, places=3)
+        self.assertAlmostEqual(b["score"], 0.842, places=3)
+        self.assertAlmostEqual(a["weight_live"], 0.95, places=3)
+        self.assertIn("D28", a["components"]["type_prior"].note)
+
+    def test_the_gate_is_rank_preserving(self):
+        a, b = self.entry(0.90, 1.0), self.entry(0.50, 1.0)
+        before = a["score"] > b["score"]
+        score.gate_constant_components([a, b])
+        self.assertEqual(before, a["score"] > b["score"],
+                         "removing a constant must never reorder the suspects")
+
+    def test_a_discriminating_component_is_left_alone(self):
+        a, b = self.entry(0.90, 1.0), self.entry(0.50, 0.5)
+        self.assertEqual(score.gate_constant_components([a, b]), [])
+        self.assertTrue(a["components"]["type_prior"].applicable)
+        self.assertEqual(a["score"], 0.97, "a live component must not be rescored")
+
+    def test_one_candidate_alone_is_never_constant(self):
+        a = self.entry(0.90, 1.0)
+        self.assertEqual(score.gate_constant_components([a]), [],
+                         "a single vessel cannot tell you a component discriminates nothing")
+        self.assertTrue(a["components"]["type_prior"].applicable)
+
+
+class TestExclusionReason(unittest.TestCase):
+    """An exclusion without a stated reason is worse than no exclusion, and an empty
+    `excluded[]` is a demo requirement missed. Every real case shipped one until 14 Sept,
+    because the pool only ever held plausible-but-unranked vessels and every plausible
+    vessel was also scored onto a card. The near misses — scored, but below the funnel's
+    grid-probability floor — are the honest source, and they carry the measurement.
+    """
+
+    def entry(self, **vals):
+        comps = {k: score.Component(1.0, note="measured") for k in score.WEIGHTS}
+        for k, v in vals.items():
+            comps[k] = (score.Component.not_applicable("n/a") if v is None
+                        else score.Component(v, note="measured"))
+        return {"components": comps}
+
+    def test_a_near_miss_reason_quotes_the_measured_probability(self):
+        r = score.exclusion_reason(self.entry(proximity=0.02, trajectory=1.0, gap=1.0))
+        self.assertIsNotNone(r)
+        self.assertIn("0.02", r, "the card has to show what was measured, not just a verdict")
+
+    def test_heading_away_wins_over_the_proximity_reason(self):
+        r = score.exclusion_reason(self.entry(proximity=0.02, trajectory=0.0))
+        self.assertEqual(r, "heading away from the origin throughout the window")
+
+    def test_a_strong_candidate_gets_no_exclusion_reason(self):
+        self.assertIsNone(score.exclusion_reason(
+            self.entry(proximity=0.9, trajectory=1.0, gap=1.0)))
+
+
 class TestInfrastructure(unittest.TestCase):
     """Phase 4. Hand-computed geometry: a square slick 0.02 deg on a side at the equator-ish
     latitude 33.6, so the arithmetic is checkable on paper rather than read back out of the

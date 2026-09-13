@@ -16,7 +16,7 @@
   },
 
   "naap_result": {
-    "origin_summary": "Trace seeded from det-01 (2.64 km², the only oil feature). Origin cloud centred at 33.59454 N, 118.05190 W after a ~6.2 km median rewind, peak 0.2 km from the centroid. r50 1.35 km, r90 2.46 km (ensemble precision). Release window measured by convergence: 2021-10-01 17:41Z to 19:58Z. Wind share 0.38. The origin peak is 6.75 km from NTSB's casualty location (33°34.20' N, 118°7.26' W), which lies outside the origin grid. Stage 3: 106 in region → 75 in window → 5 plausible, abstained on vessels (top two inseparable). The declared San Pedro Bay Pipeline scored below the 0.25 infrastructure floor, so no infrastructure finding.",
+    "origin_summary": "Trace seeded from det-01 (2.64 km², the only oil feature). Origin cloud centred at 33.59454 N, 118.05190 W after a ~6.2 km median rewind, peak 0.2 km from the centroid. r50 1.35 km, r90 2.46 km (ensemble precision). Release window measured by convergence: 2021-10-01 17:41Z to 19:58Z. Wind share 0.38. The origin peak is 6.75 km from NTSB's casualty location (33°34.20' N, 118°7.26' W), which lies outside the origin grid. Stage 3: 106 in region → 75 in window → 5 plausible, abstained on vessels (top two 0.730 vs 0.729, inseparable). Three vessels were excluded with stated reasons: one never entered the high-probability region (peak grid probability 0.02), two were heading away from the origin throughout the window. The declared San Pedro Bay Pipeline scored below the 0.25 infrastructure floor, so no infrastructure finding.",
     "top_suspects": [],
     "abstained": true
   },

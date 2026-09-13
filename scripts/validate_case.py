@@ -754,7 +754,14 @@ def check_suspects(d, known_mmsi, origin, box=None, ais_source=None):
                 continue
             if not all(isinstance(v, (int, float)) for v in vals):
                 continue
-            if len(set(vals)) == 1:
+            # A constant ZERO is exempt, and deliberately (14 Sept). It separates nobody
+            # either, but it cannot inflate anything: it contributes nothing to the numerator
+            # while keeping its weight in the denominator, so it holds every score DOWN by the
+            # same factor. It is also a real measurement — Farallones' slowdown 0.0 says no
+            # vessel slowed, which is evidence, not a missing value. Gating it to null would
+            # RAISE every score on the case, which is the direction no automated advice should
+            # ever push. Non-zero constants stay a warning: those are the inflating kind.
+            if len(set(vals)) == 1 and vals[0] != 0:
                 warn(f"suspects.json: components.{cname} is {vals[0]} for all {len(scored)} "
                      "scored suspects — it separates nobody, so it only inflates every score "
                      "by its weight. Gate it to null instead (D28).")
@@ -767,7 +774,11 @@ def check_suspects(d, known_mmsi, origin, box=None, ais_source=None):
         if not str(ex["reason"]).strip():
             err(f"suspects.json/excluded[{i}]: reason must not be empty — "
                 "exoneration without a reason is worse than no exoneration")
-    if not s["excluded"]:
+    # No exclusions is a demo-requirement miss — EXCEPT where nothing was searched. On a case
+    # with no AIS archive the funnel is all zeros and there is no vessel to exonerate; demanding
+    # an exclusion there would be asking for a name we have no data behind (Mumbai, D20).
+    searched = (s.get("funnel") or {}).get("in_region")
+    if not s["excluded"] and searched:
         warn("suspects.json: no excluded vessels; at least one exclusion is a demo requirement")
     if origin and origin.get("abstain") and s["suspects"]:
         err("suspects.json: origin.json has abstain=true, so suspects must be empty")
