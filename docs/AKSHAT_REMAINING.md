@@ -31,7 +31,7 @@ after the demo, before December.
   git check-ignore docs/ANSWERS.md            # must print the path, never commit it
   ```
   Then commit, PR to `main`, merge.
-- [ ] **P0 — Ask Jaiveer to re-score** Jacksonville, Farallones, Huntington and Mumbai with the
+- [x] **P0 — ~~Ask Jaiveer to re-score~~ DONE 14 Sept without him: AIS rebuilt from the public NOAA archive, all three re-scored.** Jacksonville, Farallones, Huntington and Mumbai with the
   current `score.py`. That puts peak-based `closest_km` (D36) and the D37 fields into the
   committed bundles; the data is on his laptop only. Mumbai uses `--no-ais`. It clears the D37
   warnings.
@@ -297,6 +297,35 @@ Condensed checklist (full version: `docs/_archive/harshita/05_HARSHITA_INTEGRATI
 open issues.*
 
 <!-- first entry here -->
+
+### 14 Sept (late) — Jaiveer's remaining work, done here: AIS rebuilt, Phase 8, GFW
+
+**Done.**
+- **AIS is no longer a dependency.** `data/ais/*.parquet` existed only on Jaiveer's laptop; rebuilt from the public NOAA Marine Cadastre archive in ~4 minutes (six daily files, ~2 GB, no auth). **Jacksonville and Huntington reproduce his funnel and ranking exactly**, which is the check that the rebuild is faithful.
+- **Three cases re-scored.** Jacksonville's suspects are **1.30 and 1.13 km from the origin peak** (was 10.2/10.1 to the centroid, D36); D37 fields land; Jacksonville is now **0 warnings**.
+- **D28 implemented** — it was in the contract but never in the code. Farallones' `type_prior` (1.0 for a tanker and two cargo ships) now gates to null; scores fall to 0.620/0.345/0.046, rank preserved by construction.
+- **Exclusions exist for the first time.** The pool only ever held plausible-but-unranked vessels, which was empty on every case. It now draws on the near misses the funnel dropped, with the measured grid probability in the reason. Jacksonville 1, Huntington 3.
+- **Validator:** a constant **zero** no longer warns (it cannot inflate a score, and gating it would raise every score on the case); cases where nothing was searched are exempt from the exclusion warning.
+- **Phase 8 shipped** (`pipeline/attribute/evaluate.py`, `docs/STAGE3_PHASE8.md`, **D39**). Offshore top-1 **0.910** [0.87–0.94]; **0.488** on hourly AIS; **1.000** perfect cloud vs **0.653** at one r90 of error; **0.556** against an offender with no behavioural signature; in port with a 25 km cloud **111 of 150 trials abstain**. Ablation answers **A5** (`trajectory` −0.051, it contributes) and **A6** (`type_prior` −0.024, inert), and shows **removing `gap` improves top-1 by 0.143** when the offender does not go dark (A2 at scale).
+- **D40: the Indian cases have real AIS.** GFW's 4wings report *does* return per-vessel hourly positions; we had ruled it out on a documentation sentence without issuing the request. `ingest_gfw.py` writes the same parquet schema. Mumbai 9 vessels / 31 vessel-hours, Jamnagar 8 / 43 — both abstain because **no vessel entered the origin cloud**, a searched negative rather than "nothing was searched". **Jamnagar gains `attribute`.**
+
+**Files touched:** `pipeline/attribute/{score,evaluate,ingest_gfw,tests}.py` · `scripts/{validate_case,gfw_probe}.py` ·
+`cases/case-{jacksonville,farallones,huntington,mumbai,jamnagar}/*` · `docs/{00_MASTER_PLAN,STAGE3_PHASE8,STAGE3_ISSUE_REGISTER,DECK_NUMBERS,receipts}.md` · `verification/*.json`
+
+**Run command:**
+```bash
+bash <scratchpad>/get_ais.sh                                     # rebuilds the three NOAA parquets
+python pipeline/attribute/ingest_gfw.py --case case-mumbai-2023 --out data/ais/mumbai.parquet
+python pipeline/attribute/evaluate.py --parquet data/ais/jacksonville.parquet --trials 300
+python scripts/test_validator.py && python pipeline/attribute/tests.py && python scripts/validate_case.py cases/
+```
+Expected: 26/26, 100 tests OK, PASS on all 9 (6 warnings, 3 of them by design on no-oil cases).
+
+**Open issues.**
+- **F1 (new, HIGH):** `MIN_POINTS=5` means five *hours* of presence at hourly sampling and drops the one Mumbai vessel that reached the origin cloud (grid probability 0.069 at 5.0 km). **Deliberately not changed** — Mumbai's sealed record names no AIS vessel, so relaxing it now would be tuning with the answer in view. Rule after the demo, validated on the Phase 8 curve.
+- Verification prose for six cases is still the critical path, and no case has `verify` yet.
+- Two harness bugs found and fixed by their own tests, worth remembering: the first offender generator made every offender a tanker (inflating `type_prior` to −0.100), and the Phase 8 mass radii were ordered by probability rather than distance (clouds ~3× their label, r50 > r90).
+
 
 ### 14 Sept — §0–§2: rulings D38, seed notes, claims, verification prep (Claude, parallel to the §3 session)
 
