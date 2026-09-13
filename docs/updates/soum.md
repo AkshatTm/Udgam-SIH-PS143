@@ -15,6 +15,196 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-14 01:20] Phase 7.2 — E8a: the ceiling verified, and 0.85 looks reachable after all
+
+**Done:** Plan E8a. `pipeline/detect/oracle_ceiling.py`, run over 228 Parts I+II oil scenes.
+**No Part III pixel was read** — the ceiling is measured on the training halves and re-weighted
+by Part III's band oil-mass, so the holdout stays untouched.
+
+### The ceiling reproduces independently: **0.8446** (planning agent: 0.838)
+
+The oracle cheats in exactly one way — it takes the sea reference **from the GT mask**.
+Everything else is deliberately stupid: one band, one Gaussian blur (σ=3), one global threshold
+(best: sea − 2.25σ), no texture, no shape, no context, nothing learned.
+
+| band | n | oracle IoU | P3 oil mass | weighted |
+|---|---|---|---|---|
+| 0–1% | 61 | 0.4387 | 0.0071 | 0.0031 |
+| 1–3% | 59 | 0.6601 | 0.0509 | 0.0336 |
+| 3–10% | 60 | 0.7429 | 0.1949 | 0.1448 |
+| 10–30% | 39 | 0.8123 | 0.3643 | 0.2959 |
+| ≥30% | 9 | **0.9590** | 0.3829 | 0.3672 |
+| | | | **CEILING** | **0.8446** |
+
+Top two bands agree closely with the agent's figures (0.812 vs 0.827; 0.959 vs 0.961) and they
+carry the weight. The light bands differ more but are worth 0.7% and 5.1% of the metric.
+
+### The finding that changes the outlook
+
+| band | ours (Part III) | oracle | beats oracle? |
+|---|---|---|---|
+| 0–1% | 0.6685 | 0.4387 | **YES** |
+| 1–3% | 0.7566 | 0.6601 | **YES** |
+| 3–10% | 0.7826 | 0.7429 | **YES** |
+| 10–30% | 0.6595 | 0.8123 | no |
+| **≥30%** | **0.0848** | **0.9590** | no |
+
+**The model already beats a GT-informed threshold on three of five bands.** It is not broadly
+weak. It fails precisely and only where the normalisation is broken — the two bands holding
+**74.7%** of Part III's oil mass.
+
+Arithmetic, if the fix lands those two bands on their ceilings:
+
+```
+pooled today (band-weighted reconstruction)  0.4685   (measured 0.4349)
+if the top two bands reach their ceilings    0.8589
+full oracle everywhere                       0.8446
+```
+
+**0.8589 is above the 0.85 target**, and above the full-oracle figure, because we out-perform
+the oracle in the light bands. **This revises the plan's ~15% estimate for reaching 0.85 sharply
+upward** — the plan assumed we could not reach the heavy-band ceilings; it did not notice we
+already beat the oracle everywhere the data is adequate.
+
+**It is a projection, not a measurement, and it is conditional.** It assumes the fix matches a
+GT-informed threshold in both heavy bands, which is demanding. The ≥30% ceiling rests on 9
+scenes. And the "ours" column is Part III while the oracle is Parts I+II, so the populations
+differ slightly.
+
+### Boundary decomposition — where the ceiling comes from
+
+Share of oracle error lying within m px of the GT boundary:
+
+| band | 2px | 5px | 10px | 15px |
+|---|---|---|---|---|
+| 1–3% | 0.31 | 0.67 | 0.86 | 0.90 |
+| 3–10% | 0.29 | 0.63 | 0.83 | 0.88 |
+| 10–30% | 0.37 | 0.63 | 0.77 | 0.83 |
+| **≥30%** | **0.56** | **0.81** | 0.89 | 0.92 |
+
+At ≥30% coverage, **81% of the oracle's residual error is within 5 px of the annotator's line**
+— that band's 0.959 is already annotation-limited, and no method will do much better there. The
+0–1% band is the opposite (0.19 at 5 px): its errors are whole missed objects, not edges, which
+is why the oracle scores 0.44 there and we score 0.67.
+
+**Next:** E1 — the channel-order fix and the augmentation ablation, which is the cheapest
+remaining item and the one with a fast read-out (max probability on easy positive tiles should
+move from ~0.85 toward >0.97).
+
+---
+
+## [2026-09-13 23:55] Phase 7.1 — accuracy programme, Week 1: both gates pass
+
+**Done:** Plan E0 and E2's safety gate. No cache rebuilt, no model retrained, nothing in
+`cases/` touched. New files: `pipeline/detect/normalise.py`, `split.py`, `evaluate_val.py`.
+
+### E2 gate — PASS, on the fifth attempt
+
+Final audit, all 2,570 Parts I+II scenes:
+
+| population | n | p99 \|Δref\| | med scale × | p99 scale × |
+|---|---|---|---|---|
+| no oil | 1200 | 5.33 | 1.000 | 2.921 |
+| 0–1% | 356 | **0.000** | **1.000** | **1.000** |
+| 1–3% | 501 | **0.000** | **1.000** | **1.000** |
+| 3–10% | 295 | **0.000** | **1.000** | **1.000** |
+| 10–30% | 39 | 0.000 | 1.000 | 1.803 |
+| **≥30%** | 9 | **4.988** | **2.219** | **4.127** |
+
+The 93% that already work are untouched in both reference and scale; the target band moves
+hard; no overridden reference lands off the ocean.
+
+**The headline mechanism is a SCALE error, not a reference error.** The plan framed this as
+"the slick becomes its own median". That is true for only **4 of the 12** failing Part III
+scenes (>50% coverage). For the other **8** the median is still in the sea and the scale is
+1.8×–4.2× too wide, compressing normalised contrast to ~40% of true. Both are now handled,
+separately: `full-override` when the dark mode is genuinely the majority, `scale-only`
+otherwise — and scale-only cannot move a reference onto land, which is most of the safety.
+
+### Four of the five gate failures were my measurement, not the fix
+
+Worth recording, because it re-prices the remaining plan items:
+
+1. Iterative sigma-clipping cannot escape a dark mode that **is** the bulk — 99.6% kept,
+   converged in one iteration at −31.74 dB against a true sea of −27.00. **Real design flaw**,
+   caught by the self-test before it ever touched data.
+2. The brightness land mask **ate the sea**: 31–65% of a land-free majority-oil scene flagged
+   as land, because its reference is the p20 of local means, which sits inside the slick once
+   oil is the bulk. **Real bug.** Modes collapsed 2→1 on seven of nine and the fix silently
+   stopped firing on exactly the scenes it exists for.
+3. My gate measured only the reference shift — could never pass, see above. **My error.**
+4. My gate demanded no-oil scenes never move. Wrong in conception: a large dark patch is what
+   *makes* a look-alike, so a coverage-adaptive estimator is supposed to re-reference them.
+   **My error.**
+5. My leak check tested references the estimator had never touched, flagging bands whose
+   measured shift was 0.000. **My error.**
+
+Before the coastline fix I tried and **falsified four discriminators**, all measured: MAD-ratio
+roughness (land 0.27–0.97, overlapping), a shift cap (swept 9→5 dB, never separates), local
+texture (land 2.11, oil 1.94, ocean 1.41), and land-mask coverage (a clean-ocean scene scored
+67.7%). The answer was not a threshold: **use a real coastline.** `global-land-mask==1.0.0` was
+already pinned at `requirements.txt:62` and merely uninstalled, so this adds no dependency.
+
+**Plan estimate was off by an order of magnitude** — E2's "~15 min safety check" took a day.
+Price the remaining E-items accordingly.
+
+### E0 gate — the proxy is faithful, and is NOT a Part III predictor
+
+Old split gave validation **1** scene ≥30% and **3** at 10–30%, out of 190 — blind to ~75% of
+Part III's oil mass. `split.py` gives 3 and 6, with the 9 large-slick scenes rotated over 3
+folds. Re-scoring the shipped checkpoint (fold 0, 387 held-out scenes):
+
+pooled **0.6350**, CI [0.523, 0.744], macro/scene 0.6945, mean IoU 0.8108
+
+| band | n | IoU |
+|---|---|---|
+| 0–1% | 53 | 0.6120 |
+| 1–3% | 75 | 0.7047 |
+| 3–10% | 44 | 0.7865 |
+| 10–30% | 6 | 0.8832 |
+| **≥30%** | **3** | **0.1714** |
+
+The failure signature reproduces unmistakably — a 5× cliff into the top band. But pooled 0.635
+is **not** comparable to Part III's 0.435: only 3 scenes sit in the collapsed band here versus
+12 there, so it carries far less pooled weight, and 10–30% is genuinely easier on this
+population (0.883 vs 0.660). **Use this metric for measuring change, never for predicting the
+Part III value**, and do not quote a val delta as a Part III delta.
+
+**3-fold rotation result — and the measurement floor is uncomfortably high.**
+
+| fold | pooled | 95% CI | ≥30% band (n=3) |
+|---|---|---|---|
+| 0 | 0.6350 | [0.523, 0.744] | **0.1714** |
+| 1 | 0.6252 | [0.493, 0.760] | **0.2737** |
+| 2 | 0.6851 | [0.589, 0.761] | **0.4286** |
+| | mean **0.6484**, spread **0.0599** | | mean ~0.29, range **0.257** |
+
+Every other band is identical across folds (0.6120 / 0.7047 / 0.7865 / 0.8832), which confirms
+the rotation touches only the ≥30% assignment as intended. But that band swings **0.17 to 0.43
+on three scenes** — a 2.5× range. **Nothing below ~0.06 pooled, or a large move in the ≥30%
+band, is measurable on this proxy.** The expected effect (a 2.2× scale correction) should clear
+that comfortably; a modest one would not be distinguishable from fold noise.
+
+**⚠ The baseline ≥30% numbers above are LEAKY and flatter the baseline.** The shipped checkpoint
+was trained with the old `train_test_split(uniq, 0.15, random_state=42)`, which put **8 of the 9**
+≥30% scenes into training. So most of what fold 0/1/2 "hold out" was in that model's training
+set — and it still scores 0.17–0.43, which is the point. Every retrained model from here must use
+`split.py`, or the comparison is not like-for-like.
+
+### Dataset findings worth knowing independently of any retrain
+
+- **170 of 1,370 non-oil scenes (12.4%) are entirely land** once a real coastline is applied.
+  Look-alike rejection of 0.940 is partly measured on farmland. That is the third land scene
+  after `No oil/00091` (already replaced as a demo case) and `No oil/00487` (100% land).
+- Every Zenodo tile **is** georeferenced (EPSG:4326, real geotransform) — `land_mask_geo.py`'s
+  claim that "the Zenodo scenes have no reliable land information" is false and should be
+  corrected when that file is next touched.
+
+**Next:** E8a (re-verify the 0.838 oracle independently — the ceiling claim the whole plan
+leans on), then the E1 channel-fix ablation.
+
+---
+
 ## [2026-09-13 22:15] Phase 6.8 — the networks DO transfer. It was a channel-order bug, and I had it wrong.
 
 **Akshat asked whether he needed to re-export the cases in Zenodo's format. The answer is no — his
