@@ -1,0 +1,32 @@
+# OpenDrift — Phase 7 / 8.4 comparison ONLY. Deliberately NOT in the project requirements.txt.
+#
+# Approved out of requirements by Akshat, 13 Sept 2026, on condition the version is pinned next
+# to the script. This file is that pin.
+#
+# WHY IT IS SEPARATE
+#   It pulls ~90 packages including Cartopy, netCDF4, xarray, dask, zarr, boto3 and copernicusmarine.
+#   Nothing in the demo path imports it. It is a comparison tool used to produce one number for the
+#   deck (8.4), not a runtime dependency of Stage 2 — installing it on a demo machine would add
+#   minutes and several hundred MB for no runtime benefit, and a failure inside it would look like
+#   a Stage 2 failure.
+#
+# THE VERSION MATTERS, it is not decoration
+#   8.4's numbers were produced against exactly this build. Two behaviours we depend on are
+#   version-specific and both are silent if they change:
+#     - results arrive on `.result` as an xarray Dataset (<=1.12 used `.history`)
+#     - `drift:advection_scheme` accepts "runge-kutta4"; the DEFAULT is "euler", so an unpinned
+#       upgrade that renamed or reordered schemes would quietly compare our RK2 against Euler
+#       and report a disagreement that is a config difference, not a physics one.
+#
+# INSTALL (a throwaway venv, never the project venv)
+#   python -m venv odenv
+#   odenv/bin/pip install -r pipeline/drift/requirements-opendrift.txt
+#   odenv/bin/python pipeline/drift/compare_opendrift.py --case case-jacksonville-2024
+#
+# `pip install opendrift` needs a recent setuptools for the awesome-slugify transitive
+# dependency, and the wheel set is large enough that a short pip timeout will fail the download
+# mid-way. Both are environment issues, not OpenDrift ones.
+
+opendrift==1.14.12      # reports __version__ 1.14.11; 8.4 was measured on this build
+scipy>=1.11             # compare_opendrift.py uses cKDTree for the particle pairing proof
+netCDF4>=1.6            # writing the CF field files OpenDrift reads

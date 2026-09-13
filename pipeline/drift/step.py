@@ -159,7 +159,7 @@ def integrate_stranding(positions, t0, field, n_steps, timestep_minutes=15,
 
     Deliberately a SEPARATE function rather than a flag on integrate(). integrate() is called
     from run.py, tests.py, age.py, geo_tests.py and ensemble.run_once; changing its return
-    arity late in integration to add an optional feature is how a working component
+    arity three days before a freeze to add an optional feature is how a working component
     stops working. This one is additive and nothing that exists has to change.
 
     Stranding is STICKY. Once a particle touches land it stops and stays stopped, and it is
@@ -364,12 +364,31 @@ def displacement_km(start, end):
     return np.hypot(dx, dy) / 1000.0
 
 
-def assert_displacement_plausible(start, end, hours, lo_km=5.0, hi_km=200.0):
-    """Over 48 h a drifting parcel covers between 5 and 200 km. Metres means the field is
-    dead or the timestep is wrong; thousands of km means a units bug."""
+def assert_displacement_plausible(start, end, hours, lo_km=5.0, hi_km=None):
+    """A drifting parcel covers at least ~5 km per 48 h, and never more than the fastest water
+    the plausibility guard already allows. Metres means the field is dead or the timestep is
+    wrong; thousands of km means a units bug.
+
+    THE CEILING IS DERIVED, NOT A MAGIC NUMBER, and the old one was wrong for this library.
+    It was a flat 200 km per 48 h -- an implied maximum speed of **1.16 m/s**. That is fine for
+    Ennore at 0.3-1.1 m/s and it REFUSES THE GULF STREAM: `case-jacksonville-2024` measures a
+    24 h median displacement of 148.7 km at 1.71 m/s, which is exactly the physics the brief
+    predicts for that case ("the Gulf Stream at 2.0 m/s covers 173 km in 24 h", A3). The guard
+    was calibrated on the first case in the library and then met the second.
+
+    So the ceiling now comes from `MAX_PLAUSIBLE_SPEED_MS` -- the SAME constant the speed guard
+    and the HYCOM units check use. One definition of "physically possible water", applied in
+    three places, instead of three numbers that can disagree. At 3.0 m/s that is 259 km per
+    24 h, so Jacksonville passes and the x10 units bug this exists to catch (which would report
+    ~1487 km) still does not.
+    """
     d = displacement_km(start, end)
-    scale = float(hours) / 48.0
-    lo, hi = lo_km * scale, hi_km * scale
+    if hi_km is None:
+        hi = MAX_PLAUSIBLE_SPEED_MS * 3.6 * float(hours)
+        lo = lo_km * float(hours) / 48.0
+    else:
+        scale = float(hours) / 48.0
+        lo, hi = lo_km * scale, hi_km * scale
     median = float(np.median(d))
     if median < lo:
         raise ImplausibleDrift(
@@ -378,5 +397,6 @@ def assert_displacement_plausible(start, end, hours, lo_km=5.0, hi_km=200.0):
     if median > hi:
         raise ImplausibleDrift(
             f"median displacement {median:.1f} km over {hours:.1f} h exceeds the {hi:.1f} km "
-            f"ceiling -- almost certainly a units bug (docs/TRAPS.md #2).")
+            f"ceiling ({MAX_PLAUSIBLE_SPEED_MS:.1f} m/s sustained) -- almost certainly a units "
+            f"bug (docs/TRAPS.md #2).")
     return median

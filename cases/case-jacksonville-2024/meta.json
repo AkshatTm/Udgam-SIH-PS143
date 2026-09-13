@@ -7,7 +7,8 @@
   "scene_id": "S1A_IW_GRDH_1SDV_20240730T232129_20240730T232154_054997_06B32C_7973",
   "detection_time": "2024-07-30T23:21:29Z",
   "acts_available": [
-    "detect"
+    "detect",
+    "trace"
   ],
   "ais_source": "noaa_dense",
   "gallery": {

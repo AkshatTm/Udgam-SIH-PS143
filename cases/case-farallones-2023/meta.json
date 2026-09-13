@@ -1,13 +1,14 @@
 {
   "case_id": "case-farallones-2023",
-  "title": "Pacific approach — off the Farallon Islands",
+  "title": "Pacific approach \u00e2\u20ac\u201d off the Farallon Islands",
   "short_location": "US Pacific EEZ, west of San Francisco, California",
   "case_type": "spill",
   "satellite": "Sentinel-1A",
   "scene_id": "S1A_IW_GRDH_1SDV_20230317T142442_20230317T142507_047685_05BA4D_AFD8",
   "detection_time": "2023-03-17T14:24:42Z",
   "acts_available": [
-    "detect"
+    "detect",
+    "trace"
   ],
   "ais_source": "noaa_dense",
   "gallery": {
@@ -15,5 +16,5 @@
     "blurb": "Different ocean, different year, same pipeline. Does the method hold?",
     "difficulty": "medium"
   },
-  "notes": "Second basin — the case that proves case 1 was not a fluke, and the hero backup if offshore AIS coverage fails at Jacksonville. Target acts: detect, trace, attribute, verify. Export box -124.0113 37.7094 -123.8013 37.8895, 82% inside the scene footprint (the footprint edge cuts the east side; shifting east made it worse, so the box is tightened instead), dB clamp [-28, -14]. cerulean_slick.geojson is Cerulean slick 3687325 (19.63 km, 3.85 km2, model confidence 0.929) — comparison target, not ground truth. CARE: this Sentinel-1 scene carries at least four separate Cerulean slicks, including two much larger ones (126 km and 76 km) and another on the adjacent 14:24:17 frame. Ours is the 19.6 km feature. If Stage 1 returns a detection an order of magnitude larger, it has found a different slick, not a better one — check the geometry before assuming a segmentation bug."
+  "notes": "Second basin \u00e2\u20ac\u201d the case that proves case 1 was not a fluke, and the hero backup if offshore AIS coverage fails at Jacksonville. Target acts: detect, trace, attribute, verify. Export box -124.0113 37.7094 -123.8013 37.8895, 82% inside the scene footprint (the footprint edge cuts the east side; shifting east made it worse, so the box is tightened instead), dB clamp [-28, -14]. cerulean_slick.geojson is Cerulean slick 3687325 (19.63 km, 3.85 km2, model confidence 0.929) \u00e2\u20ac\u201d comparison target, not ground truth. CARE: this Sentinel-1 scene carries at least four separate Cerulean slicks, including two much larger ones (126 km and 76 km) and another on the adjacent 14:24:17 frame. Ours is the 19.6 km feature. If Stage 1 returns a detection an order of magnitude larger, it has found a different slick, not a better one \u00e2\u20ac\u201d check the geometry before assuming a segmentation bug."
 }
