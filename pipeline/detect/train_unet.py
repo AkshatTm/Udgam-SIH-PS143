@@ -188,7 +188,7 @@ def _gaussian_blur(x, sigma):
     return F.conv2d(x, k.view(1, 1, -1, 1).expand(c, 1, -1, 1), padding=(r, 0), groups=c)
 
 
-def augment(x, y, domain=True):
+def augment(x, y, domain=True, xpol_ch=1, xpol_p=0.25):
     """Geometric augmentation, plus DOMAIN augmentation when domain=True.
 
     WHY THE DOMAIN HALF EXISTS — read the first training curve before changing
@@ -243,11 +243,16 @@ def augment(x, y, domain=True):
             c0 = int(torch.randint(0, max(1, w - bw), (1,)).item())
             x[:, :, r0:r0 + bh, c0:c0 + bw] = 0.0
             y[:, r0:r0 + bh, c0:c0 + bw] = 0.0      # no image, no oil to find
-    if torch.rand(1).item() < 0.25 and x.shape[1] >= 2:
+    # Cross-pol dropout. THE CHANNEL MATTERS: cache channel 0 is read(1) = VH and
+    # channel 1 is read(2) = VV, so the historical default of 1 corrupts the CO-POL
+    # channel — the only one carrying oil signal — in 25% of steps. Parameterised
+    # rather than silently corrected so the ablation can measure what it was worth.
+    if torch.rand(1).item() < xpol_p and x.shape[1] >= 2:
+        other = 1 - xpol_ch
         if torch.rand(1).item() < 0.5:
-            x[:, 1] = torch.randn_like(x[:, 1]) * 0.15
+            x[:, xpol_ch] = torch.randn_like(x[:, xpol_ch]) * 0.15
         else:
-            x[:, 1] = x[:, 0]
+            x[:, xpol_ch] = x[:, other]
     return x, y
 
 
@@ -272,6 +277,24 @@ def main():
     ap.add_argument("--gamma", type=float, default=2.0)
     ap.add_argument("--patience", type=int, default=6)
     ap.add_argument("--no-amp", action="store_true")
+    ap.add_argument("--xpol-channel", type=int, default=1, choices=(0, 1),
+                    help="which channel the cross-pol dropout corrupts. DEFAULT 1 IS THE "
+                         "BUG: cache channel 1 is read(2), the CO-POL channel, verified "
+                         "from the manifest where channel 0 runs 12.7 dB darker in 99.9% "
+                         "of 2565 scenes. Channel 0 is the real cross-pol. Kept as the "
+                         "default so a plain run still reproduces the shipped model.")
+    ap.add_argument("--xpol-p", type=float, default=0.25,
+                    help="probability of the cross-pol dropout. At 0.25 on the wrong "
+                         "channel, one training step in four shows a positive mask with "
+                         "the only informative channel replaced by noise.")
+    ap.add_argument("--split", choices=("legacy", "stratified"), default="legacy",
+                    help="legacy = train_test_split(uniq, 0.15, seed 42), which put 8 of "
+                         "the 9 >=30%-coverage scenes into TRAINING. stratified = "
+                         "split.py, coverage-stratified with a 3-fold rotation on that "
+                         "band. Comparisons across runs must use the same one.")
+    ap.add_argument("--fold", type=int, default=0, help="stratified split fold")
+    ap.add_argument("--tag", default="", help="suffix for the output files, so ablation "
+                                              "runs do not overwrite each other")
     ap.add_argument("--no-domain-aug", action="store_true",
                     help="geometric augmentation only — the run that overfitted by epoch 3")
     ap.add_argument("--weight-decay", type=float, default=1e-4)
@@ -295,9 +318,16 @@ def main():
     print(f"  mean oil fraction over positive tiles: "
           f"{oilfrac[kinds=='pos'].mean() if (kinds=='pos').any() else 0:.4f}")
 
-    uniq = sorted(set(scenes))
-    tr_s, va_s = train_test_split(uniq, test_size=0.15, random_state=42)
-    tr_s, va_s = set(tr_s), set(va_s)
+    if a.split == "stratified":
+        from pipeline.detect.split import load_manifest, make_split
+        tr_l, va_l, _ = make_split(load_manifest(), fold=a.fold)
+        tr_s, va_s = set(tr_l), set(va_l)
+        print(f"  split: STRATIFIED by coverage (split.py), fold {a.fold}")
+    else:
+        uniq = sorted(set(scenes))
+        tr_s, va_s = train_test_split(uniq, test_size=0.15, random_state=42)
+        tr_s, va_s = set(tr_s), set(va_s)
+        print("  split: LEGACY — 1 scene >=30% in validation; see split.py")
     tr_idx = np.array([i for i in range(store.n) if scenes[i] in tr_s])
     va_idx = np.array([i for i in range(store.n) if scenes[i] in va_s])
     print(f"  split by SCENE: {len(tr_idx)} train tiles / {len(va_idx)} val tiles")
@@ -316,7 +346,8 @@ def main():
         tl = n = 0
         for i in range(0, len(order), a.batch_size):
             xb, yb = store.batch(order[i:i + a.batch_size])
-            xb, yb = augment(xb, yb, domain=not a.no_domain_aug)
+            xb, yb = augment(xb, yb, domain=not a.no_domain_aug,
+                         xpol_ch=a.xpol_channel, xpol_p=a.xpol_p)
             xb, yb = xb.to(DEVICE), yb.to(DEVICE)
             opt.zero_grad(set_to_none=True)
             with torch.amp.autocast("cuda", enabled=amp):
@@ -342,6 +373,13 @@ def main():
         if v_iou > best_iou + 1e-4:
             best_iou, bad = v_iou, 0
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            # Also to DISK, every time. This used to live only in RAM until the run
+            # finished, so a crash at epoch 29 of a 200-minute run lost everything.
+            _t = CKPT.replace(".pt", f"_{a.tag}.pt") if a.tag else CKPT
+            torch.save({"state_dict": best_state, "arch": "UNet", "depth": a.depth,
+                        "in_ch": 2, "threshold": 0.5, "epoch": ep,
+                        "val_iou_tiles": round(float(v_iou), 4), "partial": True},
+                       _t.replace(".pt", "_running.pt"))
             flag = "  *best"
         else:
             bad += 1
@@ -381,9 +419,11 @@ def main():
             best_t, best_t_iou, mark = t, iou, "  <-"
         print(f"    t={t:<5} IoU {iou:.4f}{mark}")
 
+    ckpt_path = CKPT if not a.tag else CKPT.replace(".pt", f"_{a.tag}.pt")
+    meta_path = META if not a.tag else META.replace(".json", f"_{a.tag}.json")
     torch.save({"state_dict": model.state_dict(), "arch": "UNet",
-                "depth": a.depth, "in_ch": 2, "threshold": best_t}, CKPT)
-    with open(META, "w") as fh:
+                "depth": a.depth, "in_ch": 2, "threshold": best_t}, ckpt_path)
+    with open(meta_path, "w") as fh:
         json.dump({"depth": a.depth, "filters": FILTERS[:a.depth],
                    "loss": f"focal(alpha={a.alpha}, gamma={a.gamma})",
                    "threshold": best_t, "threshold_selected_on": "validation tiles",
