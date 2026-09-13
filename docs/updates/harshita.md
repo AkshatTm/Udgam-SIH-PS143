@@ -12,6 +12,120 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-13 19:00] Detect QA close-out — human/browser QA on all 9 real Gallery cases
+
+**Done:** Browser-tested the Detect screen for every case currently reachable from the Gallery
+(`cases/index.json`, 9 entries) — the first per-case Detect sign-off since the real-case library
+grew to nine. The six oil-detection cases (`case-jacksonville-2024`, `case-farallones-2023`,
+`case-huntington-2021`, `case-gulf-alaska-2023`, `case-mumbai-2023`, `case-jamnagar-2024`) were
+checked for: detection polygons visually aligning with the SAR dark features, coordinates
+rendering in the expected hemisphere (all six correct, including Mumbai/Jamnagar's
+positive-longitude scenes), and per-case measurement sanity. The three no-spill/look-alike cases
+(`case-ennore-lookalike-2023`, `case-lookalike-zenodo`, `case-nospill-zenodo`) were checked
+against the D1 no-spill designed state (docs/04 Part D) and confirmed to show the correct "No
+spill detected" / rejection messaging rather than a contract-error card. **This is human/browser
+QA — visual geometry, hemisphere, and UI-state sanity — not independent re-validation of every
+underlying schema field**, and `scripts/validate_case.py` was not re-run in this session. No
+frontend code, producer data, or schemas were modified during this pass.
+
+Per-case visual observations:
+- `case-jacksonville-2024` (hero/default): centroid ~30.28747N, -79.62503W. Selected oil
+  feature: area 4.5 km², elongation 7.9, contrast -5.0 dB, shape Linear/Elongated.
+- `case-farallones-2023`: centroid ~37.79400N, -123.87328W. Selected oil feature: area 4.2 km²,
+  elongation 19.0, contrast -5.1 dB, shape Linear/Elongated.
+- `case-huntington-2021`: centroid ~33.63970N, -118.09044W. 9 dark patches, 1 oil; selected oil
+  feature visually aligned to the SAR dark feature.
+- `case-gulf-alaska-2023`: centroid ~59.55629N, -142.72349W. 13 dark patches, 3 oil; selected
+  feature visually aligned.
+- `case-mumbai-2023`: centroid ~18.54023N, +72.21062E. 13 dark patches, 3 oil; selected feature
+  visually aligned; positive-longitude scene renders correctly.
+- `case-jamnagar-2024`: centroid ~20.16469N, +71.90863E. 2 dark patches, 1 oil; selected feature
+  visually aligned; positive-longitude scene renders correctly.
+- `case-ennore-lookalike-2023` ("Ennore — four days before the spill"): "No spill detected in
+  this scene", 29 dark patches, none matching oil — correct rejection state for this
+  correct-rejection case.
+- `case-lookalike-zenodo` ("Mississippi Delta — a slick that isn't"): "No spill detected in this
+  scene", "The scene is clear — no dark features to assess." — correct rejection state.
+- `case-nospill-zenodo` ("Clean ocean — no spill"): same no-spill clean state as above — correct.
+
+**Case ID mapping (verified against `cases/index.json` + each case's `meta.json` before writing
+this entry, per instruction — the displayed titles do not all literally contain their case IDs):**
+- "Jacksonville / Atlantic transit" → `case-jacksonville-2024`
+- "Farallones / Pacific approach" → `case-farallones-2023`
+- "Huntington Beach" → `case-huntington-2021`
+- "Gulf of Alaska" → `case-gulf-alaska-2023`
+- "Mumbai offshore" → `case-mumbai-2023`
+- "Jamnagar approaches" → `case-jamnagar-2024`
+- "Ennore — four days before the spill" → `case-ennore-lookalike-2023` (`meta.json["title"]`
+  matches verbatim)
+- "Mississippi Delta — a slick that isn't" → `case-lookalike-zenodo` (`meta.json["title"]`
+  matches verbatim; `provenance: "benchmark"`, real location, Zenodo Part III)
+- "Clean ocean — no spill" → `case-nospill-zenodo` (`meta.json["title"]` matches verbatim;
+  `provenance: "benchmark"`, real location, Zenodo Part III)
+
+QA sign-off (per `docs/05_HARSHITA_INTEGRATION.md` Part B6 format):
+```
+case-jacksonville-2024: QA PASS — Detect browser QA
+case-farallones-2023: QA PASS — Detect browser QA
+case-huntington-2021: QA PASS — Detect browser QA
+case-gulf-alaska-2023: QA PASS — Detect browser QA
+case-mumbai-2023: QA PASS — Detect browser QA
+case-jamnagar-2024: QA PASS — Detect browser QA
+case-ennore-lookalike-2023: QA PASS — Detect browser QA (no-spill/look-alike rejection state)
+case-lookalike-zenodo: QA PASS — Detect browser QA (no-spill/look-alike rejection state)
+case-nospill-zenodo: QA PASS — Detect browser QA (no-spill state)
+```
+
+**Scope note (current-status correction, not a rewrite of history):** many phase entries below
+this one end "Not committed / not pushed" — accurate *at the time each was written*. As of this
+entry, `git log`/`git status` show that body of work is committed and merged (`HEAD = 85b7f79`,
+matching `origin/main`/`origin/HEAD`); those historical lines are left exactly as written, this
+note just flags that "not committed" no longer describes current state. The only uncommitted
+items as of this entry are the 5 QA screenshots and the `.playwright-mcp/` session-log folder
+listed under Checkpoint artefact below — this doc entry does not commit or push them.
+
+**Files touched:** `docs/updates/harshita.md` (this entry only). No frontend code (`web/`), no
+`cases/` producer data, no `scripts/validate_case.py`, no other owner's files touched during
+this QA pass.
+
+**Run command (to reproduce this QA):**
+```bash
+cd web && npm run dev
+```
+Then visit `/case/<id>/detect` for each of the 9 case IDs above. Expected: the six oil cases
+render SAR + detection polygons with a selectable oil `DetectionCard`; the three no-spill/
+look-alike cases render the `NoSpillBanner` ("No spill detected in this scene.") with no
+contract-error card.
+
+**Checkpoint artefact:**
+- Screenshot files present in the repo root (untracked, this session) for 5 of the 9 cases:
+  `jacksonville-detect.png`, `farallones-detect.png`, `huntington-detect.png`,
+  `mumbai-detect.png`, `ennore-detect.png`.
+- The remaining 4 cases (`case-gulf-alaska-2023`, `case-jamnagar-2024`, `case-lookalike-zenodo`,
+  `case-nospill-zenodo`) were browser-tested this session but have no corresponding saved
+  screenshot file in the repo — their sign-off above rests on direct visual inspection, not a
+  saved artefact.
+- `.playwright-mcp/` (untracked) holds prior interactive-session console/page-snapshot logs, all
+  timestamped 2026-09-12 — supporting evidence for earlier phases, not this entry's session.
+
+**Open issues:**
+- Real downstream Trace/Attribute/Verify bundles still do not exist for any of the 9 real
+  cases — reconfirmed against current `cases/*/meta.json` while writing this entry, every one
+  still lists `"acts_available": ["detect"]` only. Harshita cannot perform Trace/Attribute/Verify
+  human QA until Anushka/Jaiveer/Akshat land a real bundle for at least one real case.
+- Demo-machine / offline QA (docs/05 Phase 6) has not been done in this session.
+- Previously-flagged `web/public/cases` mirror gaps and `meta.json` placeholder text
+  (`case-lookalike-zenodo` missing from the mirror; `case-nospill-zenodo` missing assets /
+  containing "TODO-SOUM" text) do **not** reproduce as of this entry — both cases mirror
+  cleanly today and neither `meta.json` contains placeholder text. Not re-flagged as open since
+  they no longer reproduce.
+
+**Next:** escalate to Anushka/Jaiveer/Akshat for a real Trace/Attribute/Verify bundle on the
+hero case (`case-jacksonville-2024`) so the next QA pass can exercise the actual human gate
+beyond Detect; see message drafts prepared alongside this entry.
+
+---
+
 ## [2026-09-12 18:15] Phase 5.4 — natural_seep caution panel + AIS sampling label
 
 **Done:** Closed the two Phase 5.4 gaps identified by a reality check first (per instructions,
