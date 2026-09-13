@@ -52,18 +52,31 @@ control endpoint.
 
 ## 8.3 Age — an output, with no accuracy number
 
-**The four-case validation claim is WITHDRAWN (A5, 13 Sept).** Akshat audited the library rather
-than assuming: no indexed case carries a `detections.geojson`, none carries a release time, and
-`discharge_class` is unset everywhere including `case-000`'s own `det-01`. Both acute-gated
-estimators therefore fire on nothing today. **The claim failed on missing inputs, not on physics** —
-and the gates that refuse are correct and stay.
+**The four-case validation claim is WITHDRAWN (A5, 13 Sept) — and the reason is now stronger than
+when it was withdrawn.** A5 rested on `detections.geojson` being absent and `discharge_class` unset.
+Soum's detections have since landed for all seven live cases, and **`discharge_class` is emitted on
+every feature** — so that premise no longer holds. The conclusion does, for a structural reason:
+
+`ships.classify_discharge()` computes the class from **shape alone** — `elongation < 3.0` →
+`acute`, `elongation >= 5.0` **and** `straightness >= 0.60` → `chronic`, everything else →
+`unknown`. Because `acute` requires *low* elongation and oil slicks are elongated, **0 of the 13
+oil detections in the library are `acute`** — and none ever will be. Both acute-gated estimators
+therefore fire on nothing **structurally**, not for want of data, and no retrain changes that.
+
+**The claim failed on a gate that cannot open, not on physics** — and the gates that refuse are
+correct and stay. Verified live on all six real runs: every one reports `age_method: "none"` with
+the cause named.
+
+> **Ruled, 13 Sept.** C3.3 reads age *off elongation* and its gate is a *threshold on elongation*,
+> so the gate is circular. **It stands for the demo, documented as circular.** Re-grounding it on
+> source type is December work: it would make Stage 2 depend on Stage 3. See 8.9 for what it costs.
 
 So age ships as an output with `age_method` and the per-estimator breakdown, and **no hit rate**.
 
-If Huntington's detection lands and C3.1 fires, we state an explicit **N = 1** with the
-overestimate caveat attached — a 2.8 h old slick sits in the estimator's documented weak regime,
-because gravity-viscous spreading dominates the first hours and the model omits it. That is a
-result to state, not a surprise to absorb on stage.
+Huntington's detection has since landed and **C3.1 does not fire on it** — elongation 3.77 falls
+between the gate's thresholds, so it classifies `unknown`. There is no N = 1 to state. What we
+state instead is in 8.9: a measured miss against a documented interval, and the structural reason
+for it.
 
 ### What the limitations slide carries instead
 
@@ -73,15 +86,23 @@ result to state, not a surprise to absorb on stage.
 shear estimator can therefore only date slicks whose major axis is about **0.8–1.3 km**. That is
 not a coding limit — it is HYCOM's resolution again, the item ranked #1 in our own error budget.
 
-**Fay's refusal, as evidence.** A 93.5 m³ release (Huntington's 588 barrels, NTSB MIR-24-01)
-spreads to **0.508 km² at 24 h** and **0.880 km² even at the 72 h ceiling**, against observed
-slicks of order 12 km² — off by **~14×**. Gravity-viscous spreading cannot set the area of a
-SAR-detectable slick; shear and advection do. That refusal is independent evidence that the
-shear estimator models the right process.
+**Fay's refusal, as evidence — now measured on the real detection.** A 93.5 m³ release
+(Huntington's 588 barrels, NTSB MIR-24-01) spreads to **0.508 km² at 24 h** and **0.880 km² even
+at the 72 h ceiling**, against Huntington's **actual detected slick of 2.64 km²** — short by
+**3×**. Gravity-viscous spreading cannot set the area of a SAR-detectable slick; shear and
+advection do. `regime: "shear_dominated"`, no band, which is independent evidence that the shear
+estimator models the right process.
+
+**Correction to an earlier draft of this section:** it said "~14×", computed against an assumed
+12 km² slick. Huntington's real detection is 2.64 km², so the measured shortfall is **3×**, not
+14×. The verdict survives — closing a 3× area gap needs k ≈ 2.25 against a literature range of
+1.1–1.5, still outside it — but it survives with far less room, and the quotable number is 3×.
+Quote the measured one.
 
 And it is robust to the one uncited constant, which is why it ships (A4): Fay's **area goes as
-k²**, so closing a 14× area gap would need **k ≈ 5.5** against a literature range of 1.1–1.5. A
-Fay *age band* would not survive that uncertainty; the regime verdict does. Quote a Fay age and
+k²**, so closing the measured 3× area gap would need **k ≈ 2.25** against a literature range of
+1.1–1.5 — outside it, but only by about 50%, not by the 4× an assumed 12 km² slick implied. A Fay
+*age band* would not survive that uncertainty; the regime verdict still does. Quote a Fay age and
 the citation becomes mandatory again — so we quote none.
 
 ### Three physics corrections, ratified
@@ -427,6 +448,116 @@ wind is effectively the whole signal. Quote the ranking as a library average, no
 ```bash
 python pipeline/drift/plot_quiver.py --case <id>     # the field, per case
 ```
+
+---
+
+## 8.9 All seven cases, run
+
+Every case with a real `detections.geojson`, 3000 particles × 50 members, real HYCOM + ERA5.
+
+| case | r50 | r90 | travel | wind share | release window | origin bearing |
+|---|---|---|---|---|---|---|
+| `case-jacksonville-2024` | **13.1 km** | 31.1 km | 148.7 km | 4% | **convergence** 8.30 h | SSW |
+| `case-farallones-2023` | 4.4 km | 8.8 km | 35.5 km | 37% | bounded 16 h | N 339° |
+| `case-jamnagar-2024` | 2.3 km | 3.7 km | 16.7 km | **62%** | bounded 16 h | NW 311° |
+| `case-mumbai-2023` | 2.0 km | 3.7 km | 16.7 km | 37% | bounded 16 h | NNW 333° |
+| `case-gulf-alaska-2023` | 1.4 km | 2.6 km | 12.0 km | **73%** | **convergence** 2.00 h | W 263° |
+| `case-huntington-2021` | 1.4 km | 2.5 km | 6.2 km | 38% | **convergence** 2.27 h | SE 145° |
+| `case-ennore-lookalike-2023` | — | — | — | — | — | **refused: zero oil features** |
+
+`abstain: false` on all six. `stranded_fraction: 0.0` on all six. Every measured bearing matches
+the Phase 5.3 prediction made *before* the run (§8.8), including Gulf of Alaska's W, which is the
+wind-dominated reading rather than the brief's current-atlas E.
+
+**r50 tracks path length, not case difficulty.** 13.1 km after 148.7 km of Gulf Stream against
+1.4 km after 6.2 km in San Pedro Bay — the uncertainty compounds with distance travelled, which is
+what an ensemble over perturbed inputs should do. A team reporting the same radius on both would be
+reporting a number it had not measured.
+
+**The wind flag fired live on two cases.** Gulf of Alaska at 73% and Jamnagar at 62% both printed
+the wind-dominated warning during their real runs. Those two origins rest on ERA5 and the 0.03
+rule, not on HYCOM, and must be checked against a wind reanalysis rather than a current atlas.
+
+**Three of six windows are MEASURED.** §8.5 predicted the convergence estimator "may fire" where
+cadence is better than daily; it fires on half the library — Jacksonville (8.30 h), Gulf of Alaska
+(2.00 h) and Huntington (2.27 h) — against the 16.00 h bounded bracket on the rest. On those three
+the release window is a measurement, and A3's "weakest defensible claim" no longer applies.
+
+### Measuring the axis instead of inferring it, case by case
+
+A1 made C3.1 match the observed major axis. Deriving that axis from `area × elongation` assumes the
+slick is an ellipse. Measured against the real polygons:
+
+| case | measured | ellipse form would say | factor |
+|---|---|---|---|
+| `case-farallones-2023` | 17.07 km | 10.09 km | **×1.69** |
+| `case-jamnagar-2024` | 7.55 km | 3.65 km | **×2.07** |
+| `case-mumbai-2023` | 4.85 km | 2.40 km | **×2.02** |
+| `case-huntington-2021` | 3.84 km | 3.56 km | ×1.08 |
+| `case-gulf-alaska-2023` | 2.25 km | 2.26 km | ×1.00 |
+| `case-jacksonville-2024` | 34.58 km | — | merged slick carries `elongation: None` |
+
+**The ellipse form is right only where the slick is nearly one** — Gulf of Alaska, the most compact
+detection in the library, agrees to 1%. On the long sinuous ones it under-reads by a factor of two.
+Those are exactly the cases where the axis is the quantity being matched, so it is exactly where
+inferring instead of measuring would have dated the wrong slick.
+
+This is a second, independent reason the measured path is the right one, alongside Soum's: his
+`elongation` is a `cv2.fitEllipse` ratio in **pixel** coordinates, whose minor axis spans the bow of
+a curve rather than the filament width, and Jacksonville's pixels are 14% anisotropic.
+
+### The one case where we can check a window — a measured miss against a documented interval
+
+**Ruled by Akshat, 13 Sept, from NTSB MIR-24-01.** `case-huntington-2021` is not a release instant
+and must not be described as one:
+
+```
+first leak-detection alarm   2021-10-01 23:10Z
+line restarted repeatedly, final shutdown  2021-10-02 13:04Z
+detection_time               2021-10-02 01:58Z
+
+at detection the oil is 0-2.8 h old AND STILL BEING FED
+our window     2021-10-01 17:41Z -> 19:58Z  (convergence, span 2.27 h)
+               = 6.0 to 8.3 h before detection
+MISSES BY >= 3.2 h
+```
+
+**Report it as a caveat: a measured miss against a documented interval.** Not a hit rate, not a
+validation, and not a hidden failure either — it is the one place a Stage 2 window meets a number
+we did not choose, and it misses.
+
+**The reason, stated correctly.** Two framings are wrong and were both used in earlier drafts of
+this document:
+
+- ✗ *"the alarm is when it was noticed, so it is an upper bound"* — **the alarm is pressure-based.**
+  It is an instrument reading on the pipeline, not somebody spotting a sheen. Do not argue this.
+- ✗ *"young slicks read old because we omit gravity-viscous spreading"* — that is a real limitation
+  and it may contribute, but it is a **hypothesis here, not the explanation.**
+
+The actual limit is structural, and it is the more interesting point:
+
+> **Age-from-shape cannot handle a source that is still releasing.** Every estimator in Part C
+> reads age off the geometry of a slick assumed to have been released once and then deformed. At
+> Huntington's detection time the line was still discharging and would be restarted several more
+> times over the following eleven hours. A slick that is still being fed has no single age for the
+> shape to encode, so the question the estimator asks does not have an answer on this case.
+
+That is a limitation of the method, stated in one sentence, and it is worth more on the limitations
+slide than a hit rate would have been.
+
+### What the gate costs, and why it stays anyway
+
+**Ruled: the gate stands for the demo, documented as circular** (Akshat, 13 Sept). Re-grounding
+`discharge_class` on source type rather than shape is December work, because it would make Stage 2
+depend on Stage 3 — the wrong direction for a pipeline.
+
+The cost is worth naming precisely, because it is not abstract: **Huntington's det-01 has
+elongation 3.77, which lands between the thresholds and classifies `unknown` — so the one
+point-source case in the entire library is gated out.** A pipeline leak is exactly the release
+geometry the acute-gated estimators were written for, and the shape-based gate cannot see that.
+
+So on the demo the honest line is: *the estimators are gated off on every case, the gate is correct
+for the physics it was given, and we can say exactly what it costs us and what would fix it.*
 
 ---
 

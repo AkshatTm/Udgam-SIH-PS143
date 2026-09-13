@@ -40,7 +40,15 @@ the data, by hold_last_snapshot(); see that function for why it is done there ra
 OpenDrift's `always_valid` flag. OpenDrift refusing the first step without it is not wrong of
 it, and we are matching our own documented tolerance rather than hiding it.
 
-Run:  /tmp/claude-0/odenv/bin/python compare_opendrift.py
+VERSION IS PINNED, next to this file, in `requirements-opendrift.txt`. Approved out of the
+project requirements.txt by Akshat (13 Sept 2026) on condition the pin lives here. 8.4's numbers
+were measured against that exact build, and two things we rely on are version-specific and fail
+SILENTLY if they change: results arrive on `.result` (<=1.12 used `.history`), and
+`drift:advection_scheme` accepts "runge-kutta4" while the DEFAULT is "euler" -- an upgrade that
+renamed the scheme would quietly compare our RK2 against Euler and report a config difference as
+a physics disagreement.
+
+Run:  <venv>/bin/python pipeline/drift/compare_opendrift.py --case <id>
 """
 import argparse
 import json
@@ -262,6 +270,11 @@ def main(argv=None):
     olon = np.asarray(res["lon"].values, dtype=float)
     olat = np.asarray(res["lat"].values, dtype=float)
     import opendrift as _od
+    if not str(_od.__version__).startswith("1.14"):
+        print(f"  !! OpenDrift {_od.__version__} is NOT the pinned 1.14.x that 8.4 was measured "
+              f"on.\n     See pipeline/drift/requirements-opendrift.txt -- the result may not be "
+              f"comparable, and the\n     ways it breaks are silent (results accessor, advection "
+              f"scheme naming).")
     print(f"OpenDrift {_od.__version__}: {olon.shape[0]} trajectories x {olon.shape[1]} steps "
           f"({o.num_elements_deactivated()} deactivated)")
 

@@ -242,18 +242,31 @@ def run(check):
                                         n_members=2, discharge_class="chronic")
     open_gate, odiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
                                             n_members=2, discharge_class="acute")
-    # The refusal must also say WHOSE problem it is: 'chronic' is physics and nothing is
-    # missing, 'unknown' is a Stage 1 data gap. A5 found the field unset on every case, so the
-    # second message is the one this estimator actually emits in production today.
+    # The refusal must also say WHOSE problem it is, and WHAT IT IS.
+    #
+    # THIS ASSERTION CHANGED ON 13 SEPT, AND THE REASON MATTERS. It used to require the word
+    # "MISSING INPUT" in the 'unknown' message, because A5 had found discharge_class unset on
+    # every case and absent from every detections.geojson. Soum's detections then landed for all
+    # seven live cases and discharge_class IS emitted on every feature -- so the old wording was
+    # asserting something factually false, and a test that pins a false claim is worse than no
+    # test. The claim it replaces is stronger, not weaker: classify_discharge() reads SHAPE
+    # ALONE (elongation < 3 -> acute, >= 5 and straight -> chronic, else unknown), so 0 of the
+    # 13 oil detections in the library are acute and none ever can be. A5's conclusion survives
+    # structurally; only its stated cause was wrong.
     unset, udiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
                                         n_members=2, discharge_class="unknown")
     ok &= check("6r  C3.1 refuses a chronic slick, runs on an acute one, and names the cause",
                 gated is None and "'chronic'" in gdiag.get("skipped", "")
                 and "nothing is missing" in gdiag.get("skipped", "")
-                and unset is None and "MISSING INPUT" in udiag.get("skipped", "")
+                and unset is None
+                and "NOT a missing field" in udiag.get("skipped", "")
+                and "SHAPE ALONE" in udiag.get("skipped", "")
+                and "0 of 13" in udiag.get("skipped", "")
                 and "members" in odiag,
                 f"chronic -> None, and the reason says the gate is correct and nothing is "
-                f"missing. unknown -> None, and the reason says MISSING INPUT (Soum). "
+                f"missing. unknown -> None, and the reason says it is NOT a missing field -- "
+                f"discharge_class IS emitted, it is computed from SHAPE ALONE, and 0 of 13 oil "
+                f"detections can ever be acute. "
                 f"acute -> ran {odiag.get('n_members')} members, {odiag.get('n_fitted')} fits "
                 f"against a 31.17 km axis. Those are three different situations and the "
                 f"diagnostics now distinguish them")

@@ -1,19 +1,20 @@
 {
   "case_id": "case-mumbai-2023",
-  "title": "Mumbai offshore — Indian EEZ",
+  "title": "Mumbai offshore \u00e2\u20ac\u201d Indian EEZ",
   "short_location": "Arabian Sea, off Mumbai, Maharashtra",
   "case_type": "spill",
   "satellite": "Sentinel-1A",
   "scene_id": "S1A_IW_GRDH_1SDV_20230903T010333_20230903T010358_050156_06095B_9215",
   "detection_time": "2023-09-03T01:03:33Z",
   "acts_available": [
-    "detect"
+    "detect",
+    "trace"
   ],
   "ais_source": "gfw_hourly",
   "gallery": {
     "thumbnail": "thumb.png",
-    "blurb": "A pipeline, a platform, a ship that isn't broadcasting. Before naming anyone — what kind of thing did this?",
+    "blurb": "A pipeline, a platform, a ship that isn't broadcasting. Before naming anyone \u00e2\u20ac\u201d what kind of thing did this?",
     "difficulty": "hard"
   },
-  "notes": "The source-classification case: the answer here may not be a vessel at all. Target acts: detect, trace, attribute, verify. Export box 72.0863 18.4023 72.2678 18.6072, 100% inside the scene footprint, dB clamp [-28, -15]. The scene shows several bright point targets near the slick head — real radar returns for the ship detector, not speckle. cerulean_slick.geojson is Cerulean slick 3612640 (20.55 km, 7.74 km2, model confidence 0.928). ais_source is gfw_hourly — one position per vessel per hour against NOAA's ~71 s, so Stage 3's 'gap' component is structurally impossible and 'slowdown' is very coarse. Both must come back null, never 0 (Master §6.1, D20). CORRECTION TO EARLIER PLANNING DOCS: the 'known natural seep area' warning attributed to Cerulean could NOT be substantiated — their API exposes four AOI layers (EEZ, IHO sea areas, Marine Protected Area, user-generated) and no seep layer, and this slick is classed VESSEL, not NATURAL. Do not render a natural_seep flag on this case until somebody produces the source."
+  "notes": "The source-classification case: the answer here may not be a vessel at all. Target acts: detect, trace, attribute, verify. Export box 72.0863 18.4023 72.2678 18.6072, 100% inside the scene footprint, dB clamp [-28, -15]. The scene shows several bright point targets near the slick head \u00e2\u20ac\u201d real radar returns for the ship detector, not speckle. cerulean_slick.geojson is Cerulean slick 3612640 (20.55 km, 7.74 km2, model confidence 0.928). ais_source is gfw_hourly \u00e2\u20ac\u201d one position per vessel per hour against NOAA's ~71 s, so Stage 3's 'gap' component is structurally impossible and 'slowdown' is very coarse. Both must come back null, never 0 (Master \u00c2\u00a76.1, D20). CORRECTION TO EARLIER PLANNING DOCS: the 'known natural seep area' warning attributed to Cerulean could NOT be substantiated \u00e2\u20ac\u201d their API exposes four AOI layers (EEZ, IHO sea areas, Marine Protected Area, user-generated) and no seep layer, and this slick is classed VESSEL, not NATURAL. Do not render a natural_seep flag on this case until somebody produces the source."
 }
