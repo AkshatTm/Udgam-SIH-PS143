@@ -806,7 +806,11 @@ function ExcludedCard({ e }: { e: ExcludedVessel }) {
       </div>
       <div className="mt-0.5 font-mono text-[10px] text-white/30">
         MMSI {e.mmsi}
-        {e.closestKm !== undefined ? ` · ${fmt(e.closestKm, 1)} km` : ""}
+        {/* `!= null` on purpose, so it catches an explicit null as well as an absent field: a
+            vessel excluded for having no report inside the window has no closest approach to
+            measure, and the producer says so with null. Rendering "· — km" there would show a
+            missing measurement as a dash where no measurement exists. */}
+        {e.closestKm != null ? ` · ${fmt(e.closestKm, 1)} km` : ""}
       </div>
       <p className="mt-1.5 text-[10px] leading-relaxed text-white/40">{e.reason}</p>
     </div>
