@@ -1,0 +1,138 @@
+{
+  "funnel": {
+    "in_region": 987,
+    "in_window": 897,
+    "plausible": 17,
+    "scored": 3,
+    "dropped_short_track": 15
+  },
+  "suspects": [
+    {
+      "source_type": "vessel",
+      "mmsi": "538003321",
+      "name": "EVERGLADES",
+      "vessel_type": "tanker",
+      "score": 0.981,
+      "components": {
+        "proximity": 0.978,
+        "parity": null,
+        "temporality": null,
+        "trajectory": null,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
+        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
+        "trajectory": "vessel was never outside the 18 km origin radius before closest approach, so it has no approach direction to assess",
+        "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
+        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "type_prior": "vessel type tanker"
+      },
+      "closest_km": 2.34,
+      "closest_time": "2023-01-25T05:29:10Z",
+      "grid_probability": 0.978,
+      "heading_consistent": false,
+      "ais_gap_minutes": 1.8,
+      "edge_truncated": false,
+      "reasons": [
+        "inside the high-probability region of the reconstructed origin during the release window"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "636021786",
+      "name": "SFL CONDUCTOR",
+      "vessel_type": "cargo",
+      "score": 0.926,
+      "components": {
+        "proximity": 0.914,
+        "parity": null,
+        "temporality": null,
+        "trajectory": null,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
+        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
+        "trajectory": "vessel was never outside the 18 km origin radius before closest approach, so it has no approach direction to assess",
+        "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
+        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "type_prior": "vessel type cargo"
+      },
+      "closest_km": 4.99,
+      "closest_time": "2023-01-25T12:01:12Z",
+      "grid_probability": 0.914,
+      "heading_consistent": false,
+      "ais_gap_minutes": 1.8,
+      "edge_truncated": false,
+      "reasons": [
+        "inside the high-probability region of the reconstructed origin during the release window"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "229988000",
+      "name": "CMA CGM TAGE",
+      "vessel_type": "cargo",
+      "score": 0.843,
+      "components": {
+        "proximity": 0.738,
+        "parity": null,
+        "temporality": null,
+        "trajectory": 1.0,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
+        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
+        "trajectory": "on approach 19 km out, course 286 deg against 310 deg toward the origin (25 deg off)",
+        "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
+        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "type_prior": "vessel type cargo"
+      },
+      "closest_km": 8.94,
+      "closest_time": "2023-01-25T13:05:08Z",
+      "grid_probability": 0.738,
+      "heading_consistent": true,
+      "ais_gap_minutes": 9.0,
+      "edge_truncated": false,
+      "reasons": [
+        "inside the high-probability region of the reconstructed origin during the release window",
+        "cargo on a course consistent with the origin"
+      ]
+    }
+  ],
+  "dark_vessels": [],
+  "infrastructure": [],
+  "excluded": [
+    {
+      "mmsi": "538005118",
+      "name": "STI FONTVIEILLE",
+      "closest_km": 16.97,
+      "reason": "never entered the high-probability region of the origin"
+    },
+    {
+      "mmsi": "636018924",
+      "name": "AQUARIUS",
+      "closest_km": 9.32,
+      "reason": "never entered the high-probability region of the origin"
+    },
+    {
+      "mmsi": "240168000",
+      "name": "OLYMPIC FLAG",
+      "closest_km": 9.24,
+      "reason": "never entered the high-probability region of the origin"
+    }
+  ],
+  "abstained": false,
+  "abstain_reason": null
+}

@@ -12,6 +12,127 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-13 22:10] Phase 10.4 — evidence breadth on the card, and the temporality gate gets tested
+
+**Done:** Three fixes I could make without anyone's ruling, all found while writing up the issue
+register. (1) `suspects.json` now carries `weight_live`, `components_available` and
+`components_total` per suspect — the renormalised score has always looked identical whether it
+rested on seven live components or two, and on the `gfw_hourly` fixture a vessel scores **0.981 off
+two of seven, live weight 0.35**. The numbers were already computed for the renormalisation; they
+just were not written out. (2) `make_fake_case.py` hardcoded `time_window_method: "bounded"`, so the
+temporality gate had **no test coverage in either direction** despite deciding 15% of the score on
+three of the six real cases — added `--time-window-method`, default unchanged. (3) Renamed
+`ABSTAIN_MAX_VESSELS` → `ABSTAIN_MAX_PLAUSIBLE_VESSELS`, since the other 40 in that logic is
+kilometres.
+
+**Files touched:** `pipeline/attribute/score.py` (modified) · `pipeline/attribute/make_fake_case.py`
+(modified) · `pipeline/attribute/tests.py` (modified, 63 → 74) ·
+`docs/STAGE3_ISSUE_REGISTER.md` (new) · `docs/STAGE3_PROGRESS_2026-09-13_EVENING.md` (new) ·
+`pipeline/attribute/fixtures/case-gfw-fake` (new) · `pipeline/attribute/fixtures/case-abstain-fake`
+(new)
+
+**Run command:**
+
+```bash
+python pipeline/attribute/tests.py
+
+# a fixture that finally exercises temporality
+python pipeline/attribute/make_fake_case.py \
+       --out pipeline/attribute/fixtures/case-conv-fake --time-window-method convergence
+python pipeline/attribute/score.py --case-dir pipeline/attribute/fixtures/case-conv-fake \
+       --parquet data/ais/gulf.parquet --ranking
+
+# the D20 hourly gate, on a fixture that matches the AIS we actually hold
+python pipeline/attribute/make_fake_case.py \
+       --out pipeline/attribute/fixtures/case-gfw-fake --ais-source gfw_hourly
+python pipeline/attribute/score.py --case-dir pipeline/attribute/fixtures/case-gfw-fake \
+       --parquet data/ais/gulf.parquet --ranking
+```
+
+Expected output: `Ran 74 tests ... OK`; then a `temp` column with live values 0.00–0.96 and live
+weights of 0.70/0.85; then `gap` and `slow` both `n/a` with `weight_live` 0.35–0.50.
+
+**Checkpoint artefact:** `weight_live` verified end to end in the written file —
+`EVERGLADES 0.981 / 0.35 / 2 of 7`, `SFL CONDUCTOR 0.926 / 0.35 / 2 of 7`,
+`CMA CGM TAGE 0.843 / 0.50 / 3 of 7`.
+
+**Open issues:**
+- **The three new keys are outside §6.7**, exactly like `component_notes`. Asked Akshat to bless or
+  kill all four together. If he refuses the amendment they come out as a set.
+- **Emitting the numbers is not the fix for A9.** The fix is what the card *shows*, which is
+  Akshat's ruling and Harshita's layout. This only guarantees neither of them waits on me.
+- **A10 is untouched.** Farallones, Mumbai and Jamnagar are still `bounded`, so temporality is still
+  `null` on half the library. The code path is now proven, which is a different thing from the
+  problem being solved. Route B (Soum's polygon → head-proximity timing) would fix it without
+  needing the window at all, and unlocks `parity` at the same time.
+- **`cases/case-000-*` are still unusable** — origins in the Bay of Bengal 2017 against US AIS,
+  giving `funnel 987 → 0 → 0 → 0` and an abstention that looks like a pass and tests nothing. Not my
+  files, so flagged rather than fixed; my replacements live under `pipeline/attribute/fixtures/`.
+- Half the 40 problem remains: the 40 km cloud trigger comes from the master plan.
+
+**Next:** the three remaining NOAA cases (Huntington, Gulf of Alaska, Farallones) once
+`AIS_2021_10_01`, `AIS_2023_05_15`, `AIS_2023_03_16` and `AIS_2023_03_17` finish downloading — then
+Phase 8, the injected-offender curve, which is the only D21-compliant way to settle the `trajectory`
+and `type_prior` weights.
+
+---
+
+## [2026-09-13 20:15] Phase 9 — first real attribution output, `case-jacksonville-2024`
+
+**Done:** Scored the hero case against Anushka's published origin using real NOAA AIS for 29–30
+July 2024. `vessels.geojson` and `suspects.json` are in the bundle and the validator passes. Funnel
+`48 → 26 → 2 → 2`, two dropped for short track. **NAGOYA EXPRESS `636093219` 0.693**, **GALVESTON
+`367337960` 0.650**, no abstention. First time the pipeline has produced a named suspect from real
+data end to end.
+
+**Files touched:** `cases/case-jacksonville-2024/suspects.json` (output) ·
+`cases/case-jacksonville-2024/vessels.geojson` (output) · `data/ais/jacksonville.parquet` (output,
+gitignored)
+
+**Run command:**
+
+```bash
+python pipeline/attribute/ingest.py \
+       --csv data/ais/AIS_2024_07_29.csv data/ais/AIS_2024_07_30.csv \
+       --from-origin cases/case-jacksonville-2024/origin.json \
+       --out data/ais/jacksonville.parquet
+python pipeline/attribute/score.py --case case-jacksonville-2024 \
+       --parquet data/ais/jacksonville.parquet --ranking
+python scripts/validate_case.py cases/case-jacksonville-2024
+```
+Expected output: `funnel 48 -> 26 -> 2 -> 2`, then `PASS acts=['detect','trace'] (149 warnings)`.
+
+**Checkpoint artefact:** `docs/STAGE3_PROGRESS_2026-09-13_EVENING.md` — full technical account
+including the origin geometry measured off the published grid: **3.68:1 aspect**, peak at
+`[-79.68210, 29.11749]` sitting **10.65 km from the stated centroid**, major axis 170.1° from north
+(Gulf Stream direction, and the backward drift checks out at 2.08 m/s).
+
+**Open issues:**
+- **`parity` is `null` for both suspects** — no slick polygon from Stage 1. Renormalisation over the
+  remaining six confirmed working on real data, which is the first live demonstration of D9.
+- **`trajectory` is 1.00 for both** (17° and 5° off). The near-tautology reproduces on real data.
+  No weight touched — that is Phase 8's job or Akshat's.
+- **`gap` and `slowdown` are measured `0.0`, not `null`** — correct, this is `noaa_dense`. First
+  case where both kinds of "no score" appear on the same card, which is the cleanest available
+  illustration of frozen convention 4.
+- **Top two are 6.2% apart**, against a 3% abstain-tie threshold. It named names, but only just.
+  Worth saying before a judge computes it.
+- **The 149 validator warnings are Stage 2's**, not mine: `particles_forward` positions and the
+  origin centroid fall outside the scene bounds, which is inevitable for a `trace` output when the
+  scene is a 0.03° pad and the origin is 170 km away. The check is wrong for trace layers.
+- **`acts_available` is still `["detect","trace"]`** so the validator never looks at my output and
+  Harshita's panel stays off. Akshat's edit.
+- **`closest_km` does not mean what §6.7 implies** — it measures from the best-probability point to
+  the *centroid*, so both suspects report ≈10.2 km while sitting essentially on the grid peak.
+  Three options written up in the progress report; recommended measuring to the peak. Changed
+  nothing pending his ruling.
+- **STENA PROSPEROUS never reached the plausible set**, so the D30 pre-registered failure mode did
+  not fire on this window. Recording it so nobody later reads that as the prediction being wrong.
+
+**Next:** the evening's dependency-free work — the `gfw_hourly` and abstain gates.
+
+---
+
 ## [2026-09-13 12:30] Answers to the three open questions in `_INTEGRATION.md`
 
 **Done:** Re-ran the Menuett gap analysis to settle Akshat's three questions, all from

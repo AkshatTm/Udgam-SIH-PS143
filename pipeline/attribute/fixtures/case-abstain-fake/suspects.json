@@ -1,0 +1,34 @@
+{
+  "funnel": {
+    "in_region": 987,
+    "in_window": 897,
+    "plausible": 17,
+    "scored": 0,
+    "dropped_short_track": 15
+  },
+  "suspects": [],
+  "dark_vessels": [],
+  "infrastructure": [],
+  "excluded": [
+    {
+      "mmsi": "538005112",
+      "name": "BALLENITA",
+      "closest_km": 7.17,
+      "reason": "never entered the high-probability region of the origin"
+    },
+    {
+      "mmsi": "563043900",
+      "name": "PINZA",
+      "closest_km": 16.66,
+      "reason": "no transponder gap and continuous coverage through the window"
+    },
+    {
+      "mmsi": "538005118",
+      "name": "STI FONTVIEILLE",
+      "closest_km": 16.97,
+      "reason": "never entered the high-probability region of the origin"
+    }
+  ],
+  "abstained": true,
+  "abstain_reason": "Stage 2 flagged the origin cloud as too diffuse to attribute at acceptable confidence"
+}

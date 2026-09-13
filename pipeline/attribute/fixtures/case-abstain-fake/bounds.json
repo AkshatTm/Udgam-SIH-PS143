@@ -1,0 +1,14 @@
+{
+  "west": -95.23355,
+  "south": 28.15,
+  "east": -93.5,
+  "north": 30.12742,
+  "width_px": 700,
+  "height_px": 700,
+  "db_clamp": [
+    -25,
+    0
+  ],
+  "db_min": -25,
+  "db_max": 0
+}
