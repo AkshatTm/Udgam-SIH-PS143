@@ -8,7 +8,8 @@
   "detection_time": "2024-07-30T23:21:29Z",
   "acts_available": [
     "detect",
-    "trace"
+    "trace",
+    "attribute"
   ],
   "ais_source": "noaa_dense",
   "gallery": {

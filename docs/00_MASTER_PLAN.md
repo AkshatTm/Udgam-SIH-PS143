@@ -485,6 +485,13 @@ A no-spill case is a FeatureCollection with **zero `oil` features**; look-alikes
 `abstain: true` forces Stage 3 to return zero suspects. The agreed trigger is `radius_90_km > 40`.
 The last four blocks are optional — absence hides a UI row, it does not throw.
 
+**One trace per case, not per detection (D35).** A case with several `oil` features still has
+exactly one `particles.json` and one `origin.json`. Stage 2 picks the seed: every oil feature merged
+into one ribbon when `ribbon_metrics` passes every gate (Jacksonville), otherwise the single
+highest-confidence oil feature (Mumbai, Gulf of Alaska). Selecting a different detection on screen
+does **not** change the trace. Which feature(s) seeded it is written into `meta.notes`, so the
+choice is on the record rather than silent.
+
 ## 6.6 `vessels.geojson`
 FeatureCollection of LineString tracks:
 ```json
@@ -549,6 +556,13 @@ Funnel counts must **decrease monotonically**. Suspects sorted by descending sco
 `source_type` ∈ `vessel | dark_vessel | infrastructure | natural_seep`.
 **On a `gfw_hourly` case, `gap` and `slowdown` must be `null`** — the validator warns on a number, because a zero where a `null` belongs is an honesty bug, not a display bug (D20).
 `abstained: true` requires `suspects` empty.
+
+**`closest_km` is measured to the origin-grid peak (D36)** — the distance from the grid's
+highest-probability cell to the vessel's report with the highest grid probability. It is **not**
+distance to `origin.centroid`. On an elongated cloud the two can be far apart (Jacksonville: peak
+10.65 km off the centroid, aspect 3.68:1), and a vessel sitting on the peak would read as "10 km
+away". `grid_probability` remains the primary proximity evidence. Anything rendering `closest_km`
+labels it as distance to the peak, never "closest approach" to the centre of the rings.
 
 **Applicability gating, the full set.** A component returns `null` when it cannot be measured, never
 a number standing in for "we couldn't tell":
@@ -709,6 +723,8 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 | D31 | **Blindness is declared per case, never claimed globally** | Verifying AIS density at case 1 *required* identifying the vessel — the check and the answer are the same operation, so that case was never going to stay blind. Separately, Alaska's and Mumbai's source identifiers and coordinates were sitting in §3.2 of a document the whole team reads. Both are now stated openly per case (Part 16) rather than papered over with a blanket claim a panel could take apart in one question. **Case 1 is open**: its documented vessel may be used for diagnostics and worked examples, but **no weight or threshold may be chosen using it** — weights are set on injected scenarios only. Case 2 becomes the headline blind result. |
 | D33 | **Detector routing moves to an explicit `meta.provenance` field; the CRS sniff is deleted** | Stage 1 has two detection paths (classical CV + RandomForest for our GEE exports, CNN scene classifier for the Zenodo corpus) and `scene_provenance()` chose between them by testing whether the GeoTIFF had a CRS. That test was **always false**: Zenodo Part III tiles carry EPSG:4326 and a real geotransform exactly like a GEE export, so the sniff matched both corpora and discriminated nothing — every Zenodo bundle would have gone down the classical path. Two rules were violated at once: routing on the *absence* of a property is an invisible tripwire, and the same false premise had been written into `benchmark_scene.py`, which was emitting a Null Island placeholder box for scenes that are georeferenced. `provenance` ∈ `satellite \| benchmark`, optional, absent means `satellite` so nothing needs backfilling. It also carries a second meaning we were going to need anyway: it is what tells the frontend whether `confidence` is a model probability or a rule margin (§6.3). Found by Soum, 13 Sept. |
 | D34 | **Radar contacts move to a top-level `ship_detections` on the FeatureCollection; a contact is never called a dark vessel without an AIS check** | `ship_detections` was nested in each detection's `properties`, but it is a scene-level observation: `run.py` already copied the identical full list onto every feature, so a scene with zero detections had nowhere to put its contacts — both Zenodo bundles silently dropped them (1 on `case-lookalike-zenodo`, 31 on `case-nospill-zenodo`, measured by Soum and reproduced independently) — and the map flattened every feature's copy, drawing Ennore's 72 contacts as 2,088 stacked markers. Top-level key is canonical (absent = not recorded, `[]` = ran and found none); per-feature copy deprecated, accepted, no longer written. **Soum's framing was declined:** he called a no-oil-plus-contact scene the dark-vessel case. Darkness is an absent AIS match and needs AIS at a known time; the Zenodo cases have neither (1970 sentinel), and the Delta contact is a genuine return (29.7σ above the sea) whose identity is unestablished — a structure-or-vessel question no geometric rule can answer. The library's dark-vessel case is Alaska (case 4) — and there our detector finds **no** contact (threshold −8.06, peak −8.79 dB), so its dark-vessel contact is Cerulean's and must never be shown as a NAAP detection. Found by Soum, 13 Sept. |
+| D35 | **Trace is per spill event, not per detection** | Mumbai and Gulf of Alaska each carry three oil detections, and `merge_oil_features()` seeds one trace per case: a merged ribbon when the ribbon gates pass (Jacksonville, where Cerulean's own polygon is an 18-part MultiPolygon of the same slick), otherwise the highest-confidence feature. That is deliberate and physically motivated (`STAGE2_NUMBERS.md` §8.4b), but no contract said so. The frontend copy implied per-detection tracing ("Trace this slick back"), and nothing in the bundle recorded the seed — on Mumbai the trace uses `det-01` (1.5 km²) while `det-02` is 5× larger. Ruling: one trace per event, the pipeline chooses the seed, the UI does not promise a re-trace per click, and the seed decision (`seeded_from`, `n_oil`, merged or not) is appended to `meta.notes`. **No schema change.** Per-detection tracing was declined: it would be a schema extension two days from the demo. Raised by Harshita, 13 Sept. |
+| D36 | **`closest_km` is measured to the origin-grid peak, not the centroid** | `score.py` measured from `origin.centroid` to the vessel's highest-probability report. On Jacksonville both suspects sat on the grid peak (grid probability 0.946 and 0.943), but the peak is 10.65 km from the centroid on a 3.68:1 cloud, so the cards read "10.2 km" for vessels at the most likely origin. That is D8's argument again — the grid is the object, not a circle around its centroid. Field name and type unchanged; the meaning is fixed in §6.7, and the note text names the reference point. **Known cost:** the map's r50/r90 rings stay centred on the centroid, so the card must say "to the peak", not "closest approach". No score, component or weight is affected. Raised by Jaiveer, 13 Sept. |
 
 ---
 
