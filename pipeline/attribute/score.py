@@ -373,6 +373,19 @@ def weighted_score(comps):
     return total, live
 
 
+def rescore(s):
+    """Recompute score and weight_live from the components, in place.
+
+    Used after a gate is applied post-ranking. Identical arithmetic to `score_vessel` -- if these
+    two ever disagree the cards stop matching the ranking, so they stay in this file together
+    rather than drifting apart. (Jaiveer's helper, merged from jaiveer-phase2.)
+    """
+    total, live = weighted_score(s["components"])
+    s["score"] = round(min(1.0, max(0.0, total)), 3)
+    s["weight_live"] = round(live, 3)
+    return s
+
+
 def gate_constant_components(scored, names=("type_prior",)):
     """D28: a component holding the SAME value for every scored candidate gates to `null`.
 
@@ -399,9 +412,7 @@ def gate_constant_components(scored, names=("type_prior",)):
             s["components"][name] = Component.not_applicable(
                 f"every scored candidate scores {vals[0].value:g} here, so it separates "
                 f"nobody and is not counted (D28)")
-            total, live = weighted_score(s["components"])
-            s["score"] = round(min(1.0, max(0.0, total)), 3)
-            s["weight_live"] = round(live, 3)
+            rescore(s)
         gated.append(name)
     return gated
 
@@ -647,11 +658,11 @@ def main():
         # in `abstain_reason` instead, in words, where nothing can round it off: the counts
         # are zero because nothing was searched, NOT because the water was empty. Do not let
         # a card render "0 vessels in region" without that sentence next to it.
-        tracks, in_window, plausible, near_miss = {}, [], [], []
+        tracks, in_window, plausible, near_miss, silent = {}, [], [], [], []
         in_region = dropped_short = 0
         box = None
     else:
-        in_window, plausible, near_miss = [], [], []
+        in_window, plausible, near_miss, silent = [], [], [], []
         tracks = load_tracks(a.parquet)
         if not tracks:
             raise SystemExit("no usable tracks in the parquet")
@@ -675,6 +686,10 @@ def main():
         for t in in_window:
             s = score_vessel(t, grid, t0, t1, ais_source, discharge_class, box)
             if not s:
+                # Jaiveer's case (jaiveer-phase2, merged 14 Sept): score_vessel returns None
+                # when the vessel never touched non-zero origin probability. Those vessels were
+                # dropped silently, which is why three real cases shipped zero exclusions.
+                silent.append(t)
                 continue
             if s["grid_probability"] > PLAUSIBLE_GRID_MIN:
                 plausible.append(s)
@@ -761,6 +776,55 @@ def main():
             })
         if len(doc["excluded"]) >= MAX_EXCLUSIONS:
             break
+
+    # Last, the vessels the scorer could not score at all. `score_vessel` returns None when the
+    # vessel never touched NON-ZERO origin probability, which is two different situations, and
+    # they need two different sentences. Jaiveer's branch said "no AIS position report inside the
+    # release window" for all of them; measured against the real extracts that is false almost
+    # everywhere -- 0 of 23 on Jacksonville, 1 of 65 on Huntington, and Farallones' NAVAJO has
+    # 138 reports inside the window. Saying a ship was absent when it was present all along, on a
+    # judge-facing card, is the kind of claim this project exists not to make.
+    #
+    # Ordering is nearest-to-the-peak first, then MMSI. There are 23 and 65 of these on the two
+    # US cases against MAX_EXCLUSIONS of 3, so without a stated order which three appear depended
+    # on dict iteration order, and two runs of the same data named different ships -- that is how
+    # our list and Jaiveer's came out different. Nearest-first also puts the most interesting
+    # exclusion on the card: the ship that got closest and still did not do it.
+    def _silence(track):
+        idx = [i for i, ts in enumerate(track.ts) if t0 <= ts <= t1]
+        if not idx:
+            return None, 0
+        pk = grid.peak_lonlat()
+        return min(geo.haversine_km(track.lon[i], track.lat[i], *pk) for i in idx), len(idx)
+
+    measured = []
+    for t in silent:
+        km, n = _silence(t)
+        measured.append((km if km is not None else float("inf"), t.mmsi, t, km, n))
+    measured.sort(key=lambda r: (r[0], r[1]))
+
+    for _key, _mmsi, t, km, n in measured:
+        if len(doc["excluded"]) >= MAX_EXCLUSIONS:
+            break
+        if n == 0:
+            # Genuinely absent: nothing to measure, so closest_km is null, not a number.
+            reason = ("no AIS position report inside the release window — the track enters or "
+                      "leaves the search box either side of it")
+            km = None
+        else:
+            # Present and broadcasting the whole time, and still never inside the cloud. Every
+            # sample it gave us scored zero grid probability, so "the report with the highest
+            # grid probability" (D36) ties across all of them; the nearest is the honest reading
+            # of the distance, and it is a real measurement rather than a stand-in.
+            reason = (f"{n} AIS reports inside the release window and never entered the "
+                      f"reconstructed origin — closest approach {km:.1f} km from the peak, at "
+                      f"zero grid probability throughout")
+        doc["excluded"].append({
+            "mmsi": t.mmsi,
+            "name": t.name or "",
+            "closest_km": None if km is None else round(km, 2),
+            "reason": reason,
+        })
 
     # vessels.geojson: the plausible set only, so the map draws what was considered —
     # and clipped to the release window with an hour either side. The full 24-hour track

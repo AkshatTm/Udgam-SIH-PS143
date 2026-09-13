@@ -92,6 +92,18 @@
       "name": "RANDY BETH",
       "closest_km": 50.25,
       "reason": "heading away from the origin throughout the window"
+    },
+    {
+      "mmsi": "368127540",
+      "name": "GALE MIST II",
+      "closest_km": 33.16,
+      "reason": "92 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 33.2 km from the peak, at zero grid probability throughout"
+    },
+    {
+      "mmsi": "338071000",
+      "name": "MAERSK PITTSBURGH",
+      "closest_km": 41.0,
+      "reason": "155 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 41.0 km from the peak, at zero grid probability throughout"
     }
   ],
   "abstained": false,

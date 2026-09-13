@@ -123,7 +123,14 @@
   ],
   "dark_vessels": [],
   "infrastructure": [],
-  "excluded": [],
+  "excluded": [
+    {
+      "mmsi": "367008770",
+      "name": "NAVAJO",
+      "closest_km": 27.82,
+      "reason": "138 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 27.8 km from the peak, at zero grid probability throughout"
+    }
+  ],
   "abstained": false,
   "abstain_reason": null
 }

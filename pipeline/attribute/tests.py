@@ -864,6 +864,78 @@ class TestExclusionReason(unittest.TestCase):
             self.entry(proximity=0.9, trajectory=1.0, gap=1.0)))
 
 
+class TestHomogeneousTypeGate(unittest.TestCase):
+    """D28, from Jaiveer's jaiveer-phase2 branch (merged 14 Sept). The rule's trigger sentence
+    and its rationale disagree, and these pin which one the code follows. Ported unchanged except
+    for the function name: ours is the generic gate and returns the list of components it gated,
+    so truthiness reads the same.
+
+    The last two are the argument behind the validator's constant-zero exemption, and they are
+    why that exemption is not merely a convenience: gating a uniform 1.00 lowers every score,
+    gating a uniform 0.00 raises it.
+    """
+
+    def candidate(self, vessel_type, type_prior_value, proximity=0.5):
+        return {
+            "track": StubTrack(vessel_type=vessel_type),
+            "components": {
+                "proximity": score.Component(proximity),
+                "parity": score.Component.not_applicable("test"),
+                "temporality": score.Component.not_applicable("test"),
+                "trajectory": score.Component.not_applicable("test"),
+                "gap": score.Component.not_applicable("test"),
+                "slowdown": score.Component.not_applicable("test"),
+                "type_prior": score.Component(type_prior_value),
+            },
+            "score": 0.0, "weight_live": 0.0,
+        }
+
+    def test_identical_value_across_different_classes_still_gates(self):
+        """Farallones: one tanker, two cargo — different classes, identical 1.00 prior."""
+        cands = [self.candidate("tanker", 1.0), self.candidate("cargo", 1.0)]
+        self.assertTrue(score.gate_constant_components(cands))
+        for c in cands:
+            self.assertFalse(c["components"]["type_prior"].applicable)
+            self.assertIn("D28", c["components"]["type_prior"].note)
+
+    def test_differing_values_are_left_alone(self):
+        cands = [self.candidate("tanker", 1.0), self.candidate("passenger", 0.2)]
+        self.assertFalse(score.gate_constant_components(cands))
+        self.assertTrue(cands[0]["components"]["type_prior"].applicable)
+
+    def test_a_single_candidate_is_never_gated(self):
+        cands = [self.candidate("cargo", 1.0)]
+        self.assertFalse(score.gate_constant_components(cands),
+                         "one candidate cannot be 'the same for everybody'")
+
+    def test_gating_a_value_of_one_lowers_the_score(self):
+        """The direction that makes D28 correct. proximity 0.50 at weight 0.30 plus type_prior
+        1.00 at 0.05: 0.200/0.35 = 0.571 before, 0.150/0.30 = 0.500 after."""
+        cands = [self.candidate("tanker", 1.0), self.candidate("cargo", 1.0)]
+        for c in cands:
+            score.rescore(c)
+        before = cands[0]["score"]
+        score.gate_constant_components(cands)
+        self.assertAlmostEqual(before, 0.571, places=3)
+        self.assertAlmostEqual(cands[0]["score"], 0.500, places=3)
+        self.assertLess(cands[0]["score"], before)
+
+    def test_gating_a_value_of_zero_would_raise_it_instead(self):
+        """Why the validator does NOT ask for this on a component sitting at 0.0. Same fixture,
+        type_prior 0.00: 0.150/0.35 = 0.429 before, 0.150/0.30 = 0.500 after — the score goes UP.
+        A uniform zero is a measured finding about the fleet, and removing it inflates every
+        score while claiming we could not measure what we did measure."""
+        cands = [self.candidate("tanker", 0.0), self.candidate("cargo", 0.0)]
+        for c in cands:
+            score.rescore(c)
+        before = cands[0]["score"]
+        score.gate_constant_components(cands)
+        self.assertAlmostEqual(before, 0.429, places=3)
+        self.assertAlmostEqual(cands[0]["score"], 0.500, places=3)
+        self.assertGreater(cands[0]["score"], before,
+                           "this is the inversion the validator's D28 hint misses")
+
+
 class TestPhase8Offender(unittest.TestCase):
     """The injected offender is the measuring instrument for Phase 8, so it gets asserted like
     one. If it does not actually pass through the discharge point, or the silence it claims to
