@@ -1,9 +1,14 @@
 # Citation File Format 1.2.0 — https://citation-file-format.github.io
 #
 # TODO before this repository is cited anywhere formal (paper, thesis, NTRO submission):
-#   fill `family-names` for all six authors and add ORCIDs where they exist. Only given
-#   names were recorded in the project documents, and per docs/receipts.md a TODO is not
-#   deleted by guessing — a wrong surname on a citation is worse than a missing one.
+#   fill `family-names` for the six team authors below, and add ORCIDs where they exist.
+#   Only given names are recorded anywhere in the project documents, and per
+#   docs/receipts.md a TODO is not deleted by guessing — a wrong surname on a citation is
+#   worse than a missing one. Everything else in this file has been verified against the
+#   source: the dataset record, its authors and its licence come from Zenodo, and the
+#   dataset paper from its DOI.
+#
+#   Validate after editing:  pip install cffconvert && cffconvert --validate
 cff-version: 1.2.0
 title: >-
   Naap: satellite forensics for oil-spill source attribution from
@@ -58,24 +63,42 @@ version: 0.4.0
 date-released: '2026-09-14'
 references:
   - type: data
-    title: Oil spill detection dataset (Parts I-III)
+    title: >-
+      Sentinel-1 SAR Oil spill image dataset for train, validate, and test
+      deep learning models. Part III
     authors:
-      - name: Trujillo-Acatitla et al.
+      - family-names: Trujillo-Acatitla
+        given-names: Rubicel
+      - family-names: Tuxpan-Vargas
+        given-names: José
+      - family-names: Ovando-Vázquez
+        given-names: Cesaré
+      - family-names: Monterrubio-Martínez
+        given-names: Erandi
     doi: 10.5281/zenodo.13761290
+    license: CC-BY-4.0
     notes: >-
-      CC-BY. Part III is the authors' designated test set and is the held-out
-      split behind every Stage 1 figure this project reports. Dataset paper:
-      Marine Pollution Bulletin 204:116549 (2024).
+      Part III is the authors' designated test set and is the held-out split
+      behind every Stage 1 figure this project reports. Attribution is a
+      licence condition, not a courtesy.
   - type: article
-    # TODO: exact article title not recorded in this repository — fill from the DOI
-    # before formal citation. Do not guess it.
-    title: 'TODO: title not recorded'
+    title: >-
+      Marine oil spill detection and segmentation in SAR data with two steps
+      Deep Learning framework
     authors:
-      - name: Trujillo-Acatitla et al.
+      - family-names: Trujillo-Acatitla
+        given-names: Rubicel
+      - family-names: Tuxpan-Vargas
+        given-names: José
+      - family-names: Ovando-Vázquez
+        given-names: Cesaré
+      - family-names: Monterrubio-Martínez
+        given-names: Erandi
     journal: Marine Pollution Bulletin
     volume: 204
     pages: '116549'
     year: 2024
+    doi: 10.1016/j.marpolbul.2024.116549
     notes: >-
       The dataset paper for DOI 10.5281/zenodo.13761290. Recorded in
       docs/00_MASTER_PLAN.md Part 10, where the authors report 99%

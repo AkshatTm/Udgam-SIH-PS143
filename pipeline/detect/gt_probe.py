@@ -26,7 +26,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from darkspot_v2 import load_scene, detect_array
+from darkspot import load_scene, detect_array
 
 img_path, mask_path = sys.argv[1], sys.argv[2]
 db, px = load_scene(img_path)

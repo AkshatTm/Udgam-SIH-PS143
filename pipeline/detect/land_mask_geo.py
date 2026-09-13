@@ -2,7 +2,7 @@
 land_mask_geo.py — a REAL coastline land mask for the Ennore / US demo scenes
 (anything that has lon/lat bounds, i.e. Akshat's GEE export + bounds.json).
 
-The Zenodo scenes have no reliable land information, so darkspot_v2 infers
+The Zenodo scenes have no reliable land information, so darkspot infers
 land from brightness. For the demo scenes we know where we are on Earth, so
 use an actual coastline instead: `global-land-mask` (pip install
 global-land-mask) is a ~1 km land/sea raster, offline, no API, no token.

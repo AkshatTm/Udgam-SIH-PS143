@@ -8,11 +8,12 @@ Run:  python test_synthetic.py
 Expect: v1 recall on the thin streak ~0%, v2 recall > 80%, and v2 producing
 no regions on the land block, the seam, or the ship halo.
 """
+import os
 import numpy as np
 from scipy import ndimage as ndi
 import cv2
 
-from darkspot_v2 import detect_array
+from darkspot import detect_array
 
 rng = np.random.default_rng(0)
 H = W = 2048
@@ -121,5 +122,11 @@ for a, m, title in [(ax[0], gt, "ground truth"), (ax[1], v1_mask, "v1 detections
     a.set_title(title)
     a.axis("off")
 fig.tight_layout()
-fig.savefig("synthetic_v1_vs_v2.png", dpi=90)
-print("\nwrote synthetic_v1_vs_v2.png")
+# Diagnostic picture, regenerable in seconds -> out/ (scratch, gitignored), not
+# results/ (committed evidence). Script-relative so it lands in the same place
+# wherever this is run from.
+_OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+os.makedirs(_OUT, exist_ok=True)
+_png = os.path.join(_OUT, "synthetic_v1_vs_v2.png")
+fig.savefig(_png, dpi=90)
+print(f"\nwrote {_png}")

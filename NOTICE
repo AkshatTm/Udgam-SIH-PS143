@@ -21,10 +21,15 @@ Mandatory attributions, reproduced here as the upstream licences require:
   Contains modified Copernicus Sentinel data (2021-2024), processed by Team Naap.
   Sentinel-1 GRD scenes accessed through Google Earth Engine (COPERNICUS/S1_GRD).
 
-  Oil-spill detection dataset, Zenodo, DOI 10.5281/zenodo.13761290, licensed
-  CC-BY. Dataset paper: Trujillo-Acatitla et al., Marine Pollution Bulletin
-  204:116549 (2024). Part III is the authors' designated test set and is the
-  held-out split behind every Stage 1 number this project reports.
+  Trujillo-Acatitla, Rubicel; Tuxpan-Vargas, Jose; Ovando-Vazquez, Cesare;
+  Monterrubio-Martinez, Erandi. "Sentinel-1 SAR Oil spill image dataset for
+  train, validate, and test deep learning models. Part III." Zenodo,
+  DOI 10.5281/zenodo.13761290. Licensed CC-BY-4.0. Part III is the authors'
+  designated test set and is the held-out split behind every Stage 1 number
+  this project reports.
+  Dataset paper: Trujillo-Acatitla et al., "Marine oil spill detection and
+  segmentation in SAR data with two steps Deep Learning framework," Marine
+  Pollution Bulletin 204:116549 (2024), DOI 10.1016/j.marpolbul.2024.116549.
   (Not to be confused with the Krestenitis 5-class benchmark, which is a
   different dataset, is not openly available, and is not used here.)
 
@@ -36,6 +41,8 @@ Mandatory attributions, reproduced here as the upstream licences require:
   USE ONLY and that condition reaches the two bundles derived from it.
 
   Slick polygons used as a comparison target, never as ground truth: SkyTruth
-  Cerulean public OGC Features API.
+  Cerulean public OGC Features API. SkyTruth data products are licensed
+  CC BY-SA 4.0 -- attribution AND ShareAlike -- so the five committed
+  cerulean_slick.geojson files stay under that licence. See DATA_LICENSES.md.
 
   Coastline: GSHHG, via the global-land-mask package.

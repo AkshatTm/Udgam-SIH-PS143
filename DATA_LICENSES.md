@@ -22,11 +22,12 @@ Provenance down to the scene id, the fetch date and the request parameters lives
 | ERA5 (Copernicus C3S, via Google Earth Engine) | 10 m wind components → drift wind term | Copernicus C3S licence | **Yes** | Yes |
 | NOAA Marine Cadastre AIS | Vessel tracks → `vessels.geojson`, `suspects.json` | US Government work, public domain | Courtesy | Yes |
 | Global Fishing Watch API v3 | Hourly vessel positions for the two Indian cases | **NON-COMMERCIAL USE ONLY** | **Yes** | **NO** |
-| SkyTruth Cerulean public OGC API | Slick polygons → `cerulean_slick.geojson` | TODO — not verified; the API is public and unauthenticated, but the redistribution terms were never read | **Yes** | TODO |
+| SkyTruth Cerulean public OGC API | Slick polygons → `cerulean_slick.geojson` | **CC BY-SA 4.0** — attribution **and ShareAlike** | **Yes** | Yes, under ShareAlike |
 | GSHHG shoreline (via `global-land-mask`) | Land mask for near-shore drift | GSHHG is LGPL / public-domain-derived | Courtesy | Yes |
 
-`TODO` above means genuinely not established yet. Per the convention in `docs/receipts.md`:
-**do not delete a TODO by guessing.**
+Where a term above is stated, it was read from the provider, not assumed. Anything still unverified
+would be marked `TODO` — and per the convention in `docs/receipts.md`, **a TODO is not deleted by
+guessing.**
 
 ---
 
@@ -85,12 +86,35 @@ Exact scene identifiers for all nine cases are tabulated in `docs/receipts.md`.
 
 ---
 
-## SkyTruth Cerulean — comparison target, never ground truth
+## SkyTruth Cerulean — CC BY-SA 4.0, and a comparison target, never ground truth
 
-`cerulean_slick.geojson` ships inside five bundles. It is **SkyTruth's polygon, not a Naap
-detection**, and each file says so in its own contents. Cerulean themselves state that SAR alone
-cannot definitively identify oil slicks and that their detections are *potential* slicks; this
-project repeats that rather than quietly upgrading it to truth.
+**SkyTruth licenses all its data sets, maps, images and related products under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)** (verified against their
+[Terms of Service](https://skytruth.org/terms-of-service/), September 2026). Commercial use is
+permitted. **Attribution is required, and so is ShareAlike.**
+
+`cerulean_slick.geojson` ships inside five bundles:
+
+- `case-farallones-2023` · `case-gulf-alaska-2023` · `case-jacksonville-2024`
+- `case-jamnagar-2024` · `case-mumbai-2023`
+
+Each file is redistributed essentially as received — SkyTruth's polygon and centerline for the
+feature — so **those five files remain CC BY-SA 4.0 and carry the ShareAlike condition with them.**
+That is narrower than it sounds: it attaches to the Cerulean-derived file, not to this
+repository's own code or documentation merely distributed alongside it. If you *adapt* one of
+those polygons, your adaptation must also be CC BY-SA 4.0.
+
+SkyTruth's recommended citation format is:
+
+> SkyTruth [Name of Product or Service with Link], [Year]. CC BY-SA 4.0. [Modifications made, if
+> any] by [Your Name]. Accessed YYYY-MM-DD.
+
+### It is a comparison target, not ground truth
+
+The polygon is **SkyTruth's detection, not a Naap detection**, and each file says so in its own
+contents. Cerulean themselves state that SAR alone cannot definitively identify oil slicks and
+that their detections are *potential* slicks; this project repeats that rather than quietly
+upgrading it to truth.
 
 Two consequences that are licensing-adjacent and worth stating here:
 
@@ -126,6 +150,7 @@ is committed on purpose because it is the evidence behind the reported classical
 | Source code (`pipeline/`, `scripts/`, `web/`) | Apache-2.0 — see [`LICENSE`](LICENSE) |
 | Documentation (`docs/`, `*.md`) | CC-BY-4.0 |
 | Case bundles (`cases/`) | Team Naap's contribution is CC-BY-4.0; **the upstream terms above still apply to the underlying data** |
+| `cases/*/cerulean_slick.geojson` (5 files) | **CC BY-SA 4.0** — SkyTruth's, ShareAlike, not ours to relicense |
 
 If those two sets of terms ever conflict for a particular file, the upstream licence wins. We
 cannot sublicense someone else's data more permissively than we received it.

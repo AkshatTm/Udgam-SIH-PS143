@@ -14,7 +14,7 @@ numbers on 75-149 — never tune and report on the same scenes.
 import argparse, csv, glob, os, time
 import numpy as np
 import rasterio
-from darkspot_v2 import load_scene, detect_array
+from darkspot import load_scene, detect_array
 
 ap = argparse.ArgumentParser()
 ap.add_argument("root")

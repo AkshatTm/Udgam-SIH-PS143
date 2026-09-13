@@ -129,6 +129,12 @@ detections.** It did not.
 Public OGC Features API, **no key, no authentication**: `https://api.cerulean.skytruth.org`,
 collection `public.slick_plus`. Wrapped by `scripts/fetch_cerulean.py`. Fetched 2026-09-12.
 
+**Licence: CC BY-SA 4.0** — SkyTruth licenses all its data sets, maps, images and related products
+under Creative Commons Attribution-**ShareAlike** 4.0. Verified against their Terms of Service
+14 Sept 2026. Commercial use is allowed; attribution and ShareAlike are both required, so the five
+committed `cerulean_slick.geojson` files stay under that licence rather than this project's.
+Details and the required citation format: `DATA_LICENSES.md`.
+
 Each bundle carries `cerulean_slick.geojson` — their polygon plus centerline for the same
 feature. It is a **comparison target for Stage 1, not ground truth and not a NAAP detection**,
 and it ships with that wording inside the file. Cerulean themselves state that SAR alone cannot
@@ -221,7 +227,18 @@ origin position on any case.
 ## Training data
 
 **Zenodo oil-spill dataset, Part III** — DOI [10.5281/zenodo.13761290](https://doi.org/10.5281/zenodo.13761290)
-- Licence **CC-BY** → **must be cited on a slide.** (Urooz: data-provenance slide.)
+- Full title: *Sentinel-1 SAR Oil spill image dataset for train, validate, and test deep learning
+  models. Part III.*
+- Authors: **Trujillo-Acatitla, Rubicel; Tuxpan-Vargas, José; Ovando-Vázquez, Cesaré;
+  Monterrubio-Martínez, Erandi.** Verified against the Zenodo record 14 Sept 2026 — previously
+  only "Trujillo-Acatitla et al." was recorded here.
+- Dataset paper: *Marine oil spill detection and segmentation in SAR data with two steps Deep
+  Learning framework*, **Mar Pollut Bull 204:116549 (2024)**,
+  DOI [10.1016/j.marpolbul.2024.116549](https://doi.org/10.1016/j.marpolbul.2024.116549).
+- Licence **CC-BY-4.0** → **must be cited on a slide.** (Urooz: data-provenance slide.) The
+  attribution is a licence condition, not a courtesy — the wording to use is in `NOTICE`.
+- **Not the Krestenitis benchmark.** Different dataset, not openly available, not used here — see
+  Master Part 10, and do not quote its ~53% IoU as ours.
 - 150 oil + 150 look-alike + 150 no-oil scenes, 2048×2048×2 (VV, VH) GeoTIFF in dB, plus masks.
 - Part I (DOI 10.5281/zenodo.8346860, 40.7 GB) downloaded for the October CNN work. **Not used
   in this sprint** — do not claim it was.

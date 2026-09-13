@@ -1,7 +1,7 @@
 """
-darkspot_v2.py — Phase 2 dark-spot finder, version 2. Owner: Soum.
+darkspot.py — Phase 2 dark-spot finder, version 2. Owner: Soum.
 
-Drop-in replacement for darkspot.py. Same public entry points
+This IS the v2 detector; it replaced the v1 file of the same name. Same public entry points
 (`load_scene`, `detect`) and the same region-dict shape, so features.py /
 make_labels.py keep working. Adds `detect_array` for arrays that don't come
 from a Zenodo TIF (e.g. the GEE float GeoTIFF for Ennore).
@@ -355,7 +355,7 @@ if __name__ == "__main__":
     ap.add_argument("--k-high", type=float, default=3.0, help="core must be this many noise-MADs deep")
     ap.add_argument("--k-low", type=float, default=1.5)
     ap.add_argument("--mask", help="optional GT mask tif to overlay in green")
-    ap.add_argument("--out", default="darkspot_v2_preview.png")
+    ap.add_argument("--out", default="darkspot_preview.png")
     a = ap.parse_args()
 
     db, px = load_scene(a.tif_path, band=a.band)
