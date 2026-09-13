@@ -1,0 +1,162 @@
+{
+  "parquet": "data/ais/jacksonville.parquet",
+  "trials_per_point": 300,
+  "seed": 143,
+  "background_vessels": 46,
+  "conditions": {
+    "baseline": {
+      "condition": {
+        "density": 1.0,
+        "gap": 0,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": false
+      },
+      "trials": 300,
+      "abstained": 39,
+      "decided": 261,
+      "top1": 151,
+      "top3": 240,
+      "top1_rate": 0.579,
+      "top3_rate": 0.92,
+      "top1_ci": [
+        0.518,
+        0.637
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    }
+  },
+  "ablation": {
+    "none": {
+      "trials": 300,
+      "abstained": 39,
+      "decided": 261,
+      "top1": 151,
+      "top3": 240,
+      "top1_rate": 0.579,
+      "top3_rate": 0.92,
+      "top1_ci": [
+        0.518,
+        0.637
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    },
+    "proximity": {
+      "trials": 300,
+      "abstained": 65,
+      "decided": 235,
+      "top1": 111,
+      "top3": 213,
+      "top1_rate": 0.472,
+      "top3_rate": 0.906,
+      "top1_ci": [
+        0.409,
+        0.536
+      ],
+      "median_rank": 2.0,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    },
+    "parity": {
+      "trials": 300,
+      "abstained": 39,
+      "decided": 261,
+      "top1": 151,
+      "top3": 240,
+      "top1_rate": 0.579,
+      "top3_rate": 0.92,
+      "top1_ci": [
+        0.518,
+        0.637
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    },
+    "temporality": {
+      "trials": 300,
+      "abstained": 42,
+      "decided": 258,
+      "top1": 132,
+      "top3": 226,
+      "top1_rate": 0.512,
+      "top3_rate": 0.876,
+      "top1_ci": [
+        0.451,
+        0.572
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    },
+    "trajectory": {
+      "trials": 300,
+      "abstained": 33,
+      "decided": 267,
+      "top1": 141,
+      "top3": 244,
+      "top1_rate": 0.528,
+      "top3_rate": 0.914,
+      "top1_ci": [
+        0.468,
+        0.587
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    },
+    "gap": {
+      "trials": 300,
+      "abstained": 52,
+      "decided": 248,
+      "top1": 179,
+      "top3": 233,
+      "top1_rate": 0.722,
+      "top3_rate": 0.94,
+      "top1_ci": [
+        0.663,
+        0.774
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    },
+    "slowdown": {
+      "trials": 300,
+      "abstained": 44,
+      "decided": 256,
+      "top1": 150,
+      "top3": 238,
+      "top1_rate": 0.586,
+      "top3_rate": 0.93,
+      "top1_ci": [
+        0.525,
+        0.645
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    },
+    "type_prior": {
+      "trials": 300,
+      "abstained": 46,
+      "decided": 254,
+      "top1": 141,
+      "top3": 229,
+      "top1_rate": 0.555,
+      "top3_rate": 0.902,
+      "top1_ci": [
+        0.494,
+        0.615
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    }
+  }
+}

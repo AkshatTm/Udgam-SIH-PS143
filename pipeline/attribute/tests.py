@@ -864,6 +864,77 @@ class TestExclusionReason(unittest.TestCase):
             self.entry(proximity=0.9, trajectory=1.0, gap=1.0)))
 
 
+class TestPhase8Offender(unittest.TestCase):
+    """The injected offender is the measuring instrument for Phase 8, so it gets asserted like
+    one. If it does not actually pass through the discharge point, or the silence it claims to
+    carry is not there, every number in the curve is measuring something else.
+    """
+
+    def setUp(self):
+        import evaluate
+        self.ev = evaluate
+        self.when = datetime(2024, 7, 30, 3, 0, tzinfo=timezone.utc)
+
+    def offender(self, gap=0, slowdown=False, cadence=60):
+        return self.ev.synthetic_offender(-79.7, 30.0, self.when, cadence, gap,
+                                          slowdown, course_deg=90.0, speed_kn=12.0)
+
+    def test_it_passes_through_the_discharge_point_at_the_stated_time(self):
+        p = self.offender().position_at(self.when)
+        self.assertIsNotNone(p)
+        self.assertLess(geo.haversine_km(p[0], p[1], -79.7, 30.0), 0.05,
+                        "the offender must be AT its own discharge point at that timestamp")
+
+    def test_it_reports_from_outside_any_swept_r90(self):
+        t = self.offender()
+        far = max(geo.haversine_km(lo, la, -79.7, 30.0) for lo, la in zip(t.lon, t.lat))
+        self.assertGreater(far, max(self.ev.R90_TARGETS_KM),
+                           "without a report outside r90 the trajectory component gates to "
+                           "null (D27) and the sweep would measure a component that never fires")
+
+    def test_an_injected_gap_is_actually_in_the_track(self):
+        t = self.offender(gap=90)
+        window = (self.when - timedelta(hours=1), self.when + timedelta(hours=1))
+        self.assertAlmostEqual(t.gap_overlapping(*window), 90 + 1, delta=2,
+                               msg="the silence must overlap the release window to be scorable")
+
+    def test_no_gap_requested_means_no_silence(self):
+        t = self.offender(gap=0)
+        self.assertLess(t.gap_overlapping(self.when - timedelta(hours=1),
+                                          self.when + timedelta(hours=1)), 2.0)
+
+    def test_the_vessel_is_under_way_on_both_sides_of_the_silence(self):
+        t = self.offender(gap=90)
+        self.assertTrue(all(s >= score.UNDERWAY_KNOTS for s in t.sog if s is not None),
+                        "a silence with a moored vessel either side is not a transponder gap, "
+                        "and component_gap correctly refuses to score it")
+
+    def test_slowdown_shows_up_only_near_closest_approach(self):
+        t = self.offender(slowdown=True)
+        i = min(range(len(t.ts)), key=lambda j: abs((t.ts[j] - self.when).total_seconds()))
+        self.assertLess(t.sog[i], 12.0 * 0.5)
+        self.assertAlmostEqual(t.sog[0], 12.0, places=6, msg="cruising speed away from the release")
+
+    def test_decimation_thins_to_the_requested_cadence(self):
+        t = self.ev.decimate(self.offender(cadence=60), 3600)
+        deltas = [(b - a).total_seconds() for a, b in zip(t.ts, t.ts[1:])]
+        self.assertTrue(all(d >= 3600 for d in deltas), "hourly means hourly")
+
+    def test_the_synthetic_grid_reports_the_size_it_was_asked_for(self):
+        g = self.ev.synthetic_grid(-79.7, 30.0, 10.0,
+                                   self.when - timedelta(hours=2),
+                                   self.when + timedelta(hours=2))
+        self.assertAlmostEqual(g.radius_90_km, 10.0, delta=2.0,
+                               msg="the sweep axis has to be the cloud the scorer actually saw")
+        self.assertLess(g.radius_50_km, g.radius_90_km)
+
+    def test_wilson_interval_brackets_the_point_estimate(self):
+        lo, hi = self.ev.wilson(45, 50)
+        self.assertLess(lo, 0.9)
+        self.assertGreater(hi, 0.9)
+        self.assertEqual(self.ev.wilson(0, 0), (0.0, 0.0))
+
+
 class TestInfrastructure(unittest.TestCase):
     """Phase 4. Hand-computed geometry: a square slick 0.02 deg on a side at the equator-ish
     latitude 33.6, so the arithmetic is checkable on paper rather than read back out of the

@@ -1,0 +1,522 @@
+{
+  "parquet": "data/ais/jacksonville.parquet",
+  "trials_per_point": 300,
+  "seed": 143,
+  "background_vessels": 46,
+  "conditions": {
+    "baseline": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 23,
+      "decided": 277,
+      "top1": 252,
+      "top3": 267,
+      "top1_rate": 0.91,
+      "top3_rate": 0.964,
+      "top1_ci": [
+        0.87,
+        0.938
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "density=0.25": {
+      "condition": {
+        "density": 0.25,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 19,
+      "decided": 281,
+      "top1": 275,
+      "top3": 278,
+      "top1_rate": 0.979,
+      "top3_rate": 0.989,
+      "top1_ci": [
+        0.954,
+        0.99
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 1.0
+    },
+    "density=0.5": {
+      "condition": {
+        "density": 0.5,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 18,
+      "decided": 282,
+      "top1": 268,
+      "top3": 274,
+      "top1_rate": 0.95,
+      "top3_rate": 0.972,
+      "top1_ci": [
+        0.918,
+        0.97
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 2.0
+    },
+    "density=1.0": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 23,
+      "decided": 277,
+      "top1": 252,
+      "top3": 267,
+      "top1_rate": 0.91,
+      "top3_rate": 0.964,
+      "top1_ci": [
+        0.87,
+        0.938
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "gap=0min": {
+      "condition": {
+        "density": 1.0,
+        "gap": 0,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 40,
+      "decided": 260,
+      "top1": 177,
+      "top3": 244,
+      "top1_rate": 0.681,
+      "top3_rate": 0.938,
+      "top1_ci": [
+        0.622,
+        0.734
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    },
+    "gap=45min": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 23,
+      "decided": 277,
+      "top1": 252,
+      "top3": 267,
+      "top1_rate": 0.91,
+      "top3_rate": 0.964,
+      "top1_ci": [
+        0.87,
+        0.938
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "gap=120min": {
+      "condition": {
+        "density": 1.0,
+        "gap": 120,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 22,
+      "decided": 278,
+      "top1": 252,
+      "top3": 268,
+      "top1_rate": 0.906,
+      "top3_rate": 0.964,
+      "top1_ci": [
+        0.866,
+        0.935
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "r90=3.0km": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 3.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 22,
+      "decided": 278,
+      "top1": 252,
+      "top3": 269,
+      "top1_rate": 0.906,
+      "top3_rate": 0.968,
+      "top1_ci": [
+        0.866,
+        0.935
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 2.0
+    },
+    "r90=10.0km": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 23,
+      "decided": 277,
+      "top1": 252,
+      "top3": 267,
+      "top1_rate": 0.91,
+      "top3_rate": 0.964,
+      "top1_ci": [
+        0.87,
+        0.938
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "r90=25.0km": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 25.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 26,
+      "decided": 274,
+      "top1": 213,
+      "top3": 257,
+      "top1_rate": 0.777,
+      "top3_rate": 0.938,
+      "top1_ci": [
+        0.724,
+        0.823
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 4.0
+    },
+    "sampling=noaa_dense": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 23,
+      "decided": 277,
+      "top1": 252,
+      "top3": 267,
+      "top1_rate": 0.91,
+      "top3_rate": 0.964,
+      "top1_ci": [
+        0.87,
+        0.938
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "sampling=gfw_hourly": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "gfw_hourly",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 93,
+      "decided": 207,
+      "top1": 101,
+      "top3": 137,
+      "top1_rate": 0.488,
+      "top3_rate": 0.662,
+      "top1_ci": [
+        0.421,
+        0.556
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 137,
+      "median_plausible_set": 2.0
+    },
+    "origin_err=0.0xr90": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.0,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 11,
+      "decided": 289,
+      "top1": 289,
+      "top3": 289,
+      "top1_rate": 1.0,
+      "top3_rate": 1.0,
+      "top1_ci": [
+        0.987,
+        1.0
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 0,
+      "median_plausible_set": 3.0
+    },
+    "origin_err=0.5xr90": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 23,
+      "decided": 277,
+      "top1": 252,
+      "top3": 267,
+      "top1_rate": 0.91,
+      "top3_rate": 0.964,
+      "top1_ci": [
+        0.87,
+        0.938
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "origin_err=1.0xr90": {
+      "condition": {
+        "density": 1.0,
+        "gap": 45,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 1.0,
+        "slowdown": true
+      },
+      "trials": 300,
+      "abstained": 64,
+      "decided": 236,
+      "top1": 154,
+      "top3": 184,
+      "top1_rate": 0.653,
+      "top3_rate": 0.78,
+      "top1_ci": [
+        0.59,
+        0.71
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 98,
+      "median_plausible_set": 2.0
+    },
+    "offender=plain": {
+      "condition": {
+        "density": 1.0,
+        "gap": 0,
+        "r90": 10.0,
+        "sampling": "noaa_dense",
+        "origin_error_frac": 0.5,
+        "slowdown": false
+      },
+      "trials": 300,
+      "abstained": 52,
+      "decided": 248,
+      "top1": 138,
+      "top3": 229,
+      "top1_rate": 0.556,
+      "top3_rate": 0.923,
+      "top1_ci": [
+        0.494,
+        0.617
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 17,
+      "median_plausible_set": 3.0
+    }
+  },
+  "ablation": {
+    "none": {
+      "trials": 300,
+      "abstained": 23,
+      "decided": 277,
+      "top1": 252,
+      "top3": 267,
+      "top1_rate": 0.91,
+      "top3_rate": 0.964,
+      "top1_ci": [
+        0.87,
+        0.938
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "proximity": {
+      "trials": 300,
+      "abstained": 13,
+      "decided": 287,
+      "top1": 271,
+      "top3": 277,
+      "top1_rate": 0.944,
+      "top3_rate": 0.965,
+      "top1_ci": [
+        0.911,
+        0.965
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "parity": {
+      "trials": 300,
+      "abstained": 23,
+      "decided": 277,
+      "top1": 252,
+      "top3": 267,
+      "top1_rate": 0.91,
+      "top3_rate": 0.964,
+      "top1_ci": [
+        0.87,
+        0.938
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "temporality": {
+      "trials": 300,
+      "abstained": 24,
+      "decided": 276,
+      "top1": 239,
+      "top3": 262,
+      "top1_rate": 0.866,
+      "top3_rate": 0.949,
+      "top1_ci": [
+        0.821,
+        0.901
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "trajectory": {
+      "trials": 300,
+      "abstained": 20,
+      "decided": 280,
+      "top1": 250,
+      "top3": 269,
+      "top1_rate": 0.893,
+      "top3_rate": 0.961,
+      "top1_ci": [
+        0.851,
+        0.924
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "gap": {
+      "trials": 300,
+      "abstained": 52,
+      "decided": 248,
+      "top1": 214,
+      "top3": 237,
+      "top1_rate": 0.863,
+      "top3_rate": 0.956,
+      "top1_ci": [
+        0.815,
+        0.9
+      ],
+      "median_rank": 1,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "slowdown": {
+      "trials": 300,
+      "abstained": 27,
+      "decided": 273,
+      "top1": 242,
+      "top3": 262,
+      "top1_rate": 0.886,
+      "top3_rate": 0.96,
+      "top1_ci": [
+        0.843,
+        0.919
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    },
+    "type_prior": {
+      "trials": 300,
+      "abstained": 21,
+      "decided": 279,
+      "top1": 252,
+      "top3": 269,
+      "top1_rate": 0.903,
+      "top3_rate": 0.964,
+      "top1_ci": [
+        0.863,
+        0.933
+      ],
+      "median_rank": 1.0,
+      "offender_never_plausible": 18,
+      "median_plausible_set": 3.0
+    }
+  }
+}
