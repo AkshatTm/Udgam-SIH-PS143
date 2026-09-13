@@ -15,10 +15,10 @@ stronger story from 01_AKSHAT_INTEGRATION Part I — a backward reconstruction t
 course, a speed and an outbound track, reducing an unsolved discharge to a single database
 query, and then showing that the query cannot be run.
 
->>> STATUS: written against GFW's documented v3 API but NOT yet run against it — there was no
->>> token on disk when it was written. Expect one round of fixing (dataset ids and the report
->>> body are the likely culprits). Every response is printed raw on failure so the fix is
->>> obvious rather than guessed. Treat the 45-minute rule as applying here.
+>>> STATUS: run 2026-09-12 and again 2026-09-14 with a real token — both Indian boxes answer on
+>>> presence, AIS-disabling events, and SAR presence. See docs/receipts.md "Global Fishing Watch"
+>>> for the recorded verdict. Cases 5 and 6 keep `attribute`; `gap`/`slowdown` still return null
+>>> at hourly sampling (D20) — that's the data, not a probe failure.
 
 **The correction this script exists to respect.** A report in circulation claims GFW's AIS
 Vessel Presence dataset returns MMSI, name, IMO and positions. It does not — GFW's own docs say

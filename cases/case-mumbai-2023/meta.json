@@ -8,7 +8,8 @@
   "detection_time": "2023-09-03T01:03:33Z",
   "acts_available": [
     "detect",
-    "trace"
+    "trace",
+    "attribute"
   ],
   "ais_source": "gfw_hourly",
   "gallery": {
