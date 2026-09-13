@@ -35,7 +35,7 @@ if _ROOT not in sys.path:
 from pipeline.detect import nets                                  # noqa: E402
 from pipeline.detect.make_labels import _build_jobs               # noqa: E402
 
-OUT = os.path.join(_HERE, "audit_shortcut.json")
+OUT = os.path.join(_HERE, "results", "audit_shortcut.json")
 
 
 def score(model, norm):
@@ -127,6 +127,7 @@ def main():
           f"  (n={lf['oil_frac_over_30pct_n']})")
     print("  A slick that fills the scene becomes its own background — the same")
     print("  self-contamination that killed the v1 annulus CFAR detector.")
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w") as fh:
         json.dump(result, fh, indent=2)
     print(f"\n  wrote {OUT}")

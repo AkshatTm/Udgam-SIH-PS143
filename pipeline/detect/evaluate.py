@@ -51,7 +51,7 @@ from pipeline.detect import nets                                         # noqa:
 
 CACHE = os.path.join(_ROOT, "data", "cache")
 MODELS = os.path.join(_HERE, "models")
-OUT_JSON = os.path.join(_HERE, "eval_part3.json")
+OUT_JSON = os.path.join(_HERE, "results", "eval_part3.json")
 
 
 def load_part3_scenes():
@@ -478,6 +478,7 @@ def main():
         out_path = OUT_JSON.replace(".json", "_smoke.json")
         print(f"\n  [--limit {a.limit}] PARTIAL RUN — these numbers are NOT the "
               f"Part III result.")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump({"split": "Zenodo Part III holdout, scene-level",
                    "n_scenes": a.limit or 450,

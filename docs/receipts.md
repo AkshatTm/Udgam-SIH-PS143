@@ -245,14 +245,14 @@ split would flatter us). See Master Plan Part 12.
 | Training rows (classical RandomForest) | **76,721** rows / 3,867 positives / 2,535 scenes | `data/labels/features_train.csv`, Parts I+II |
 
 **Layer 2's IoU definition is the strictest available:** oil class only, background excluded from
-numerator and denominator, pooled over whole 2048×2048 scenes (`pipeline/detect/eval_part3.json`,
+numerator and denominator, pooled over whole 2048×2048 scenes (`pipeline/detect/results/eval_part3.json`,
 `unet_meta.json`). **There is no "23% accuracy" figure for Layer 2** — Soum searched every eval file;
 it was a crossed wire with Stage 2's 23% `wind_share`. Do not put 23% on a detection slide.
 
 ## Detection on real incidents — IoU against SkyTruth Cerulean
 
 Soum, commit `0dce618`, validated in `18e986a`. Tool `pipeline/detect/iou_cerulean.py`, raw numbers
-`pipeline/detect/iou_cerulean.json`. Computed on the **shipped classical detections**, nothing
+`pipeline/detect/results/iou_cerulean.json`. Computed on the **shipped classical detections**, nothing
 retuned after the Cerulean polygons were seen (Part H). Both polygon sets burned onto the scene's own
 affine grid; the method reproduces Cerulean's own stated `area` to within 0.8% on all five.
 

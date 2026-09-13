@@ -35,6 +35,10 @@ __pycache__/
 
 # Intermediate stage outputs — regenerable, the bundle in cases/ is the artefact
 pipeline/*/out/
+# NOT pipeline/*/results/. Those are the committed metric files — the evidence behind every
+# number we quote — and the reasoning is the same one written under the model weights below:
+# we ship CODE, not weights, so the training scripts and the eval JSONs ARE the reproducible
+# artefact. out/ is scratch; results/ is evidence. Do not "tidy" results/ into this rule.
 
 # Trained weights. GitHub hard-rejects any blob over 100 MB and models/ is 534 MB:
 # classifier_vv_only.pkl is 204 MB and unet.pt / unet_baseline.pt are 121 MB each. We ship

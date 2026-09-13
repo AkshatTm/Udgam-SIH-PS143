@@ -138,7 +138,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-band", type=int, default=60,
                     help="scenes sampled per coverage band (small bands taken whole)")
-    ap.add_argument("--json", default=os.path.join(_HERE, "oracle_ceiling.json"))
+    ap.add_argument("--json", default=os.path.join(_HERE, "results", "oracle_ceiling.json"))
     a = ap.parse_args()
 
     man = json.load(open(os.path.join(_ROOT, "data", "cache", "manifest_P12.json"),
@@ -235,6 +235,7 @@ def main():
         edge[b] = {m: round(near[m] / max(tot, 1e-9), 4) for m in EDGE_BANDS}
         print(f"{b:<10}" + "".join(f"{near[m]/max(tot,1e-9):>10.2f}" for m in EDGE_BANDS))
 
+    os.makedirs(os.path.dirname(os.path.abspath(a.json)), exist_ok=True)
     json.dump({"best_k": best_k, "per_band": per_band, "weighted_ceiling": round(weighted, 4),
                "edge": edge, "note": "Parts I+II only; weighted by Part III band oil mass"},
               open(a.json, "w", encoding="utf-8"), indent=2)

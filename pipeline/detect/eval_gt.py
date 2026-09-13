@@ -8,7 +8,7 @@ Usage:
   python eval_gt.py data --limit 20 # first 20 scenes per class (quick)
   python eval_gt.py data --t-high 2.5 --k-high 3.5   # try a tuning
 
-Writes eval_summary.csv (one row per scene). Tune on Oil scenes 0-74, report
+Writes results/eval_summary.csv (one row per scene). Tune on Oil scenes 0-74, report
 numbers on 75-149 — never tune and report on the same scenes.
 """
 import argparse, csv, glob, os, time
@@ -23,7 +23,10 @@ ap.add_argument("--t-high", type=float, default=2.0)
 ap.add_argument("--t-low", type=float, default=1.0)
 ap.add_argument("--k-high", type=float, default=3.0)
 ap.add_argument("--k-low", type=float, default=1.5)
-ap.add_argument("--out", default="eval_summary.csv")
+# Default is script-relative, not cwd-relative: this used to drop eval_summary.csv
+# wherever it happened to be run from. Metric files are evidence and live in results/.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+ap.add_argument("--out", default=os.path.join(_HERE, "results", "eval_summary.csv"))
 a = ap.parse_args()
 kw = dict(t_high_db=a.t_high, t_low_db=a.t_low, k_high=a.k_high, k_low=a.k_low)
 
@@ -52,6 +55,7 @@ for cls in ("Oil", "Lookalike", "No oil"):
         print(f"{cls:9s} {sid}  regions={row['n_regions']:3d}  recall={row['gt_recall']}  hits={row['hit_regions']}  land={row['land_frac']:.0%}")
     print(f"--- {cls}: {len(imgs)} scenes in {time.time()-t0:.0f}s")
 
+os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
 with open(a.out, "w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
     w.writeheader(); w.writerows(rows)

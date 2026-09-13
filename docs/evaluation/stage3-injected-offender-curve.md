@@ -1,7 +1,7 @@
 # Stage 3 Phase 8 — the injected-offender curve
 
 *Built and run 14 Sept (Akshat, on Jaiveer's design from `STAGE3_PROGRESS_2026-09-13_EVENING.md` §8.3).
-Tool: `pipeline/attribute/evaluate.py`. Raw results: `pipeline/attribute/phase8_*.json`.*
+Tool: `pipeline/attribute/evaluate.py`. Raw results: `pipeline/attribute/results/phase8_*.json`.*
 
 ## Why it exists
 
@@ -112,11 +112,11 @@ a measurement rather than an opinion.
 
 ```bash
 python pipeline/attribute/evaluate.py --parquet data/ais/jacksonville.parquet --trials 300 \
-    --json pipeline/attribute/phase8_jacksonville.json
+    --json pipeline/attribute/results/phase8_jacksonville.json
 python pipeline/attribute/evaluate.py --parquet data/ais/jacksonville.parquet --trials 300 \
-    --quick --plain --json pipeline/attribute/phase8_jacksonville_hard.json
+    --quick --plain --json pipeline/attribute/results/phase8_jacksonville_hard.json
 python pipeline/attribute/evaluate.py --parquet data/ais/huntington.parquet --trials 150 --r90 3 \
-    --json pipeline/attribute/phase8_huntington.json
+    --json pipeline/attribute/results/phase8_huntington.json
 ```
 
 Deterministic for a given `--seed` (default 143); every condition sees the same offenders, so a row
