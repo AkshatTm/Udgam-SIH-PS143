@@ -152,7 +152,16 @@ def main():
     ap.add_argument("--steps", type=int, default=97)     # (97-1) x 15 min = exactly 24 h
     ap.add_argument("--timestep-minutes", type=int, default=15)
     ap.add_argument("--px", type=int, default=700)
+    ap.add_argument("--scene-pad-deg", type=float, default=0.85,
+                    help="margin around the slick and origin for the SAR scene, degrees. "
+                         "0.85 gives roughly a Sentinel-1 IW footprint")
     ap.add_argument("--seed", type=int, default=143)
+    ap.add_argument("--ais-source", default="noaa_dense",
+                    choices=("noaa_dense", "gfw_hourly"),
+                    help="which AIS regime this case stands in for (D20)")
+    ap.add_argument("--discharge-class", default="chronic",
+                    choices=("chronic", "acute", "unknown"),
+                    help="Stage 1's field; gates the parity component")
     ap.add_argument("--abstain", action="store_true",
                     help="write abstain:true, to exercise the refusal path end to end")
     a = ap.parse_args()
@@ -176,20 +185,40 @@ def main():
     half_len_km, half_wid_km = 9.0, 1.1        # elongation 8.2 -> shape_class "linear"
     slick_ring = ellipse_ring(slon, slat, half_len_km, half_wid_km, a.axis_deg)
 
-    # --- scene bounds: contains the slick and the origin, with margin
+    # --- scene bounds: contains the slick and the origin, with margin.
+    # Padded toward a real Sentinel-1 IW footprint (~250 km swath) rather than tightly
+    # around the slick. A 65 km scene is not what a real case looks like, and it made
+    # the validator warn on every vessel that sailed off the edge during a 12-hour
+    # window — 232 warnings that were an artefact of the fixture rather than a fault in
+    # the output. Warnings are where real problems hide; a fixture should not manufacture
+    # them.
     lons = [p[0] for p in slick_ring] + [clon]
     lats = [p[1] for p in slick_ring] + [clat]
-    bounds = {"west": r5(min(lons) - 0.20), "south": r5(min(lats) - 0.20),
-              "east": r5(max(lons) + 0.20), "north": r5(max(lats) + 0.20),
-              "width_px": a.px, "height_px": a.px, "db_min": -25, "db_max": 0}
+    pad = a.scene_pad_deg
+    # v4 Part 6.2 renamed the dB stretch to `db_clamp`. Both are written: `db_clamp` is
+    # the live contract, `db_min`/`db_max` keep any v1-era reader working.
+    bounds = {"west": r5(min(lons) - pad), "south": r5(min(lats) - pad),
+              "east": r5(max(lons) + pad), "north": r5(max(lats) + pad),
+              "width_px": a.px, "height_px": a.px,
+              "db_clamp": [-25, 0], "db_min": -25, "db_max": 0}
     (out / "bounds.json").write_text(json.dumps(bounds, indent=2))
 
+    # `ais_source` is required on every case with `attribute` (v4 Part 6.1, D20): it
+    # decides whether `gap` and `slowdown` can fire at all. This fixture stands in for a
+    # NOAA case, so `noaa_dense` — pass --ais-source gfw_hourly to exercise the other
+    # regime, where those two components must return null rather than zero.
     (out / "meta.json").write_text(json.dumps({
         "case_id": case_id,
         "title": "FAKE — Galveston test origin (Stage 3 development fixture)",
+        "short_location": "Galveston approaches, Texas",
+        "case_type": "spill",
         "satellite": "Sentinel-1A (fake)", "scene_id": "FAKE-GULF",
         "detection_time": iso(t0),
         "acts_available": ["detect", "trace", "attribute"],
+        "ais_source": a.ais_source,
+        "gallery": {"thumbnail": "thumb.png",
+                    "blurb": "Synthetic fixture. Not a case — never shown to a judge.",
+                    "difficulty": "easy"},
         "notes": ("Synthetic. Never shown to a judge. Written by "
                   "pipeline/attribute/make_fake_case.py so Stage 3 scoring can be built "
                   "and tested against US AIS before the real US origin exists.")
@@ -209,6 +238,8 @@ def main():
                            "elongation": round(half_len_km / half_wid_km, 1),
                            "edge_gradient": 0.34, "contrast_db": -6.2,
                            "shape_class": "linear",
+                           "discharge_class": a.discharge_class,
+                           "ship_detections": [],
                            "centroid": [r5(slon), r5(slat)]}}]}))
 
     # --- origin.json: the anisotropic cloud
