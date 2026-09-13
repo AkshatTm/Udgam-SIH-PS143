@@ -12,6 +12,131 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-14 20:10] Phase — Alaska ship_detections: why it is empty, and the px -> m question
+
+**Done:** Answered both of Jaiveer's Stage 3 blockers with measurements, no code changed.
+## [2026-09-14 04:10] Phase 7.3 — E1 closed as a NULL result; and I destroyed the tile cache
+
+### E1 — the channel fix buys nothing. Four measurements agree.
+
+Three configs, 12 epochs each, same stratified fold, same budget:
+
+| config | tile IoU | confidence | pooled (scenes) | ≥30% band |
+|---|---|---|---|---|
+| **A** ch1 p=0.25 — the shipped bug | 0.6997 | 0.8860 | 0.6606 | 0.2821 |
+| **B** ch0 p=0.10 — correct channel | 0.6911 | 0.8685 | 0.6513 | 0.2612 |
+| **C** p=0.00 — no cross-pol dropout | 0.6994 | 0.8398 | 0.6549 | 0.2678 |
+
+Pooled spread **0.0093** against a measured fold spread of **0.0599** — identical within noise by
+a factor of six. The ≥30% band sits at 0.26–0.28 in all three, so the failure is untouched.
+
+**The hypothesis was wrong and is retired.** "25% of training steps destroy the signal channel"
+sounded like a major finding; measured, it is worth nothing. Note this is a DIFFERENT
+manifestation from the inference-side channel bug, which was real and large (P(oil) 0.002 → 0.999
+on live cases). Same root cause, opposite significance — only the inference one mattered.
+
+**What did come out of it:** the underconfidence is real and systemic — **zero of 200 easy
+positive tiles saturate above 0.99, in all four configs including the shipped one**, and 6% never
+cross 0.5 despite being ≥30% oil. Since it survives removing the augmentation entirely, the
+remaining suspect with a mechanism is **focal loss at γ=2**, which by construction de-weights
+pixels the model is already confident about. **E4 is promoted above E3.**
+
+Config C cut the never-crosses-threshold tail from 6% to 1% at a slightly lower mean. For
+whole-scene IoU the tail is what matters — a scene dies when nothing crosses 0.5 — but it did not
+show up at scene level, so it is noted rather than adopted.
+
+### ⚠ I overwrote the tile cache, and the safety mechanism is what failed
+
+`--suffix` and `--normalise` were added to `build_cache.py` as CLI flags but **never wired to the
+`run()` call** — the edit that would have done it sat in a script that raised before writing. So a
+"safe" smoke test with `--suffix smoke` wrote straight to `P12`: manifest **2,565 → 9 scenes**,
+index **28,059 → 56 tiles**.
+
+The suffix existed precisely so a bad rebuild would be recoverable. **An accepted argument that
+changes nothing is worse than no argument**, and that is now a comment at the call site.
+
+**Cost:** the ability to A/B against the original cache. The E1 checkpoints and every number above
+are unaffected — measured before the overwrite, and the running eval had already loaded the good
+manifest (it reports 387 held-out scenes, not 2). `manifest_P12.json` also feeds `split.py`, so it
+had to be restored regardless.
+
+**Recovery, which is not wasted work — the rebuild was next anyway:** both caches are being rebuilt
+with the SAME corrected channel order, which is a cleaner comparison than originally planned
+because it isolates normalisation as the only variable:
+- `P12` — median normalisation, the baseline
+- `P12sea` — sea-referenced, plan E2
+
+**Channel order in both is transposed relative to every existing checkpoint** (channel 0 is now
+VV). Old models are incompatible with the new caches — retrain, do not mix. Retrains must write to
+a TAGGED file: `models/unet.pt` is what the demo loads and is not to be overwritten.
+
+**Demo safety, stated explicitly:** the demo is 15 Sept 17:00. Nine cases PASS, their
+`detections.geojson` came from the classical path and do not involve the U-Net at all, and
+`unet.pt` / `scene_classifier.pt` are untouched with `_baseline` copies beside them. Nothing in
+this programme is on the demo's critical path.
+
+**Next:** rebuild finishes → retrain on `P12sea` vs `P12` → E4 loss ablation.
+
+---
+
+(1) The threshold that produced Alaska's empty list is **-8.06 dB** = sea -18.30 + 4.0 x 2.561,
+i.e. the scene-relative term, NOT the -10 dB floor. The brightest water pixel in the entire tile
+is -8.79 dB = **3.71 sigma**, so nothing clears the bar anywhere in the scene — this is not one
+missed vessel. Swept k_sigma 4.0 -> 1.0: nothing appears until k<=3.25, where the -10 dB floor
+clamps and 3 contacts of 4-6 px surface at 7.2/9.1/10.0 km from the slick centroid, peaks
+-8.79/-9.66/-9.84 dB. Below k=3.25 the floor caps it and nothing further changes.
+Cross-case evidence that those 3 are not vessels: on all six cases that DO yield contacts the
+brightest sits at **+8.7 to +23.5 dB (11.2-17.5 sigma)**, and the faintest non-empty case
+(Jacksonville) is -7.34 dB / 5.8 sigma. Alaska tops out below every one of them.
+**The bigger finding is field of view, not threshold:** the export box is 7.96 x 11.81 km = 94 km2.
+Only **40.8%** of the 4.5 km ring around the slick centroid is inside the raster, and Cerulean's
+dark-vessel module searches 50 km (~7,850 km2) — we hold **1.2%** of that area. Recommendation:
+keep k=4.0; a wider re-export is the only honest lever, and it is Akshat's call.
+(2) px_area cannot be converted to a length. Measured ground pixel area across the nine cases
+runs **50.7 - 97.4 m2 (1.92x spread)** because the exports use a fixed DEGREE step, so ground
+pixel size is cos(lat)-dependent: 5.07 x 9.93 m at Alaska (59.6N) vs 9.74 x 9.93 m at Ennore
+(13.2N). A fixed px_area floor is therefore a different physical size on every card. Ruling given
+to Jaiveer: report footprint area in m2 (px_area x the case's own pixel area — a unit conversion,
+legitimate), keep `est_length_m: null` (validator requires only lon/lat/score on dark_vessels, and
+rule 4 says not-applicable is null), and state the size floor as the detector's existing MIN_PX=4,
+which is 203 m2 (Alaska) to 390 m2 (Ennore) of radar footprint.
+
+**Files touched:** none in `pipeline/` or `cases/` — diagnostics only, run from the scratchpad.
+`docs/updates/soum.md` (this entry).
+
+**Run command:**
+```bash
+python pipeline/detect/run.py --case case-gulf-alaska-2023 --rule-contrast -3.0 --rule-elongation 2.5
+```
+Expected output: `[detect] ships  : 0 bright radar contact(s)` followed by
+`threshold -8.06 dB (sea -18.3 +/- 2.561); 0 candidate(s)` and the empty-list note. Add
+`--ship-k-sigma 3.25` to reproduce the 3 sub-threshold contacts — **diagnostics only, do not ship
+a bundle built that way.**
+
+**Checkpoint artefact:** sigma-level table across all nine cases and the k_sigma sweep, sent to
+Jaiveer 20:10.
+
+**Open issues:**
+- **Governance:** D34 already logged this exact finding on 13 Sept (threshold -8.06, peak -8.79)
+  and ruled Alaska's dark-vessel contact is Cerulean's, never a NAAP detection. Lowering k until
+  Alaska yields a contact at a documented offset would be choosing a threshold against a sealed
+  answer on a case already marked partially compromised (Part 16). Not done, and should not be.
+- `cases/case-gulf-alaska-2023/meta.json` says "Exported raster is 1573 x 1190 at 10 m". It is
+  1573 x 1190 at **5.07 x 9.93 m** — the same note warns to check the aspect ratio. Akshat's
+  export script should be corrected at source, not the bundle hand-edited.
+- `ships.py:_merge_and_project` derives `pixel_size_m` from `transform.a` only, so the 50 m merge
+  radius is 50 m in x but **98 m in y** at Alaska (aspect 1.96). Harmless on the other eight cases
+  (aspect 1.02-1.26) and it changes no current output. Deferred until after the demo on purpose.
+- px_area -> length CAN be calibrated honestly: NOAA AIS carries a `Length` column
+  (`pipeline/attribute/tests.py:50`), so Huntington's 43 contacts could be matched to AIS at scene
+  time and footprint area regressed against real lengths. I cannot run it — no AIS on this machine.
+  Jaiveer's half, post-demo.
+
+**Next:** wait on Akshat re the Alaska export box; otherwise Alaska ships with `ship_detections: []`
+and the silence argument stated on the slide.
+
+---
+
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 

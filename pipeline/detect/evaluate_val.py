@@ -66,11 +66,11 @@ def val_jobs(fold=0, limit=None):
     return jobs, val_ids
 
 
-def run_fold(fold, gate_thr, limit=None):
+def run_fold(fold, gate_thr, limit=None, ckpt=None):
     jobs, val_ids = val_jobs(fold, limit)
     n_oil = sum(1 for j in jobs if j[1] == "Oil")
     print(f"\n=== fold {fold}: {len(jobs)} held-out scenes ({n_oil} oil) ===", flush=True)
-    rows, _ = ev.unet_rows(gate_thr, jobs=jobs)
+    rows, _ = ev.unet_rows(gate_thr, jobs=jobs, ckpt=ckpt)
     return rows
 
 
@@ -80,6 +80,8 @@ def main():
     ap.add_argument("--all-folds", action="store_true",
                     help="rotate the >=30% band through all 3 folds and report the spread")
     ap.add_argument("--limit", type=int, default=None, help="smoke test")
+    ap.add_argument("--ckpt", default=None,
+                    help="explicit U-Net checkpoint; default is models/unet.pt")
     ap.add_argument("--json", default=None)
     a = ap.parse_args()
 
@@ -90,7 +92,7 @@ def main():
     folds = range(3) if a.all_folds else [a.fold]
     out = {}
     for f in folds:
-        rows = run_fold(f, gate_thr, a.limit)
+        rows = run_fold(f, gate_thr, a.limit, a.ckpt)
         shipped = next((r for r in rows if r["model"].startswith("Classifier + U-Net")), None)
         if shipped:
             out[f] = shipped
