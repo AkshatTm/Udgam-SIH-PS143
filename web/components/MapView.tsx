@@ -1,7 +1,8 @@
 "use client";
 
-// The one map. MapLibre GL JS, no token, no external tiles — the SAR raster is the backdrop
-// and a plain dark background keeps the demo offline-safe (docs/04 allows this).
+// The one map. MapLibre GL JS, no token, no external tiles — the SAR raster is the backdrop,
+// a bundled coastline gives faint geographic context, and a plain dark ocean background keeps
+// the demo offline-safe (docs/04 allows this).
 //
 // The map object is created once. Store changes (case, layer visibility, selection) are pushed
 // in via imperative map calls in effects — the map container never re-renders on those.
@@ -41,11 +42,36 @@ import type { Bounds, LonLat } from "@/lib/contracts";
 // static copy of the worker instead; `predev`/`prebuild` copy it into public/maplibre/.
 setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
+// A judge seeing the Trace union camera zoom out to fit a real off-scene origin cloud (Jacksonville
+// sits ~130 km from its own SAR scene) was landing on a near-empty frame: no external tiles means
+// no coastline, so the wide-zoomed background was just flat colour with nothing to read as "this
+// is the ocean." Fixed with one bundled, static, offline asset — never a network fetch — rather
+// than a hosted basemap: `land.geojson` is Natural Earth's 1:110m land-polygon layer (public
+// domain, no attribution required, 127 features / ~135 KB, https://www.naturalearthdata.com),
+// fetched once at https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector and committed at
+// web/public/basemap/ne_110m_land.geojson. It renders first (bottom of the style, under the SAR
+// raster/detections layers added in `load` below, and under every deck.gl overlay, which always
+// paints above the MapLibre canvas) and stays deliberately low-contrast against the `#0b0f14`
+// ocean background — a shape to read as "Earth," never a layer competing with the evidence.
 const DARK_STYLE: StyleSpecification = {
   version: 8,
-  sources: {},
+  sources: {
+    land: { type: "geojson", data: "/basemap/ne_110m_land.geojson" },
+  },
   layers: [
     { id: "bg", type: "background", paint: { "background-color": "#0b0f14" } },
+    {
+      id: "land-fill",
+      type: "fill",
+      source: "land",
+      paint: { "fill-color": "#141b24", "fill-opacity": 1 },
+    },
+    {
+      id: "land-outline",
+      type: "line",
+      source: "land",
+      paint: { "line-color": "#232e3a", "line-width": 0.6, "line-opacity": 0.7 },
+    },
   ],
 };
 
@@ -515,17 +541,21 @@ export default function MapView() {
   }, []);
 
   // Origin opacity — this is the ONLY thing about the origin layer that changes on a scrub.
-  // 0 when Origin is toggled off. Otherwise the rewind fraction (0 at T−0, 1 at T−24h) run
+  // 0 when Origin is toggled off. On Trace, the rewind fraction (0 at T−0, 1 at T−24h) runs
   // through a smoothstep, so the cloud is hidden near the detection time and eases in only as
   // the slider nears maximum rewind ("the origin becomes knowable the further back you drift",
   // docs/04 §Phase 3). Taken from the integer timestep `t`, NOT the raw slider value, so it
   // changes at most n_steps times across a full scrub — never continuously as the handle drags.
+  // Outside Trace (e.g. Attribute), there is no rewind narrative to earn — the toggle alone
+  // should show the cloud at full opacity, since the footer's slider still defaults to T−0
+  // (rewind 0) there and would otherwise make "Origin" a no-op until the user drags it.
   const originOpacity = useMemo(() => {
     if (!originVisible) return 0;
+    if (activeStage !== "trace") return 1;
     const nSteps = particles?.nSteps ?? 0;
     const rewind = nSteps > 1 ? t / (nSteps - 1) : 0;
     return smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind);
-  }, [originVisible, t, particles]);
+  }, [originVisible, activeStage, t, particles]);
 
   // Origin cloud + 50/90 % rings — the backdrop the particles rewind into, drawn UNDERNEATH
   // them. Ruling D11: a BitmapLayer, never a HeatmapLayer. HeatmapLayer aggregates its points
