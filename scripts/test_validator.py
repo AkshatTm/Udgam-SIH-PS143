@@ -256,6 +256,25 @@ def component_is_constant_across_the_fleet(d):
     return "separates nobody"
 
 
+def vessel_track_lonlat_swapped(d):
+    """TRAPS #1 on the attribute layer. Trace and vessel layers are checked against physical
+    reach (hundreds of km), not the tight scene box, and the swap must still be caught there."""
+    v = read(d, "vessels.geojson")
+    f = v["features"][0]
+    f["geometry"]["coordinates"] = [[pt[1], pt[0]] for pt in f["geometry"]["coordinates"]]
+    write(d, "vessels.geojson", v)
+    return "swapped"
+
+
+def origin_in_the_wrong_hemisphere(d):
+    """A sign flip on longitude: the origin lands an ocean away. The reach box is generous
+    enough for a Gulf Stream rewind, and must still not be generous enough to hide this."""
+    o = read(d, "origin.json")
+    o["centroid"] = [-o["centroid"][0], o["centroid"][1]]
+    write(d, "origin.json", o)
+    return "km of the scene"
+
+
 MUTATIONS = [
     ("detection polygon written as [lat, lon]", swap_detection_lonlat,   "swapped",  False),
     ("particles.t0 missing its trailing Z",     naive_timestamp,         "naive",    False),
@@ -279,6 +298,9 @@ MUTATIONS = [
     ("null component with no note behind it",   null_component_without_a_note, "component_notes", True),
     ("a component scoring identically for every suspect", component_is_constant_across_the_fleet,
      "separates nobody", True),
+    ("vessel track written as [lat, lon]",      vessel_track_lonlat_swapped, "swapped", False),
+    ("origin centroid in the wrong hemisphere", origin_in_the_wrong_hemisphere,
+     "km of the scene", True),
 ]
 
 

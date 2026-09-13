@@ -85,14 +85,33 @@ def parse_ts(value, where):
     return dt
 
 
+# How far a layer may legitimately sit from the scene, in km. The scene box is a tight pad
+# around the slick (D14), but the trace and attribute layers leave it by construction:
+# Jacksonville's origin is 132 km off-scene and its vessel tracks reach 226 km. Degrees were
+# the wrong unit here, because a degree of longitude at Alaska is half the width it is at
+# Mumbai. A 0-360 leak or a hemisphere flip is thousands of km out, so the warning still fires.
+TRACE_REACH_KM = 300   # 24 h at ~3.5 m/s, faster than any surface current we will meet
+VESSEL_REACH_KM = 400  # trace reach plus the 2 x radius_90_km AIS search box
+
+
 class Box:
-    def __init__(self, b):
+    def __init__(self, b, reach_km=None, label="the scene bounds"):
         self.w, self.s = float(b["west"]), float(b["south"])
         self.e, self.n = float(b["east"]), float(b["north"])
-        # pad: drift particles and vessel tracks legitimately leave the scene, but a
-        # 2 deg floor (~220 km) made the "well outside" warning unreachable — keep it
-        # generous enough for a 24 h drift excursion, tight enough to still fire.
-        self.pad = max(0.5, 0.5 * max(self.e - self.w, self.n - self.s))
+        self.label = label
+        if reach_km is None:
+            # pad: a detection belongs in the scene, but a 2 deg floor (~220 km) made the
+            # "well outside" warning unreachable — keep it tight enough to still fire.
+            self.pad_x = self.pad_y = max(0.5, 0.5 * max(self.e - self.w, self.n - self.s))
+        else:
+            mid = math.radians((self.s + self.n) / 2)
+            self.pad_y = reach_km / 111.32
+            self.pad_x = min(180.0, reach_km / (111.32 * max(math.cos(mid), 0.05)))
+
+    def reach(self, reach_km, label):
+        """The same scene, padded for a layer that legitimately leaves it."""
+        return Box({"west": self.w, "south": self.s, "east": self.e, "north": self.n},
+                   reach_km, label)
 
     def check(self, lon, lat, where):
         if not (-180 <= lon <= 180):
@@ -101,16 +120,16 @@ class Box:
         if not (-90 <= lat <= 90):
             err(f"{where}: latitude {lat} out of range — coordinates are [lon, lat], not [lat, lon]")
             return False
-        inside_swapped = (self.w - self.pad <= lat <= self.e + self.pad and
-                          self.s - self.pad <= lon <= self.n + self.pad)
-        inside = (self.w - self.pad <= lon <= self.e + self.pad and
-                  self.s - self.pad <= lat <= self.n + self.pad)
+        inside_swapped = (self.w - self.pad_x <= lat <= self.e + self.pad_x and
+                          self.s - self.pad_y <= lon <= self.n + self.pad_y)
+        inside = (self.w - self.pad_x <= lon <= self.e + self.pad_x and
+                  self.s - self.pad_y <= lat <= self.n + self.pad_y)
         if not inside and inside_swapped:
             err(f"{where}: [{lon}, {lat}] is outside bounds but INSIDE them when swapped — "
                 f"this file is writing [lat, lon]. Fix the producer, not this check.")
             return False
         if not inside:
-            warn(f"{where}: [{lon}, {lat}] falls well outside the scene bounds")
+            warn(f"{where}: [{lon}, {lat}] falls well outside {self.label}")
         return True
 
 
@@ -817,6 +836,10 @@ def _run_bundle(d, strict=False):
     acts = meta["acts_available"] if meta else []
     b = check_bounds(d)
     box = Box(b) if b else None
+    # trace and attribute layers leave the scene by construction — check them against
+    # physical reach, not against a box padded only for the slick
+    trace_box = box.reach(TRACE_REACH_KM, f"{TRACE_REACH_KM} km of the scene") if box else None
+    vessel_box = box.reach(VESSEL_REACH_KM, f"{VESSEL_REACH_KM} km of the scene") if box else None
 
     if meta:
         check_known_origin(meta, box)
@@ -824,14 +847,14 @@ def _run_bundle(d, strict=False):
     if "detect" in acts:
         check_detections(d, box)
     if "trace" in acts:
-        backward = check_particles(d, box, meta)
-        check_particles_forward(d, box, meta, backward)
-        origin = check_origin(d, box)
+        backward = check_particles(d, trace_box, meta)
+        check_particles_forward(d, trace_box, meta, backward)
+        origin = check_origin(d, trace_box)
     else:
         origin = None
     if "attribute" in acts:
-        known = check_vessels(d, box)
-        check_suspects(d, known, origin, box, meta.get("ais_source") if meta else None)
+        known = check_vessels(d, vessel_box)
+        check_suspects(d, known, origin, vessel_box, meta.get("ais_source") if meta else None)
     if "verify" in acts:
         check_verification(d)
 
