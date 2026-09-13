@@ -1,0 +1,86 @@
+{
+  "funnel": {
+    "in_region": 48,
+    "in_window": 26,
+    "plausible": 2,
+    "scored": 2,
+    "dropped_short_track": 2
+  },
+  "suspects": [
+    {
+      "source_type": "vessel",
+      "mmsi": "636093219",
+      "name": "NAGOYA EXPRESS",
+      "vessel_type": "cargo",
+      "score": 0.693,
+      "components": {
+        "proximity": 0.946,
+        "parity": null,
+        "temporality": 0.701,
+        "trajectory": 1.0,
+        "gap": 0.0,
+        "slowdown": 0.0,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "closest approach 1.2 h from the centre of the release window",
+        "trajectory": "on approach 31 km out, course 168 deg against 186 deg toward the origin (17 deg off)",
+        "gap": "longest silence overlapping the window: 2 minutes",
+        "slowdown": "12.0 kn at closest approach against an under-way median of 12.5 kn",
+        "type_prior": "vessel type cargo"
+      },
+      "closest_km": 10.22,
+      "closest_time": "2024-07-30T04:44:49Z",
+      "grid_probability": 0.946,
+      "heading_consistent": true,
+      "ais_gap_minutes": 2.4,
+      "edge_truncated": false,
+      "reasons": [
+        "inside the high-probability region of the reconstructed origin during the release window",
+        "cargo on a course consistent with the origin"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "367337960",
+      "name": "GALVESTON",
+      "vessel_type": "other",
+      "score": 0.65,
+      "components": {
+        "proximity": 0.943,
+        "parity": null,
+        "temporality": 0.632,
+        "trajectory": 1.0,
+        "gap": 0.0,
+        "slowdown": 0.0,
+        "type_prior": 0.5
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "closest approach 1.5 h from the centre of the release window",
+        "trajectory": "on approach 31 km out, course 1 deg against 356 deg toward the origin (5 deg off)",
+        "gap": "longest silence overlapping the window: 6 minutes",
+        "slowdown": "15.7 kn at closest approach against an under-way median of 15.2 kn",
+        "type_prior": "vessel type other"
+      },
+      "closest_km": 10.13,
+      "closest_time": "2024-07-30T01:58:44Z",
+      "grid_probability": 0.943,
+      "heading_consistent": true,
+      "ais_gap_minutes": 6.3,
+      "edge_truncated": false,
+      "reasons": [
+        "inside the high-probability region of the reconstructed origin during the release window",
+        "other on a course consistent with the origin"
+      ]
+    }
+  ],
+  "dark_vessels": [],
+  "infrastructure": [],
+  "excluded": [],
+  "abstained": false,
+  "abstain_reason": null
+}
