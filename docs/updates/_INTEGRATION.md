@@ -8,7 +8,25 @@ log; this file is only for the joins.
 
 ---
 
-# ▶ START HERE — state of the world, 2026-09-13 (post Soum-merge)
+# ▶ START HERE — 2026-09-13 21:00 update (read this first, then the block below)
+
+- **Plan docs 00–06 restored** (`72b9540`). `ee19819` had silently swapped in stale drafts: no
+  D23–D34, missing §6 contract text, vessel identifiers back in shared docs. **If you read
+  `00_MASTER_PLAN.md` between 03:29 and now, re-read Part 6 and Part 9.** The validator never
+  regressed, only the docs did.
+- **Jacksonville is `detect + trace + attribute`** and PASSES. It is the first case with Stage 3 on `main`.
+- **New rulings:** **D35**: one trace per event, and the seed is recorded in `meta.notes`.
+  **D36**: `closest_km` is measured to the grid peak.
+- **Validator:** trace and vessel layers are checked against physical reach (300 / 400 km), not the
+  slick-tight scene pad. The hero case is down from 767 false warnings to 1 real one.
+- **Waiting on:**
+  - Harshita: push her branch. There is no `harshita` on origin. Then make the D35/D36 copy changes.
+  - Jaiveer: D36 in `score.py` and a Jacksonville rerun.
+  - Anushka: D35 seed note via `publish_all.py`.
+
+---
+
+# ▶ state of the world, 2026-09-13 (post Soum-merge)
 
 *Written for whoever picks integration up next, including a fresh AI session. Read this section
 first; everything below it is history.*

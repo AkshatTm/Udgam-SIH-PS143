@@ -2,6 +2,54 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-13 21:00] Second doc regression reverted; Jacksonville attribute live; D35 + D36; validator reach
+
+**Done:**
+- **`ee19819` was a regression, not the final docs.** The 16:30 entry below says it "landed the
+  final versions". That was wrong. It put stale drafts of `00`–`06` onto `main`:
+  - D23–D34 were deleted (33 D-rows fell to 22).
+  - Five pieces of §6 were lost: `provenance`, `db_min`/`db_max`, `ship_detections` and the
+    meaning of `confidence`, the gating table, `component_notes`. §16.1 blindness went with them.
+  - **Case 1 and case 2 vessel names, flags, MMSIs and IMOs went back into shared docs.**
+  - Jaiveer's asks #3 and #6–#8 all came from reading that version.
+  - Restored from `7d89a76`, then re-applied `835295e` (freeze removal) and `f432a8e` (Soum's VH/VV
+    correction). Scrubbed four more name references that `7d89a76` had missed (`72b9540`).
+- **Merged** `origin/jaiveer-phase2` (`d673296`, first real Stage 3 output) and `origin/soum`
+  (`c7c750e`, E0/E2 detect code, no bundle changes).
+- **`case-jacksonville-2024` gets `attribute`** (`a96ca1f`). PASS, synced to `web/`.
+- **D35 (Harshita):** Trace is per event. Stage 2 picks the seed; the seed decision goes into
+  `meta.notes`. No schema change.
+- **D36 (Jaiveer):** `closest_km` is measured to the origin-grid peak, not the centroid (§6.7).
+- **Validator** (`495dc73`): trace layers are checked within 300 km of the scene and vessels within
+  400 km, padded in km. Jacksonville warnings went from 767 to 1. Two new mutations; 23/23 pass.
+
+**Files touched:** `docs/00`–`06` · `cases/case-jacksonville-2024/meta.json` ·
+`scripts/validate_case.py` · `scripts/test_validator.py`
+
+**Run command:**
+```bash
+python scripts/test_validator.py
+python scripts/validate_case.py cases/
+```
+Expected output: `23/23 mutations correctly caught and named`, then `PASS   cases/index.json + all listed cases`.
+
+**Checkpoint artefact:** Jacksonville PASS, `acts=['detect', 'trace', 'attribute']  (1 warning(s))`.
+
+**Open issues:**
+- **The vessel identifiers are in pushed git history** (`ee19819`, 13 Sept 03:29 → `72b9540`).
+  History was not rewritten. D31 calls Farallones "the headline blind result". That holds only if
+  nobody read Master §3 or doc 01/02 in that window. Needs a decision, and an amendment to §16.1 if not.
+- Case-1 vessel name still appears in Jaiveer's progress docs, `jaiveer.md` and a `score.py` comment.
+  Case 1 is already open (D31), so this is not scrubbed; flagged.
+- Harshita asked for an urgent merge, but **there is no `harshita` branch on origin**. She needs to push.
+- Routed: Jaiveer implements D36 (`score.py:392` → `grid.peak_lonlat()`) and reruns Jacksonville.
+  Anushka writes the D35 seed note from `publish_all.py`. Harshita makes the copy changes
+  (`flow.ts:44`, `ContextPanel.tsx:680`).
+- `pipeline/drift/tests.py` stops at the missing local `data/fields/case-000.npz` cache, which is
+  environmental. It passed through 9b.
+
+**Next:** merge Harshita's branch when pushed; merge Jaiveer's D36 rerun.
+
 ## [2026-09-13 16:30] Catch-up: final plan docs, receipts filled, four branches merged, Stage 2 live on six cases
 
 *This entry covers everything from `ee19819` (03:29) to `483a2b7` (16:27) that never got logged
