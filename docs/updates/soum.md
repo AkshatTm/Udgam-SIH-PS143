@@ -15,6 +15,84 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-14 01:20] Phase 7.2 — E8a: the ceiling verified, and 0.85 looks reachable after all
+
+**Done:** Plan E8a. `pipeline/detect/oracle_ceiling.py`, run over 228 Parts I+II oil scenes.
+**No Part III pixel was read** — the ceiling is measured on the training halves and re-weighted
+by Part III's band oil-mass, so the holdout stays untouched.
+
+### The ceiling reproduces independently: **0.8446** (planning agent: 0.838)
+
+The oracle cheats in exactly one way — it takes the sea reference **from the GT mask**.
+Everything else is deliberately stupid: one band, one Gaussian blur (σ=3), one global threshold
+(best: sea − 2.25σ), no texture, no shape, no context, nothing learned.
+
+| band | n | oracle IoU | P3 oil mass | weighted |
+|---|---|---|---|---|
+| 0–1% | 61 | 0.4387 | 0.0071 | 0.0031 |
+| 1–3% | 59 | 0.6601 | 0.0509 | 0.0336 |
+| 3–10% | 60 | 0.7429 | 0.1949 | 0.1448 |
+| 10–30% | 39 | 0.8123 | 0.3643 | 0.2959 |
+| ≥30% | 9 | **0.9590** | 0.3829 | 0.3672 |
+| | | | **CEILING** | **0.8446** |
+
+Top two bands agree closely with the agent's figures (0.812 vs 0.827; 0.959 vs 0.961) and they
+carry the weight. The light bands differ more but are worth 0.7% and 5.1% of the metric.
+
+### The finding that changes the outlook
+
+| band | ours (Part III) | oracle | beats oracle? |
+|---|---|---|---|
+| 0–1% | 0.6685 | 0.4387 | **YES** |
+| 1–3% | 0.7566 | 0.6601 | **YES** |
+| 3–10% | 0.7826 | 0.7429 | **YES** |
+| 10–30% | 0.6595 | 0.8123 | no |
+| **≥30%** | **0.0848** | **0.9590** | no |
+
+**The model already beats a GT-informed threshold on three of five bands.** It is not broadly
+weak. It fails precisely and only where the normalisation is broken — the two bands holding
+**74.7%** of Part III's oil mass.
+
+Arithmetic, if the fix lands those two bands on their ceilings:
+
+```
+pooled today (band-weighted reconstruction)  0.4685   (measured 0.4349)
+if the top two bands reach their ceilings    0.8589
+full oracle everywhere                       0.8446
+```
+
+**0.8589 is above the 0.85 target**, and above the full-oracle figure, because we out-perform
+the oracle in the light bands. **This revises the plan's ~15% estimate for reaching 0.85 sharply
+upward** — the plan assumed we could not reach the heavy-band ceilings; it did not notice we
+already beat the oracle everywhere the data is adequate.
+
+**It is a projection, not a measurement, and it is conditional.** It assumes the fix matches a
+GT-informed threshold in both heavy bands, which is demanding. The ≥30% ceiling rests on 9
+scenes. And the "ours" column is Part III while the oracle is Parts I+II, so the populations
+differ slightly.
+
+### Boundary decomposition — where the ceiling comes from
+
+Share of oracle error lying within m px of the GT boundary:
+
+| band | 2px | 5px | 10px | 15px |
+|---|---|---|---|---|
+| 1–3% | 0.31 | 0.67 | 0.86 | 0.90 |
+| 3–10% | 0.29 | 0.63 | 0.83 | 0.88 |
+| 10–30% | 0.37 | 0.63 | 0.77 | 0.83 |
+| **≥30%** | **0.56** | **0.81** | 0.89 | 0.92 |
+
+At ≥30% coverage, **81% of the oracle's residual error is within 5 px of the annotator's line**
+— that band's 0.959 is already annotation-limited, and no method will do much better there. The
+0–1% band is the opposite (0.19 at 5 px): its errors are whole missed objects, not edges, which
+is why the oracle scores 0.44 there and we score 0.67.
+
+**Next:** E1 — the channel-order fix and the augmentation ablation, which is the cheapest
+remaining item and the one with a fast read-out (max probability on easy positive tiles should
+move from ~0.85 toward >0.97).
+
+---
+
 ## [2026-09-13 23:55] Phase 7.1 — accuracy programme, Week 1: both gates pass
 
 **Done:** Plan E0 and E2's safety gate. No cache rebuilt, no model retrained, nothing in
