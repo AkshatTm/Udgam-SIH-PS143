@@ -1,11 +1,16 @@
 # Raw inputs never move between laptops — outputs move instead (Master §7)
 data/*
 !data/.gitkeep
-# ...except the labelled training table, which is small and IS a deliverable
-# (docs/02_SOUM_DETECTION.md: "features.csv committed (hundreds of rows)")
+# ...except the labelled table that IS a deliverable. Repointed 13 Sept: the rule
+# used to un-ignore features.csv, which is the OLD pre-clean-split file (trained and
+# tested on Part III both). Un-ignoring it invited someone to commit it and quote
+# numbers off a contaminated split, so it is ignored again on purpose.
+# features_test.csv is the Part III HOLDOUT table -- 4,085 rows, 1.0 MB -- and it is
+# the evidence behind every classical number we report. features_train.csv is 20 MB
+# and stays out.
 !data/labels/
 data/labels/*
-!data/labels/features.csv
+!data/labels/features_test.csv
 
 # Environments
 venv/

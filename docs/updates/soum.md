@@ -15,6 +15,299 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-13 22:15] Phase 6.8 — the networks DO transfer. It was a channel-order bug, and I had it wrong.
+
+**Akshat asked whether he needed to re-export the cases in Zenodo's format. The answer is no — his
+exports are correct. But the question sent me to compare the two side by side, and there is a bug.
+It is in how we read the Zenodo files, not in his exports.**
+
+**Nothing was retrained and no bundle was touched** (his §3 rule). All work in `scratch/`.
+
+### The finding
+
+Over ocean, cross-pol is always below co-pol — 6–10 dB below, by physics. Across **297 Part III
+scenes**, Zenodo's **band 1 is 8.15 dB DARKER than band 2**, and band 1 < band 2 in **290 of 297**.
+Band 1 median-of-medians is **−28.21 dB**, band 2 is **−20.12 dB**.
+
+- Band 1 sits exactly where VH belongs. Band 2 sits exactly where VV belongs.
+- **Zenodo is band 1 = VH, band 2 = VV.**
+- `build_cache.py:107-108` and `make_labels.py:151` read band 1 as VV. So does everything built
+  from them.
+- Akshat's GEE exports are band 1 = VV, band 2 = VH — **correct**, and confirmed by the physics
+  (farallones VV −18.0 / VH −27.0; huntington −20.2 / −27.8; alaska −18.3 / −27.3, all a clean
+  +7.6 to +9.0 dB co-pol-over-cross-pol).
+
+So the networks were trained with the channels in one order and shown the other order at inference.
+
+### What happens when the channels are matched
+
+| case | P(oil) as shipped | P(oil) corrected | U-Net px as shipped | corrected |
+|---|---|---|---|---|
+| jacksonville | 0.0019 | **0.9992** | 0 | 41,598 |
+| mumbai | 0.0050 | **0.9999** | 0 | 63,922 |
+| farallones | 0.0016 | **0.9993** | 0 | 21,396 |
+| jamnagar | 0.0028 | **0.9997** | 0 | 15,710 |
+| gulf-alaska | 0.0023 | **0.9575** | 0 | 10,125 |
+| huntington | 0.0141 | **0.8364** | 0 | 15,644 |
+| **ennore (look-alike)** | 0.0103 | **0.0021** | 0 | **0** |
+
+Every spill case fires. **The look-alike still rejects, and rejects harder than before.** That last
+row is what makes this a fix rather than a threshold being blown open.
+
+### ⚠️ This invalidates a large block of my own earlier work
+
+I concluded the networks "do not transfer to GEE exports" and built a decision on it. **That
+conclusion was wrong.** They transfer fine. Everything I ruled out one at a time — VH noise floor,
+ground scale at 80/60/40 m/px, bright-ship masking, nodata fill, slick size, domain augmentation —
+was chasing a symptom of a channel swap. The domain-augmentation retrain that moved Huntington
+0.0025 → 0.0141 was treating the wrong disease.
+
+**D33 provenance routing was built on this false premise.** It still produces correct output, but
+its stated justification is now wrong.
+
+### What it does NOT change: the demo decision still stands, for a different reason
+
+Layer 2 with corrected channels, against Cerulean:
+
+| case | Layer 2 | classical | |
+|---|---|---|---|
+| jacksonville | **0.504** | 0.483 | L2 ahead |
+| jamnagar | **0.613** | 0.452 | L2 ahead |
+| mumbai | 0.681 | **0.728** | classical ahead |
+| farallones | 0.344 | **0.624** | classical ahead |
+| gulf-alaska | 0.024 | **0.165** | classical ahead |
+| **median** | **0.504** | **0.483** | |
+
+Ahead on the median by 0.021, **behind on three of five cases**. That is not a clear win, and
+swapping the live pipeline 29 hours from freeze for +0.021 median while losing three cases is a bad
+trade. **Recommend live cases stay classical** — now on evidence rather than on a false premise.
+
+The two are complementary, which is worth a sentence in the deck: classical has recall 0.80–0.94
+but precision 0.17–0.76 (over-extends); Layer 2 has precision 0.76–0.92 but recall 0.37–0.73
+(under-extends).
+
+### ⚠️ What it DOES break: two claims that must come off the deck as written
+
+1. **"VH is the discriminator" — the novelty slide.** The feature named `vh_mean_depth_db`
+   (importance 0.3155, rank 1) was computed from Zenodo **band 2, which is VV**. The channel names
+   in the feature importances are swapped. **What survives:** adding the second polarisation
+   nearly doubled validation F1 (0.346 → 0.643) and raised Part III precision 5.8× at identical
+   recall. That ablation is real and channel-agnostic. **What does not survive:** naming which
+   polarisation did it, and the physics story attached to that name.
+2. **"The networks do not transfer to real Sentinel-1 exports."** Delete it. It is false.
+
+**Benchmark numbers are unaffected** — training and evaluation both used the same (mislabelled)
+convention, so 0.951 scene accuracy and 0.435 IoU are internally consistent and still stand. Only
+the channel *names* were wrong.
+
+### Open, and it is Akshat's call
+
+Fixing the naming properly means re-reading Zenodo as (VH, VV) and rebuilding the cache, the label
+CSVs and both models — a full retrain, well past the freeze. **Not proposing that now.** The
+options before Tuesday are: (a) ship as-is, live cases classical, and remove the two broken claims
+from the deck; or (b) also swap the channel order at inference so the benchmark bundles use the
+matched order. (a) is my recommendation — it changes nothing that runs and only removes claims we
+cannot defend.
+
+---
+
+## [2026-09-13 21:30] Phase 6.7 — Layer 2 measured against Akshat's bar: it scores zero, and retraining cannot help
+
+**Done:** Measured, not assumed, what Layer 2 does on real scenes. Akshat's §2 ruling said Layer 2
+replaces classical on a live case only if it *"beats classical on real scenes, measured as IoU
+against `cerulean_slick.geojson`"*, by Monday 12:00. **That question is now closed by measurement
+rather than by the deadline.** Nothing was retrained and no bundle was touched — all output went
+to `scratch/nets/`.
+
+**Files:** none changed. **Run:** `python pipeline/detect/run.py --case <id> --path networks --out scratch/nets/<id>.geojson`
+
+### 1. Layer 2 vs Cerulean on the five reference cases: **IoU 0.000 on all five**
+
+Forced down the network path, Layer 1 closes the gate on every one at **P(oil) 0.002–0.005**
+against a 0.143 threshold — including Jacksonville's 31 km ribbon, which is unmistakable by eye.
+So Layer 2 never executes. Classical scores **median 0.483** on the same five. The bar cannot be
+cleared.
+
+### 2. Bypassing the gate entirely: the U-Net still predicts **0.00 km²** on all five
+
+| case | P(oil) | U-Net km² | Cerulean km² | IoU |
+|---|---|---|---|---|
+| jacksonville | 0.0019 | **0.00** | 4.54 | 0.000 |
+| farallones | 0.0016 | **0.00** | 3.85 | 0.000 |
+| gulf-alaska | 0.0023 | **0.00** | 0.27 | 0.000 |
+| mumbai | 0.0050 | **0.00** | 7.77 | 0.000 |
+| jamnagar | 0.0028 | **0.00** | 1.59 | 0.000 |
+
+So it is **not** a gating problem that a better Layer 1 would fix. Both layers fail on GEE exports.
+
+### 3. And it cannot be rescued by rethresholding — it is not localising at all
+
+| scene | prob max | prob mean | px > 0.1 | of scene |
+|---|---|---|---|---|
+| jacksonville | 0.269 | 0.164 | 3,662,541 | **99.99%** |
+| mumbai | 0.250 | 0.159 | 4,610,153 | ~99.9% |
+| farallones | 0.230 | 0.107 | 3,854,331 | ~99.9% |
+
+The probability field is **flat at ~0.16–0.27 across the whole scene**. Dropping the threshold to
+0.2 does not reveal a faint slick, it paints the entire raster as oil. This is the signature of
+domain shift — inputs outside the training distribution, so the network returns something near its
+prior everywhere. **There is no threshold that makes this work.**
+
+### 4. The control: in its own domain the U-Net is genuinely good
+
+| Zenodo scene | oil fraction | prob max | IoU |
+|---|---|---|---|
+| P3_Oil_00081 | 0.37% | 0.592 | 0.125 |
+| P3_Oil_00043 | 2.53% | 0.784 | **0.970** |
+| P3_Oil_00103 | 4.32% | 0.835 | **0.836** |
+| P3_Oil_00067 | **78.32%** | 0.374 | **0.000** |
+
+This confirms the large-slick mechanism **directly**, at the probability level: at 78% oil the max
+probability over the entire scene is 0.374 and **not one pixel** crosses 0.5. The slick has become
+its own median under per-scene MAD normalisation and the contrast the model needs is gone.
+
+**A better way to describe Layer 2, still honest:** on typical Part III scenes it reaches
+**IoU 0.97 and 0.84**. Pooled over all 150 positives it is **0.435**, because the 12 scenes above
+30% oil coverage collapse to 0.085 and carry a large share of all oil pixels. Say all three parts
+or none of them.
+
+### Why retraining is the wrong use of the remaining time
+
+- **No demo case is in the failure band.** Measured oil coverage across the library: 0.00%, 1.13%,
+  1.21%, 1.45%, 1.85%, 2.18%, 2.25%, and three at 0%. The >30% band **does not exist here**.
+- **The networks contribute nothing to any live case** — gate closed, and ungated they emit zero
+  pixels. Improving them changes a slide number and nothing a judge sees.
+- On the two benchmark bundles the correct answer is zero oil, and the gate already delivers it.
+
+**Recommendation: freeze the model work.** The remaining risk is not accuracy. It is the
+Python 3.13-vs-3.11 divergence, which is the only open item that can stop Stage 1 running on
+someone else's laptop.
+
+**Post-freeze, ranked:** (1) the normalisation fix for large slicks — the only genuine defect, and
+it is load-bearing so it needs a clean before/after on Part III; (2) domain adaptation for GEE
+exports, which is a research problem, not a fix; (3) classical-path precision, which is **barred
+now** because tuning after seeing the Cerulean polygons is exactly what A6 forbids.
+
+---
+
+## [2026-09-13 20:30] Phase 6.6 — the 0.435-vs-96% gap decomposed, and it is not what I predicted
+
+**Done:** Plan items 3, 4 and 5. `evaluate.py` now prints every IoU variant **with its definition
+named**, on the same 450-scene Part III holdout, same model, same pixels. No retraining.
+
+**Files:** `pipeline/detect/evaluate.py`, `pipeline/detect/eval_part3.json`, all nine
+`scratch/check_*.png`. **Run:** `python pipeline/detect/evaluate.py --report`
+
+Headline rows are unchanged by any of this: gated **0.4349**, ungated **0.4485**.
+
+### Item 3 — the decomposition
+
+| metric | value | definition |
+|---|---|---|
+| `iou_oil_pooled` | **0.4349** | oil class only, pooled over positive scenes, background excluded both sides. **What we report.** |
+| `iou_background_pooled` | 0.9392 | background as a class, same pooling |
+| `miou_pooled` | **0.6871** | mean IoU over {background, oil} — the authors' likely definition |
+| `pixel_accuracy_positives` | 0.9419 | over the 150 positive scenes |
+| `pixel_accuracy_all450` | **0.9800** | over all 450 — the likelier match for their "99%" |
+| `dice_oil_pooled` | 0.6061 | Dice/F1 on the oil class |
+| `iou_oil_macro_scene` | **0.6825** | per-scene IoU averaged over 150 scenes |
+| `iou_oil_macro_tile` | 0.4944 | per-tile over the 2,807 tiles containing oil |
+| `invalid_px_fraction` | 0.0184 | land/NaN share, so nobody wonders if background is inflated |
+
+**The gap splits three ways, and only the third is a defect:**
+
+1. **Definition — about half.** 0.4349 → **0.6871** is the same predictions scored two ways.
+   Pixel accuracy over all 450 is **0.980** against their quoted 99%: close enough that accuracy
+   is roughly comparable, which is the evidence that the *IoU* definitions are not.
+2. **Pooling — most of the rest.** 0.4349 pooled → **0.6825** per-scene, again identical
+   predictions. Pooling weights each scene by its slick size.
+3. **A real defect, and it is narrow.**
+
+| oil coverage | n | mean per-scene IoU |
+|---|---|---|
+| 0–1% | 18 | 0.6685 |
+| 1–3% | 39 | 0.7566 |
+| 3–10% | 52 | 0.7826 |
+| 10–30% | 29 | 0.6595 |
+| **30–101%** | **12** | **0.0848** |
+
+**138 of 150 scenes sit at 0.66–0.78. Twelve scenes where oil covers more than 30% of the frame
+score 0.085.** Those twelve hold a large share of all oil pixels, which is exactly why the *pooled*
+number collapses while the per-scene mean does not. The cause is already known and is mechanical:
+**per-scene MAD normalisation lets a slick that large become its own median**, erasing the contrast
+the model depends on. The model is not broadly weak — it fails on one identifiable class of scene.
+
+**⚠️ This falsifies a hypothesis I put in the plan.** I wrote that part of the gap was *split
+hardness* — "our validation IoU is 0.679 on same-population data; Part III is a different slick
+population." **Wrong.** Part III per-scene macro is **0.6825** against validation **0.6793** —
+statistically the same. Part III is **not** harder scene-for-scene. The whole pooled gap is
+pooling plus those twelve scenes. I also predicted mean IoU ≈ 0.71 by assuming background IoU
+0.99; it is 0.9392, so the real figure is 0.687.
+
+**We keep reporting 0.4349.** The others exist so a comparison is like-for-like, not so we can
+pick the flattering number (B2). Anyone quoting 0.687 must say "mean IoU over both classes" in
+the same breath.
+
+**Also fixed: `--limit` used to overwrite the authoritative results file.** A 10-scene smoke run
+silently replaced the 450-scene `eval_part3.json` and it had to be restored from git. Partial runs
+now write `eval_part3_smoke.json`, print `PARTIAL RUN — these numbers are NOT the Part III result`,
+and stamp `"partial": true` and `"n_scenes"` into the JSON.
+
+### Item 4 — all nine plotted and eyeballed, and it earned its place
+
+Plots were **stale** (01:21 vs detections at 02:30); regenerated all nine first. Then looked at
+every one.
+
+| case | verdict |
+|---|---|
+| jacksonville | ribbon tracked along its long axis; the 3 oil features are visibly one ~31 km ribbon with real breaks; over-extent visible as perpendicular fronds |
+| farallones | textbook — one ruler-straight filament, polygon hugging it |
+| huntington | comma slick outlined tightly; 43 contacts sit on bright cross/sidelobe vessel signatures |
+| gulf-alaska | **explains its own 0.165** — det-01 is on the real slick, det-02/03 sit in a large diffuse dark band Cerulean did not call oil. 0 contacts, as reported |
+| mumbai | +72 E / +18 N correct, polygons tight on dark features |
+| jamnagar | 21 km hook tracked; filament continues past the north end toward the swath edge, consistent with recall 0.916 |
+| ennore | 0 oil — correct |
+| lookalike-zenodo | delta, 0 oil, the single edge contact visible exactly where Akshat described |
+| **nospill-zenodo** | **FAILED — was farmland. Replaced.** See `6a6f4cc` |
+
+**The one defect, and it is mine.** `P3_No oil_00091` was not clean ocean; it was the Ghab plain —
+fields, roads, a settlement, the Orontes river — ~150 km inland from the "Gulf of İskenderun" the
+bundle's own `meta.json` named, and its 31 "radar contacts" were buildings. I had nominated it on
+**statistics alone** (deepest dark feature, most candidate regions, therefore "hardest") and never
+opened the image. Classifier correct, validator PASS, JSON strict-clean — **no automated gate in
+this repo can catch "the ocean is a field."** Replaced with `P3_No oil_00027`, verified as water
+rather than assumed: median −26.9 dB, MAD 0.47, 1–99th spread 3.6 dB, zero pixels above −5 dB,
+zero contacts, and the plot shows open water with swell banding. 65 of 150 Part III no-oil scenes
+qualify, so there was never a shortage — I picked on the wrong axis.
+
+**One suspicion checked and withdrawn.** Ennore's plot *looked* like contacts were sitting on the
+port and river. Measured instead of assumed: **0 of 72 on land**, 32 within 15 px (~130 m) of the
+land-mask edge, which in a working port is the quayside — where berthed vessels are. Land masking
+is doing its job (it had cut 1,377 → 72).
+
+### Item 5 — reporting closed out
+
+- **`features_test.csv` committed** (`fd4021e`), 4,085 rows, 1.0 MB — the evidence behind the
+  classical numbers. While adding it, the gitignore un-ignore rule was pointing at `features.csv`,
+  the **old contaminated-split** table; an un-ignore is an invitation, so it is ignored again on
+  purpose with the reason in the rule. Same class as the root-anchored `models/*`.
+- **Margin distribution** — delivered and corrected (Phase 6.3): 12 detections, median 0.645,
+  bands 7 clear / 5 marginal.
+- **VH sentence** — the defensible wording is in Phase 6.5; VH raises precision 5.8× at
+  *identical* recall, so it is a discriminator, not a detector.
+- **Zenodo DOI `10.5281/zenodo.13761290`** — verified already present in `docs/receipts.md`,
+  `docs/updates/_INTEGRATION.md` and `docs/01_AKSHAT_INTEGRATION.md`. Nothing to add.
+
+**Open for Akshat:** the `case-nospill-zenodo` gallery blurb. His "No oil — but not empty water /
+does the system tell traffic from a spill?" was written for 31 contacts that were never vessels.
+Set to "Open ocean, nothing on it. Does the system say so?" pending his call.
+
+**Next:** nothing left in the plan. Remaining time is best spent on the 12 large-slick scenes if
+anything, and that is a retrain — which the Layer 2 ruling puts behind a Monday 12:00 bar it does
+not need to clear.
+
+---
+
 ## [2026-09-13 19:40] Phase 6.5 — answering Akshat's handoff: §1 confirmed, §6 named, three stale numbers caught
 
 **This entry is written to be quoted from.** Every number below carries its metric, its split and

@@ -102,10 +102,32 @@ def normalise(band):
 
 
 def scene_arrays(img_path):
-    """-> (norm (H,W,2) float32, valid (H,W) bool, stats dict)."""
+    """-> (norm (H,W,2) float32, valid (H,W) bool, stats dict).
+
+    ⚠ THE CHANNEL NAMES BELOW ARE WRONG, AND DELIBERATELY LEFT WRONG (Soum, 13 Sept).
+
+    Zenodo Part I-III tiles are **band 1 = VH, band 2 = VV**, not the other way round.
+    Measured over 297 Part III scenes: band 1 is 8.15 dB DARKER than band 2 and is
+    darker in 290 of 297. Over ocean, cross-pol sits 6-10 dB below co-pol by physics,
+    so band 1 is the cross-pol channel. Akshat's GEE case exports are the opposite -
+    band 1 = VV, band 2 = VH - and they are correct (farallones -18.0 / -27.0,
+    huntington -20.2 / -27.8, alaska -18.3 / -27.3).
+
+    Consequence: every model in models/ was trained with cross-pol in channel 0. Feeding
+    a correctly-labelled export straight in therefore swaps the channels, and that is why
+    Layer 1 returned P(oil) ~ 0.002 on real scenes. Matching the order makes it return
+    0.96-0.9999 on all six spill cases while still rejecting the Ennore look-alike.
+
+    NOT renamed here because renaming without rebuilding the cache and retraining both
+    models would silently invalidate every shipped number, two days from the freeze. The
+    variables stay misnamed so that the cache, the label CSVs and the checkpoints remain
+    mutually consistent. Benchmark metrics are unaffected - train and test share this
+    convention. If you rebuild the cache, fix the names and the read order TOGETHER, and
+    re-run evaluate.py before believing anything.
+    """
     with rasterio.open(img_path) as src:
-        vv = src.read(1).astype(np.float32)
-        vh = src.read(2).astype(np.float32) if src.count >= 2 else vv.copy()
+        vv = src.read(1).astype(np.float32)   # actually VH — see docstring
+        vh = src.read(2).astype(np.float32) if src.count >= 2 else vv.copy()   # actually VV
     n_vv, val_vv, med_vv, mad_vv = normalise(vv)
     n_vh, val_vh, med_vh, mad_vh = normalise(vh)
     norm = np.stack([n_vv, n_vh], axis=-1)

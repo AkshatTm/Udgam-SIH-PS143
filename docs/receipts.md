@@ -91,6 +91,25 @@ in band 2 on those scenes is thermal noise, not ocean backscatter. This is a pro
 over calm water at C-band, not a fault in our export: it is **universal, not per-case**, and no
 choice of scene from GEE would have avoided it.
 
+> ### ⚠ SUPERSEDED IN PART, 13 Sept (Soum) — read before building the VH slide
+>
+> The noise-floor measurement above still stands: sea VH on the seven live cases really is
+> −27.0 to −38.5 dB against NESZ ≈ −24 dB. **What does NOT stand is the claim that our feature
+> importances measured VH.** Zenodo tiles are **band 1 = VH, band 2 = VV** — band 1 is 8.15 dB
+> darker across 297 Part III scenes, and cross-pol is always below co-pol over ocean. Our
+> pipeline read band 1 as VV. So `vh_mean_depth_db` (importance 0.3155, rank 1) was computed
+> from **VV**, and the channel names in every feature-importance figure are swapped.
+>
+> **What survives, and it is still a real result:** adding the *second polarisation* nearly
+> doubled validation F1 (0.346 → 0.643) and raised Part III precision 5.8× (0.049 → 0.286) at
+> **identical** recall. Dual-pol earns its place. **What must not be said:** that we measured
+> *which* polarisation did it, or that our data demonstrates the Marangoni physics. The physics
+> is standard and citable; our evidence for it is not, because it names the wrong channel.
+>
+> Safe slide sentence: *"Adding the second polarisation nearly doubles F1 and raises precision
+> 5.8× at identical recall on the benchmark. On our own IW exports the cross-pol channel sits
+> below the noise floor, so the live detections run co-pol only."*
+
 **Consequence for the deck — the VH slide must be reframed, not deleted.** The dual-pol novelty
 is real and measurable **on the Zenodo corpus** (sea VH −20.7 dB, and both newly accepted scenes
 are usable at −21.9 and −11.6 dB) and **inoperative on every scene we will actually show**. That
