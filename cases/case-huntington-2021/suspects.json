@@ -1,0 +1,15 @@
+{
+  "funnel": {
+    "in_region": 106,
+    "in_window": 75,
+    "plausible": 5,
+    "scored": 0,
+    "dropped_short_track": 6
+  },
+  "suspects": [],
+  "dark_vessels": [],
+  "infrastructure": [],
+  "excluded": [],
+  "abstained": true,
+  "abstain_reason": "the top two vessels score within a few percent of each other and cannot be separated on this evidence"
+}

@@ -186,6 +186,34 @@ def check_consecutive_days(csv_paths):
         print(f"days    {days[0]} .. {days[-1]} — {len(days)} consecutive days")
 
 
+def print_rejects(con, csv_paths):
+    """Count and report lines the CSV reader could not parse. Best-effort: see the call site.
+
+    Nothing is recovered here and nothing is repaired — this only answers "how much did the
+    reader throw away", so the number can sit next to the funnel instead of being invisible.
+    """
+    try:
+        con.execute("DROP TABLE IF EXISTS reject_errors")
+        con.execute("DROP TABLE IF EXISTS reject_scans")
+        con.execute(
+            "CREATE TEMP TABLE _rejcount AS "
+            "SELECT count(*) AS n FROM read_csv(?, header=true, store_rejects=true, "
+            "types={'MMSI': 'VARCHAR', 'VesselName': 'VARCHAR'})",
+            [[str(p) for p in csv_paths]],
+        )
+        rejected = con.execute("SELECT count(*) FROM reject_errors").fetchone()[0]
+    except duckdb.Error as exc:
+        print(f"note: could not count malformed CSV lines ({type(exc).__name__}).")
+        print("      The ingest above still stands — it tolerates unparseable rows — but the")
+        print("      number thrown away is unknown for this run. Say so if it reaches a slide.\n")
+        return
+
+    if rejected:
+        print(f"note: {rejected} malformed CSV line(s) rejected by the reader, not ingested.")
+        print("      Structurally broken rows cannot be repaired without inventing fields.")
+        print("      Report this count alongside the funnel if it is ever more than a handful.\n")
+
+
 def ingest(csv_paths, bbox, window, out_path, keep_cargo):
     west, south, east, north = bbox
     if west >= east or south >= north:
@@ -225,7 +253,7 @@ def ingest(csv_paths, bbox, window, out_path, keep_cargo):
                 try_cast(VesselType AS INTEGER)     AS type_code,
                 {VESSEL_TYPE_SQL}                   AS vessel_type,
                 {"try_cast(Cargo AS INTEGER)" if keep_cargo else "NULL"} AS cargo_code
-            FROM read_csv(?, header=true, union_by_name=true,
+            FROM read_csv(?, header=true, union_by_name=true, ignore_errors=true,
                           types={{'MMSI': 'VARCHAR', 'VesselName': 'VARCHAR'}})
             WHERE {' AND '.join(where)}
         )
@@ -238,6 +266,23 @@ def ingest(csv_paths, bbox, window, out_path, keep_cargo):
         f"COPY ({sql}) TO '{out_path.as_posix()}' (FORMAT PARQUET)",
         [[str(p) for p in csv_paths]] + params,
     )
+
+    # NOAA's daily exports occasionally carry a structurally broken line. AIS_2023_05_15 has
+    # exactly one in 8,904,500: a row with a leading empty field, which shifts every column
+    # right by one and puts the MMSI where BaseDateTime belongs. Without `ignore_errors` the
+    # whole scan dies on it and the case cannot be ingested at all.
+    #
+    # A shifted row is NOT repaired. There is no recoverable MMSI in it, and guessing the
+    # alignment would fabricate a position report — the same sin as interpolating across a
+    # transponder gap. It is dropped. But a row silently vanishing is exactly the kind of
+    # hidden assumption the funnel exists to prevent, so it is also counted and printed.
+    #
+    # The count needs a second pass: DuckDB refuses `store_rejects` alongside `union_by_name`,
+    # and `union_by_name` is the thing that lets NOAA's schema drift between years. So the
+    # scan above tolerates, and this pass counts. It is best-effort by design — if the files
+    # disagree on schema badly enough that a single-schema read fails, the ingest still stands
+    # and the count reports as unknown rather than taking the run down with it.
+    print_rejects(con, csv_paths)
 
     # Timestamps come back as strings, not datetimes: DuckDB's Python conversion of
     # TIMESTAMPTZ wants pytz, which is not in requirements.txt and is not worth adding.
