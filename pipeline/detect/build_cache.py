@@ -84,6 +84,30 @@ MAX_POS_PER_SCENE = 12
 MAX_NEG_PER_SCENE = 12
 
 
+NORMALISE_MODE = "sea"      # "median" reproduces the original cache exactly
+
+
+def _norm(band, mode, transform=None):
+    """THE normalisation, from pipeline/detect/normalise.py. This file used to hold a
+    second copy of the same rule, which is the shape of bug that made the k_sigma fix
+    inert for a day; there is now one implementation and both producers call it."""
+    from pipeline.detect.normalise import normalise_band as _nb, sea_reference, valid_mask
+    if mode == "sea":
+        v = valid_mask(band, exclude_land=True, transform=transform)
+        if not v.any():
+            return np.zeros_like(band, np.float32), v, 0.0, 1.0
+        ref, scale, _ = sea_reference(band, v, transform=transform)
+        out = np.clip((band - ref) / scale, -CLIP_SIGMA, CLIP_SIGMA) / CLIP_SIGMA
+        return np.where(v, out, 0.0).astype(np.float32), v, ref, scale
+    out, v, ref, scale = _nb(band, "median")
+    return out, v, ref, scale
+
+
+def _median_reference(band):
+    from pipeline.detect.normalise import median_reference
+    return median_reference(band)
+
+
 def normalise(band):
     """dB -> [-1, +1] using this scene's own median and MAD. Returns
     (norm float32, valid bool, med, mad). Invalid pixels are set to 0.0, which
@@ -101,39 +125,56 @@ def normalise(band):
     return norm, valid, med, mad
 
 
-def scene_arrays(img_path):
+def scene_arrays(img_path, mode=None):
     """-> (norm (H,W,2) float32, valid (H,W) bool, stats dict).
 
-    ⚠ THE CHANNEL NAMES BELOW ARE WRONG, AND DELIBERATELY LEFT WRONG (Soum, 13 Sept).
+    CHANNEL ORDER IS NOW CORRECT, and this is a breaking change to the cache.
 
-    Zenodo Part I-III tiles are **band 1 = VH, band 2 = VV**, not the other way round.
-    Measured over 297 Part III scenes: band 1 is 8.15 dB DARKER than band 2 and is
-    darker in 290 of 297. Over ocean, cross-pol sits 6-10 dB below co-pol by physics,
-    so band 1 is the cross-pol channel. Akshat's GEE case exports are the opposite -
-    band 1 = VV, band 2 = VH - and they are correct (farallones -18.0 / -27.0,
-    huntington -20.2 / -27.8, alaska -18.3 / -27.3).
+    Zenodo Parts I-III tiles are **band 1 = VH, band 2 = VV** — measured over 297 Part
+    III scenes, band 1 runs 8.15 dB darker and is darker in 290 of 297, and over ocean
+    cross-pol sits 6-10 dB below co-pol by physics. Verified again from the old cache's
+    own manifest: its `vv_med` field (read(1)) has median -32.87 dB against `vh_med`
+    (read(2)) at -20.20 dB, channel 0 darker in 99.9% of 2,565 scenes.
 
-    Consequence: every model in models/ was trained with cross-pol in channel 0. Feeding
-    a correctly-labelled export straight in therefore swaps the channels, and that is why
-    Layer 1 returned P(oil) ~ 0.002 on real scenes. Matching the order makes it return
-    0.96-0.9999 on all six spill cases while still rejecting the Ennore look-alike.
+    The old cache read band 1 as VV, so every model in models/ was trained with
+    CROSS-POL in channel 0 while Akshat's GEE exports put CO-POL there. That mismatch is
+    why Layer 1 returned P(oil) ~ 0.002 on real scenes and ~0.999 once the channels were
+    matched by hand.
 
-    NOT renamed here because renaming without rebuilding the cache and retraining both
-    models would silently invalidate every shipped number, two days from the freeze. The
-    variables stay misnamed so that the cache, the label CSVs and the checkpoints remain
-    mutually consistent. Benchmark metrics are unaffected - train and test share this
-    convention. If you rebuild the cache, fix the names and the read order TOGETHER, and
-    re-run evaluate.py before believing anything.
+    Channel 0 is now VV (co-pol, the channel carrying the oil signal) and channel 1 is
+    VH. **Any checkpoint trained on the old cache is incompatible with this one** — the
+    channels are transposed. Retrain, do not mix.
+
+    NOTE, measured rather than assumed: fixing this changed essentially nothing about
+    ACCURACY. The E1 ablation (12 epochs, stratified fold) gave tile val IoU 0.6997 with
+    the old order against 0.6911 with the new, and the confidence probe moved the wrong
+    way. The rename is carried because a cache rebuild is the one moment it is free and
+    leaving `vv` pointing at VH is a landmine — not because it buys a number.
+
+    `mode` selects the normalisation, and defaults to NORMALISE_MODE:
+      "median"  whole-scene median + 1.4826*MAD — the original
+      "sea"     sea-referenced, plan E2 — brightest-mode selection with a coastline
+                land mask, which un-compresses scenes where oil is a large fraction of
+                the frame (scale was 1.8x-4.2x too wide on the >=30% band)
     """
+    mode = mode or NORMALISE_MODE
     with rasterio.open(img_path) as src:
-        vv = src.read(1).astype(np.float32)   # actually VH — see docstring
-        vh = src.read(2).astype(np.float32) if src.count >= 2 else vv.copy()   # actually VV
-    n_vv, val_vv, med_vv, mad_vv = normalise(vv)
-    n_vh, val_vh, med_vh, mad_vh = normalise(vh)
-    norm = np.stack([n_vv, n_vh], axis=-1)
+        vh_raw = src.read(1).astype(np.float32)                 # band 1 IS cross-pol
+        vv_raw = src.read(2).astype(np.float32) if src.count >= 2 else vh_raw.copy()
+        transform = src.transform
+    n_vv, val_vv, ref_vv, sc_vv = _norm(vv_raw, mode=mode, transform=transform)
+    n_vh, val_vh, ref_vh, sc_vh = _norm(vh_raw, mode=mode, transform=transform)
+    norm = np.stack([n_vv, n_vh], axis=-1)                      # channel 0 = VV
     valid = val_vv & val_vh
+    # Both references are stored. Layer 3 inverts contrast_db through the MEDIAN pair, so
+    # keeping it means the reported decibels do not change meaning when `mode` changes.
+    med_vv, mad_vv = _median_reference(vv_raw)
+    med_vh, mad_vh = _median_reference(vh_raw)
     stats = {"vv_med": round(med_vv, 4), "vv_mad": round(mad_vv, 4),
-             "vh_med": round(med_vh, 4), "vh_mad": round(mad_vh, 4)}
+             "vh_med": round(med_vh, 4), "vh_mad": round(mad_vh, 4),
+             "vv_ref": round(ref_vv, 4), "vv_scale": round(sc_vv, 4),
+             "vh_ref": round(ref_vh, 4), "vh_scale": round(sc_vh, 4),
+             "norm_mode": mode}
     return norm, valid, stats
 
 
@@ -188,9 +229,13 @@ class ShardWriter:
                        "meta": self.meta}, fh)
 
 
-def run(parts_key, limit=None):
+def run(parts_key, limit=None, suffix="", mode=None):
     os.makedirs(CACHE, exist_ok=True)
-    prefix = PARTS[parts_key]["prefix"]
+    prefix = PARTS[parts_key]["prefix"] + (suffix or "")
+    # The old cache is NOT overwritten. A rebuild that turns out worse has to be
+    # recoverable, and 10.7 GB against 139 GB free is a cheap insurance premium. The
+    # sea-normalised cache lands as P12sea alongside P12, so both can be trained from
+    # and compared without re-running anything.
 
     jobs = _build_jobs(parts_key)
     if limit:
@@ -208,7 +253,7 @@ def run(parts_key, limit=None):
 
     for i, (scene_id, cls, img_path, msk_path) in enumerate(jobs, 1):
         try:
-            norm, valid, stats = scene_arrays(img_path)
+            norm, valid, stats = scene_arrays(img_path, mode=mode)
             h, w = valid.shape
             gt = load_mask(msk_path, (h, w)) if cls == "Oil" else np.zeros((h, w), np.uint8)
 
@@ -278,6 +323,8 @@ def run(parts_key, limit=None):
     np.save(os.path.join(CACHE, f"scenes_{prefix}.npy"), scenes_arr)
     with open(os.path.join(CACHE, f"manifest_{prefix}.json"), "w") as fh:
         json.dump({"prefix": prefix, "parts": parts_key,
+                   "norm_mode": mode or NORMALISE_MODE,
+                   "channel_order": "0=VV(co-pol, read band 2), 1=VH(cross-pol, read band 1)",
                    "scene_ids": scene_ids, "scene_labels": scene_labels,
                    "scene_px": SCENE_SIZE, "tile_px": TILE,
                    "clip_sigma": CLIP_SIGMA, "min_oil_frac": MIN_OIL_FRAC,
@@ -306,5 +353,16 @@ if __name__ == "__main__":
     ap.add_argument("--parts", default="1,2", choices=sorted(PARTS))
     ap.add_argument("--limit", type=int, default=None,
                     help="process only N scenes per class — smoke test")
+    ap.add_argument("--normalise", choices=("median", "sea"), default=NORMALISE_MODE,
+                    help="median = the original whole-scene median+MAD. sea = plan E2, "
+                         "sea-referenced, which un-compresses large-slick scenes where the "
+                         "old scale was 1.8x-4.2x too wide.")
+    ap.add_argument("--suffix", default="",
+                    help="appended to the cache prefix, e.g. --suffix sea writes P12sea and "
+                         "leaves the existing P12 cache untouched.")
     a = ap.parse_args()
-    run(a.parts, limit=a.limit)
+    # suffix and mode MUST be passed. They were added as CLI flags and not wired to
+    # this call, so --suffix was silently ignored and a 9-scene smoke build overwrote
+    # the real 2,565-scene P12 cache. An accepted argument that changes nothing is
+    # worse than no argument at all.
+    run(a.parts, limit=a.limit, suffix=a.suffix, mode=a.normalise)

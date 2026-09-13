@@ -264,11 +264,12 @@ def decompose(a):
     }
 
 
-def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None, jobs=None):
+def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None, jobs=None,
+              ckpt=None):
     """Run the U-Net over Part III, ungated and gated, in one pass over the
     scenes — decoding 450 scenes twice would be pointless I/O."""
     clf, clf_thr = nets.load_classifier()
-    unet, unet_thr = nets.load_unet()
+    unet, unet_thr = nets.load_unet(ckpt)
     if unet is None:
         return [], None
     if clf is None and True in use_gate_list:
