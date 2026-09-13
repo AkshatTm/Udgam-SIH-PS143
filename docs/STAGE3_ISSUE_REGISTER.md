@@ -65,6 +65,22 @@ fix required a decision that is not mine, I have written the decision up and lef
 **Four items need a decision before Monday afternoon:** A9, B6, C4, D4. The rest can wait until
 Monday evening, but not past it.
 
+## Resolutions, 14 Sept (Akshat)
+
+*Rulings on the items owned by Akshat. The sections below are left as written, as the record of what was raised.*
+
+| # | Resolution |
+|---|---|
+| A1 | **Done.** Master §3.2 says Jacksonville is not a gap case and gives 170 km, not ~100 km. D30 moves the gap story to case 4. |
+| A5 / A6 | **No weight moves** until the Phase 8 injected-offender curve reports top-3 rate with and without `trajectory` and `type_prior` (D27, D28). Until then both go on the honesty slide as measured: `trajectory` is a near-tautological sanity check (1.00 for 13 of 15), and `type_prior` is gated to `null` on a homogeneous fleet. |
+| A8 | **Roadmap, not a feature.** The `repeat_offender` block stays in §6.7. On stage: the data model supports it, and our library has no vessel overlap by construction (Atlantic and Pacific). Nothing is rendered for it. |
+| B3 | **Rings stay centroid-centred; `closest_km` is to the peak (D36).** The card says "to the origin peak", never "closest approach". `trajectory` still bears toward `grid.centroid` (`score.py:194`). That is a known inconsistency, left unchanged for the demo because a component-definition change should come with the Phase 8 curve rather than go into a bundle on the last day. Revisit after 15 Sept. |
+| B5 | **Solved by the reach fix** (`495dc73`). Trace layers are checked within 300 km and vessels within 400 km. Jacksonville went from 767 warnings to 1. It carries 7 today: six are the D37 fields missing, which clear on Jaiveer's re-score. The seventh, "no excluded vessels", is on all four scored cases and is a demo requirement, so it's routed to Jaiveer. Farallones also warns that `type_prior` is 1.0 and `slowdown` 0.0 across all 3 suspects. D28 says the first should gate to `null`, which is also routed. |
+| D1 | **Declared per case in §16.1 (D31).** Amended 14 Sept: Farallones is *blind on weights, not provably on identity*, because its identity was in pushed docs between `ee19819` and `72b9540`. The stage line quotes no count. |
+| D2 | **Done**, same edit as A1. |
+| D3 | **Reconciled.** The Master Plan decision table runs D1–D38, and D32 was never assigned. Master is authoritative; `docs/CONTRACTS.md` is the v1 record. |
+| E1 | **Narrative.** Phase 4 (infrastructure) **shipped**: code, tests and a D38 contract, with Huntington's candidate declared. Its honest result is below floor (D38). Phases 5 (traffic prior), 6 (repeat offenders, A8) and 7 (chronic vs acute, blocked on C3/B1) are **openly dropped for the demo** and presented as roadmap, not implied. |
+
 ---
 
 # A · Scoring model

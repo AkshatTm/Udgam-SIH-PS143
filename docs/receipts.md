@@ -178,12 +178,17 @@ error explicitly rather than folding it into a coverage verdict.
 | Wind | `ECMWF/ERA5/HOURLY` | `u_component_of_wind_10m`, `v_component_of_wind_10m` | signed components, not speed/bearing |
 
 Drift physics: surface oil moves at current + **3%** of wind speed (the "3% rule"), RK2,
-dt = 15 min, **50**-run ensemble. Field cache: `data/fields/<case>.npz` — `TODO` confirm which
+dt = 15 min, **50**-run ensemble. Field cache: `data/fields/<case>.npz` — `TODO` (still open 14 Sept: the caches are
+not on Akshat's machine, so per-case HYCOM cadence can only be read on Anushka's) confirm which
 time span was pulled per case (Anushka: the caches live on her machine; she refetched all six
 with `--forward-hours 24` so each brackets t0).
 
-**Independent-implementation check — OpenDrift (Anushka, `docs/STAGE2_NUMBERS.md` §8.4).**
-`case-000`, 3000 particles, 24 h backward, our RK2 against OpenDrift's RK4 on the identical cached
+**Independent-implementation check — OpenDrift (Anushka, `docs/_archive/anushka/STAGE2_NUMBERS.md` §8.4).**
+**Quote the real case, not the fixture:** on `case-jacksonville-2024` the origin centroids are
+**550 m apart after a 140 km rewind** (0.39% of path). Across all six spill cases the separation is 0.26–1.05% of
+path. Huntington is the worst at 1.05%, on 6.2 km of travel with a weak current and a 53% land field.
+**The 118 m figure below is the synthetic `case-000` fixture and must never be quoted as a real-case number.**
+On `case-000`, 3000 particles, 24 h backward, our RK2 against OpenDrift's RK4 on the identical cached
 field: origin centroids **118 m** apart, median per-particle disagreement **161 m**, worst of 3000
 **958 m**, against our own r50 of 8.84 km. OpenDrift's own landmask, vertical mixing, Stokes drift
 and diffusivity were switched off so only the integrator differs. Reproduce with
@@ -322,7 +327,8 @@ tar balls collected along a 12 km stretch.
 - `TODO` — one official reference (Coast Guard / DG Shipping / NGT order) before this case is ever un-archived.
 
 **Huntington Beach / San Pedro Bay Pipeline, 1–2 October 2021** — pipeline P00547 (operator
-Amplify Energy / Beta Offshore) ruptured ~4.5 nm off Huntington Beach; 588 barrels of crude,
+Amplify Energy / Beta Offshore) ruptured 4.75 nm off Huntington Beach (NTSB casualty location
+**33°34.20′ N, 118°7.26′ W** = `[-118.121, 33.570]`, declared as `meta.infrastructure_candidates`, D38); 588 barrels of crude,
 ~$160M damage. NTSB (MIR-24-01) probable cause: anchorage proximity — the containerships
 **MSC DANIT** (IMO 9404649) and **Beijing** dragged anchor and struck the pipeline on
 25 Jan 2021; fatigue cracks grew and it leaked ~9 months later. Delayed shutdown by Beta
@@ -361,7 +367,7 @@ river mouth to Kasimedu harbour, about 20 km². The NGT Southern Bench took the 
 2023). CPCL's stated position was that there was no pipeline leak. Our case 7 is the 2023-11-30
 pass, four days *before* it, used as a correct-rejection case.
 - The Week, 13 Dec 2023: https://www.theweek.in/news/india/2023/12/13/ennore-residents-battle-health-issues-and-loss-of-livelihood-amid-blame-game-over-oil-spill.html (verified 13 Sept 2026: CPCL Manali refinery as source, Cyclone Michaung flooding, ~20 km² from Kosasthalaiyar to Kasimedu, NGT directions, CPCL's denial)
-- NGT Southern Zone, O.A. No. 180 of 2023, report by the Tamil Nadu Pollution Control Board: https://www.greentribunal.gov.in/sites/default/files/news_updates/OA%20180%20of%202023%20Report%20by%20TNPCB.pdf (primary filing; located 13 Sept 2026, file too large to open in this pass — `TODO` read it and pin the release date and quantity before quoting either)
+- NGT Southern Zone, O.A. No. 180 of 2023, report by the Tamil Nadu Pollution Control Board: https://www.greentribunal.gov.in/sites/default/files/news_updates/OA%20180%20of%202023%20Report%20by%20TNPCB.pdf (primary filing; located 13 Sept 2026, file too large to open in this pass — `TODO` read it and pin the release date and quantity before quoting either. 14 Sept: downloaded, 18.3 MB, 95 pages, **scanned images with no text layer**, so it needs reading by eye or with OCR. Until then **quote neither a date nor a quantity**; case 7 does not need either.)
 
 ---
 

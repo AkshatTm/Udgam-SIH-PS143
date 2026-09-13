@@ -275,6 +275,38 @@ def origin_in_the_wrong_hemisphere(d):
     return "km of the scene"
 
 
+def infrastructure_candidate_without_source(d):
+    """A structure declared with no provenance for its coordinate. The scorer would name it on
+    screen as if the pipeline had found it (D38)."""
+    m = read(d, "meta.json")
+    b = read(d, "bounds.json")
+    m["infrastructure_candidates"] = [{"name": "Test Platform", "kind": "platform",
+                                       "lon": (b["west"] + b["east"]) / 2,
+                                       "lat": (b["south"] + b["north"]) / 2}]
+    write(d, "meta.json", m)
+    return "source"
+
+
+def infrastructure_candidate_lonlat_swapped(d):
+    """The swap again, on a declared structure — hand-typed coordinates are where it happens."""
+    m = read(d, "meta.json")
+    b = read(d, "bounds.json")
+    m["infrastructure_candidates"] = [{"name": "Test Platform", "kind": "platform",
+                                       "lon": (b["south"] + b["north"]) / 2,
+                                       "lat": (b["west"] + b["east"]) / 2,
+                                       "source": "https://example.gov/report"}]
+    write(d, "meta.json", m)
+    return "swapped"
+
+
+def wind_share_as_percent(d):
+    """wind_share written as 37 instead of 0.37 — a percent where the contract says fraction."""
+    o = read(d, "origin.json")
+    o["wind_share"] = 37.0
+    write(d, "origin.json", o)
+    return "wind_share"
+
+
 MUTATIONS = [
     ("detection polygon written as [lat, lon]", swap_detection_lonlat,   "swapped",  False),
     ("particles.t0 missing its trailing Z",     naive_timestamp,         "naive",    False),
@@ -301,6 +333,11 @@ MUTATIONS = [
     ("vessel track written as [lat, lon]",      vessel_track_lonlat_swapped, "swapped", False),
     ("origin centroid in the wrong hemisphere", origin_in_the_wrong_hemisphere,
      "km of the scene", True),
+    ("infrastructure candidate with no source", infrastructure_candidate_without_source,
+     "source", False),
+    ("infrastructure candidate written as [lat, lon]", infrastructure_candidate_lonlat_swapped,
+     "swapped", False),
+    ("origin wind_share written as a percent",  wind_share_as_percent,   "wind_share", False),
 ]
 
 

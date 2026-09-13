@@ -191,6 +191,46 @@ def check_known_origin(m, box):
         box.check(coords[0], coords[1], "meta.json/known_origin")
 
 
+def check_infrastructure_candidates(m, box):
+    """meta.infrastructure_candidates (Master §6.1, D38) — declared fixed sources Stage 3 scores.
+
+    Optional list. Every entry needs name, lon, lat, kind and source, exactly what
+    pipeline/attribute/infrastructure.py:load_candidates demands, so a bundle that would make
+    the scorer raise fails here first. `source` is the provenance of the coordinate: these
+    positions are case input, not something the pipeline found, and a structure named on
+    screen with no source is the infrastructure version of a vessel name not in the AIS file.
+    A structure may legitimately sit off the exported scene, so the box is the trace reach and
+    'outside' is only a warning; a [lat, lon] swap is still an error.
+    """
+    raw = m.get("infrastructure_candidates")
+    if raw is None:
+        return
+    where = "meta.json/infrastructure_candidates"
+    if not isinstance(raw, list):
+        err(f"{where}: must be a list of candidate objects")
+        return
+    for i, c in enumerate(raw):
+        w = f"{where}[{i}]"
+        if not isinstance(c, dict):
+            err(f"{w}: must be an object with name, lon, lat, kind, source")
+            continue
+        missing = [k for k in ("name", "lon", "lat", "kind", "source")
+                   if c.get(k) is None or (isinstance(c.get(k), str) and not c[k].strip())]
+        if missing:
+            err(f"{w}: missing {', '.join(missing)} — every declared structure needs a source "
+                "for its coordinate")
+            continue
+        try:
+            lon, lat = float(c["lon"]), float(c["lat"])
+        except (TypeError, ValueError):
+            err(f"{w}: lon/lat must be numbers, got {c['lon']!r}, {c['lat']!r}")
+            continue
+        if box:
+            box.check(lon, lat, w)
+        elif not (-180 <= lon <= 180 and -90 <= lat <= 90):
+            err(f"{w}: [{lon}, {lat}] out of range — coordinates are [lon, lat]")
+
+
 def polygon_area_km2(geom):
     """Rough planar area of a GeoJSON Polygon's outer ring, cos-lat scaled at its
     centroid. Good to a few % at slick scale — enough to catch an area_km2 that is
@@ -566,6 +606,12 @@ def check_origin(d, box):
     sf = o.get("stranded_fraction")
     if sf is not None and not (isinstance(sf, (int, float)) and 0 <= sf <= 1):
         err(f"origin.json/stranded_fraction: must be a fraction in 0-1, got {sf!r}")
+    # wind_share (Master §6.5): share of drift displacement due to windage, a 0-1 fraction.
+    # Omitted, never zeroed, when the field is synthetic, since a 0 would claim a calm we never measured.
+    ws = o.get("wind_share")
+    if ws is not None and not (isinstance(ws, (int, float)) and not isinstance(ws, bool)
+                               and 0 <= ws <= 1):
+        err(f"origin.json/wind_share: must be a fraction in 0-1 (not a percent), got {ws!r}")
     oc = o.get("opendrift_comparison")
     if oc is not None:
         if not isinstance(oc, dict):
@@ -862,6 +908,7 @@ def _run_bundle(d, strict=False):
 
     if meta:
         check_known_origin(meta, box)
+        check_infrastructure_candidates(meta, trace_box)
 
     if "detect" in acts:
         check_detections(d, box)

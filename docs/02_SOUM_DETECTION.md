@@ -83,7 +83,7 @@ The dataset is titled *"Sentinel-1 SAR Oil spill image dataset for train, valida
 | 2 | **Farallones** 2023-03-17 | Pacific, 37.8 N −123.9 W | 20 km linear |
 | 3 | **Huntington Beach** 2021-10-02 | San Pedro Bay, 33.6 N −118.1 W | Comma-shaped, sea −20.9 dB VV, core −28 to −32 |
 | 4 | **Alaska dark vessel** 2023-05-16 | Gulf of Alaska, 59.6 N −142.7 W | 2 km, 0.3 km² — **the smallest slick in the library.** Also: **find the bright target 4.5 km away**, it is the whole case |
-| 5 | **Mumbai** 2023-09-03 | Indian EEZ, 18.5 N 72.2 E | 21 km, 7.7 km². Carries infrastructure + dark vessel + natural-seep flag |
+| 5 | **Mumbai** 2023-09-03 | Indian EEZ, 18.5 N 72.2 E | 21 km, 7.7 km². Carries infrastructure + dark vessel candidates (the natural-seep flag was unsourced and is dropped, D19) |
 | 6 | **Jamnagar** 2024-02-23 | Arabian Sea, 20.15 N 71.9 E | 21 km hook — measured ~8 dB VV depression, VV −25.41 vs clean −17.24 |
 | 7 | **Look-alike** Ennore 2023-11-30 | Bay of Bengal | **Correct output is zero oil features** |
 | 8 | **No-spill** Zenodo Part 3 | — | **You nominate this one.** Correct output is zero oil features |
@@ -409,7 +409,7 @@ For every case, do all four:
 
 **The ship detector matters more on Alaska than anywhere else.** Cerulean places a dark vessel at 59.546 N −142.639 W, roughly 4.5 km from the slick, estimated 40 m ± 20%. **Your bright-point detector finding that contact independently is the entire case.** A 40 m vessel is at the small end of what SAR resolves reliably — if you find it, say so with the measured peak dB; if you do not, say that too, because a missed contact is honest and a fabricated one is not.
 
-**Mumbai carries three source types at once** — infrastructure, a dark vessel, and a natural-seep flag. Your `discharge_class` and `ship_detections` both feed the source classification that sorts them out. Expect a messier scene than the open-ocean cases.
+**Mumbai carries two candidate source types at once**: infrastructure and a dark vessel. (A natural-seep flag was once claimed here, could not be sourced, and is dropped, D19.) Your `discharge_class` and `ship_detections` both feed the source classification that sorts them out. Expect a messier scene than the open-ocean cases.
 
 ### 6.7 Cases 7 and 8 — the rejection pair
 **Case 7 is already chosen**: the Ennore scene of **2023-11-30 00:32 UTC**, from the Arabian Sea sweep. It is four days *before* the December 2023 CPCL spill, so its dark patches provably cannot be oil. That is a better look-alike than anything in Zenodo because it is the same coast and sensor as a real incident.

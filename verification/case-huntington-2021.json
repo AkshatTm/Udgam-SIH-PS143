@@ -12,13 +12,13 @@
     "source_url": "https://www.ntsb.gov/investigations/AccidentReports/Reports/MIR2401.pdf",
     "source_type": "official_investigation",
     "volume_reported": "588 barrels (~24,700 gallons)",
-    "caveat": "The anchor strikes preceded the oil release by ~8-9 months. No vessel was transiting or the proximate source at detection time (2 Oct 2021). The source at detection time is fixed infrastructure — the pipeline itself. Exact rupture coordinate to be pinned from MIR-24-01 / the USCG ROI; widely reported as ~4.5 nm offshore Huntington Beach in San Pedro Bay (~33.66 N, 118.11 W)."
+    "caveat": "The anchor strikes preceded the oil release by ~8-9 months. No vessel was transiting or the proximate source at detection time (2 Oct 2021). The source at detection time is fixed infrastructure — the pipeline itself. MIR-24-01's casualty fact table gives the location as 33°34.20' N, 118°7.26' W, 4.75 nm off Huntington Beach. The ~33.66 N figure that circulated earlier was not the NTSB coordinate."
   },
 
   "naap_result": {
-    "origin_summary": "TODO Phase 4 — fill from cases/case-huntington-2021/origin.json after Anushka's stage runs.",
+    "origin_summary": "Trace seeded from det-01 (2.64 km², the only oil feature). Origin cloud centred at 33.59454 N, 118.05190 W after a ~6.2 km median rewind, peak 0.2 km from the centroid. r50 1.35 km, r90 2.46 km (ensemble precision). Release window measured by convergence: 2021-10-01 17:41Z to 19:58Z. Wind share 0.38. The origin peak is 6.75 km from NTSB's casualty location (33°34.20' N, 118°7.26' W), which lies outside the origin grid. Stage 3: 106 in region → 75 in window → 5 plausible, abstained on vessels (top two inseparable). The declared San Pedro Bay Pipeline scored below the 0.25 infrastructure floor, so no infrastructure finding.",
     "top_suspects": [],
-    "abstained": false
+    "abstained": true
   },
 
   "assessment": {
