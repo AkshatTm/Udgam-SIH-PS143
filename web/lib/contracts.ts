@@ -83,7 +83,7 @@ export type Classification = "oil" | "lookalike";
 export type ShapeClass = "linear" | "blob";
 export type DischargeClass = "chronic" | "acute" | "unknown";
 
-/** Master §6.3, docs/04 Phase 5.3 — a raw radar ship contact near a detection (Soum's output).
+/** Master §6.3, docs/team/harshita-frontend.md Phase 5.3 — a raw radar ship contact near a detection (Soum's output).
  *  `px_area`/`peak_db` are documented but not currently rendered by the frontend — only
  *  position is used for the map marker, same "documented, optional, not all consumed" treatment
  *  as `vessels.geojson`'s `n_points`/`max_gap_minutes`. */
@@ -103,7 +103,7 @@ export interface DetectionProperties {
   edge_gradient: number;
   contrast_db: number; // negative for a dark spot
   shape_class: ShapeClass;
-  /** Master §6.3, docs/04 Phase 5.3 — Soum's chronic/acute/unknown classification, feeding
+  /** Master §6.3, docs/team/harshita-frontend.md Phase 5.3 — Soum's chronic/acute/unknown classification, feeding
    *  Anushka's line-vs-point origin seeding on the producer side. Optional; absent hides the
    *  badge — never inferred from geometry on the frontend. */
   discharge_class?: DischargeClass;
@@ -244,7 +244,7 @@ export interface RawSuspectComponents {
   [component: string]: number | null | undefined;
 }
 
-/** Master §6.7, `06_JAIVEER_AIS.md:374-379` — cross-case vessel history. `cases` are OTHER
+/** Master §6.7, `docs/team/jaiveer-stage3-attribution.md:374-379` — cross-case vessel history. `cases` are OTHER
  *  case ids where this same vessel was also scored; `best_rank` is its best (lowest) rank
  *  across those. Not validator-enforced anywhere (unlike dark_vessels/infrastructure) — this
  *  is a documented-but-unvalidated shape, same category as `dropped_short_track`. Jaiveer's own
@@ -337,7 +337,7 @@ export interface RawSuspectsBundle {
   infrastructure?: RawInfrastructure[];
   natural_seep?: RawNaturalSeep;
   excluded: RawExcludedVessel[];
-  /** §6.7 — Stage 3's deliberate refusal to attribute (docs/04 D2). `true` ⇒ `suspects` empty,
+  /** §6.7 — Stage 3's deliberate refusal to attribute (docs/team/harshita-frontend.md D2). `true` ⇒ `suspects` empty,
    *  a feature not a failure — the screen says why. */
   abstained?: boolean;
   /** The human "why" for the abstention. `null` / absent when not abstaining. */

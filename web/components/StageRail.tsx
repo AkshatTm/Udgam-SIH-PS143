@@ -26,7 +26,7 @@ export default function StageRail() {
   const activeStage = useAppStore((s) => s.activeStage);
   const activeCaseId = useAppStore((s) => s.activeCaseId);
   const setStage = useAppStore((s) => s.setStage);
-  // docs/04 D1 — a no-spill scene greys Trace/Attribute with a specific "nothing to trace"
+  // docs/team/harshita-frontend.md D1 — a no-spill scene greys Trace/Attribute with a specific "nothing to trace"
   // reason; every other case keeps the default STAGE_UNAVAILABLE_REASON string.
   const noSpill = isNoSpill(useAppStore((s) => s.detections));
 

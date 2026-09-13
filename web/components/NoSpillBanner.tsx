@@ -1,6 +1,6 @@
 "use client";
 
-// docs/04 Part D, D1 — a *designed result*, never an error. Shown over the Detect map so the
+// docs/team/harshita-frontend.md Part D, D1 — a *designed result*, never an error. Shown over the Detect map so the
 // SAR scene and the grey dashed look-alike polygons stay visible underneath ("showing the
 // rejection is what proves we're not just flagging dark pixels"). Informational only →
 // pointer-events-none, so clicks pass straight through to the look-alike polygons below.

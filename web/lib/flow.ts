@@ -34,7 +34,7 @@ export function adjacentStage(
   return j >= 0 && j < avail.length ? avail[j] : null;
 }
 
-/** Label for the bottom-right primary action while on `stage` (docs/04 Part B). At the end
+/** Label for the bottom-right primary action while on `stage` (docs/team/harshita-frontend.md Part B). At the end
  *  of the flow it always sends the judge back to the gallery. */
 export function primaryActionLabel(stage: Act, acts: Act[] | undefined): string {
   const next = adjacentStage(stage, acts, 1);
@@ -52,7 +52,7 @@ export function primaryActionLabel(stage: Act, acts: Act[] | undefined): string 
 }
 
 /** Why a stage is unavailable for a case — the default tooltip on the disabled rail item and
- *  progress step (docs/04 Part D, D3). Ennore hits the `attribute` case. */
+ *  progress step (docs/team/harshita-frontend.md Part D, D3). Ennore hits the `attribute` case. */
 export const STAGE_UNAVAILABLE_REASON: Record<Act, string> = {
   detect: "no detection output for this case",
   trace: "no backward-drift reconstruction for this case",
@@ -60,7 +60,7 @@ export const STAGE_UNAVAILABLE_REASON: Record<Act, string> = {
   verify: "no official finding to compare against yet",
 };
 
-/** The tooltip for a greyed act, given case context. On a no-spill scene (docs/04 Part D, D1)
+/** The tooltip for a greyed act, given case context. On a no-spill scene (docs/team/harshita-frontend.md Part D, D1)
  *  the Trace / Attribute reasons are specific — "nothing to trace"; every other case keeps the
  *  static STAGE_UNAVAILABLE_REASON string above (Ennore's D3 "no free historical AIS…"
  *  included). */
@@ -75,7 +75,7 @@ export function stageUnavailableReason(
   return STAGE_UNAVAILABLE_REASON[act];
 }
 
-/** One dot in the five-step progress indicator (docs/04 Part C, C3). */
+/** One dot in the five-step progress indicator (docs/team/harshita-frontend.md Part C, C3). */
 export interface FlowStep {
   key: "pick" | Act;
   label: string;

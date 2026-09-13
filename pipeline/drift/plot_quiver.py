@@ -142,7 +142,7 @@ def main():
     print(f"\n  wrote {out.relative_to(REPO)}")
     print("\n  Look for: land shaded grey on the correct side, arrows not marching inland,")
     print("  and a smoothly varying field. Work out the expected upstream direction for THIS")
-    print("  case before you run it (03_ANUSHKA_DRIFT.md Phase 5.3), then compare.")
+    print("  case before you run it (docs/team/anushka-stage2-drift.md Phase 5.3), then compare.")
     if ring is None:
         print(f"\n  !! NO SLICK OUTLINE: {ring_note}")
     elif ring_src == "cerulean":

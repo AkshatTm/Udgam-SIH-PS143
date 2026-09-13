@@ -60,7 +60,7 @@ Then you did the thing that actually matters: **you corroborated the fix physica
 
 **Only the `linear` seeding branch has run on real fields.** Blob, no-spill and abstain are untested paths. "Never executed" is never "known good."
 
-**~~You now have ground truth for age.~~ — CORRECTED 13 Sept 2026, and this paragraph was wrong.** It assumed the four US cases each carry a documented release time. Checked against the live library at ratification: **one** case has a documented release time (Huntington, true age ≈ 2.8 h), no live case carries it in `meta.json`, and none has a `detections.geojson` to measure an age from. So age cannot be *validated* across four incidents — at best across one, and only once Soum's detection lands. Build the estimators to be right, not to hit a validation table. See `docs/STAGE2_AGE_DECISION_BRIEF.md` §4a and §5/A5.
+**~~You now have ground truth for age.~~ — CORRECTED 13 Sept 2026, and this paragraph was wrong.** It assumed the four US cases each carry a documented release time. Checked against the live library at ratification: **one** case has a documented release time (Huntington, true age ≈ 2.8 h), no live case carries it in `meta.json`, and none has a `detections.geojson` to measure an age from. So age cannot be *validated* across four incidents — at best across one, and only once Soum's detection lands. Build the estimators to be right, not to hit a validation table. See `docs/evaluation/stage2-age-decision-brief.md` §4a and §5/A5.
 
 **Your coastline handling is the weakest part of the physics, and two of our cases sit in enclosed water.** Golden Ray is inside St Simons Sound; Huntington Beach is inside San Pedro Bay. HYCOM's 9 km cells there are partly land, and your land mask is derived from the velocity field's own validity rather than from a real shoreline dataset. Phase 4 fixes this cheaply.
 
@@ -189,7 +189,7 @@ Ship the per-estimator breakdown — it lets the frontend show *why* the band is
 
 ## C5. The validation that turns this into a claim — **withdrawn 13 Sept 2026**
 
-**This section promised a four-case validation that the case library cannot support.** Ratified in `docs/STAGE2_AGE_DECISION_BRIEF.md` §5/A5; the evidence is §4a. Superseded text:
+**This section promised a four-case validation that the case library cannot support.** Ratified in `docs/evaluation/stage2-age-decision-brief.md` §5/A5; the evidence is §4a. Superseded text:
 
 > ~~The four US cases have documented release times and known scene timestamps, so you know the true age. Run all four: *"Across four independent incidents with documented release times, our age band contained the true value in N of 4, with a median band width of X hours."*~~
 

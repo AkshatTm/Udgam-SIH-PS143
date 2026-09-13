@@ -1,5 +1,5 @@
 # AKSHAT — Integration, Cases, Contracts, Verification
-*v3. Read with 00_MASTER_PLAN.md (v4) and 05_HARSHITA_INTEGRATION.md. Organised in phases, not days.*
+*v3. Read with 00_MASTER_PLAN.md (v4) and docs/team/harshita-integration.md. Organised in phases, not days.*
 
 > ### Historical brief — kept as the record of what Akshat built
 >

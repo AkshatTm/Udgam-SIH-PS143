@@ -10,7 +10,7 @@ WHY THIS EXISTS AND NOT A SHELL LOOP
     `run.py` writes `particles.json` and `origin.json` into ONE shared directory,
     `pipeline/drift/out/`, regardless of --case. That is the bug that once rendered an Ennore
     cloud under Jacksonville's name, 160 degrees of longitude away, with nothing tripping
-    (docs/STAGE2_NUMBERS.md 8.7). Guards catch it at PLOT time now, but the hazard at PUBLISH
+    (docs/evaluation/stage2-numbers.md 8.7). Guards catch it at PLOT time now, but the hazard at PUBLISH
     time is the same shape: run six cases, then publish six times, and every bundle gets the
     last case's cloud.
 

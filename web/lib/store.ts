@@ -73,7 +73,7 @@ export interface AppState {
 
   activeStage: Act;
   selectedDetectionId: string | null;
-  /** docs/04 Phase 3.3 — the mmsi of the suspect card currently hovered in Attribute, or `null`.
+  /** docs/team/harshita-frontend.md Phase 3.3 — the mmsi of the suspect card currently hovered in Attribute, or `null`.
    *  Purely transient UI state (same family as `selectedDetectionId`); MapView reads it to
    *  emphasise/dim the matching vessel track. Never persisted, never drives any data fetch. */
   hoveredSuspectMmsi: string | null;
@@ -99,7 +99,7 @@ export interface AppState {
    *  rewind from T−0. No-ops unless particles + origin are both `ready` and this case has not
    *  been initialised yet, so it is safe to call on every render. */
   initTrace: () => void;
-  /** Return to a clean Gallery state (docs/04 C8, Master §2.1). Clears only the transient
+  /** Return to a clean Gallery state (docs/team/harshita-frontend.md C8, Master §2.1). Clears only the transient
    *  session state the next judge must not inherit — slider, selection, stage, layers,
    *  playback, the Trace-arrival guard — and re-seeds the best-oil detection. When the case is
    *  fully loaded (`status === "ready"`) every bundle stays in memory, so re-picking the same
@@ -227,7 +227,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         detections,
         detectionsPending,
         activeStage,
-        // Detect arrives with the best oil detection already selected (docs/04 C1).
+        // Detect arrives with the best oil detection already selected (docs/team/harshita-frontend.md C1).
         // detections is null for a D16 known-origin case (no `detect` act) — nothing to select.
         selectedDetectionId: detections ? bestOilDetectionId(detections) : null,
       });
@@ -381,7 +381,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   resetToGallery: () => {
     const s = get();
-    // The transient session state Judge B must never inherit (docs/04 C8, Master §2.1).
+    // The transient session state Judge B must never inherit (docs/team/harshita-frontend.md C8, Master §2.1).
     const transient = {
       tNorm: 1,
       activeStage: "detect" as Act,
@@ -396,7 +396,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       autoPlaying: false,
       traceInitFor: null,
       error: null,
-      // Re-seed the best-oil pick so Detect is never blank on re-entry (docs/04 C1).
+      // Re-seed the best-oil pick so Detect is never blank on re-entry (docs/team/harshita-frontend.md C1).
       selectedDetectionId: s.detections ? bestOilDetectionId(s.detections) : null,
       hoveredSuspectMmsi: null,
     };

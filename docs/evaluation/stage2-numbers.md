@@ -1,6 +1,6 @@
 # Stage 2 — the numbers we will present
 
-*Phase 8 of `03_ANUSHKA_DRIFT.md`. Anushka's lane, 13 Sept 2026. Every figure here is measured,
+*Phase 8 of `docs/team/anushka-stage2-drift.md`. Anushka's lane, 13 Sept 2026. Every figure here is measured,
 and the command that produces it is named. Rulings A1–A5 (Akshat, 13 Sept) are incorporated —
 including the withdrawal of the four-case age claim.*
 

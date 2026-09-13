@@ -24,7 +24,7 @@ fails loudly. GeoJSON is [lon, lat], longitude FIRST, always. Pixel (0,0) is
 top-left = (west, north), so latitude DECREASES as row increases — the affine
 handles that, which is precisely why we use it rather than re-deriving it.
 
-THE -3 dB TRAP (docs/02_SOUM_DETECTION.md 6.4). The documented fallback rule
+THE -3 dB TRAP (docs/team/soum-stage1-detection.md 6.4). The documented fallback rule
 "contrast < -3 dB AND elongation > 2.5" matches ZERO of our training positives:
 Zenodo positives run -0.44 to -1.04 dB at the 5th-95th percentiles. It is not
 hardcoded here. --rule-contrast / --rule-elongation exist so the rule is stated

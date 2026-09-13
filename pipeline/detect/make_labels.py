@@ -47,7 +47,7 @@ Carrying the scene's own noise floor per row lets train.py derive scene-relative
 features (depth / noise_mad, contrast / noise_mad) that mean the same thing in
 every domain. It is the same instinct that already makes the DETECTOR thresholds
 noise-relative, extended to the classifier — and the same instinct the tile cache
-applies as per-scene MAD normalisation (docs/02_SOUM_DETECTION.md 2.1).
+applies as per-scene MAD normalisation (docs/team/soum-stage1-detection.md 2.1).
 
 Labeling rule
 -------------

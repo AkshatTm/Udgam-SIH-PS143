@@ -163,7 +163,7 @@ function MetricRow({
   );
 }
 
-// docs/04 Phase 5.3 — discharge_class badge (Master §6.3). Plain language first, technical
+// docs/team/harshita-frontend.md Phase 5.3 — discharge_class badge (Master §6.3). Plain language first, technical
 // enum second (C4), same convention as MetricRow. Renders the producer's value verbatim —
 // never a stronger claim, never a frontend-inferred category.
 const DISCHARGE_CLASS_PLAIN: Record<DischargeClass, string> = {
@@ -359,7 +359,7 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
   );
 }
 
-// docs/04 Phase 5.3 — age_method plain-language labels (Master §6.5, C4). "none" and
+// docs/team/harshita-frontend.md Phase 5.3 — age_method plain-language labels (Master §6.5, C4). "none" and
 // "disagreement" are genuine estimator outcomes, not errors — worded as such, not hidden.
 const AGE_METHOD_LABEL: Record<AgeMethod, string> = {
   shear: "Estimated from current shear",
@@ -462,7 +462,7 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
         </p>
       )}
 
-      {/* docs/04 Phase 5.3 — estimated age (Master §6.5). ageHours and ageMethod are
+      {/* docs/team/harshita-frontend.md Phase 5.3 — estimated age (Master §6.5). ageHours and ageMethod are
           independently optional (no invented pairing rule): each row renders only when its
           own field is present, and the whole block hides when both are absent. */}
       {(origin.ageHours || origin.ageMethod) && (
@@ -570,7 +570,7 @@ function NaturalSeepNotice({ seep }: { seep: NaturalSeep }) {
   );
 }
 
-/** Static 4-step bar — "no animation needed" per docs/04 Phase 5. Steps only ever shrink or
+/** Static 4-step bar — "no animation needed" per docs/team/harshita-frontend.md Phase 5. Steps only ever shrink or
  * hold, left to right (CONTRACTS §8: funnel counts are non-increasing), so the bar length
  * itself carries the funnel's shape. */
 function FunnelBar({ funnel }: { funnel: Funnel }) {
@@ -616,7 +616,7 @@ const COMPONENT_LABELS: { key: keyof SuspectComponents; label: string }[] = [
   { key: "typePrior", label: "Type prior" },
 ];
 
-/** Score-component breakdown behind a suspect's overall score (docs/04 Phase 3.2, Master
+/** Score-component breakdown behind a suspect's overall score (docs/team/harshita-frontend.md Phase 3.2, Master
  * §6.7). Same bar-track visual language as FunnelBar — no new visual system. A `null`
  * component (e.g. `gap`/`slowdown` on a gfw_hourly case) renders "n/a" with NO bar underneath:
  * a zero-width bar would claim a measurement that was never possible. D29: an unexplained
@@ -665,7 +665,7 @@ function ComponentBars({
 }
 
 function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
-  // docs/04 Phase 3.3 — hover lifts through the same store selectedDetectionId already uses,
+  // docs/team/harshita-frontend.md Phase 3.3 — hover lifts through the same store selectedDetectionId already uses,
   // no new state mechanism. MapView reads hoveredSuspectMmsi to emphasise/dim the matching
   // vessel track; leaving the card clears it, restoring normal styling everywhere.
   const hoveredSuspectMmsi = useAppStore((st) => st.hoveredSuspectMmsi);
@@ -700,7 +700,7 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
             <span className="text-[14px] font-semibold leading-tight text-white/90">
               {s.name}
             </span>
-            {/* docs/04 Phase 3.7 — badge near identity, per the roadmap's own placement ask.
+            {/* docs/team/harshita-frontend.md Phase 3.7 — badge near identity, per the roadmap's own placement ask.
                 Only ever rendered from a real repeat_offender record — never inferred from
                 score, mmsi recurrence, or anything computed here. */}
             {s.repeatOffender && (
@@ -795,7 +795,7 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
   );
 }
 
-/** Visually "ruled out" per docs/06 — muted + strikethrough on the name. The map's vessel
+/** Visually "ruled out" per docs/team/jaiveer-stage3-attribution.md — muted + strikethrough on the name. The map's vessel
  * layer conveys the same role with reduced opacity/width (see MapView.tsx); this is the card
  * half of that motif. */
 function ExcludedCard({ e }: { e: ExcludedVessel }) {
@@ -819,7 +819,7 @@ function ExcludedCard({ e }: { e: ExcludedVessel }) {
 
 // Same rose accent as the map's dark-vessel ScatterplotLayer (MapView.tsx DARK_VESSEL_COLOR) —
 // the card and the marker are visibly the same thing. No MMSI row: a dark vessel has no AIS
-// identity by definition (docs/04 Phase 3.5, Master §6.7), so there is nothing to show there.
+// identity by definition (docs/team/harshita-frontend.md Phase 3.5, Master §6.7), so there is nothing to show there.
 function DarkVesselCard({ v }: { v: DarkVessel }) {
   return (
     <div className="rounded border border-[#f43f5e]/25 bg-[#f43f5e]/[0.05] p-3">
@@ -886,7 +886,7 @@ function InfrastructureCard({ f }: { f: Infrastructure }) {
  *  - "unknown"  — origin.json failed to load. Same caution as "loading" — we cannot confirm
  *                 abstain is false, so no suspect is named.
  *  - "abstain"  — origin.abstain === true (diffuse origin) OR suspects.abstained === true
- *                 (Stage 3's deliberate refusal for any reason). docs/04 D2: a maturity signal,
+ *                 (Stage 3's deliberate refusal for any reason). docs/team/harshita-frontend.md D2: a maturity signal,
  *                 not a failure — funnel + headline + the case's abstain reason; no suspect.
  *                 Scene-level findings (natural seep, dark vessels, infrastructure) still render.
  *  - "clear"    — neither abstains, confirmed. Render suspects.json as given.
@@ -945,7 +945,7 @@ function AttributeCard({
       )}
 
       {gate === "abstain" && (
-        // docs/04 D2 — style as a deliberate decision, never a failure. No red, no ✗.
+        // docs/team/harshita-frontend.md D2 — style as a deliberate decision, never a failure. No red, no ✗.
         <div className="rounded border border-white/10 bg-white/[0.03] p-3">
           <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
             Deliberate abstention
@@ -1001,7 +1001,7 @@ function AttributeCard({
           abstains on vessels, and its pipeline finding must stay visible). */}
       {(gate === "clear" || gate === "abstain") && (
         <>
-          {/* docs/04 Phase 3.5 — hidden entirely when empty, same convention as Score
+          {/* docs/team/harshita-frontend.md Phase 3.5 — hidden entirely when empty, same convention as Score
               Breakdown: a rare/exceptional category should not clutter the panel with a
               "none" message the way Suspects/Excluded (always-expected sections) do. */}
           {suspects.darkVessels.length > 0 && (
@@ -1016,9 +1016,9 @@ function AttributeCard({
             </>
           )}
 
-          {/* docs/04 Phase 3.6 — same hidden-when-empty convention as Dark Vessels/Score
+          {/* docs/team/harshita-frontend.md Phase 3.6 — same hidden-when-empty convention as Dark Vessels/Score
               Breakdown. Order (Suspects → Excluded → Dark Vessels → Infrastructure) matches
-              docs/04 Screen 3 exactly. */}
+              docs/team/harshita-frontend.md Screen 3 exactly. */}
           {suspects.infrastructure.length > 0 && (
             <>
               <Divider />
@@ -1083,7 +1083,7 @@ export default function ContextPanel() {
             </p>
           </div>
         ) : oilCount === 0 ? (
-          // D1 — a designed result, not an error (docs/04 Part D). Guide the judge to the
+          // D1 — a designed result, not an error (docs/team/harshita-frontend.md Part D). Guide the judge to the
           // rejected look-alikes; their DetectionCard carries the "why not oil" evidence.
           <>
             <div className="mb-4 rounded border border-white/[0.08] bg-white/[0.03] p-3">
@@ -1105,7 +1105,7 @@ export default function ContextPanel() {
           </>
         ) : (
           <>
-            {/* Screen-1 oil-detection headline (docs/04 Screen 1).
+            {/* Screen-1 oil-detection headline (docs/team/harshita-frontend.md Screen 1).
                 Shown only when oilCount > 0 — D1 (oilCount === 0) has its own messaging above. */}
             <div className="mb-4">
               <p className="text-[13px] font-semibold leading-snug text-white/85">

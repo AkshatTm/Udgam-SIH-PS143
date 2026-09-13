@@ -1,5 +1,5 @@
 # HARSHITA — Integration: the Human Gate
-*v2. Companion to 04_HARSHITA_FRONTEND.md. Read with 00_MASTER_PLAN.md and 01_AKSHAT_INTEGRATION.md. Organised in phases, not days.*
+*v2. Companion to docs/team/harshita-frontend.md. Read with 00_MASTER_PLAN.md and docs/team/akshat-integration.md. Organised in phases, not days.*
 
 > ### Historical brief — kept as the record of what Harshita built
 >

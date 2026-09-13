@@ -1,6 +1,6 @@
 # Stage 3 Phase 8 — the injected-offender curve
 
-*Built and run 14 Sept (Akshat, on Jaiveer's design from `STAGE3_PROGRESS_2026-09-13_EVENING.md` §8.3).
+*Built and run 14 Sept (Akshat, on Jaiveer's design from `docs/_archive/jaiveer/stage3-progress-2026-09-13-evening.md` §8.3).
 Tool: `pipeline/attribute/evaluate.py`. Raw results: `pipeline/attribute/results/phase8_*.json`.*
 
 ## Why it exists

@@ -10,7 +10,7 @@
 
 import type { GeoBounds, LonLat, RawOriginBundle } from "./contracts";
 
-/** Master §6.5, docs/04 Phase 5.3 — Anushka's combined age-estimation method. */
+/** Master §6.5, docs/team/harshita-frontend.md Phase 5.3 — Anushka's combined age-estimation method. */
 export type AgeMethod =
   | "shear"
   | "fay"
@@ -36,11 +36,11 @@ export interface OriginBundle {
   timeWindowMethod: "bounded" | "convergence" | null;
   ensembleRuns: number;
   abstain: boolean;
-  /** Master §6.5, docs/04 Phase 5.3 — [min, max] hours since release. `null` when absent —
+  /** Master §6.5, docs/team/harshita-frontend.md Phase 5.3 — [min, max] hours since release. `null` when absent —
    *  hides the "Estimated age" row, never rendered as a fabricated measurement. */
   ageHours: [number, number] | null;
-  /** Master §6.5, docs/04 Phase 5.3 — the estimator that produced `ageHours`. Independently
-   *  nullable from `ageHours` (docs/04 Phase 5.3: "do not invent a pairing rule"). */
+  /** Master §6.5, docs/team/harshita-frontend.md Phase 5.3 — the estimator that produced `ageHours`. Independently
+   *  nullable from `ageHours` (docs/team/harshita-frontend.md Phase 5.3: "do not invent a pairing rule"). */
   ageMethod: AgeMethod | null;
   /** Master §6.5 — per-estimator [min, max] hour band, `null` where that estimator did not
    *  apply (never a zero band). `null` overall when the bundle carries no block. */
@@ -51,9 +51,9 @@ export interface OriginBundle {
 // ALPHA alone carries probability, so colour never implies a magnitude. The mapping is a mild
 // gamma, NOT linear and NOT a hard cutoff: case-000's median non-zero cell is ~0.011, so linear
 // alpha renders the cloud invisible, and a hard threshold leaves a fringe of just-above-cutoff
-// cells reading as a second, non-existent cloud (docs/04 Phase 5.1). These three constants are
+// cells reading as a second, non-existent cloud (docs/team/harshita-frontend.md Phase 5.1). These three constants are
 // display-only — they never change a probability, only how visible one is — and are the first
-// things to retune against the real Ennore bundle (docs/04 Phase 7.2). Urooz owns the final
+// things to retune against the real Ennore bundle (docs/team/harshita-frontend.md Phase 7.2). Urooz owns the final
 // palette; `ORIGIN_ALPHA_GAMMA = 1` reverts to strictly-linear alpha.
 const ORIGIN_RGB: readonly [number, number, number] = [251, 176, 59];
 const ORIGIN_ALPHA_GAMMA = 0.7;
@@ -61,7 +61,7 @@ const ORIGIN_ALPHA_MAX = 0.85;
 
 /**
  * Rasterise the row-major probability grid onto an `OffscreenCanvas` and hand back its
- * `ImageBitmap` for a deck.gl `BitmapLayer` (ruling D11 — never a `HeatmapLayer`; docs/04
+ * `ImageBitmap` for a deck.gl `BitmapLayer` (ruling D11 — never a `HeatmapLayer`; docs/team/harshita-frontend.md
  * Phase 5.1). One texel per grid cell, so the image is `cols × rows` (120 × 120 for case-000).
  *
  * Orientation: CONTRACTS §6 says `values` is row-major from the top-left, i.e. **row 0 is the
@@ -299,7 +299,7 @@ function validate(raw: RawOriginBundle, id: string): void {
   }
 
   // age_hours (optional) — [min, max] hours since release. Independently optional from
-  // age_method (docs/04 Phase 5.3: "do not invent a pairing rule").
+  // age_method (docs/team/harshita-frontend.md Phase 5.3: "do not invent a pairing rule").
   if (raw.age_hours !== undefined && raw.age_hours !== null) {
     const ah = raw.age_hours;
     if (

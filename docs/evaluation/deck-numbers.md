@@ -34,7 +34,7 @@ differently. Cerulean is also where cases 1, 2, 4 and 5 came from; say so.
 
 ## Stage 2: trace
 
-Per case, from the published `origin.json` (cross-checked against `docs/_archive/anushka/STAGE2_NUMBERS.md` §8.9):
+Per case, from the published `origin.json` (cross-checked against `docs/_archive/anushka/docs/evaluation/stage2-numbers.md` §8.9):
 
 | case | r50 | r90 | median travel | wind share | release window |
 |---|---|---|---|---|---|
@@ -65,12 +65,12 @@ Per case, from the published `origin.json` (cross-checked against `docs/_archive
 | `null` ≠ 0: gap/slowdown are n/a on hourly AIS (D20) | — | Master §6.1 | — |
 | **Both Indian cases now search real vessels** (GFW hourly, D40) | Mumbai 9 vessels / 31 vessel-hours, funnel 9 → 2 → 0 → 0; Jamnagar 8 / 43, 8 → 2 → 0 → 0. Both abstain because **no vessel entered the origin cloud** | `docs/receipts.md` GFW section | "no AIS available in Indian waters" — that was our error, corrected 14 Sept |
 | Infrastructure association is built and contracted (D38) | — | Master §6.1 | that it found the Huntington pipeline (it scores below floor) |
-| **Injected-offender curve (Phase 8), offshore, 300 trials/point** | top-1 **0.910** [0.87–0.94], top-3 0.964, 23/300 abstained, given a cloud with 0.5 × r90 of error | `docs/STAGE3_PHASE8.md` | any of it as an accuracy figure for the six live cases |
+| **Injected-offender curve (Phase 8), offshore, 300 trials/point** | top-1 **0.910** [0.87–0.94], top-3 0.964, 23/300 abstained, given a cloud with 0.5 × r90 of error | `docs/evaluation/stage3-injected-offender-curve.md` | any of it as an accuracy figure for the six live cases |
 | Sampling density is the biggest lever | dense **0.910** → hourly **0.488** offshore; 0.782 → 0.296 in port | same | — |
 | Origin quality sets the ceiling | perfect cloud **1.000**; error of one r90 **0.653** | same | — |
 | A hard offender (no gap, no slowdown) | top-1 **0.556**, top-3 0.923 | same | quoting only the baseline |
 | It refuses as water crowds | port, 25 km cloud: **111 of 150 trials abstained** | same | — |
-| Honesty slide, now measured: `trajectory` **−0.051** top-1 when removed, `type_prior` **−0.024**, `gap` **+0.143** (removing it helps when the offender never goes dark). **No weight moved.** | — | `STAGE3_PHASE8.md` ablation | that we tuned anything on a real case |
+| Honesty slide, now measured: `trajectory` **−0.051** top-1 when removed, `type_prior` **−0.024**, `gap` **+0.143** (removing it helps when the offender never goes dark). **No weight moved.** | — | `stage3-injected-offender-curve.md` ablation | that we tuned anything on a real case |
 | Repeat offenders: in the data model, roadmap | — | A8 | a working feature |
 
 ## Blind evaluation

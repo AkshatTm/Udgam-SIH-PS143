@@ -10,7 +10,7 @@ The narrative and the reasoning live in `docs/updates/soum.md`; this is the one-
 
 ## What this is, and what it is NOT
 
-`docs/02_SOUM_DETECTION.md` — the Stage 1 task document, **7 phases and a 12-item definition of
+`docs/team/soum-stage1-detection.md` — the Stage 1 task document, **7 phases and a 12-item definition of
 done — is COMPLETE**. Nine cases PASS, `detections.geojson` ships for all of them, and the demo
 loads none of this work.
 

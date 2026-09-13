@@ -138,7 +138,7 @@ def check_consecutive_days(csv_paths):
     rows. Ingest 25 Jan together with 16 Feb and every vessel in the file acquires a
     three-week gap: max_gap_minutes stops meaning anything and the `gap` component
     fires on the entire fleet as a plausible signal rather than as an error.
-    Risk D6; docs/06_JAIVEER_AIS.md Phase 9.1.
+    Risk D6; docs/team/jaiveer-stage3-attribution.md Phase 9.1.
 
     'Consecutive' is the rule, not 'narrow'. An incident +/- 2 days is a five-day
     span and must pass; what must fail is a hole in the middle of it, so the test is

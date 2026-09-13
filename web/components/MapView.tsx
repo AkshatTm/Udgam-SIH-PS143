@@ -2,7 +2,7 @@
 
 // The one map. MapLibre GL JS, no token, no external tiles — the SAR raster is the backdrop,
 // a bundled coastline gives faint geographic context, and a plain dark ocean background keeps
-// the demo offline-safe (docs/04 allows this).
+// the demo offline-safe (docs/team/harshita-frontend.md allows this).
 //
 // The map object is created once. Store changes (case, layer visibility, selection) are pushed
 // in via imperative map calls in effects — the map container never re-renders on those.
@@ -84,7 +84,7 @@ const PARTICLE_FILL: [number, number, number, number] = [251, 146, 60, 210];
 
 // Origin cloud fade. Rewind fraction (0 at T−0, 1 at T−24h) is run through a smoothstep so the
 // cloud is fully hidden near the detection time and eases in only as the slider approaches
-// maximum rewind — "the origin becomes knowable the further back you drift" (docs/04 §Phase 3).
+// maximum rewind — "the origin becomes knowable the further back you drift" (docs/team/harshita-frontend.md §Phase 3).
 // This is the ONLY thing about the origin layer that changes on a scrub: a pure `opacity` prop,
 // which the BitmapLayer applies without re-uploading its texture. The colour ramp and the
 // alpha-proportional mapping live in lib/origin.ts (buildOriginImage); Urooz owns the palette.
@@ -123,7 +123,7 @@ interface VesselMapItem {
 const VESSEL_COLOR_PLAIN: [number, number, number, number] = [96, 165, 250, 140];
 const VESSEL_COLOR_SUSPECT: [number, number, number, number] = [56, 189, 248, 200];
 const VESSEL_COLOR_TOP_SUSPECT: [number, number, number, number] = [56, 189, 248, 255];
-// Excluded — muted, per docs/06 ("visually ruled out"). The strikethrough motif itself is
+// Excluded — muted, per docs/team/jaiveer-stage3-attribution.md ("visually ruled out"). The strikethrough motif itself is
 // applied on the exclusion card in ContextPanel; a dashed line isn't a deck.gl PathLayer
 // primitive, so the map conveys "ruled out" via reduced opacity + thin width instead.
 const VESSEL_COLOR_EXCLUDED: [number, number, number, number] = [148, 163, 184, 120];
@@ -133,7 +133,7 @@ const VESSEL_WIDTH_SUSPECT = 1.8;
 const VESSEL_WIDTH_TOP_SUSPECT = 3;
 const VESSEL_WIDTH_EXCLUDED = 1;
 
-// docs/04 Phase 3.5 — dark vessels (Master §6.7). A radar contact with no AIS at all: a point,
+// docs/team/harshita-frontend.md Phase 3.5 — dark vessels (Master §6.7). A radar contact with no AIS at all: a point,
 // never a track, never linked to `vessels.geojson`. Deliberately its own colour family (rose),
 // unused everywhere else in this app (blue = vessel, amber = particle/origin, red = oil,
 // grey = look-alike/excluded) — an alert marker must not read as any of those.
@@ -144,7 +144,7 @@ const DARK_VESSEL_COLOR: [number, number, number, number] = [244, 63, 94, 235];
 const DARK_VESSEL_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
 const DARK_VESSEL_RADIUS_PX = 7;
 
-// docs/04 Phase 3.6 — infrastructure findings (Master §6.7). Also a stationary point with no
+// docs/team/harshita-frontend.md Phase 3.6 — infrastructure findings (Master §6.7). Also a stationary point with no
 // AIS identity, but a distinct category from a dark vessel (a named, known facility being
 // scored — not an anomaly). Its own colour (violet) — unclaimed by any other layer in this
 // app (blue = vessel, amber = particle/origin, red = oil, grey = look-alike/excluded, rose =
@@ -156,7 +156,7 @@ const INFRASTRUCTURE_COLOR: [number, number, number, number] = [167, 139, 250, 2
 const INFRASTRUCTURE_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
 const INFRASTRUCTURE_RADIUS_PX = 7;
 
-// docs/04 Phase 5.3 — ship_detections (Master §6.3, D34). Soum's RAW radar contacts for the whole
+// docs/team/harshita-frontend.md Phase 5.3 — ship_detections (Master §6.3, D34). Soum's RAW radar contacts for the whole
 // scene, top-level on the FeatureCollection. UNATTRIBUTED — NOT the same list as suspects.json's
 // `dark_vessels` (Jaiveer's already AIS-cross-checked "no match" subset, Phase 3.5 above). A
 // contact is never "dark" until that check has run at a known time. This renders every candidate
@@ -261,7 +261,7 @@ export default function MapView() {
   const vessels = useAppStore((s) => s.vessels);
   const vesselsVisible = useAppStore((s) => s.layers.vessels);
   const suspects = useAppStore((s) => s.suspects);
-  // docs/04 Phase 3.3 — hover-to-highlight. Purely presentational: never touches vesselItems
+  // docs/team/harshita-frontend.md Phase 3.3 — hover-to-highlight. Purely presentational: never touches vesselItems
   // (the parsed track geometry), never refetches, never rebuilds the map or its camera.
   const hoveredMmsi = useAppStore((s) => s.hoveredSuspectMmsi);
 
@@ -319,8 +319,8 @@ export default function MapView() {
     });
   }, [vesselItems, vesselsVisible, hoveredMmsi]);
 
-  // docs/04 Phase 3.5 — dark-vessel markers. Independent of `vesselsVisible` on purpose: the
-  // whole point of the AIS-off reveal (docs/05 §3.3) is that toggling the AIS track layer off
+  // docs/team/harshita-frontend.md Phase 3.5 — dark-vessel markers. Independent of `vesselsVisible` on purpose: the
+  // whole point of the AIS-off reveal (docs/team/harshita-integration.md §3.3) is that toggling the AIS track layer off
   // leaves this marker alone with nothing beneath it. No mmsi exists to share with the hover
   // highlight (Phase 3.3) or the vessel PathLayer, so the two features cannot collide.
   const darkVesselItems = useMemo(() => {
@@ -345,7 +345,7 @@ export default function MapView() {
     });
   }, [darkVesselItems]);
 
-  // docs/04 Phase 3.6 — infrastructure markers. Same independent-of-`vesselsVisible` reasoning
+  // docs/team/harshita-frontend.md Phase 3.6 — infrastructure markers. Same independent-of-`vesselsVisible` reasoning
   // as dark vessels doesn't apply here (no toggle-driven reveal is described for infrastructure
   // in any doc) — it simply renders whenever the bundle has findings, like the dark-vessel layer.
   const infrastructureItems = useMemo(() => {
@@ -370,7 +370,7 @@ export default function MapView() {
     });
   }, [infrastructureItems]);
 
-  // docs/04 Phase 5.3 — ship_detections (Master §6.3, D34). Read the top-level scene list. Only a
+  // docs/team/harshita-frontend.md Phase 5.3 — ship_detections (Master §6.3, D34). Read the top-level scene list. Only a
   // bundle written before D34 lacks it; those carry the SAME full scene list on every feature, so
   // the fallback flattens AND deduplicates by position — flattening alone drew each contact once
   // per feature (Ennore: 72 contacts rendered as 2,088 stacked markers). Independent of
@@ -480,7 +480,7 @@ export default function MapView() {
           "fill-opacity": 0.18,
         },
       });
-      // oil = solid red outline, look-alike = grey dashed (docs/04). Split into two layers
+      // oil = solid red outline, look-alike = grey dashed (docs/team/harshita-frontend.md). Split into two layers
       // because line-dasharray is not reliably data-driven.
       map.addLayer({
         id: "det-outline-oil",
@@ -544,7 +544,7 @@ export default function MapView() {
   // 0 when Origin is toggled off. On Trace, the rewind fraction (0 at T−0, 1 at T−24h) runs
   // through a smoothstep, so the cloud is hidden near the detection time and eases in only as
   // the slider nears maximum rewind ("the origin becomes knowable the further back you drift",
-  // docs/04 §Phase 3). Taken from the integer timestep `t`, NOT the raw slider value, so it
+  // docs/team/harshita-frontend.md §Phase 3). Taken from the integer timestep `t`, NOT the raw slider value, so it
   // changes at most n_steps times across a full scrub — never continuously as the handle drags.
   // Outside Trace (e.g. Attribute), there is no rewind narrative to earn — the toggle alone
   // should show the cloud at full opacity, since the footer's slider still defaults to T−0

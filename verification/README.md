@@ -1,7 +1,7 @@
 # verification/ — Stage 4 content, hand-authored
 
 `verification.json` is not produced by a pipeline stage. It is **research and prose**, written by
-hand per case (Master Plan Phase 4, `docs/01_AKSHAT_INTEGRATION.md` Part 4). This directory holds
+hand per case (Master Plan Phase 4, `docs/team/akshat-integration.md` Part 4). This directory holds
 the source files; `build_case.py` copies `verification/<case-id>.json` into
 `cases/<case-id>/verification.json` when `verify` is in `acts_available`.
 

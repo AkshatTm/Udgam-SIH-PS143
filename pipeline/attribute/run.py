@@ -21,7 +21,7 @@ must never reach a judge: every vessel on screen comes from the real NOAA file, 
 documented incident's vessel doesn't rank top-3, that is the result we show.
 
 The real scoring is a deterministic weighted sum with the weights below as named constants —
-no ML. See docs/06_JAIVEER_AIS.md Phase 2.
+no ML. See docs/team/jaiveer-stage3-attribution.md Phase 2.
 
 Deliberately stdlib-only. The real ingest needs duckdb/pyarrow/pandas/shapely.
 """
@@ -102,7 +102,7 @@ def main():
     if not a.stub:
         raise SystemExit(
             "attribute/run.py has no real implementation yet — pass --stub.\n"
-            "Building it is Phases 1-2 of docs/06_JAIVEER_AIS.md.")
+            "Building it is Phases 1-2 of docs/team/jaiveer-stage3-attribution.md.")
 
     case_dir = Path(a.cases_root) / a.case
     org_path = case_dir / "origin.json"

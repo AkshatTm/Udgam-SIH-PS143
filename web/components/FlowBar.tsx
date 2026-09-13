@@ -1,7 +1,7 @@
 "use client";
 
 // The strip under the header: back navigation (left), the five-step progress indicator
-// (centre, docs/04 C3), and "Start over" (right, C8). Always visible while in a case.
+// (centre, docs/team/harshita-frontend.md C3), and "Start over" (right, C8). Always visible while in a case.
 
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
@@ -18,11 +18,11 @@ export default function FlowBar({ stage }: { stage: Act }) {
   const acts = meta?.acts_available;
 
   const prev = adjacentStage(stage, acts, -1);
-  // docs/04 D1 — greyed dots get the "nothing to trace" reason on a no-spill scene.
+  // docs/team/harshita-frontend.md D1 — greyed dots get the "nothing to trace" reason on a no-spill scene.
   const steps = flowSteps(acts, { noSpill });
 
   // Any path back to the Gallery goes through the same clean-state reset as the idle timer
-  // (docs/04 C8) — going forward through a stage never does.
+  // (docs/team/harshita-frontend.md C8) — going forward through a stage never does.
   const toGallery = () => {
     resetToGallery();
     router.push("/");

@@ -101,7 +101,7 @@ The `explanation` is human prose. **Never generated.** A `miss` with a reason sh
   - **Without it, Huntington's verdict is `partial`.**
   - Mumbai's candidate is already probed (score 0.368, sits on the slick's eastern tip, *outside*
     the origin grid). That tension should be stated, not hidden.
-- [x] **Stage 3 issue register leftovers** (`docs/STAGE3_ISSUE_REGISTER.md`):
+- [x] **Stage 3 issue register leftovers** (`docs/evaluation/stage3-issue-register.md`):
   - A1: Menuett is not a gap case, so plan text needs an edit.
   - A5 / A6: `trajectory` and `type_prior` weights. **No weight moves** until Jaiveer's Phase 8
     curve exists. Say that whenever the weights are discussed.
@@ -176,7 +176,7 @@ Stage 2 is **functionally complete**: all six spill cases ship `particles.json`,
   python pipeline/drift/plot_heatmap.py --case case-mumbai-2023
   ```
 - [x] **P0 — Stage 2 numbers, with their framing.** Per-case r50/r90, `wind_share` and the
-  OpenDrift 550 m are collected in `docs/DECK_NUMBERS.md`, each with its source and its "never
+  OpenDrift 550 m are collected in `docs/evaluation/deck-numbers.md`, each with its source and its "never
   say" (r50/r90 are precision, not accuracy; the 118 m is synthetic; direction arrows only on
   Jacksonville and Farallones). That file is a **claims reference, not a deck plan** — it exists so
   that whoever writes a slide, a paper, or an answer to a judge quotes a measured number.
@@ -245,7 +245,7 @@ QA'd on a real bundle. After `sync_web_cases.py`, run on each case and log `QA P
 | Jamnagar | Trace, **Attribute — it now runs (searched, then abstained), so it is no longer greyed**, Verify |
 | 3 rejection cases | nothing new (Detect done) |
 
-Condensed checklist (full version: `docs/_archive/harshita/05_HARSHITA_INTEGRATION.md` Part B):
+Condensed checklist (full version: `docs/_archive/harshita/docs/team/harshita-integration.md` Part B):
 - **Load:** no console error; map frames scene + particles + origin; nothing important off-screen.
 - **Trace:**
   - particles overlap the slick at frame 0
@@ -294,7 +294,7 @@ What is left, in order:
 3. **§3C demo machine + fallback video**, then **§1E rehearsals ×2**.
 4. If time: §1D's remaining receipts (CPCL needs OCR), §2's P2 items, issue **F1**.
 
-*(The deck is deliberately absent — Akshat builds it separately. `docs/DECK_NUMBERS.md` stays as a
+*(The deck is deliberately absent — Akshat builds it separately. `docs/evaluation/deck-numbers.md` stays as a
 claims reference for it: every measured number with its receipt and its "never say", including the
 mandatory Zenodo CC-BY attribution.)*
 
@@ -322,7 +322,7 @@ restored with `git checkout -b <name> <sha>`:
 - **Soum.** Additive and off the demo path: no `cases/`, no `web/`, no `models/*.pt`. Recorded in
   the merge message so it is not misread later: **E1's "the channel fix buys nothing" is about
   U-Net training** (tile IoU spread 0.0093 against fold noise 0.0599), *not* a contradiction of his
-  Phase 6.8 finding that the networks do transfer, which is what D33 and `DECK_NUMBERS.md` rest on.
+  Phase 6.8 finding that the networks do transfer, which is what D33 and `docs/evaluation/deck-numbers.md` rest on.
 - **Harshita.** Land basemap under the SAR raster, origin at full opacity outside Trace,
   `source_type`/`grid_probability` parsed, and "excluded" → "dropped" on the short-track line —
   which was calling a sampling drop an exoneration. **She never committed the asset**:
@@ -340,7 +340,7 @@ restored with `git checkout -b <name> <sha>`:
 **Result:** Farallones gains its first exclusion, so the library is at **5 warnings, down from 6** —
 three by design on the no-oil cases, plus Mumbai and Jamnagar having nobody to exclude.
 
-**Files touched:** `pipeline/attribute/{score,tests}.py` · `cases/case-{jacksonville-2024,farallones-2023,huntington-2021}/suspects.json` (regenerated) · `web/public/basemap/ne_110m_land.geojson` · `web/components/ContextPanel.tsx` · `docs/STAGE3_ISSUE_REGISTER.md`
+**Files touched:** `pipeline/attribute/{score,tests}.py` · `cases/case-{jacksonville-2024,farallones-2023,huntington-2021}/suspects.json` (regenerated) · `web/public/basemap/ne_110m_land.geojson` · `web/components/ContextPanel.tsx` · `docs/evaluation/stage3-issue-register.md`
 
 **Run command:**
 ```bash
@@ -366,7 +366,7 @@ Expected: 26/26 · 105 tests OK · PASS on all 9 · 0 TS errors · compiled.
 - **D28 implemented** — it was in the contract but never in the code. Farallones' `type_prior` (1.0 for a tanker and two cargo ships) now gates to null; scores fall to 0.620/0.345/0.046, rank preserved by construction.
 - **Exclusions exist for the first time.** The pool only ever held plausible-but-unranked vessels, which was empty on every case. It now draws on the near misses the funnel dropped, with the measured grid probability in the reason. Jacksonville 1, Huntington 3.
 - **Validator:** a constant **zero** no longer warns (it cannot inflate a score, and gating it would raise every score on the case); cases where nothing was searched are exempt from the exclusion warning.
-- **Phase 8 shipped** (`pipeline/attribute/evaluate.py`, `docs/STAGE3_PHASE8.md`, **D39**). Offshore top-1 **0.910** [0.87–0.94]; **0.488** on hourly AIS; **1.000** perfect cloud vs **0.653** at one r90 of error; **0.556** against an offender with no behavioural signature; in port with a 25 km cloud **111 of 150 trials abstain**. Ablation answers **A5** (`trajectory` −0.051, it contributes) and **A6** (`type_prior` −0.024, inert), and shows **removing `gap` improves top-1 by 0.143** when the offender does not go dark (A2 at scale).
+- **Phase 8 shipped** (`pipeline/attribute/evaluate.py`, `docs/evaluation/stage3-injected-offender-curve.md`, **D39**). Offshore top-1 **0.910** [0.87–0.94]; **0.488** on hourly AIS; **1.000** perfect cloud vs **0.653** at one r90 of error; **0.556** against an offender with no behavioural signature; in port with a 25 km cloud **111 of 150 trials abstain**. Ablation answers **A5** (`trajectory` −0.051, it contributes) and **A6** (`type_prior` −0.024, inert), and shows **removing `gap` improves top-1 by 0.143** when the offender does not go dark (A2 at scale).
 - **D40: the Indian cases have real AIS.** GFW's 4wings report *does* return per-vessel hourly positions; we had ruled it out on a documentation sentence without issuing the request. `ingest_gfw.py` writes the same parquet schema. Mumbai 9 vessels / 31 vessel-hours, Jamnagar 8 / 43 — both abstain because **no vessel entered the origin cloud**, a searched negative rather than "nothing was searched". **Jamnagar gains `attribute`.**
 
 **Files touched:** `pipeline/attribute/{score,evaluate,ingest_gfw,tests}.py` · `scripts/{validate_case,gfw_probe}.py` ·
@@ -406,7 +406,7 @@ Expected: 26/26, 100 tests OK, PASS on all 9 (6 warnings, 3 of them by design on
 - **D33 reworded.** Networks do transfer once channels match; live cases stay classical on the IoU evidence.
 - **Issue register.** Resolutions table added for A1, A5/A6, A8, B3, B5, D1, D2, D3 and E1.
 - **§1D.**
-  - Natural-seep claim removed from `02_SOUM_DETECTION.md`, the §6.7 example and the open-items row.
+  - Natural-seep claim removed from `docs/team/soum-stage1-detection.md`, the §6.7 example and the open-items row.
   - Glossary "VH is the discriminator" removed.
   - §16.1 / D31: Farallones is **blind on weights, not provably on identity**, because Jaiveer's asks came from reading `ee19819`. The stage line quotes no count.
   - `receipts.md`: 118 m qualified as synthetic, 550 m Jacksonville added, NTSB 4.75 nm and coordinate added.
@@ -420,11 +420,11 @@ Expected: 26/26, 100 tests OK, PASS on all 9 (6 warnings, 3 of them by design on
   - `naap_result` filled from the bundles in all six `verification/*.json`. Stale wind shares corrected in the facts-to-weigh lists: Alaska 0.73, Jamnagar 0.62.
   - `caveat`, `verdict` and `explanation` are **left for Akshat**. `verify` is not added.
   - Per-case fact sheets live outside the repo, because they contain ANSWERS content.
-- **§1E.** `docs/DECK_NUMBERS.md`: every safe number with its receipt and its "never say".
+- **§1E.** `docs/evaluation/deck-numbers.md`: every safe number with its receipt and its "never say".
 
 **Files touched:** `scripts/validate_case.py` · `scripts/test_validator.py` · `pipeline/drift/publish_all.py` ·
-`cases/case-*/meta.json` (6) · `docs/00_MASTER_PLAN.md` · `docs/STAGE3_ISSUE_REGISTER.md` · `docs/receipts.md` ·
-`docs/02_SOUM_DETECTION.md` · `docs/DECK_NUMBERS.md` · `verification/case-huntington-2021.json` (+5 untracked drafts)
+`cases/case-*/meta.json` (6) · `docs/00_MASTER_PLAN.md` · `docs/evaluation/stage3-issue-register.md` · `docs/receipts.md` ·
+`docs/team/soum-stage1-detection.md` · `docs/evaluation/deck-numbers.md` · `verification/case-huntington-2021.json` (+5 untracked drafts)
 
 **Run command:**
 ```bash
@@ -467,9 +467,9 @@ python scripts/validate_case.py cases/                  # PASS
   - All 9 bundles load through the real frontend loaders (sucrase-transpiled `web/lib` + a fetch shim). Particles t0 = detection_time, r50 ≤ r90, funnels monotone, every suspect has a track.
   - Headless Chrome screenshots of Trace and Attribute were checked by eye: Jacksonville, Farallones, Huntington, Mumbai, Alaska and Jamnagar. There were no error cards, and Trace frames scene + particles + origin.
   - **Verify was not QA'd:** no case has the `verify` act yet (§1A).
-- **§3C:** `web/DEMO_RUNBOOK.md` covers the pull→validate→sync→build→start sequence, OS settings, offline check, fallback video and the break ladder. There is no runtime network dependency (local fonts, no tiles).
+- **§3C:** `docs/operations/demo-runbook.md` covers the pull→validate→sync→build→start sequence, OS settings, offline check, fallback video and the break ladder. There is no runtime network dependency (local fonts, no tiles).
 
-**Files.** `web/components/{ContextPanel,MapView}.tsx`, `web/lib/{suspects,origin,contracts,flow,store,bundleCache}.ts`, `web/DEMO_RUNBOOK.md`.
+**Files.** `web/components/{ContextPanel,MapView}.tsx`, `web/lib/{suspects,origin,contracts,flow,store,bundleCache}.ts`, `docs/operations/demo-runbook.md`.
 
 **Run.** `python scripts/sync_web_cases.py --clean && cd web && npx tsc --noEmit && npm run build && npm run start`
 

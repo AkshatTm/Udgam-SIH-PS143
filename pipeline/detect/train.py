@@ -26,7 +26,7 @@ Dividing by the scene's own noise MAD fixes the units. "Three times deeper than
 this scene's own clutter" means the same thing at -33 dB in Zenodo Part 1, -29 dB
 in Part 3 and -20 dB in a GEE export. It is the same instinct that already makes
 the DETECTOR thresholds noise-relative, and the same one the tile cache applies
-as per-scene MAD normalisation (docs/02_SOUM_DETECTION.md 2.1).
+as per-scene MAD normalisation (docs/team/soum-stage1-detection.md 2.1).
 
 THRESHOLD SELECTION (2.1 / 3.4)
 -------------------------------

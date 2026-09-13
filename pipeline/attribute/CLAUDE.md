@@ -1,7 +1,7 @@
 # Attribution (Stage 3) — Jaiveer
 
 Owns: AIS ingest → track reconstruction → scoring → `vessels.geojson` + `suspects.json`.
-Full brief: `docs/06_JAIVEER_AIS.md`. Contracts: `docs/00_MASTER_PLAN.md` Part 6 (§6.6, §6.7).
+Full brief: `docs/team/jaiveer-stage3-attribution.md`. Contracts: `docs/00_MASTER_PLAN.md` Part 6 (§6.6, §6.7).
 
 ## Non-negotiable
 

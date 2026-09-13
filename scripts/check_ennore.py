@@ -8,7 +8,7 @@ The entire plan assumes a Sentinel-1 radar satellite passed over Ennore (~13.25 
 shortly after the 28 January 2017 tanker collision. If it did not, we change the plan tonight,
 not on Monday. Everything keys off this answer.
 
-What the verdict means (docs/01_AKSHAT_INTEGRATION.md, Phase 0):
+What the verdict means (docs/team/akshat-integration.md, Phase 0):
   GREEN  scene within ~3 days  -> green-light everything, record the id in docs/receipts.md
   AMBER  only a later scene    -> still usable. The demo says "the first available pass, N days
                                   after the incident" — and that gap is literally why

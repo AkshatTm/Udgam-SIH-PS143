@@ -1,6 +1,6 @@
 "use client";
 
-// The one primary action per screen (docs/04 Part C, C2): always bottom-right of the work
+// The one primary action per screen (docs/team/harshita-frontend.md Part C, C2): always bottom-right of the work
 // area, always the same shape and colour. Only the label and target change between screens.
 
 export default function PrimaryAction({

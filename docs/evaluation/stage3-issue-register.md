@@ -4,7 +4,7 @@
 **Branch:** `jaiveer-phase2` @ `d39e619` · **Freeze:** Tue 15 Sept 05:00 IST
 
 Every open problem in Stage 3, with the evidence behind it, why it matters, and what I need from
-you. Companion to `docs/STAGE3_PROGRESS_2026-09-13_EVENING.md`, which covers what *works*.
+you. Companion to `docs/_archive/jaiveer/stage3-progress-2026-09-13-evening.md`, which covers what *works*.
 
 **Nothing in this document has been fixed by changing a weight or a threshold.** Every one of these
 could have been made to disappear that way, and that is exactly what D21 exists to prevent. Where a
@@ -137,7 +137,7 @@ of presence"), and validate it on the Phase 8 curve at `sampling=gfw_hourly`, ne
 | # | Resolution |
 |---|---|
 | A1 | **Done.** Master §3.2 says Jacksonville is not a gap case and gives 170 km, not ~100 km. D30 moves the gap story to case 4. |
-| A5 / A6 | **Measured 14 Sept — the Phase 8 curve now exists** (`docs/STAGE3_PHASE8.md`, `pipeline/attribute/evaluate.py`). Ablated on the hard condition (300 trials, offshore, offender with no behavioural signature): removing **`trajectory` costs −0.051 top-1, so A5 is answered — it does contribute**, about half of `temporality`. Removing **`type_prior` costs −0.024, so A6 is answered — it is nearly inert** (and an earlier −0.100 turned out to be an artefact of the generator always making the offender a tanker). **Still no weight moves before the demo**: one offender design, two parquets, hours before freeze. Both go on the honesty slide with these numbers instead of adjectives. |
+| A5 / A6 | **Measured 14 Sept — the Phase 8 curve now exists** (`docs/evaluation/stage3-injected-offender-curve.md`, `pipeline/attribute/evaluate.py`). Ablated on the hard condition (300 trials, offshore, offender with no behavioural signature): removing **`trajectory` costs −0.051 top-1, so A5 is answered — it does contribute**, about half of `temporality`. Removing **`type_prior` costs −0.024, so A6 is answered — it is nearly inert** (and an earlier −0.100 turned out to be an artefact of the generator always making the offender a tanker). **Still no weight moves before the demo**: one offender design, two parquets, hours before freeze. Both go on the honesty slide with these numbers instead of adjectives. |
 | A2 | **Reproduced at scale and quantified.** In the hard condition, removing `gap` *improves* top-1 from 0.579 to 0.722 (**+0.143**): the offender never goes dark while real traffic does, so the component rewards innocent ships. It is worth a lot when the offender *does* go dark (0.910 with a 45-minute gap against 0.681 without). `gap` assumes the behaviour it looks for. December question, not a demo change. |
 | A8 | **Roadmap, not a feature.** The `repeat_offender` block stays in §6.7. On stage: the data model supports it, and our library has no vessel overlap by construction (Atlantic and Pacific). Nothing is rendered for it. |
 | B3 | **Rings stay centroid-centred; `closest_km` is to the peak (D36).** The card says "to the origin peak", never "closest approach". `trajectory` still bears toward `grid.centroid` (`score.py:194`). That is a known inconsistency, left unchanged for the demo because a component-definition change should come with the Phase 8 curve rather than go into a bundle on the last day. Revisit after 15 Sept. |
@@ -145,7 +145,7 @@ of presence"), and validate it on the Phase 8 curve at `sampling=gfw_hourly`, ne
 | D1 | **Declared per case in §16.1 (D31).** Amended 14 Sept: Farallones is *blind on weights, not provably on identity*, because its identity was in pushed docs between `ee19819` and `72b9540`. The stage line quotes no count. |
 | D2 | **Done**, same edit as A1. |
 | D3 | **Reconciled.** The Master Plan decision table runs D1–D38, and D32 was never assigned. Master is authoritative; `docs/CONTRACTS.md` is the v1 record. |
-| E1 | **Narrative, updated 14 Sept.** Phase 8 (the injected-offender curve) **also shipped** — see `docs/STAGE3_PHASE8.md`. Phase 4 (infrastructure) **shipped**: code, tests and a D38 contract, with Huntington's candidate declared. Its honest result is below floor (D38). Phases 5 (traffic prior), 6 (repeat offenders, A8) and 7 (chronic vs acute, blocked on C3/B1) are **openly dropped for the demo** and presented as roadmap, not implied. |
+| E1 | **Narrative, updated 14 Sept.** Phase 8 (the injected-offender curve) **also shipped** — see `docs/evaluation/stage3-injected-offender-curve.md`. Phase 4 (infrastructure) **shipped**: code, tests and a D38 contract, with Huntington's candidate declared. Its honest result is below floor (D38). Phases 5 (traffic prior), 6 (repeat offenders, A8) and 7 (chronic vs acute, blocked on C3/B1) are **openly dropped for the demo** and presented as roadmap, not implied. |
 
 ---
 
@@ -1070,7 +1070,7 @@ renaming that one is yours.
 
 The first merge of `jaiveer-phase2` into `main` picked up an earlier commit. For several hours
 `main` carried `geo.py` and the updated `ingest.py` but **no `score.py`**, no
-`STAGE3_PROGRESS_2026-09-13.md`, no `STAGE3_COMPONENT_REPORT.md`, and older `tests.py` and
+`docs/_archive/jaiveer/stage3-progress-2026-09-13.md`, no `STAGE3_COMPONENT_REPORT.md`, and older `tests.py` and
 `make_fake_case.py`. Your second pass (`14196b7`) resolved it.
 
 ### Why it is worth recording
@@ -1124,5 +1124,5 @@ dropped on Sunday is a plan; a phase quietly missing on Tuesday morning is a pro
 | **Whenever** | **C1**, **C2**, **C3**, **B1** | Not yours — they need Soum and Anushka; I need visibility, not a decision |
 
 **Reproduction for everything in this document:** see §9 of
-`docs/STAGE3_PROGRESS_2026-09-13_EVENING.md`. Every figure here is measured, deterministic, and
+`docs/_archive/jaiveer/stage3-progress-2026-09-13-evening.md`. Every figure here is measured, deterministic, and
 re-derivable from the repo at `jaiveer-phase2` @ `d39e619`.

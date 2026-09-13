@@ -1,6 +1,6 @@
 # Frontend — Harshita
 
-Owns the entire judge-facing app. Full brief: `docs/04_HARSHITA_FRONTEND.md`. Integration duties: `docs/05_HARSHITA_INTEGRATION.md`.
+Owns the entire judge-facing app. Full brief: `docs/team/harshita-frontend.md`. Integration duties: `docs/team/harshita-integration.md`.
 
 ## Non-negotiable
 - **NEVER use localStorage or sessionStorage.** State lives in memory (Zustand).

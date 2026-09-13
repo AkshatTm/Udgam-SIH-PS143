@@ -538,7 +538,7 @@ This is the section to read before anyone puts a number on a slide.
 
 **Confidence.** Verified against the GEE catalog band table, not inferred from plausibility alone — and independently corroborated by the corrected field flowing south along the Coromandel coast at 0.3–1.1 m/s, which is the East India Coastal Current under the January NE monsoon.
 
-**Propagated to:** `docs/TRAPS.md` #2, `03_ANUSHKA_DRIFT.md`, `SETUP_ANUSHKA.md`, `PER_DIRECTORY_CLAUDE.md`, `PROMPTING_PLAYBOOK.md`, `docs/receipts.md` (judge-facing), root `CLAUDE.md`, `pipeline/drift/CLAUDE.md`, `check_gee.py`, `fields.py`.
+**Propagated to:** `docs/TRAPS.md` #2, `docs/team/anushka-stage2-drift.md`, `SETUP_ANUSHKA.md`, the per-directory `CLAUDE.md` files, `docs/operations/prompting-playbook.md`, `docs/receipts.md` (judge-facing), root `CLAUDE.md`, `pipeline/drift/CLAUDE.md`, `check_gee.py`, `fields.py`.
 
 ### 13.2 A case that did not exist silently got another case's ocean ★ the second big one
 **What happened.** Running `--case case-gulf-2019` before that bundle existed made both `check_gee.py` and `fetch_fields.py` fall back to hardcoded Ennore defaults, download **January 2017 Bay of Bengal** water, and cache it as `data/fields/case-gulf-2019.npz`. Everything printed PASS. The field statistics looked like a real ocean — because they were one.
@@ -745,7 +745,7 @@ No network is needed after the fetch — everything downstream reads `data/field
 
 ## 19. Definition of done — status
 
-| Requirement (`03_ANUSHKA_DRIFT.md`) | Status |
+| Requirement (`docs/team/anushka-stage2-drift.md`) | Status |
 |---|---|
 | Tests 1–4 green and committed | ✅ plus test 5 — 5/5, 20/20 |
 | Quiver image posted | ⬜ **produced, not yet posted in the group** |

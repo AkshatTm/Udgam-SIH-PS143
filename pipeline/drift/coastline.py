@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Real coastline for Stage 2. Owner: Anushka.   (03_ANUSHKA_DRIFT.md Phase 4, decision D7)
+Real coastline for Stage 2. Owner: Anushka.   (docs/team/anushka-stage2-drift.md Phase 4, decision D7)
 
 WHY THIS EXISTS
     Until now the land mask was derived from the VELOCITY FIELD'S OWN VALIDITY: a HYCOM cell

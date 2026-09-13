@@ -226,7 +226,7 @@ def main():
     print(f"  centroid ({clon:.4f}, {clat:.4f})  r50 {r50:.1f} km  r90 {r90:.1f} km  "
           f"abstain={origin['abstain']}")
     print(f"  release window {tw[0]} -> {tw[1]}  ({method})")
-    # The expected direction is PER CASE and lives in 03_ANUSHKA_DRIFT.md Phase 5.3. It used
+    # The expected direction is PER CASE and lives in docs/team/anushka-stage2-drift.md Phase 5.3. It used
     # to be hardcoded here as "NORTH-EAST ... upstream of a southward current", which is
     # Ennore's answer printed for every case -- worse than useless under the blind protocol,
     # because it tells you what to expect regardless of which case you ran.

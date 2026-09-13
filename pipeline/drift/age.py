@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Stage 2 age estimation. Owner: Anushka.   (03_ANUSHKA_DRIFT.md Part C, Phase 1)
+Stage 2 age estimation. Owner: Anushka.   (docs/team/anushka-stage2-drift.md Part C, Phase 1)
 
     python pipeline/drift/age.py --case <id> --real
     python pipeline/drift/age.py --case case-000 --fake      # no GEE, for iteration
@@ -797,7 +797,7 @@ def elongation_age(observed_elongation, shear_rate_s, discharge_class,
 
     !! THIS DEPARTS FROM THE FORMULA IN THE BRIEF, DELIBERATELY. Read this before quoting it. !!
 
-    03_ANUSHKA_DRIFT.md C3.3 gives `aspect(t) = sqrt(1 + (S t)^2)`, hence `age ~ elongation / S`.
+    docs/team/anushka-stage2-drift.md C3.3 gives `aspect(t) = sqrt(1 + (S t)^2)`, hence `age ~ elongation / S`.
     That expression is the stretch of a material LINE initially perpendicular to the flow. It
     is not the aspect ratio of a deformed circular patch, which is what `elongation` measures
     in the detections contract.
@@ -820,7 +820,7 @@ def elongation_age(observed_elongation, shear_rate_s, discharge_class,
     ratio is sqrt(a^2 - 1) / sqrt(a + 1/a - 2), which CLIMBS with elongation: 2.45x at a = 2,
     3.24x at a = 8.2, 4.70x at a = 20, 7.21x at a = 50. Every case carries its own elongation,
     so an age computed under the brief's form cannot be corrected by dividing -- it has to be
-    recomputed here. Ratified by Akshat 13 Sept 2026 (docs/STAGE2_AGE_DECISION_BRIEF.md, D-B).
+    recomputed here. Ratified by Akshat 13 Sept 2026 (docs/evaluation/stage2-age-decision-brief.md, D-B).
 
     Both are computed and both are reported in the diagnostics, so the discrepancy is visible
     rather than resolved silently. `age_hours` uses the exact form.
@@ -995,7 +995,7 @@ def parse_ts(s):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Stage 2 age estimation (03_ANUSHKA_DRIFT.md Part C)")
+        description="Stage 2 age estimation (docs/team/anushka-stage2-drift.md Part C)")
     ap.add_argument("--case", required=True)
     ap.add_argument("--cases-root", default=str(REPO / "cases"))
     ap.add_argument("--real", action="store_true", help="cached HYCOM + ERA5")

@@ -292,9 +292,9 @@ If a source turns out to be fabricated, say so in the delivery message. That tel
 
 | # | Task | Tool | Document | Priority |
 |---|---|---|---|---|
-| 1 | Project naming | ChatGPT only, no deep research | `07_UROOZ_RESEARCH_01_NAMING.md` | Quick — do first, it unblocks the deck and the UI |
-| 2 | The science of oil slick age estimation | Full workflow | `07_UROOZ_RESEARCH_02_AGE_ENGINE.md`, Research A | **Highest** |
-| 3 | Architecture and applications of an age engine | Full workflow, **takes Research A's output as input** | `07_UROOZ_RESEARCH_02_AGE_ENGINE.md`, Research B | **Highest** |
+| 1 | Project naming | ChatGPT only, no deep research | `docs/_archive/urooz/research-01-naming.md` | Quick — do first, it unblocks the deck and the UI |
+| 2 | The science of oil slick age estimation | Full workflow | `docs/research/age-engine-brief.md`, Research A | **Highest** |
+| 3 | Architecture and applications of an age engine | Full workflow, **takes Research A's output as input** | `docs/research/age-engine-brief.md`, Research B | **Highest** |
 
 **Do them in order.** Task 3 explicitly depends on task 2's output.
 

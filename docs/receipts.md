@@ -195,7 +195,7 @@ error explicitly rather than folding it into a coverage verdict.
 
 | What | Collection | Bands | Note |
 |---|---|---|---|
-| Currents | `HYCOM/sea_water_velocity` | `velocity_u_0`, `velocity_v_0` | **Scaled integer: catalog units m/s, scale 0.001 — divided by 1000.** 0.08°, ends 2024-09-05 in GEE. **Cadence varies by case and era:** the Ennore 2017 cache held daily snapshots; Jacksonville's holds ten at **3-hour** spacing (Anushka, `docs/STAGE2_NUMBERS.md` §8.5). Check per case; do not quote "daily" as a rule. Ennore field: median 0.48 m/s, max 1.10 m/s |
+| Currents | `HYCOM/sea_water_velocity` | `velocity_u_0`, `velocity_v_0` | **Scaled integer: catalog units m/s, scale 0.001 — divided by 1000.** 0.08°, ends 2024-09-05 in GEE. **Cadence varies by case and era:** the Ennore 2017 cache held daily snapshots; Jacksonville's holds ten at **3-hour** spacing (Anushka, `docs/evaluation/stage2-numbers.md` §8.5). Check per case; do not quote "daily" as a rule. Ennore field: median 0.48 m/s, max 1.10 m/s |
 | Wind | `ECMWF/ERA5/HOURLY` | `u_component_of_wind_10m`, `v_component_of_wind_10m` | signed components, not speed/bearing |
 
 Drift physics: surface oil moves at current + **3%** of wind speed (the "3% rule"), RK2,
@@ -204,7 +204,7 @@ not on Akshat's machine, so per-case HYCOM cadence can only be read on Anushka's
 time span was pulled per case (Anushka: the caches live on her machine; she refetched all six
 with `--forward-hours 24` so each brackets t0).
 
-**Independent-implementation check — OpenDrift (Anushka, `docs/_archive/anushka/STAGE2_NUMBERS.md` §8.4).**
+**Independent-implementation check — OpenDrift (Anushka, `docs/_archive/anushka/docs/evaluation/stage2-numbers.md` §8.4).**
 **Quote the real case, not the fixture:** on `case-jacksonville-2024` the origin centroids are
 **550 m apart after a 140 km rewind** (0.39% of path). Across all six spill cases the separation is 0.26–1.05% of
 path. Huntington is the worst at 1.05%, on 6.2 km of travel with a weak current and a 53% land field.

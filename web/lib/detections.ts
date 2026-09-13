@@ -1,4 +1,4 @@
-// A no-spill result (docs/04 Part D, D1; Master §6.3): detections loaded, but not one feature
+// A no-spill result (docs/team/harshita-frontend.md Part D, D1; Master §6.3): detections loaded, but not one feature
 // is classified as oil. Look-alikes may still be present — the scene proves the system can
 // say "no", it is not an error.
 //

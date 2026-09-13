@@ -1,7 +1,7 @@
 # Export + integration — Akshat
 
 Owns: GEE scene export, the bundle assembler, `validate_case.py`, `make_case000.py`.
-Full brief: `docs/01_AKSHAT_INTEGRATION.md`. Companion: `docs/05_HARSHITA_INTEGRATION.md`.
+Full brief: `docs/team/akshat-integration.md`. Companion: `docs/team/harshita-integration.md`.
 
 ## Non-negotiable
 - The exporter **copies stage outputs into `cases/<id>/` and runs the validator**. It does not compute anything and it does not repair other people's files.

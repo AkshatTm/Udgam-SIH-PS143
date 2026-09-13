@@ -66,7 +66,7 @@ export default function VerifyScreen() {
   }
 
   if (!verification) {
-    // idle / loading — never a blank screen (docs/04 D4).
+    // idle / loading — never a blank screen (docs/team/harshita-frontend.md D4).
     return (
       <div className={cover}>
         <div className="mx-auto flex max-w-5xl gap-8">

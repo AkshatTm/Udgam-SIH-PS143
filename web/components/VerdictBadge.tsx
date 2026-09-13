@@ -2,7 +2,7 @@
 
 import type { Verdict } from "@/lib/contracts";
 
-// docs/04 Screen 4: every verdict uses the SAME badge — same size, weight, shape, placement.
+// docs/team/harshita-frontend.md Screen 4: every verdict uses the SAME badge — same size, weight, shape, placement.
 // Only the colour token changes. MISS must NOT read as an error (no red, no ✗); it is a
 // result, styled as confidently as HIT. No success/failure icon on any verdict.
 

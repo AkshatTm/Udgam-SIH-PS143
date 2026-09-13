@@ -1,7 +1,7 @@
 # Detection (Stage 1) — Soum
 
 Owns: scene classifier → U-Net segmentation → classical features → ship detections →
-`detections.geojson`. Full brief: `docs/02_SOUM_DETECTION.md`. Architecture: Master v3 §4.3.
+`detections.geojson`. Full brief: `docs/team/soum-stage1-detection.md`. Architecture: Master v3 §4.3.
 
 > **This file was rewritten 12 Sept.** The previous version said "NO deep learning this sprint,
 > the CNN is October work" and "Zenodo Part III only". Both are now wrong — Master v3 §4.3 and

@@ -305,7 +305,7 @@ def time_window(conv_idx, spreads_start, spreads_min, t0, timestep_minutes, n_st
 
     If either fails we do NOT dress up noise as a measurement. We ship the bounded window
     [t0-24h, t0-8h] and say so in `time_window_method`, exactly as the cut order allows
-    (docs/03_ANUSHKA_DRIFT.md, Phase 3 step 3).
+    (docs/team/anushka-stage2-drift.md, Phase 3 step 3).
 
     Returns (start_dt, end_dt, method).
     """

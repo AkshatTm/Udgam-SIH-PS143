@@ -44,7 +44,7 @@ export interface SuspectComponents {
   typePrior: number | null;
 }
 
-/** Cross-case vessel history (Master §6.7, docs/04 Phase 3.7). `cases` are OTHER case ids this
+/** Cross-case vessel history (Master §6.7, docs/team/harshita-frontend.md Phase 3.7). `cases` are OTHER case ids this
  *  same vessel was also scored in — never dates, never incident descriptions, since none exist
  *  in the contract. Not validator-enforced; may never be populated by any real bundle. */
 export interface RepeatOffender {
@@ -140,7 +140,7 @@ export interface SuspectsBundle {
   /** `null` when the bundle carries no `natural_seep` block at all — distinct from a present
    *  block with `flagged: false`. Either way, nothing renders unless `flagged` is true. */
   naturalSeep: NaturalSeep | null;
-  /** docs/04 D2 — Stage 3 deliberately refused to attribute. When true, `suspects` is empty. */
+  /** docs/team/harshita-frontend.md D2 — Stage 3 deliberately refused to attribute. When true, `suspects` is empty. */
   abstained: boolean;
   /** The case's stated reason for abstaining, exactly as supplied. `null` when not abstaining
    *  or when the bundle carries no reason. */
@@ -476,7 +476,7 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
   // both PASS with none. The Excluded section renders its "No vessels excluded." state instead,
   // and the missing exclusions are a producer follow-up, not something to hide or invent.
 
-  // Abstention (docs/04 D2, CONTRACTS §8). Optional fields, but a malformed one is a contract
+  // Abstention (docs/team/harshita-frontend.md D2, CONTRACTS §8). Optional fields, but a malformed one is a contract
   // bug — surfaced, never coerced or guessed around.
   if ("abstained" in raw && typeof raw.abstained !== "boolean") {
     throw new Error(`${where}: "abstained" must be a boolean when present`);

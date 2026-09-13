@@ -1,6 +1,6 @@
 "use client";
 
-// docs/04 C8 / Master §2.1: after ~90 s with no interaction, return to the Gallery in a clean
+// docs/team/harshita-frontend.md C8 / Master §2.1: after ~90 s with no interaction, return to the Gallery in a clean
 // state so the next judge never inherits the previous one's slider / selection / stage /
 // layers / playback. No visible countdown, no "you are idle" UI — the docs ask for neither.
 //

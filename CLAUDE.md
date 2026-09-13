@@ -39,7 +39,7 @@ Must print `PASS`. It catches lat/lon swaps, naive timestamps, unit errors, dime
 - Paste the **error text and the relevant function**, not the whole file, not the whole repo.
 - Prefer "here's the failing output, what's wrong" over "rewrite this".
 - Reserve roughly half of Claude quota for the integration and debugging phases, where it is worth most. Use Codex/Antigravity for boilerplate and scaffolding.
-- Full guidance: `docs/PROMPTING_PLAYBOOK.md`.
+- Full guidance: `docs/operations/prompting-playbook.md`.
 
 ## After each phase
 Append to `docs/updates/<yourname>.md` using the format in `docs/updates/TEMPLATE.md`. Four lines: what was done, files touched, exact run command, open issues. This is how another AI (or another person) resumes your work without you.

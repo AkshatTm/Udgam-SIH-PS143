@@ -8,7 +8,7 @@ import { useEffect } from "react";
 import { useAppStore } from "./store";
 import { normFromT, tFromNorm } from "./timestep";
 
-// docs/04 asks for "~8× real time" playback. Read here as 8 timesteps per second: the
+// docs/team/harshita-frontend.md asks for "~8× real time" playback. Read here as 8 timesteps per second: the
 // 97-step / 24-hour case-000 rewind then plays in ~12 s, which is a good demo length.
 // (Taking the 15-minute timestep literally in seconds gives absurd run times.) This is the
 // one knob — raise it for a faster scrub, lower it to linger. Retune at the Monday checkpoint.

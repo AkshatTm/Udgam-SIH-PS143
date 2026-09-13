@@ -1,6 +1,6 @@
 "use client";
 
-// Screen 0 — the case picker (docs/00_MASTER_PLAN.md §2.2, docs/04 Screen 0).
+// Screen 0 — the case picker (docs/00_MASTER_PLAN.md §2.2, docs/team/harshita-frontend.md Screen 0).
 // Data-driven: cases/index.json → each case's meta.json → cards, in index order. Every card
 // field is absent-safe — a v1-shaped fixture (case-000) renders a valid but minimal card;
 // a real V3 bundle fills in the badge / location / blurb / difficulty / thumbnail. Nothing

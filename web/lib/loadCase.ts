@@ -130,7 +130,7 @@ function validateDetections(d: DetectionCollection, id: string): void {
         `${id}/detections.geojson: ${p.id} has classification "${p.classification}" (expected oil|lookalike)`,
       );
     }
-    // discharge_class (optional, docs/04 Phase 5.3) — chronic|acute|unknown.
+    // discharge_class (optional, docs/team/harshita-frontend.md Phase 5.3) — chronic|acute|unknown.
     if (p.discharge_class !== undefined && !DISCHARGE_CLASSES.includes(p.discharge_class)) {
       throw new Error(
         `${id}/detections.geojson: ${p.id} has discharge_class "${p.discharge_class}" (expected chronic|acute|unknown)`,

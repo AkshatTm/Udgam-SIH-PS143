@@ -463,7 +463,7 @@ def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_ste
         "time_window": [iso(start), iso(end)],
         "ensemble_runs": int(n_runs),
         "abstain": bool(r90 > ABSTAIN_RADIUS_KM),
-        # Additive field the brief asks for (03_ANUSHKA_DRIFT.md Phase 3 step 3): says whether
+        # Additive field the brief asks for (docs/team/anushka-stage2-drift.md Phase 3 step 3): says whether
         # the window was measured from ensemble convergence or is the bounded fallback.
         # Not part of the frozen schema — Akshat, flag it if you would rather it lived
         # somewhere else; nothing breaks if the frontend ignores it.

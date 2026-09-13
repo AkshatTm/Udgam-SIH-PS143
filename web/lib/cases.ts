@@ -1,5 +1,5 @@
 // Gallery data source. The case list AND its order come from cases/index.json — never
-// hardcoded here (docs/00_MASTER_PLAN.md §6.9, docs/04 Phase 1.2). Each listed case's
+// hardcoded here (docs/00_MASTER_PLAN.md §6.9, docs/team/harshita-frontend.md Phase 1.2). Each listed case's
 // meta.json is fetched and normalised into an absent-safe shape: v1-shaped fixtures like
 // case-000 carry almost nothing, real V3 bundles carry the gallery block. A field is only
 // ever populated from data that is actually on disk — nothing is invented or defaulted.

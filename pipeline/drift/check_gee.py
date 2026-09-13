@@ -10,7 +10,7 @@ Answers, in about ten seconds, the four questions that can otherwise eat an even
   1. Is Earth Engine authenticated and initialised?
   2. Does HYCOM/sea_water_velocity actually have imagery over this case's box and dates?
   3. Does ECMWF/ERA5/HOURLY?
-  4. Are the band names the ones docs/03_ANUSHKA_DRIFT.md says they are, and are the values
+  4. Are the band names the ones docs/team/anushka-stage2-drift.md says they are, and are the values
      the right order of magnitude?
 
 Question 4 is the point. Auth failing is loud. A collection quietly returning zero images over
@@ -32,7 +32,7 @@ REPO = HERE.parents[1]
 # Anushka's noncommercial EE project. Override with --project so this script works for anyone.
 DEFAULT_PROJECT = "project-c6f47846-50cd-4991-94c"
 
-# Ennore, matching docs/03_ANUSHKA_DRIFT.md Phase 2. [west, south, east, north]
+# Ennore, matching docs/team/anushka-stage2-drift.md Phase 2. [west, south, east, north]
 ENNORE_BBOX = [79.5, 12.0, 81.5, 14.5]
 ENNORE_T0 = datetime(2017, 1, 29, 0, 14, 0, tzinfo=timezone.utc)
 LOOKBACK_HOURS = 30

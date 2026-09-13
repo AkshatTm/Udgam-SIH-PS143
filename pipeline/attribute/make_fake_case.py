@@ -10,7 +10,7 @@ WHY THIS EXISTS
 Galveston, Texas, January 2023. Scoring against it returns zero of everything —
 zero in every funnel count, no suspects — which reads exactly like broken code and
 is not. Until a US-located origin exists, the scorer cannot be tested at all
-(docs/06_JAIVEER_AIS.md, Phase 0.2).
+(docs/team/jaiveer-stage3-attribution.md, Phase 0.2).
 
 This writes a complete, schema-valid bundle over open water southeast of Galveston
 on 25 January 2023, the day I already have AIS for. It touches nothing anyone else

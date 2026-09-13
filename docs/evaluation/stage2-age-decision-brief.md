@@ -1,6 +1,6 @@
 # Stage 2 — Age estimation: what shipped, and the three places Part C had to change
 
-*Anushka's lane, Phase 1 of `03_ANUSHKA_DRIFT.md`. Written 10 Sept 2026 after building C3.1–C3.4
+*Anushka's lane, Phase 1 of `docs/team/anushka-stage2-drift.md`. Written 10 Sept 2026 after building C3.1–C3.4
 and C4. **Akshat: five decisions at the bottom, two of them gate whether an age number can go on
 a slide.** Soum: two asks. Urooz: one citation.*
 
@@ -223,7 +223,7 @@ reason A5 resolves the way it does, and it is an upstream-dependency finding, no
 | `verification.official_finding` release time or volume in `meta.json` | **absent in all seven** — no ground truth is wired in to validate against |
 | `discharge_class` on any detection | **absent everywhere, including case-000's own `det-01`** |
 
-The third row is the one that bites. [`age.py`](../pipeline/drift/age.py) reads
+The third row is the one that bites. [`age.py`](../../pipeline/drift/age.py) reads
 `props.get("discharge_class", "unknown")` and C3.3 is gated on `== "acute"`, so **the estimator
 whose formula D-B corrects currently fires on no case at all.** The gate is right and stays; the
 consequence is simply that ratifying D-B changes no number today. It changes every number the
@@ -267,7 +267,7 @@ cannot fire at all. The claim fails on missing inputs, not on physics.
    internals are binding; nobody quotes an N we cannot reproduce.
 
 **Three sentences promised four-case validation and have been corrected** (13 Sept 2026):
-`00_MASTER_PLAN.md` §"what we claim", and `03_ANUSHKA_DRIFT.md` §"ground truth for age" and C5.
+`00_MASTER_PLAN.md` §"what we claim", and `docs/team/anushka-stage2-drift.md` §"ground truth for age" and C5.
 
 ---
 
