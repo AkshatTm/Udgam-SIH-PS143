@@ -274,6 +274,12 @@ export interface RawSuspect {
   /** Closest approach happened within one reporting interval of the search-box edge, so the
    *  track is cut off and closest_km may be understated. Surface it, don't hide it. */
   edge_truncated?: boolean;
+  /** D37 — summed weight of the components that were applicable for this suspect (1.0 only
+   *  when all seven scored). A renormalised score says nothing about how much evidence it rests
+   *  on; the card must show this breadth next to the score. */
+  weight_live?: number;
+  components_available?: number;
+  components_total?: number;
   reasons: string[];
 }
 

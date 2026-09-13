@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type { Act, Bounds, CaseMeta, DetectionCollection } from "./contracts";
 import { DEFAULT_CASE_ID } from "./cases";
+import { cached } from "./bundleCache";
 import { loadCase } from "./loadCase";
 import { loadParticleBundle, type ParticleBundle } from "./particles";
 import { loadOriginBundle, type OriginBundle } from "./origin";
@@ -213,7 +214,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       verificationError: null,
     });
     try {
-      const { meta, bounds, detections, detectionsPending } = await loadCase(id);
+      const { meta, bounds, detections, detectionsPending } = await cached(`case:${id}`, () => loadCase(id));
       // Guard against a stale response if the case was switched mid-fetch.
       if (get().activeCaseId !== id) return;
       const activeStage: Act = meta.acts_available.includes(get().activeStage)
@@ -259,7 +260,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (get().particlesStatus === "loading") return;
     set({ particlesStatus: "loading", particlesError: null });
     try {
-      const bundle = await loadParticleBundle(id);
+      const bundle = await cached(`particles:${id}`, () => loadParticleBundle(id));
       // A different case was selected while this bundle was in flight — drop it.
       if (get().activeCaseId !== id) return;
       const meta = get().meta;
@@ -288,7 +289,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (get().originStatus === "loading") return;
     set({ originStatus: "loading", originError: null });
     try {
-      const bundle = await loadOriginBundle(id);
+      const bundle = await cached(`origin:${id}`, () => loadOriginBundle(id));
       // A different case was selected while this bundle was in flight — drop it.
       if (get().activeCaseId !== id) return;
       set({ origin: bundle, originStatus: "ready" });
@@ -303,7 +304,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (get().vesselsStatus === "loading") return;
     set({ vesselsStatus: "loading", vesselsError: null });
     try {
-      const bundle = await loadVesselBundle(id);
+      const bundle = await cached(`vessels:${id}`, () => loadVesselBundle(id));
       // A different case was selected while this bundle was in flight — drop it.
       if (get().activeCaseId !== id) return;
       set({ vessels: bundle, vesselsStatus: "ready" });
@@ -318,7 +319,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (get().suspectsStatus === "loading") return;
     set({ suspectsStatus: "loading", suspectsError: null });
     try {
-      const bundle = await loadSuspectsBundle(id);
+      const bundle = await cached(`suspects:${id}`, () => loadSuspectsBundle(id));
       // A different case was selected while this bundle was in flight — drop it.
       if (get().activeCaseId !== id) return;
       set({ suspects: bundle, suspectsStatus: "ready" });
@@ -333,7 +334,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (get().verificationStatus === "loading") return;
     set({ verificationStatus: "loading", verificationError: null });
     try {
-      const bundle = await loadVerificationBundle(id);
+      const bundle = await cached(`verification:${id}`, () => loadVerificationBundle(id));
       // A different case was selected while this bundle was in flight — drop it.
       if (get().activeCaseId !== id) return;
       set({ verification: bundle, verificationStatus: "ready" });

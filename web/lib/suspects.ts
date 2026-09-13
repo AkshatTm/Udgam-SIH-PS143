@@ -66,6 +66,16 @@ export interface Suspect {
   closestTime?: string;
   headingConsistent?: boolean;
   aisGapMinutes?: number;
+  /** D29 — why a component reads the way it does, keyed like `components`. Explanation, not
+   *  evidence. Empty object when the bundle carries no notes. */
+  componentNotes: Partial<Record<keyof SuspectComponents, string>>;
+  /** D37 evidence breadth. Each `null` when the bundle omits it — never a guessed value. */
+  weightLive: number | null;
+  componentsAvailable: number | null;
+  componentsTotal: number | null;
+  /** true when the closest approach sits at the search-box edge and closest_km may be
+   *  understated. undefined when the bundle doesn't say. */
+  edgeTruncated?: boolean;
   reasons: string[];
 }
 
@@ -259,6 +269,60 @@ function validateSuspect(s: RawSuspect, i: number, id: string): void {
   if (s.repeat_offender !== undefined) {
     validateRepeatOffender(s.repeat_offender, where);
   }
+  if (s.component_notes !== undefined) {
+    if (!s.component_notes || typeof s.component_notes !== "object" || Array.isArray(s.component_notes)) {
+      throw new Error(`${where}: "component_notes" must be an object keyed by component name`);
+    }
+    for (const [k, v] of Object.entries(s.component_notes)) {
+      if (typeof v !== "string" || v.trim().length === 0) {
+        throw new Error(`${where}: "component_notes.${k}" must be a non-empty string`);
+      }
+    }
+  }
+  if (s.weight_live !== undefined) {
+    if (typeof s.weight_live !== "number" || !Number.isFinite(s.weight_live) || s.weight_live < 0 || s.weight_live > 1) {
+      throw new Error(`${where}: "weight_live" must be a finite number in [0, 1] (got ${s.weight_live})`);
+    }
+  }
+  for (const k of ["components_available", "components_total"] as const) {
+    const v = s[k];
+    if (v !== undefined && (!Number.isInteger(v) || v < 0)) {
+      throw new Error(`${where}: "${k}" must be a non-negative integer (got ${v})`);
+    }
+  }
+  if (
+    s.components_available !== undefined &&
+    s.components_total !== undefined &&
+    s.components_available > s.components_total
+  ) {
+    throw new Error(
+      `${where}: components_available (${s.components_available}) exceeds components_total (${s.components_total})`,
+    );
+  }
+  if (s.edge_truncated !== undefined && typeof s.edge_truncated !== "boolean") {
+    throw new Error(`${where}: "edge_truncated" must be a boolean`);
+  }
+}
+
+// Raw component keys → parsed SuspectComponents keys. Notes keyed by an unknown component are
+// dropped here (the validator already errors on them), never rendered against a wrong bar.
+const NOTE_KEY: Record<string, keyof SuspectComponents> = {
+  proximity: "proximity",
+  parity: "parity",
+  temporality: "temporality",
+  trajectory: "trajectory",
+  gap: "gap",
+  slowdown: "slowdown",
+  type_prior: "typePrior",
+};
+
+function parseNotes(raw: Record<string, string> | undefined): Partial<Record<keyof SuspectComponents, string>> {
+  const out: Partial<Record<keyof SuspectComponents, string>> = {};
+  for (const [k, v] of Object.entries(raw ?? {})) {
+    const key = NOTE_KEY[k];
+    if (key) out[key] = v;
+  }
+  return out;
 }
 
 function validateExcluded(e: RawExcludedVessel, i: number, id: string): void {
@@ -401,14 +465,10 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
   }
 
   raw.excluded.forEach((e, i) => validateExcluded(e, i, id));
-  // A scored case must rule at least one vessel out (docs/04 Screen 3 + validator warn). An
-  // abstaining / no-vessel case (suspects empty) legitimately has none — CONTRACTS §8's
-  // invariant is only "abstained ⇒ suspects empty", not "always ≥1 excluded".
-  if (raw.excluded.length === 0 && raw.suspects.length > 0) {
-    throw new Error(
-      `${where}: a scored case must list at least one excluded vessel with a stated reason`,
-    );
-  }
+  // An empty `excluded` on a scored case is a validator WARN, not an ERR (Master §6.7 does not
+  // require one), so it must not become a contract-error card here: Jacksonville and Farallones
+  // both PASS with none. The Excluded section renders its "No vessels excluded." state instead,
+  // and the missing exclusions are a producer follow-up, not something to hide or invent.
 
   // Abstention (docs/04 D2, CONTRACTS §8). Optional fields, but a malformed one is a contract
   // bug — surfaced, never coerced or guessed around.
@@ -465,6 +525,11 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
       closestTime: s.closest_time,
       headingConsistent: s.heading_consistent,
       aisGapMinutes: s.ais_gap_minutes,
+      componentNotes: parseNotes(s.component_notes),
+      weightLive: s.weight_live ?? null,
+      componentsAvailable: s.components_available ?? null,
+      componentsTotal: s.components_total ?? null,
+      edgeTruncated: s.edge_truncated,
       reasons: s.reasons,
     })),
     excluded: raw.excluded.map((e) => ({

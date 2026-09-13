@@ -41,7 +41,7 @@ export function primaryActionLabel(stage: Act, acts: Act[] | undefined): string 
   if (!next) return "Try another case";
   switch (stage) {
     case "detect":
-      return "Trace this slick back";
+      return "Trace this spill back";
     case "trace":
       return next === "verify" ? "See what really happened" : "Find who did it";
     case "attribute":

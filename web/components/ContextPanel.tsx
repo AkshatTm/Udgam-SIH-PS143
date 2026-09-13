@@ -37,7 +37,16 @@ const fmt = (x: number | undefined, digits: number): string =>
     ? x.toFixed(digits).replace("-", "−") // real minus sign
     : "—";
 
-
+// Coordinates render as magnitude + hemisphere, never a signed number beside a fixed "N"/"E"
+// (that printed "−79.68° E" on every US case). Bundles stay signed [lon, lat]; this is display.
+const fmtLat = (v: number | undefined, digits: number): string =>
+  typeof v === "number" && Number.isFinite(v)
+    ? `${Math.abs(v).toFixed(digits)}° ${v < 0 ? "S" : "N"}`
+    : "—";
+const fmtLon = (v: number | undefined, digits: number): string =>
+  typeof v === "number" && Number.isFinite(v)
+    ? `${Math.abs(v).toFixed(digits)}° ${v < 0 ? "W" : "E"}`
+    : "—";
 
 const fmtDay = (iso: string): string => {
   const d = new Date(iso);
@@ -291,10 +300,10 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
       <SectionLabel>Centroid</SectionLabel>
       <div className="mt-1.5">
         <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
-          {fmt(p.centroid?.[1], 5)}° N
+          {fmtLat(p.centroid?.[1], 5)}
         </div>
         <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
-          {fmt(p.centroid?.[0], 5)}° E
+          {fmtLon(p.centroid?.[0], 5)}
         </div>
       </div>
 
@@ -389,10 +398,10 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
       <div className="relative mt-1.5 flex items-start gap-1">
         <div className="flex-1">
           <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
-            {fmt(origin.centroid[1], 5)}° N
+            {fmtLat(origin.centroid[1], 5)}
           </div>
           <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
-            {fmt(origin.centroid[0], 5)}° E
+            {fmtLon(origin.centroid[0], 5)}
           </div>
         </div>
         <InfoDot
@@ -416,7 +425,7 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
           primary="Nine in ten within"
           technical="90 % radius"
           value={`${fmt(origin.radius90Km, 1)} km`}
-          tip="Radius of the circle that contains nine out of ten simulations. The true release point is almost certainly inside this circle."
+          tip="Radius of the circle that contains nine out of ten simulations. It measures how closely the runs agree with each other (precision), not how close they are to the true release point."
         />
       </div>
 
@@ -440,12 +449,8 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
         />
       </div>
 
-      {/* Release-window caption — the window is a bracket (earliest–latest
-          plausible entry), never a single measured release time. */}
-      <p className="mt-3 text-[10px] leading-relaxed text-white/28">
-        Earliest and latest the oil could plausibly have entered the water — a
-        bracket, not a single measured release time.
-      </p>
+      {/* D12 — the method line below says whether this window is a search bracket or a
+          measured estimate. No always-on caption: it contradicted "Measured estimate". */}
       {origin.timeWindowMethod === "bounded" && (
         <p className="mt-2 text-[10px] leading-relaxed text-white/45">
           Search bracket (not a measured release time)
@@ -483,6 +488,23 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
               tip="How long ago the oil likely entered the water, estimated from how the slick has spread and sheared since release."
             />
           </div>
+          {/* Per-estimator bands, collapsed. A null band is "not applicable" — never a zero. */}
+          {origin.ageEstimators && Object.keys(origin.ageEstimators).length > 0 && (
+            <details className="mt-2 text-[10px] text-white/45">
+              <summary className="cursor-pointer select-none text-white/40 hover:text-white/60">
+                Per-estimator bands
+              </summary>
+              <div className="mt-1 space-y-0.5">
+                {Object.entries(origin.ageEstimators).map(([name, band]) => (
+                  <Row
+                    key={name}
+                    label={name.charAt(0).toUpperCase() + name.slice(1)}
+                    value={band === null ? "not applicable" : `${fmt(band[0], 0)} – ${fmt(band[1], 0)} h`}
+                  />
+                ))}
+              </div>
+            </details>
+          )}
         </>
       )}
 
@@ -598,13 +620,24 @@ const COMPONENT_LABELS: { key: keyof SuspectComponents; label: string }[] = [
  * §6.7). Same bar-track visual language as FunnelBar — no new visual system. A `null`
  * component (e.g. `gap`/`slowdown` on a gfw_hourly case) renders "n/a" with NO bar underneath:
  * a zero-width bar would claim a measurement that was never possible. */
-function ComponentBars({ components }: { components: SuspectComponents }) {
+function ComponentBars({
+  components,
+  notes,
+}: {
+  components: SuspectComponents;
+  notes: Suspect["componentNotes"];
+}) {
   return (
     <div className="mt-2 space-y-1.5">
       {COMPONENT_LABELS.map(({ key, label }) => {
         const v = components[key];
+        // D29 — an unexplained "n/a" reads as a broken feature. The note is the producer's
+        // own words, rendered verbatim; nothing is written here when the bundle has none.
+        // Producers note every component; inline only where the bar is "n/a" (D29's need),
+        // hover title elsewhere, so three cards don't carry 21 lines of prose.
+        const note = notes[key];
         return (
-          <div key={key}>
+          <div key={key} title={v !== null ? note : undefined}>
             <div className="flex items-baseline justify-between">
               <span className="text-[10px] text-white/45">{label}</span>
               <span className="font-mono text-[10px] text-white/70 tabular-nums">
@@ -618,6 +651,9 @@ function ComponentBars({ components }: { components: SuspectComponents }) {
                   style={{ width: `${Math.max(2, Math.min(100, v * 100))}%` }}
                 />
               </div>
+            )}
+            {v === null && note && (
+              <p className="mt-0.5 text-[9px] leading-snug text-white/35">{note}</p>
             )}
           </div>
         );
@@ -633,6 +669,18 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
   const hoveredSuspectMmsi = useAppStore((st) => st.hoveredSuspectMmsi);
   const setHoveredSuspect = useAppStore((st) => st.setHoveredSuspect);
   const isHovered = hoveredSuspectMmsi === s.mmsi;
+  // D37 — a 0.98 from two of seven components must not look like certainty. Prefer the
+  // producer's counts; with a breakdown but no counts, count the non-null components (the same
+  // fact, D37). With neither, show nothing rather than invent a breadth.
+  const breadth =
+    s.componentsAvailable !== null && s.componentsTotal !== null
+      ? { available: s.componentsAvailable, total: s.componentsTotal }
+      : s.components
+        ? {
+            available: Object.values(s.components).filter((v) => v !== null).length,
+            total: COMPONENT_LABELS.length,
+          }
+        : null;
   return (
     <div
       className={`rounded border p-3 transition-colors ${
@@ -675,9 +723,28 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
           {fmt(s.score * 100, 0)}%
         </div>
       </div>
+      {breadth && (
+        <div className="mt-1 text-right font-mono text-[9px] text-white/45 tabular-nums">
+          scored from {breadth.available} of {breadth.total} components
+        </div>
+      )}
 
       <div className="mt-2 space-y-0.5">
-        <Row label="Closest approach" value={`${fmt(s.closestKm, 1)} km`} />
+        {/* D36 — closest_km is measured to the origin-grid peak, not the ring centre. */}
+        <div className="relative flex items-baseline justify-between gap-3 py-[3px]">
+          <span className="flex items-center gap-1 text-[11px] text-white/45">
+            Distance to origin peak
+            <InfoDot tip="Measured from the highest-probability cell of the origin grid to this vessel's report there — not from the centre of the rings." />
+          </span>
+          <span className="font-mono text-[11px] text-white/85 tabular-nums">
+            {fmt(s.closestKm, 1)} km
+          </span>
+        </div>
+        {s.edgeTruncated && (
+          <p className="text-[10px] leading-snug text-[#fcd34d]/75">
+            Track is cut off at the search-box edge — this distance may be understated.
+          </p>
+        )}
         {s.closestTime && (
           <Row
             label="Closest time"
@@ -702,10 +769,15 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
           fabricated breakdown. Present-but-per-field-null is handled inside ComponentBars. */}
       {s.components && (
         <>
-          <div className="mt-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-white/30">
+          <div className="relative mt-2.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-white/30">
             Score Breakdown
+            <InfoDot
+              tip={`The score is renormalised over the components that could be measured for this vessel${
+                s.weightLive !== null ? ` (they carry ${fmt(s.weightLive * 100, 0)}% of the full weight)` : ""
+              }. "n/a" means not measurable here, never a zero.`}
+            />
           </div>
-          <ComponentBars components={s.components} />
+          <ComponentBars components={s.components} notes={s.componentNotes} />
         </>
       )}
 
@@ -810,6 +882,7 @@ function InfrastructureCard({ f }: { f: Infrastructure }) {
  *  - "abstain"  — origin.abstain === true (diffuse origin) OR suspects.abstained === true
  *                 (Stage 3's deliberate refusal for any reason). docs/04 D2: a maturity signal,
  *                 not a failure — funnel + headline + the case's abstain reason; no suspect.
+ *                 Scene-level findings (natural seep, dark vessels, infrastructure) still render.
  *  - "clear"    — neither abstains, confirmed. Render suspects.json as given.
  */
 function AttributeCard({
@@ -882,16 +955,17 @@ function AttributeCard({
         </div>
       )}
 
+      {/* D19 — contextual evidence about the scene, rendered ABOVE the ranked list and never
+          inside it: natural_seep is not a suspect and carries no rank/score. Shown on abstain
+          too — declining to name a vessel says nothing about the scene. */}
+      {(gate === "clear" || gate === "abstain") && suspects.naturalSeep?.flagged && (
+        <div className={gate === "abstain" ? "mt-3" : "mb-3"}>
+          <NaturalSeepNotice seep={suspects.naturalSeep} />
+        </div>
+      )}
+
       {gate === "clear" && (
         <>
-          {/* D19 — contextual evidence about the scene, rendered ABOVE the ranked list and
-              never inside it: natural_seep is not a suspect and carries no rank/score. */}
-          {suspects.naturalSeep?.flagged && (
-            <div className="mb-3">
-              <NaturalSeepNotice seep={suspects.naturalSeep} />
-            </div>
-          )}
-
           <SectionLabel>Suspects</SectionLabel>
           <div className="mt-2 space-y-2">
             {suspects.suspects.length === 0 ? (
@@ -913,7 +987,14 @@ function AttributeCard({
               suspects.excluded.map((e) => <ExcludedCard key={e.mmsi} e={e} />)
             )}
           </div>
+        </>
+      )}
 
+      {/* Dark vessels and infrastructure render on "clear" AND "abstain": a vessel abstention
+          is not "no infrastructure" — the fixed-source association runs regardless (Huntington
+          abstains on vessels, and its pipeline finding must stay visible). */}
+      {(gate === "clear" || gate === "abstain") && (
+        <>
           {/* docs/04 Phase 3.5 — hidden entirely when empty, same convention as Score
               Breakdown: a rare/exceptional category should not clutter the panel with a
               "none" message the way Suspects/Excluded (always-expected sections) do. */}

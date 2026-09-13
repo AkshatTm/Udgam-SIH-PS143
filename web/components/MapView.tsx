@@ -14,7 +14,7 @@
 //     no aggregation at all — a scrub only updates the layer's opacity uniform.
 // The timestep only ever updates deck layers, never the map.
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Map as MlMap,
   NavigationControl,
@@ -195,6 +195,9 @@ export default function MapView() {
   const mapRef = useRef<MlMap | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const styleReadyRef = useRef(false);
+  // Mirrors styleReadyRef as state so the camera effect re-runs once the map loads. Without it,
+  // bundles that resolve BEFORE "load" (fast or cached) leave the camera on the scene-only fit.
+  const [mapReady, setMapReady] = useState(false);
 
   const activeCaseId = useAppStore((s) => s.activeCaseId);
   const activeStage = useAppStore((s) => s.activeStage);
@@ -408,6 +411,7 @@ export default function MapView() {
 
     map.on("load", () => {
       styleReadyRef.current = true;
+      setMapReady(true);
       const state = useAppStore.getState();
       const bb = state.bounds;
       if (bb) {
@@ -661,7 +665,7 @@ export default function MapView() {
       ],
       { padding: 40, animate: false },
     );
-  }, [activeStage, bounds, vessels, particles, origin]);
+  }, [activeStage, bounds, vessels, particles, origin, mapReady]);
 
   // Detection features follow the store.
   useEffect(() => {

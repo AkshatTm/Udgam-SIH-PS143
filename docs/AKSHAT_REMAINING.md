@@ -297,3 +297,49 @@ Condensed checklist (full version: `docs/_archive/harshita/05_HARSHITA_INTEGRATI
 open issues.*
 
 <!-- first entry here -->
+
+### 14 Sept — §3 frontend fixes + automated pre-QA (Claude, parallel to the §0–2 session)
+
+**Done.**
+- **§3A fixes.**
+  - 1: infrastructure, dark vessels and natural seep now render on abstain.
+  - 2: hemisphere-aware coordinates (Trace best estimate and Detect centroid).
+  - 3: the always-on bracket caption is deleted.
+  - 4: the r90 tooltip is precision wording.
+  - 5: "Distance to origin peak" with an InfoDot.
+  - 6: "Trace this spill back".
+  - 7: `component_notes` are parsed and validated. They show inline under n/a bars and as a hover title on measured bars.
+  - 8: `weight_live` / `components_available` / `components_total` are parsed. "scored from N of 7 components" sits under the score, derived from non-null components when the counts are absent (Jacksonville until re-score).
+  - 10: `edge_truncated` warning row.
+  - 11: `age_estimators` expander; null shows "not applicable".
+  - 12: in-memory cache of parsed bundles (`web/lib/bundleCache.ts`), reset by page reload.
+  - 13 (debug overlay) skipped.
+- **Two bugs found in QA and fixed.**
+  - (a) `suspects.ts` threw on an empty `excluded[]`, which is only a validator WARN. **Attribute showed a contract-error card on Jacksonville and Farallones.** It now shows "No vessels excluded."
+  - (b) Camera race in `MapView.tsx`: if bundles resolved before the map's `load`, Trace stayed on the scene-only fit and the origin was off-screen (seen on Alaska). A `mapReady` state now re-runs the fit.
+- **§3B pre-QA (automated, not the human sign-off).**
+  - All 9 bundles load through the real frontend loaders (sucrase-transpiled `web/lib` + a fetch shim). Particles t0 = detection_time, r50 ≤ r90, funnels monotone, every suspect has a track.
+  - Headless Chrome screenshots of Trace and Attribute were checked by eye: Jacksonville, Farallones, Huntington, Mumbai, Alaska and Jamnagar. There were no error cards, and Trace frames scene + particles + origin.
+  - **Verify was not QA'd:** no case has the `verify` act yet (§1A).
+- **§3C:** `web/DEMO_RUNBOOK.md` covers the pull→validate→sync→build→start sequence, OS settings, offline check, fallback video and the break ladder. There is no runtime network dependency (local fonts, no tiles).
+
+**Files.** `web/components/{ContextPanel,MapView}.tsx`, `web/lib/{suspects,origin,contracts,flow,store,bundleCache}.ts`, `web/DEMO_RUNBOOK.md`.
+
+**Run.** `python scripts/sync_web_cases.py --clean && cd web && npx tsc --noEmit && npm run build && npm run start`
+
+**Open issues.**
+- **Producer (Jaiveer):**
+  - Jacksonville and Farallones ship `excluded: []`. The funnel drops vessels, but no exclusion with a reason is listed, and the demo requirement wants at least one.
+  - Farallones `type_prior` is 1.00 on every suspect (D28 warn).
+  - Mumbai's `abstain_reason` says the fixed-source result "is reported below", but `infrastructure[]` is empty until the §1B candidate lands.
+  - Huntington's reason cites "the top two vessels" while `scored` is 0. The wording is worth checking.
+- **Stage 2:** Mumbai's origin sits at the scene's NW corner, off the main slick body. This matches §2 P1 (seed det-01); look before quoting it.
+- **Human QA still owed (§3B):**
+  - origin upstream
+  - particles overlap the slick at frame 0
+  - track hover highlight
+  - reasons read sensibly out loud
+  - greyed Attribute tooltip on Alaska/Jamnagar
+  - scrub smoothness on the demo laptop
+  - all of Verify
+- Re-run `sync_web_cases.py` after the §1A verification and Jaiveer's re-score, then re-check the Farallones/Jacksonville cards.

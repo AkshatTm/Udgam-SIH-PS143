@@ -42,6 +42,9 @@ export interface OriginBundle {
   /** Master §6.5, docs/04 Phase 5.3 — the estimator that produced `ageHours`. Independently
    *  nullable from `ageHours` (docs/04 Phase 5.3: "do not invent a pairing rule"). */
   ageMethod: AgeMethod | null;
+  /** Master §6.5 — per-estimator [min, max] hour band, `null` where that estimator did not
+   *  apply (never a zero band). `null` overall when the bundle carries no block. */
+  ageEstimators: Record<string, [number, number] | null> | null;
 }
 
 // Origin-cloud display curve. Hue is a single amber (the 50/90 % rings' family, V3 palette);
@@ -323,6 +326,27 @@ function validate(raw: RawOriginBundle, id: string): void {
       );
     }
   }
+
+  // age_estimators (optional) — { name: [min, max] | null }.
+  if (raw.age_estimators !== undefined && raw.age_estimators !== null) {
+    const ae = raw.age_estimators;
+    if (typeof ae !== "object" || Array.isArray(ae)) {
+      throw new Error(`${where}: "age_estimators" must be an object when present`);
+    }
+    for (const [k, band] of Object.entries(ae)) {
+      if (band === null) continue;
+      if (
+        !Array.isArray(band) ||
+        band.length !== 2 ||
+        !Number.isFinite(band[0]) ||
+        !Number.isFinite(band[1]) ||
+        band[0] < 0 ||
+        band[0] > band[1]
+      ) {
+        throw new Error(`${where}: age_estimators.${k} must be null or a non-negative [min, max] pair`);
+      }
+    }
+  }
 }
 
 export async function loadOriginBundle(id: string): Promise<OriginBundle> {
@@ -357,5 +381,14 @@ export async function loadOriginBundle(id: string): Promise<OriginBundle> {
     ageMethod: AGE_METHODS.includes(raw.age_method as AgeMethod)
       ? (raw.age_method as AgeMethod)
       : null,
+    ageEstimators:
+      raw.age_estimators !== undefined && raw.age_estimators !== null
+        ? Object.fromEntries(
+            Object.entries(raw.age_estimators).map(([k, band]) => [
+              k,
+              band === null ? null : ([band[0], band[1]] as [number, number]),
+            ]),
+          )
+        : null,
   };
 }
