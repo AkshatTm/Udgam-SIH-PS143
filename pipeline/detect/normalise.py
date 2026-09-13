@@ -499,7 +499,8 @@ def _audit(limit=None):
         # SCALE is inflated — so a reference-only gate can never pass however well the
         # fix works.
         out.setdefault(key, []).append((abs(ref - med), info["n_modes"],
-                                        info["frac_sea"], sc0 / max(sc1, 1e-9), ref))
+                                        info["frac_sea"], sc0 / max(sc1, 1e-9), ref,
+                                        info.get("mode")))
         if i % 250 == 0:
             print(f"  [{i}/{len(jobs)}]", flush=True)
 
@@ -519,8 +520,14 @@ def _audit(limit=None):
         sx = np.array([x[3] for x in out[k]])
         print(f"{k:<12}{len(d):>6}{np.median(d):>12.3f}{np.percentile(d, 99):>12.3f}"
               f"{d.max():>12.3f}{np.median(sx):>13.3f}{np.percentile(sx, 99):>13.3f}{it:>7.1f}")
-        # Brightest ACCEPTED reference in this band — the land-leak check.
-        worst_ref = float(max(x[4] for x in out[k]))
+        # Land-leak check. Only OVERRIDDEN references can leak: in "scale-only" and
+        # "median" modes the reference IS the plain median, i.e. exactly what ships
+        # today, so a bright median there is a property of the scene and not
+        # something this estimator did. Testing every reference (as the previous
+        # version did) flagged bands whose shift was measured at 0.000 — the check
+        # was reporting scenes it had never touched.
+        overridden = [x[4] for x in out[k] if x[5] == "full-override"]
+        worst_ref = float(max(overridden)) if overridden else -99.0
         if worst_ref > SEA_MAX_REF_DB:
             print(f"{'':<12}   ^ brightest accepted reference {worst_ref:.1f} dB "
                   f"exceeds {SEA_MAX_REF_DB} dB — land leak")

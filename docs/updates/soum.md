@@ -15,6 +15,98 @@ top entry and tell me exactly where I left off and what the next step is."*
 <!-- Your first entry goes here. Setup counts as a phase: what you installed, what ran, what
      printed PASS, what is still broken. -->
 
+## [2026-09-13 23:55] Phase 7.1 — accuracy programme, Week 1: both gates pass
+
+**Done:** Plan E0 and E2's safety gate. No cache rebuilt, no model retrained, nothing in
+`cases/` touched. New files: `pipeline/detect/normalise.py`, `split.py`, `evaluate_val.py`.
+
+### E2 gate — PASS, on the fifth attempt
+
+Final audit, all 2,570 Parts I+II scenes:
+
+| population | n | p99 \|Δref\| | med scale × | p99 scale × |
+|---|---|---|---|---|
+| no oil | 1200 | 5.33 | 1.000 | 2.921 |
+| 0–1% | 356 | **0.000** | **1.000** | **1.000** |
+| 1–3% | 501 | **0.000** | **1.000** | **1.000** |
+| 3–10% | 295 | **0.000** | **1.000** | **1.000** |
+| 10–30% | 39 | 0.000 | 1.000 | 1.803 |
+| **≥30%** | 9 | **4.988** | **2.219** | **4.127** |
+
+The 93% that already work are untouched in both reference and scale; the target band moves
+hard; no overridden reference lands off the ocean.
+
+**The headline mechanism is a SCALE error, not a reference error.** The plan framed this as
+"the slick becomes its own median". That is true for only **4 of the 12** failing Part III
+scenes (>50% coverage). For the other **8** the median is still in the sea and the scale is
+1.8×–4.2× too wide, compressing normalised contrast to ~40% of true. Both are now handled,
+separately: `full-override` when the dark mode is genuinely the majority, `scale-only`
+otherwise — and scale-only cannot move a reference onto land, which is most of the safety.
+
+### Four of the five gate failures were my measurement, not the fix
+
+Worth recording, because it re-prices the remaining plan items:
+
+1. Iterative sigma-clipping cannot escape a dark mode that **is** the bulk — 99.6% kept,
+   converged in one iteration at −31.74 dB against a true sea of −27.00. **Real design flaw**,
+   caught by the self-test before it ever touched data.
+2. The brightness land mask **ate the sea**: 31–65% of a land-free majority-oil scene flagged
+   as land, because its reference is the p20 of local means, which sits inside the slick once
+   oil is the bulk. **Real bug.** Modes collapsed 2→1 on seven of nine and the fix silently
+   stopped firing on exactly the scenes it exists for.
+3. My gate measured only the reference shift — could never pass, see above. **My error.**
+4. My gate demanded no-oil scenes never move. Wrong in conception: a large dark patch is what
+   *makes* a look-alike, so a coverage-adaptive estimator is supposed to re-reference them.
+   **My error.**
+5. My leak check tested references the estimator had never touched, flagging bands whose
+   measured shift was 0.000. **My error.**
+
+Before the coastline fix I tried and **falsified four discriminators**, all measured: MAD-ratio
+roughness (land 0.27–0.97, overlapping), a shift cap (swept 9→5 dB, never separates), local
+texture (land 2.11, oil 1.94, ocean 1.41), and land-mask coverage (a clean-ocean scene scored
+67.7%). The answer was not a threshold: **use a real coastline.** `global-land-mask==1.0.0` was
+already pinned at `requirements.txt:62` and merely uninstalled, so this adds no dependency.
+
+**Plan estimate was off by an order of magnitude** — E2's "~15 min safety check" took a day.
+Price the remaining E-items accordingly.
+
+### E0 gate — the proxy is faithful, and is NOT a Part III predictor
+
+Old split gave validation **1** scene ≥30% and **3** at 10–30%, out of 190 — blind to ~75% of
+Part III's oil mass. `split.py` gives 3 and 6, with the 9 large-slick scenes rotated over 3
+folds. Re-scoring the shipped checkpoint (fold 0, 387 held-out scenes):
+
+pooled **0.6350**, CI [0.523, 0.744], macro/scene 0.6945, mean IoU 0.8108
+
+| band | n | IoU |
+|---|---|---|
+| 0–1% | 53 | 0.6120 |
+| 1–3% | 75 | 0.7047 |
+| 3–10% | 44 | 0.7865 |
+| 10–30% | 6 | 0.8832 |
+| **≥30%** | **3** | **0.1714** |
+
+The failure signature reproduces unmistakably — a 5× cliff into the top band. But pooled 0.635
+is **not** comparable to Part III's 0.435: only 3 scenes sit in the collapsed band here versus
+12 there, so it carries far less pooled weight, and 10–30% is genuinely easier on this
+population (0.883 vs 0.660). **Use this metric for measuring change, never for predicting the
+Part III value**, and do not quote a val delta as a Part III delta. 3-fold rotation running to
+get the ≥30% spread; nothing gets tuned on a difference smaller than it.
+
+### Dataset findings worth knowing independently of any retrain
+
+- **170 of 1,370 non-oil scenes (12.4%) are entirely land** once a real coastline is applied.
+  Look-alike rejection of 0.940 is partly measured on farmland. That is the third land scene
+  after `No oil/00091` (already replaced as a demo case) and `No oil/00487` (100% land).
+- Every Zenodo tile **is** georeferenced (EPSG:4326, real geotransform) — `land_mask_geo.py`'s
+  claim that "the Zenodo scenes have no reliable land information" is false and should be
+  corrected when that file is next touched.
+
+**Next:** E8a (re-verify the 0.838 oracle independently — the ceiling claim the whole plan
+leans on), then the E1 channel-fix ablation.
+
+---
+
 ## [2026-09-13 22:15] Phase 6.8 — the networks DO transfer. It was a channel-order bug, and I had it wrong.
 
 **Akshat asked whether he needed to re-export the cases in Zenodo's format. The answer is no — his
