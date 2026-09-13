@@ -19,6 +19,7 @@ import type {
   RawSuspect,
   RawSuspectComponents,
   RawSuspectsBundle,
+  SourceType,
 } from "./contracts";
 
 export interface Funnel {
@@ -55,6 +56,8 @@ export interface Suspect {
   mmsi: string;
   name: string;
   vesselType?: string;
+  /** Master §4.5 — always `"vessel"` on a real suspect today; carried through, not assumed. */
+  sourceType?: SourceType;
   score: number;
   /** null when the bundle carries no `components` breakdown at all (e.g. the v1 shape) —
    *  distinct from a present breakdown whose individual fields are null. */
@@ -64,6 +67,9 @@ export interface Suspect {
   repeatOffender: RepeatOffender | null;
   closestKm: number;
   closestTime?: string;
+  /** The origin grid's own probability at this suspect's closest-approach cell — distinct from
+   *  `components.proximity`, which is a normalised score. Undefined when absent. */
+  gridProbability?: number;
   headingConsistent?: boolean;
   aisGapMinutes?: number;
   /** D29 — why a component reads the way it does, keyed like `components`. Explanation, not
@@ -73,8 +79,8 @@ export interface Suspect {
   weightLive: number | null;
   componentsAvailable: number | null;
   componentsTotal: number | null;
-  /** true when the closest approach sits at the search-box edge and closest_km may be
-   *  understated. undefined when the bundle doesn't say. */
+  /** Closest approach fell within one reporting interval of the search-box edge — `closestKm`
+   *  may be understated. Surface it, don't hide it (contracts.ts). Undefined when absent. */
   edgeTruncated?: boolean;
   reasons: string[];
 }
@@ -506,6 +512,7 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
       mmsi: s.mmsi,
       name: s.name,
       vesselType: s.vessel_type,
+      sourceType: s.source_type,
       score: s.score,
       components: s.components
         ? {
@@ -523,6 +530,7 @@ export async function loadSuspectsBundle(id: string): Promise<SuspectsBundle> {
         : null,
       closestKm: s.closest_km,
       closestTime: s.closest_time,
+      gridProbability: s.grid_probability,
       headingConsistent: s.heading_consistent,
       aisGapMinutes: s.ais_gap_minutes,
       componentNotes: parseNotes(s.component_notes),

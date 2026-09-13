@@ -619,7 +619,9 @@ const COMPONENT_LABELS: { key: keyof SuspectComponents; label: string }[] = [
 /** Score-component breakdown behind a suspect's overall score (docs/04 Phase 3.2, Master
  * §6.7). Same bar-track visual language as FunnelBar — no new visual system. A `null`
  * component (e.g. `gap`/`slowdown` on a gfw_hourly case) renders "n/a" with NO bar underneath:
- * a zero-width bar would claim a measurement that was never possible. */
+ * a zero-width bar would claim a measurement that was never possible. D29: an unexplained
+ * "n/a" reads as a broken feature, so a null component with a matching producer-supplied note
+ * renders that note verbatim underneath — never invented here, never shown for a real value. */
 function ComponentBars({
   components,
   notes,
@@ -920,7 +922,7 @@ function AttributeCard({
             (field present and zero) — see Funnel.droppedShortTrack. */}
         {suspects.funnel.droppedShortTrack !== null && (
           <p className="mt-2 text-[10px] leading-relaxed text-white/45">
-            {suspects.funnel.droppedShortTrack} excluded — fewer than 5 AIS reports
+            {suspects.funnel.droppedShortTrack} dropped — fewer than 5 AIS reports
           </p>
         )}
       </div>
@@ -1080,7 +1082,7 @@ export default function ContextPanel() {
           // D1 — a designed result, not an error (docs/04 Part D). Guide the judge to the
           // rejected look-alikes; their DetectionCard carries the "why not oil" evidence.
           <>
-            <div className="rounded border border-white/[0.08] bg-white/[0.03] p-3">
+            <div className="mb-4 rounded border border-white/[0.08] bg-white/[0.03] p-3">
               <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
                 Stage 01 — Detect
               </div>
