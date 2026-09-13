@@ -41,6 +41,7 @@ sys.path.insert(0, str(HERE))
 
 import geo                                     # noqa: E402
 import ingest                                  # noqa: E402
+import score                                   # noqa: E402
 from tracks import MAX_INTERP_GAP_MIN, Track, load_tracks   # noqa: E402
 
 UTC = timezone.utc
@@ -619,6 +620,166 @@ class TestGridOnTheRealFixture(unittest.TestCase):
         self.assertGreater(along / max(across, 1e-9), 2.0,
                            f"fixture cloud should be clearly elongated, got "
                            f"{along:.1f} km along vs {across:.1f} km across")
+
+
+class StubTrack:
+    """The minimum `build_outputs` reads off a track. Deliberately not a real Track —
+    these tests are about the scorer's bookkeeping, not about track reconstruction,
+    and a real Track would drag duckdb and a parquet file into a pure-arithmetic test."""
+
+    def __init__(self, mmsi="123456789", name="STUB", vessel_type="cargo"):
+        self.mmsi, self.name, self.vessel_type = mmsi, name, vessel_type
+
+
+def origin_doc(method="convergence",
+               window=("2024-01-01T00:00:00Z", "2024-01-01T10:00:00Z")):
+    """A 2x2 origin grid — the smallest thing `OriginGrid` will accept. Only the
+    window and its method matter to these tests."""
+    return {
+        "bounds": {"west": -95.0, "south": 28.5, "east": -94.0, "north": 29.5},
+        "shape": [2, 2],
+        "values": [0.0, 0.0, 0.0, 1.0],
+        "centroid": [-94.5, 29.0],
+        "radius_50_km": 5.0, "radius_90_km": 12.0,
+        "time_window": list(window),
+        "time_window_method": method,
+        "abstain": False,
+    }
+
+
+class TestWeights(unittest.TestCase):
+    """The seven weights are the contract. A typo here is silent and changes every
+    ranking in the library, so the total is pinned to a literal rather than derived."""
+
+    def test_the_seven_weights_sum_to_one(self):
+        self.assertAlmostEqual(sum(score.WEIGHTS.values()), 1.0, places=9)
+
+    def test_there_are_exactly_seven_components(self):
+        self.assertEqual(len(score.WEIGHTS), 7)
+        self.assertEqual(set(score.WEIGHTS), {
+            "proximity", "parity", "temporality", "trajectory",
+            "gap", "slowdown", "type_prior"})
+
+
+class TestTemporalityGate(unittest.TestCase):
+    """D12 / 6.5: `bounded` is a SEARCH BRACKET, not a measured release time. Every
+    vessel inside a bracket scores much the same, so the number would say nothing and
+    the component declines instead.
+
+    Three of the six real cases are `bounded` (Farallones, Mumbai, Jamnagar), so this
+    gate decides 15% of the score on half the library. Until now it had no test at
+    all, because `make_fake_case.py` could only emit `bounded`.
+    """
+
+    def setUp(self):
+        self.mid = datetime(2024, 1, 1, 5, 0, tzinfo=timezone.utc)
+
+    def test_a_search_bracket_returns_not_applicable(self):
+        g = geo.OriginGrid(origin_doc("bounded"))
+        c = score.component_temporality(None, self.mid, g)
+        self.assertFalse(c.applicable)
+        self.assertIsNone(c.value, "a bracket must give null, never a zero that reads "
+                                   "as a measurement")
+        self.assertIn("bracket", c.note.lower())
+
+    def test_a_measured_window_scores(self):
+        g = geo.OriginGrid(origin_doc("convergence"))
+        c = score.component_temporality(None, self.mid, g)
+        self.assertTrue(c.applicable)
+        self.assertAlmostEqual(c.value, 1.0, places=6,
+                               msg="closest approach at the centre of the window is the "
+                                   "best possible timing")
+
+    def test_the_score_falls_away_toward_the_window_edge(self):
+        g = geo.OriginGrid(origin_doc("convergence"))
+        edge = datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc)   # the far end
+        quarter = datetime(2024, 1, 1, 7, 30, tzinfo=timezone.utc)
+        self.assertAlmostEqual(score.component_temporality(None, edge, g).value,
+                               0.0, places=6)
+        self.assertAlmostEqual(score.component_temporality(None, quarter, g).value,
+                               0.5, places=6)
+
+    def test_an_unknown_method_is_treated_as_a_bracket(self):
+        """Fail closed. A method we do not recognise is not a licence to score."""
+        g = geo.OriginGrid(origin_doc("something_new"))
+        self.assertFalse(score.component_temporality(None, self.mid, g).applicable)
+
+
+class TestHourlySamplingGate(unittest.TestCase):
+    """D20: on `gfw_hourly` there is one position per vessel per hour, so a 30-minute
+    silence and a speed change are both structurally invisible. Frozen convention 4
+    says the answer is `null`, and the validator now FAILS on a zero there.
+
+    Both Indian cases are `gfw_hourly`, so a regression here fails a third of the
+    library. Verified by hand on 13 Sept; pinned here so it stays verified.
+    """
+
+    def test_gap_is_null_not_zero_at_hourly_sampling(self):
+        c = score.component_gap(None, None, None, "gfw_hourly", None)
+        self.assertFalse(c.applicable)
+        self.assertIsNone(c.value)
+        self.assertIn("hourly", c.note.lower())
+
+    def test_slowdown_is_null_not_zero_at_hourly_sampling(self):
+        c = score.component_slowdown(None, None, "gfw_hourly")
+        self.assertFalse(c.applicable)
+        self.assertIsNone(c.value)
+        self.assertIn("hourly", c.note.lower())
+
+
+class TestEvidenceBreadthReachesTheCard(unittest.TestCase):
+    """A renormalised score says nothing about how much evidence stands behind it.
+    Measured on a gfw fixture: 0.981 off two live components out of seven, live weight
+    0.35. The card cannot show that unless the file carries it, so `weight_live`,
+    `components_available` and `components_total` are emitted per suspect.
+    """
+
+    def scored_entry(self, applicable_keys):
+        comps, live = {}, 0.0
+        for k in score.WEIGHTS:
+            if k in applicable_keys:
+                comps[k] = score.Component(1.0, note="measured")
+                live += score.WEIGHTS[k]
+            else:
+                comps[k] = score.Component.not_applicable("not measurable here")
+        return {
+            "track": StubTrack(),
+            "components": comps,
+            "score": 1.0,
+            "weight_live": round(live, 3),
+            "closest_time": datetime(2024, 1, 1, 5, 0, tzinfo=timezone.utc),
+            "closest_km": 3.0,
+            "grid_probability": 1.0,
+            "gap_minutes": 0.0,
+            "edge_truncated": False,
+        }
+
+    def build(self, applicable_keys):
+        doc = score.build_outputs(
+            [self.scored_entry(applicable_keys)],
+            {"in_region": 1, "in_window": 1, "plausible": 1, "scored": 1,
+             "dropped_short_track": 0},
+            geo.OriginGrid(origin_doc()), False, None)
+        return doc["suspects"][0]
+
+    def test_two_live_components_are_reported_as_two_of_seven(self):
+        s = self.build({"proximity", "type_prior"})
+        self.assertEqual(s["components_available"], 2)
+        self.assertEqual(s["components_total"], 7)
+        self.assertAlmostEqual(s["weight_live"], 0.35, places=3,
+                               msg="proximity 0.30 + type_prior 0.05")
+
+    def test_all_seven_live_gives_a_full_weight(self):
+        s = self.build(set(score.WEIGHTS))
+        self.assertEqual(s["components_available"], 7)
+        self.assertAlmostEqual(s["weight_live"], 1.0, places=3)
+
+    def test_components_available_counts_nulls_out(self):
+        s = self.build({"proximity"})
+        nulls = sum(1 for v in s["components"].values() if v is None)
+        self.assertEqual(s["components_available"] + nulls, s["components_total"],
+                         "available + null must account for every component; if these "
+                         "disagree the card is describing a different set than the score")
 
 
 if __name__ == "__main__":

@@ -159,6 +159,16 @@ def main():
     ap.add_argument("--ais-source", default="noaa_dense",
                     choices=("noaa_dense", "gfw_hourly"),
                     help="which AIS regime this case stands in for (D20)")
+    ap.add_argument("--time-window-method", default="bounded",
+                    choices=("bounded", "convergence"),
+                    help="6.5: 'bounded' is a SEARCH BRACKET, 'convergence' is a measured "
+                         "release time. The temporality component scores only against a "
+                         "measurement and returns null against a bracket (D12), so this "
+                         "flag is what gives that gate test coverage in both directions. "
+                         "Default stays 'bounded' so existing fixtures do not move under "
+                         "anyone building against them; pass 'convergence' for a fixture "
+                         "that exercises temporality. Three of the six real cases are "
+                         "'bounded', so both paths are live in production.")
     ap.add_argument("--discharge-class", default="chronic",
                     choices=("chronic", "acute", "unknown"),
                     help="Stage 1's field; gates the parity component")
@@ -258,7 +268,7 @@ def main():
         "centroid": [r5(clon), r5(clat)],
         "radius_50_km": round(r50, 1), "radius_90_km": round(r90, 1),
         "time_window": win,
-        "time_window_method": "bounded",
+        "time_window_method": a.time_window_method,
         "ensemble_runs": 50, "abstain": bool(a.abstain)}))
 
     # --- particles.json: seeded on the slick at t0, ending in the origin cloud at t0-24h.

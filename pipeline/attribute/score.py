@@ -81,10 +81,11 @@ EDGE_DEGREES         = 0.02   # "on the search-box boundary", ~2 km
 # ----------------------------------------------------------------------- abstention
 ABSTAIN_SCORE_FLOOR  = 0.25   # nothing scores convincingly
 ABSTAIN_TIE_FRACTION = 0.03   # top two indistinguishable
-ABSTAIN_MAX_VESSELS  = 40     # density too high to discriminate
+ABSTAIN_MAX_PLAUSIBLE_VESSELS = 40   # density too high to discriminate
 # NOTE the collision the master plan has not resolved: the abstain trigger on cloud
 # size is `radius_90_km > 40` (kilometres) and this one is 40 *vessels*. Two unrelated
-# 40s. Raised with Akshat; renaming one is his call, not something to fix silently.
+# 40s. The one on this side of the fence is now named for what it counts; renaming the
+# other is Akshat's call, since it comes from the plan and not from this file.
 
 TOP_N = 3
 MAX_EXCLUSIONS = 3
@@ -477,9 +478,29 @@ def clipped_feature(track, t0, t1, pad_hours=TRACK_PAD_HOURS):
 
 
 def build_outputs(scored, funnel, grid, abstained, abstain_reason):
+    """`suspects.json` per 6.7, plus three fields that are not in the schema yet.
+
+    `component_notes`, `weight_live` and `components_available` are all additive and
+    all exist for the same reason: **the score alone does not say how much evidence
+    stands behind it.**
+
+    When components are not applicable their weight is redistributed across the rest
+    (D9). That is the honest way to handle missing data, but the number that comes out
+    the other side looks identical whether it rested on seven signals or two. Measured
+    on a `gfw_hourly` fixture: a vessel scored **0.981 with a live weight of 0.35** —
+    proximity and type_prior only, five components unmeasurable. A card rendering
+    "0.98" with no caveat overstates that by a wide margin, and on the two `gfw_hourly`
+    cases it is the normal state rather than an edge case.
+
+    Emitting the numbers is not the fix — the fix is what the card shows, which is
+    Akshat's ruling and Harshita's layout. But the frontend cannot render what it has
+    not been given, so the data ships now and neither of them waits on me. Schema
+    amendment requested; if it is refused these three keys come out together.
+    """
     suspects = []
     for s in scored:
         t = s["track"]
+        applicable = sum(1 for c in s["components"].values() if c.applicable)
         suspects.append({
             "source_type": "vessel",
             "mmsi": t.mmsi,
@@ -489,6 +510,9 @@ def build_outputs(scored, funnel, grid, abstained, abstain_reason):
             "components": {k: (round(c.value, 3) if c.applicable else None)
                            for k, c in s["components"].items()},
             "component_notes": {k: c.note for k, c in s["components"].items()},
+            "weight_live": s["weight_live"],
+            "components_available": applicable,
+            "components_total": len(WEIGHTS),
             "closest_km": s["closest_km"],
             "closest_time": iso(s["closest_time"]),
             "grid_probability": s["grid_probability"],
@@ -584,10 +608,10 @@ def main():
     if grid.abstain:
         abstained, why = True, ("Stage 2 flagged the origin cloud as too diffuse to "
                                 "attribute at acceptable confidence")
-    elif len(plausible) > ABSTAIN_MAX_VESSELS:
+    elif len(plausible) > ABSTAIN_MAX_PLAUSIBLE_VESSELS:
         abstained, why = True, (f"{len(plausible)} vessels are plausible; above "
-                                f"{ABSTAIN_MAX_VESSELS} the search area is too crowded to "
-                                "discriminate between them")
+                                f"{ABSTAIN_MAX_PLAUSIBLE_VESSELS} the search area is too "
+                                "crowded to discriminate between them")
     elif not plausible:
         abstained, why = True, "no vessel entered the reconstructed origin during the window"
     elif plausible[0]["score"] < ABSTAIN_SCORE_FLOOR:
