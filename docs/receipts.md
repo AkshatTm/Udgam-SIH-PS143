@@ -158,9 +158,30 @@ Re-run 2026-09-14 (same token, same result) after Jaiveer flagged that `gfw_prob
 docstring still said "NOT yet run" — the banner was stale, not the finding; it is now corrected.
 `case-mumbai-2023/meta.json` already had a scored `suspects.json`/`vessels.geojson` sitting
 unused because `acts_available` had never been updated — added `attribute`, validates PASS.
-`case-jamnagar-2024` has no scored output yet (no GFW-hourly track ingest has been built against
-this coverage), so it stays `detect + trace` until that ingest exists — the *access path* is
-answered, the *ingest script* is a separate, unstarted piece of work.
+**14 Sept: the ingest now exists, and both Indian cases are scored against real vessels.**
+`pipeline/attribute/ingest_gfw.py` writes the same parquet schema as `ingest.py`, so nothing
+downstream changed. `case-jamnagar-2024` gains `attribute`.
+
+| Case | Vessels found | Vessel-hours | Funnel | Outcome |
+|---|---|---|---|---|
+| case-mumbai-2023 | 9 | 31 | 9 → 2 → 0 → 0 | abstains: **searched, and no vessel entered the origin cloud** |
+| case-jamnagar-2024 | 8 | 43 | 8 → 2 → 0 → 0 | same |
+
+That is a different and much stronger statement than the one these cases carried this morning,
+which was "nothing was searched".
+
+⚠️ **A claim of ours that was wrong, corrected.** This section and `gfw_probe.py` both said GFW
+"does not provide individual vessel positions". That is what GFW's documentation says about the
+**map layer**, and we generalised it to the whole API. The 4wings **report** endpoint, at
+`spatial-resolution=HIGH`, `temporal-resolution=HOURLY`, `spatial-aggregation=false` and
+`group-by=VESSEL_ID`, returns one row per vessel per hour carrying `mmsi`, `shipName`,
+`vesselType`, `flag`, `imo`, `lat` and `lon`. We had ruled out a data source on a documentation
+sentence rather than on a request.
+
+**What these positions are:** grid-cell centres at 0.01° (~1 km), one per hour. **`sog` and `cog`
+are not published there and are written NULL, never derived** — a course taken between two 1 km
+cell centres an hour apart is not a measurement. `gap` and `slowdown` gate to `null` on any
+`gfw_hourly` case anyway (D20), and `trajectory` gates to null without a course.
 
 ⚠️ **A false negative we nearly recorded here.** The first probe returned HTTP 403 on every
 endpoint and the script concluded *"no usable GFW coverage — cases 5 and 6 drop to detect+trace."*

@@ -65,6 +65,37 @@ fix required a decision that is not mine, I have written the decision up and lef
 **Four items need a decision before Monday afternoon:** A9, B6, C4, D4. The rest can wait until
 Monday evening, but not past it.
 
+## New, 14 Sept — raised by the GFW ingest, not yet ruled
+
+**F1 · `MIN_POINTS = 5` is a different filter at hourly sampling, and on Mumbai it drops the only
+vessel that touched the origin.** · Owner: Akshat · Severity: **HIGH** · Decision needed
+
+`tracks.MIN_POINTS = 5` means "fewer than five reports is noise, not a path". At NOAA's ~71 s that
+is about six minutes of presence. At GFW's one-per-hour it means **five hours inside the box**, so
+any vessel that transits in under five hours is discarded before it is ever scored.
+
+Measured on `case-mumbai-2023` (9 vessels, 31 vessel-hours):
+
+| mmsi | reports | best grid probability | km to origin peak | kept? |
+|---|---|---|---|---|
+| 419001409 (SAGAR PRIDE) | 4 | **0.069** — above the 0.05 plausible floor | 5.0 | **dropped** |
+| 419768000 | 9 | 0.000 | 12.6 | kept, not plausible |
+| 419001287 | 8 | 0.000 | 12.3 | kept, not plausible |
+| 6 others | 1–2 | 0.000–0.025 | 6.8–13.1 | dropped |
+
+So the funnel reads `9 → 2 → 0 → 0` and the case abstains, when the one vessel that reached the
+cloud was removed by a threshold calibrated for a different sampling regime.
+
+**It has deliberately not been changed.** Mumbai's sealed record lists **zero** AIS vessel
+candidates, so relaxing this gate now would push the system toward naming a vessel on a case whose
+documented answer names none — tuning a threshold with the answer in view, which is exactly D21.
+Recorded before any change, in the manner of D30.
+
+**Ask:** rule after the demo on making the minimum sampling-aware (e.g. "5 reports **or** 3 hours
+of presence"), and validate it on the Phase 8 curve at `sampling=gfw_hourly`, never on Mumbai.
+
+---
+
 ## Resolutions, 14 Sept (Akshat)
 
 *Rulings on the items owned by Akshat. The sections below are left as written, as the record of what was raised.*

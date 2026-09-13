@@ -20,10 +20,17 @@ query, and then showing that the query cannot be run.
 >>> for the recorded verdict. Cases 5 and 6 keep `attribute`; `gap`/`slowdown` still return null
 >>> at hourly sampling (D20) — that's the data, not a probe failure.
 
-**The correction this script exists to respect.** A report in circulation claims GFW's AIS
-Vessel Presence dataset returns MMSI, name, IMO and positions. It does not — GFW's own docs say
-it "shows vessel presence patterns and movement corridors, but does not provide individual
-vessel positions". It is a gridded layer. So:
+**CORRECTED 14 Sept — read this before repeating the old claim.** This docstring used to say GFW
+"does not provide individual vessel positions". That sentence is GFW's, it is about the **map
+layer**, and we wrongly generalised it to the whole API. The 4wings **report** endpoint with
+`spatial-resolution=HIGH`, `temporal-resolution=HOURLY`, `spatial-aggregation=false` and
+`group-by=VESSEL_ID` returns one row per vessel per hour with `mmsi`, `shipName`, `vesselType`,
+`flag`, `imo`, `lat` and `lon` — hourly positions at 0.01° cell centres. That is what
+`pipeline/attribute/ingest_gfw.py` uses, and it is why cases 5 and 6 are now scored against real
+vessels instead of abstaining with "nothing was searched". A data source was ruled out on a
+documentation sentence rather than on a request; that is the mistake worth remembering.
+
+The rest of the layer notes still hold:
 
   * 4wings report on the presence layer -> IS THERE TRAFFIC HERE AT ALL (a grid, not tracks)
   * Vessels API                         -> identity lookup

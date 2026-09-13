@@ -63,6 +63,7 @@ Per case, from the published `origin.json` (cross-checked against `docs/_archive
 | AIS density on the hero case | **69 s** reporting interval, holds to 240 km offshore; position ~170 km out | `receipts.md` | ~100 km; "gap case" (D30) |
 | Evidence breadth is shown with every score (D37) | e.g. 5 of 7 components live | `suspects.json` | a bare score |
 | `null` ≠ 0: gap/slowdown are n/a on hourly AIS (D20) | — | Master §6.1 | — |
+| **Both Indian cases now search real vessels** (GFW hourly, D40) | Mumbai 9 vessels / 31 vessel-hours, funnel 9 → 2 → 0 → 0; Jamnagar 8 / 43, 8 → 2 → 0 → 0. Both abstain because **no vessel entered the origin cloud** | `docs/receipts.md` GFW section | "no AIS available in Indian waters" — that was our error, corrected 14 Sept |
 | Infrastructure association is built and contracted (D38) | — | Master §6.1 | that it found the Huntington pipeline (it scores below floor) |
 | **Injected-offender curve (Phase 8), offshore, 300 trials/point** | top-1 **0.910** [0.87–0.94], top-3 0.964, 23/300 abstained, given a cloud with 0.5 × r90 of error | `docs/STAGE3_PHASE8.md` | any of it as an accuracy figure for the six live cases |
 | Sampling density is the biggest lever | dense **0.910** → hourly **0.488** offshore; 0.782 → 0.296 in port | same | — |
