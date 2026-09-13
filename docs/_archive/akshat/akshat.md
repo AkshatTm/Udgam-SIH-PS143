@@ -2,6 +2,77 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-14 00:00] Rulings on Jaiveer's issue register: B6, C4, D4/D37, B2/D36
+
+**Done:** Four decisions from `STAGE3_ISSUE_REGISTER_1.md`, all closing tonight rather than
+Monday since Harshita and Jaiveer are both blocked on them.
+
+- **B6 (acts_available).** Added `"attribute"` to `case-jacksonville-2024` (already had it),
+  `case-huntington-2021`, `case-farallones-2023`. **Not** `case-gulf-alaska-2023` — checked and it
+  has no `suspects.json`/`vessels.geojson` yet (blocked on C2, Soum's `est_length_m`); adding the
+  act there would fail validation, not just flip on a dark panel, so it stays `detect+trace` until
+  scored. Also caught **`case-mumbai-2023`** carrying a real, validated abstain bundle
+  (`abstained: true`, "no AIS archive we hold covers this region") under `acts_available:
+  ["detect","trace"]` — nobody had flagged this one, added `attribute` there too. All four
+  re-validated PASS.
+- **C4 (GFW path).** Re-ran `scripts/gfw_probe.py --all` with the token already sitting in
+  `.env` — same result as the 2026-09-12 run in `docs/receipts.md`: presence, gap-events and SAR
+  all respond for both Mumbai and Jamnagar boxes. **The access path was never actually blocked**;
+  `gfw_probe.py`'s own docstring still said "NOT yet run against it", which is what sent Jaiveer
+  looking for a token that already existed — banner corrected. Answer for Jaiveer: token is real,
+  coverage is real, Mumbai's abstain bundle already proves the plumbing works end to end. What
+  does **not** exist yet is a GFW-hourly track ingest (the presence layer is gridded, not
+  per-vessel — `Vessels`/`Events` API work is still ahead of us for Jamnagar to ever score).
+- **D4 + A9 (component_notes, weight_live, components_available, components_total).** Blessed all
+  four into §6.7 as one set (D29 already covered `component_notes`; added **D37** for the other
+  three). Kept `weight_live`/`components_available`/`components_total` as validator **WARN**, not
+  ERR — checked first, and only Farallones' committed bundle actually carries them; Jacksonville/
+  Huntington/Mumbai were scored before Jaiveer added the fields, so a hard fail would have flipped
+  three real PASSes to FAIL over a missing field the same night. Validator also now cross-checks
+  `components_available`/`components_total` against the actual `components` dict when present.
+- **B2/D36 (closest_km).** Went with option (b): `score.py` now measures to `grid.peak_lonlat()`
+  instead of `grid.centroid` (the method already existed in `geo.py`, unused). No schema change,
+  matches D8. **Important gap this surfaced:** D36 had already been *ruled* in the master plan
+  (13 Sept) but the code still called `.centroid` — the ruling and the fix were never the same
+  commit. Fixed now. Documented in the D36 row that `data/ais/` isn't on this machine (frozen
+  convention: inputs stay put), so **Jacksonville, Huntington, Farallones and Mumbai's committed
+  `suspects.json` still report centroid-based `closest_km` until Jaiveer re-runs `score.py`
+  against the real AIS parquets** — this is the same re-score that clears the D37 warnings above,
+  so one re-run fixes both.
+
+**Files touched:** `cases/case-huntington-2021/meta.json`, `cases/case-farallones-2023/meta.json`,
+`cases/case-mumbai-2023/meta.json` (acts_available) · `pipeline/attribute/score.py` (closest_km →
+peak, docstring) · `scripts/gfw_probe.py` (banner) · `scripts/validate_case.py` (D37 warn +
+consistency check) · `docs/00_MASTER_PLAN.md` (§6.7 schema block, D37, D36 addendum) ·
+`docs/receipts.md` (GFW re-verification note).
+
+**Run command:**
+```bash
+python venv/Scripts/python.exe scripts/validate_case.py cases/case-jacksonville-2024
+python venv/Scripts/python.exe -m unittest pipeline.attribute.tests -q
+python venv/Scripts/python.exe scripts/test_validator.py
+```
+Expected output: `PASS` (7 warnings, all pre-existing or the new D37 flag), `Ran 84 tests ... OK`,
+`23/23 mutations correctly caught and named`.
+
+**Checkpoint artefact:** full-library sweep run tonight — all 9 cases in `cases/index.json` PASS;
+the 3 FAILs seen in a raw directory sweep (`case-000-abstain`, `case-dry`, `case-smoke`) are dev
+fixtures outside the index, pre-existing, unrelated to tonight's changes (confirmed via `git
+stash`).
+
+**Open issues:**
+- Re-score Jacksonville, Huntington, Farallones, Mumbai against real AIS to pick up peak-based
+  `closest_km` and the D37 fields — Jaiveer, needs his local AIS parquets.
+- Gulf of Alaska still can't get `attribute` until C2 (`est_length_m`) lands.
+- Jamnagar still can't get `attribute` until someone builds the actual GFW vessel-track ingest —
+  the access path is now proven, the ingest script is not written.
+- A9's actual card design (how `weight_live` renders) is still Harshita's call, not made here.
+- A1, A5, A8, B3, B5, D1, D2, D3, E1 in the register are still open — none of them blocked
+  Monday-morning work, so left for the evening pass as Jaiveer proposed.
+
+**Next:** tell Jaiveer these four are ruled so he's unblocked; wait on his re-score for the two
+stale-field issues above.
+
 ## [2026-09-13 21:00] Second doc regression reverted; Jacksonville attribute live; D35 + D36; validator reach
 
 **Done:**
