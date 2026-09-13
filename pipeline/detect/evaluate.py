@@ -132,6 +132,7 @@ def _accumulate_decomposition(a, pred, gt, valid):
         # by 0.25 here — so which scenes we fail on is the whole explanation, and it is
         # only answerable if the pairing is recorded rather than inferred.
         a["scene_oil_frac"].append(float(gt.sum()) / float(gt.size))
+        a["scene_iu"].append((float((pred & gt).sum()), union))
 
     h, w = gt.shape
     for r0 in range(0, h - TILE + 1, TILE):
@@ -143,6 +144,26 @@ def _accumulate_decomposition(a, pred, gt, valid):
             u = float((p | g).sum())
             if u:
                 a["tile_ious"].append(float((p & g).sum()) / u)
+
+
+def bootstrap_pooled(scene_iu, n=2000, seed=0):
+    """Scene-level bootstrap CI for POOLED IoU -> (lo, hi) at 95%.
+
+    Pooled IoU weights a scene by its slick size, so a handful of scenes dominate:
+    on Part III the single largest scene is ~5% of the number and the top twelve are
+    ~38%. A point estimate quoted to three decimals is therefore overclaiming.
+    Resample SCENES (not pixels) with replacement — the scene is the unit of
+    independence here, because tiles within a scene share a slick.
+    """
+    if not scene_iu:
+        return None, None
+    rng = np.random.default_rng(seed)
+    iu = np.asarray(scene_iu, dtype=float)
+    idx = rng.integers(0, len(iu), size=(n, len(iu)))
+    inter = iu[idx, 0].sum(axis=1)
+    union = iu[idx, 1].sum(axis=1)
+    vals = np.divide(inter, union, out=np.zeros_like(inter), where=union > 0)
+    return float(np.percentile(vals, 2.5)), float(np.percentile(vals, 97.5))
 
 
 def _bands(ious, fracs):
@@ -229,6 +250,12 @@ def decompose(a):
                           "big slicks are the weak ones, pooled collapses while "
                           "macro-per-scene does not. This says whether that is what "
                           "is happening."},
+        "pooled_ci95": {
+            "value": None,
+            "ci": bootstrap_pooled(a["scene_iu"]),
+            "definition": "95% scene-level bootstrap interval on iou_oil_pooled. "
+                          "Quote the interval, not the third decimal of the point "
+                          "estimate — a few large scenes dominate the pooled number."},
         "invalid_px_fraction": {
             "value": d(a["invalid_px"], a["total_px"]),
             "definition": "share of pixels masked invalid (land/NaN) across positive "
@@ -237,7 +264,7 @@ def decompose(a):
     }
 
 
-def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None):
+def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None, jobs=None):
     """Run the U-Net over Part III, ungated and gated, in one pass over the
     scenes — decoding 450 scenes twice would be pointless I/O."""
     clf, clf_thr = nets.load_classifier()
@@ -248,7 +275,10 @@ def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None):
         print("  [skip] gated row: Layer 1 is not trained yet")
         use_gate_list = (False,)
 
-    jobs = load_part3_scenes()
+    # jobs=None means the Part III holdout. evaluate_val.py passes its own list so
+    # the validation number and the headline number cannot drift apart — the same
+    # argument that put normalisation in one file.
+    jobs = load_part3_scenes() if jobs is None else jobs
     if limit:
         jobs = jobs[:limit]
 
@@ -265,6 +295,7 @@ def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None):
                "pred_sum": 0.0, "gt_sum": 0.0,       # for Dice
                "scene_ious": [],                     # macro: one IoU per scene
                "scene_oil_frac": [],                 # paired oil fraction per scene
+               "scene_iu": [],                       # (inter, union) per scene, for the CI
                "tile_ious": [],                      # macro: one IoU per oil TILE
                "invalid_px": 0.0,
                # Pixel accuracy over ALL 450 scenes, not just positives. The authors
@@ -405,7 +436,10 @@ def main():
         print()
         for key, m in md.items():
             v = m["value"]
-            if isinstance(v, dict):
+            if m.get("ci") is not None and m["ci"][0] is not None:
+                lo, hi = m["ci"]
+                print(f"  {key:<26} [{lo:.4f}, {hi:.4f}]")
+            elif isinstance(v, dict):
                 print(f"  {key:<26}")
                 for band, s in v.items():
                     mi = "  n/a" if s["mean_iou"] is None else f"{s['mean_iou']:.4f}"
