@@ -1,0 +1,20 @@
+{
+  "depth": 7,
+  "filters": [
+    16,
+    32,
+    64,
+    128,
+    256,
+    512,
+    1024
+  ],
+  "loss": "focal(alpha=0.75, gamma=2.0)",
+  "threshold": 0.6,
+  "threshold_selected_on": "validation tiles",
+  "val_iou_at_threshold": 0.6901,
+  "val_iou_at_0.5": 0.6843,
+  "n_train_tiles": 23760,
+  "n_val_tiles": 4299,
+  "trained_on": "Zenodo Parts I+II tiles, split by scene"
+}

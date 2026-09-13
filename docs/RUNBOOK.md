@@ -1,21 +1,18 @@
-# RUNBOOK — freeze, demo day, and what to do when something breaks
+# RUNBOOK — demo prep, demo day, and what to do when something breaks
 *Everyone reads this. Judges wander and ask whoever is nearest — "that's not my part" is the worst possible answer.*
 
 ---
 
-## 1. The freeze — 12 hours before judging
+## 1. Demo prep — before judging
 
-Non-negotiable. Your own risk analysis names "someone pushes a small improvement the night before" as the most common way strong teams lose demos. An unrehearsed better demo loses to a rehearsed worse one.
+Work continues on `main` right up to the demo. The demo machine pulls the latest `main`, and every pull is followed by the checklist below. A change that has not been through it does not get shown.
 
-**At freeze (Akshat runs this):**
+**After every pull onto the demo machine:**
 ```bash
-git checkout -b demo && git push -u origin demo
+git pull && python scripts/validate_case.py cases/
 ```
-- Demo machine checks out `demo` and **never** pulls again.
-- `main` may keep moving. Nothing from `main` reaches the demo machine.
-- Exceptions: **none.** Including for Akshat.
 
-**Freeze checklist:**
+**Demo-prep checklist:**
 - [ ] All case bundles present and `validate_case.py` PASSES on each
 - [ ] App runs on the demo machine **with wifi turned off**
 - [ ] Every case loads, every layer toggles, the slider scrubs, every panel populates
@@ -25,12 +22,12 @@ git checkout -b demo && git push -u origin demo
 - [ ] Deck exported to PDF, on the machine and on a phone
 - [ ] Laptop charger, HDMI adapter, phone hotspot ready
 
-**After freeze:** two full timed rehearsals with someone playing hostile judge. Fix only what the rehearsals expose, and only if the fix is under ten minutes.
+**Rehearsals:** two full timed runs with someone playing hostile judge, on the demo machine. If a pull changes what is shown, re-run the click path and re-record the fallback video.
 
 ---
 
 ## 2. Demo machine rules
-Chosen by Tue 8 (Akshat's or Harshita's). Never present from a machine the app has not run on. Before judging: close everything else, disable notifications and auto-updates, set display to never sleep, plug in power, open the app in one browser window, no other tabs. Have a second laptop with the same repo and video as a cold spare.
+Chosen early (Akshat's or Harshita's). Never present from a machine the app has not run on. Before judging: close everything else, disable notifications and auto-updates, set display to never sleep, plug in power, open the app in one browser window, no other tabs. Have a second laptop with the same repo and video as a cold spare.
 
 ---
 
@@ -66,7 +63,7 @@ Chosen by Tue 8 (Akshat's or Harshita's). Never present from a machine the app h
 
 **"Is this precomputed?"** Yes, deliberately. The pipeline runs offline and exports a case bundle; the interface plays it back. That's why the slider is instant and why it can't break on venue wifi. Every serious demo works this way.
 
-**"How accurate is detection?"** *(Soum's real held-out number.)* Then: separating oil from look-alikes is an open research problem — the published deep-learning benchmark is around 53% IoU, and it's 53% for everyone. That's precisely why the system doesn't rest on detection alone: drift and AIS are independent evidence streams.
+**"How accurate is detection?"** *(Soum's real held-out numbers on the Zenodo Part III test set, scene-level split.)* Then the two-benchmark framing: on this dataset's own benchmark the authors report 96% IoU; we report our number on their designated held-out split. The ~53% figure people quote is the *Krestenitis* look-alike benchmark — a different, harder dataset. The gap between those numbers measures look-alike variety, not model quality. And it's precisely why the system doesn't rest on detection alone: drift and AIS are independent evidence streams.
 
 **"Why is your origin a cloud and not a point?"** Because a point would be a lie. We run 50 perturbed simulations; the spread is the honest uncertainty, and it widens the further back we look. A team showing a sharp origin point is lucky or wrong.
 
@@ -76,7 +73,7 @@ Chosen by Tue 8 (Akshat's or Harshita's). Never present from a machine the app h
 
 **"Why no ships on the Indian case?"** Free bulk historical AIS exists for US waters and not for Indian waters. That data gap is itself part of what we're pointing at. The full chain runs on our US case.
 
-**"What's next?"** Deep-learning segmentation (dataset already downloaded), the dark-vessel cross-check — radar sees a ship, AIS doesn't — behavioural anomaly scoring, and repeat-offender tracking across incidents.
+**"What's next?"** A finer regional current model to tighten the origin cloud (the uncertainty is a property of the free global current field, not our code), repeat-offender tracking at scale across incidents, polarimetric decomposition for thickness, and a live-run API. The detection U-Net, the dark-vessel cross-check and forward drift are already in this build.
 
 **"How much would this cost to run?"** Satellite data is free, currents and winds are free, AIS is free. The cost is compute per scene plus storage. *(Akshat: have a rough annual number for national coverage before the finale.)*
 
@@ -85,7 +82,7 @@ Chosen by Tue 8 (Akshat's or Harshita's). Never present from a machine the app h
 ---
 
 ## 6. What we deliberately did not build — say it as roadmap, not apology
-CNN segmentation · dark-vessel radar-vs-AIS cross-check · injected-offender evaluation curve · chronic-vs-acute discrimination · forward drift prediction · repeat-offender history · live-run API. Stating scope decisions confidently reads as engineering judgement. Discovering them under questioning reads as gaps.
+Repeat-offender tracking at scale · polarimetric decomposition · multi-pass age estimation · live-run API · auth and multi-user · offline mode (Master Plan Part 14). Stating scope decisions confidently reads as engineering judgement. Discovering them under questioning reads as gaps.
 
 ---
 

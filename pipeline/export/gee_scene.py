@@ -51,7 +51,24 @@ REPO = Path(__file__).resolve().parents[2]
 DB_MIN, DB_MAX = -25, 0          # PNG clamp only; docs/CONTRACTS.md section 3
 DEFAULT_PNG_SCALE_M = 60         # metres per pixel for the display PNG
 DEFAULT_TIF_SCALE_M = 10         # metres per pixel for the GeoTIFF — Soum's training resolution
-DOWNLOAD_URL_PIXEL_CEILING = 8_000_000   # ~ getDownloadURL practical limit for 2 float bands
+# getDownloadURL's HARD server-side limit, in bytes, quoted verbatim by the API when you
+# exceed it: "Total request size (N bytes) must be less than or equal to 50331648 bytes."
+# That is 48 MiB. We budget against it in bytes rather than pixels because float32 x 2 bands
+# is what actually makes a box too big.
+DOWNLOAD_URL_BYTE_CEILING = 50_331_648
+
+
+def _label_bands(tif_path, names):
+    """Write band names into the GeoTIFF so Soum reads 'VV'/'VH', not 'band 1'/'band 2'.
+    GEE preserves band order (select(['VV','VH'])) but not the labels."""
+    try:
+        import rasterio
+        with rasterio.open(tif_path, "r+") as ds:
+            for i, n in enumerate(names, start=1):
+                ds.set_band_description(i, n)
+                ds.update_tags(i, POLARISATION=n, UNITS="dB")
+    except Exception as e:
+        print(f"          (could not label bands: {e} — band 1 is {names[0]} regardless)")
 
 
 def main():
@@ -72,6 +89,12 @@ def main():
     ap.add_argument("--drive", action="store_true",
                     help="force the Export.image.toDrive path for the GeoTIFF (needed for a "
                          "box too large for a direct download)")
+    ap.add_argument("--direct", action="store_true",
+                    help="force the direct getDownloadURL path even when the pixel estimate "
+                         "says it is too big. The estimate counts raw float32; GEE deflates "
+                         "the response, so boxes ~3x over the ceiling often still come down "
+                         "in one request — and a direct download beats a Drive task you then "
+                         "have to move by hand. Falls back to a clear error if GEE refuses.")
     ap.add_argument("--no-geotiff", action="store_true",
                     help="refresh sar.png / thumb.png / bounds.json only, skip the GeoTIFF")
     ap.add_argument("--title", default=None)
@@ -120,9 +143,22 @@ def main():
     mid_lat = (south + north) / 2
 
     def px(scale_m):
+        """Ground-square pixel count — correct for the PNG, which is requested by explicit
+        dimensions, so we want equal metres per pixel in both directions."""
         w = int((east - west) * 111320 * math.cos(math.radians(mid_lat)) / scale_m)
         h = int((north - south) * 110540 / scale_m)
         return w, h
+
+    def px_epsg4326(scale_m):
+        """Pixel count GEE will actually produce for a GeoTIFF exported in EPSG:4326.
+
+        THIS IS NOT px(). A degree-gridded export has NO cos(lat) term — GEE converts the
+        metre scale to a degree step once (scale_m / 111320) and applies it to both axes. So
+        the real raster is 1/cos(lat) wider than the ground-square estimate: at Alaska's
+        59.5 N that is nearly double, which is exactly how a box that 'fit' came back over
+        the limit. Estimate the tif with this, never with px()."""
+        step = scale_m / 111320.0
+        return int((east - west) / step), int((north - south) / step)
 
     print(f"Scene     {a.scene}")
     print(f"Acquired  {acquired.strftime('%Y-%m-%dT%H:%M:%SZ')}")
@@ -144,7 +180,9 @@ def main():
     im = Image.open(io.BytesIO(r.content)).convert("L")
     im.save(case_dir / "sar.png")
 
-    turl = vv_disp.getThumbURL({"region": region, "dimensions": "480x480",
+    # A single dimension means "longest side" — GEE keeps the aspect ratio. Forcing "480x480"
+    # squashes a long thin slick into a square and the gallery card renders it distorted.
+    turl = vv_disp.getThumbURL({"region": region, "dimensions": "480",
                                 "format": "png", "min": 0, "max": 255})
     tr = requests.get(turl, timeout=120)
     if tr.status_code == 200:
@@ -157,10 +195,25 @@ def main():
     if not a.no_geotiff:
         tif_bands = ["VV", "VH"] if have_vh else ["VV"]
         raw = img.select(tif_bands).toFloat().clip(region)
-        tw, th = px(a.tif_scale)
-        too_big = tw * th * len(tif_bands) > DOWNLOAD_URL_PIXEL_CEILING
+        tw, th = px_epsg4326(a.tif_scale)
+        # 5 bytes per band-pixel, not 4: GEE bills the request for the float32 value PLUS a
+        # 1-byte validity mask per band. Calibrated against a refusal at 50,974,640 bytes for
+        # a 2445x2083x2 box — 4 bytes/px predicts 40.7 MB and the request was really 50.9 MB.
+        est_bytes = tw * th * len(tif_bands) * 5
+        print(f"GeoTIFF   estimate ~{tw}x{th}x{len(tif_bands)} float32 = "
+              f"{est_bytes/1e6:.0f} MB request "
+              f"(direct-download ceiling {DOWNLOAD_URL_BYTE_CEILING/1e6:.0f} MB)")
+        too_big = est_bytes > DOWNLOAD_URL_BYTE_CEILING
+        if a.direct and too_big:
+            print("          over the estimate, but --direct was given — trying anyway.")
+            too_big = False
+        if too_big and not a.drive:
+            shrink = (DOWNLOAD_URL_BYTE_CEILING / est_bytes) ** 0.5
+            print(f"          To keep 10 m instead of routing through Drive, shrink the box to "
+                  f"~{shrink*100:.0f}% of its current span (tighten the pad around the slick "
+                  f"— matching Soum's 10 m training data matters more than extra sea).")
         if a.drive or too_big:
-            reason = "forced with --drive" if a.drive else f"~{tw}x{th}x{len(tif_bands)} exceeds the direct-download ceiling"
+            reason = "forced with --drive" if a.drive else "exceeds the direct-download ceiling"
             task = ee.batch.Export.image.toDrive(
                 image=raw, description=f"{a.case}_sar_vv_vh", folder="naap_exports",
                 fileNamePrefix=f"{a.case}_sar_vv_vh", region=region,
@@ -168,11 +221,11 @@ def main():
                 fileFormat="GeoTIFF")
             task.start()
             print(f"GeoTIFF   {reason}")
-            print(f"          Export task '{a.case}_sar_vv_vh' STARTED. Now:")
-            print(f"            1. open https://code.earthengine.google.com/ -> Tasks tab")
-            print(f"            2. press RUN on '{a.case}_sar_vv_vh'  (nothing exports until you do)")
-            print(f"            3. when it finishes, download from Drive/naap_exports/ into")
-            print(f"               {case_dir / 'sar_vv_vh.tif'}")
+            print(f"          Export task '{a.case}_sar_vv_vh' SUBMITTED and now running")
+            print(f"          server-side (task.start() is the trigger — no Tasks-tab RUN needed).")
+            print(f"          Watch it:  earthengine task list   (or the Tasks tab)")
+            print(f"          When COMPLETED, move Drive/naap_exports/{a.case}_sar_vv_vh.tif to")
+            print(f"            {case_dir / 'sar_vv_vh.tif'}")
         else:
             durl = raw.getDownloadURL({"region": region, "scale": a.tif_scale,
                                        "crs": "EPSG:4326", "format": "GEO_TIFF"})
@@ -180,9 +233,12 @@ def main():
             if dr.status_code != 200:
                 raise SystemExit(f"GeoTIFF download failed ({dr.status_code}). Retry with "
                                  f"--drive.\n{dr.text[:400]}")
-            (case_dir / "sar_vv_vh.tif").write_bytes(dr.content)
-            print(f"GeoTIFF   wrote sar_vv_vh.tif ({tw}x{th}, {len(tif_bands)} band(s), "
-                  f"{len(dr.content) / 1e6:.1f} MB) @ {a.tif_scale} m/px")
+            tif_path = case_dir / "sar_vv_vh.tif"
+            tif_path.write_bytes(dr.content)
+            _label_bands(tif_path, tif_bands)
+            print(f"GeoTIFF   wrote sar_vv_vh.tif ({tw}x{th}, band 1={tif_bands[0]}"
+                  f"{', band 2=VH' if have_vh else ''}, {len(dr.content) / 1e6:.1f} MB) "
+                  f"@ {a.tif_scale} m/px")
 
     # ---- bounds.json ------------------------------------------------------------------
     (case_dir / "bounds.json").write_text(json.dumps({

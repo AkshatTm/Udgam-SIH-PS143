@@ -119,6 +119,9 @@ def main():
         "satellite": "Sentinel-1A (fake)", "scene_id": "FAKE-000",
         "detection_time": iso(T0),
         "acts_available": ["detect", "trace", "attribute"],
+        # required whenever 'attribute' is available (Master §6.1, D20). noaa_dense here so
+        # the fixture exercises the branch where gap/slowdown ARE applicable.
+        "ais_source": "noaa_dense",
         "notes": "Synthetic. Never shown to a judge. Regenerate with scripts/make_case000.py."
     }, indent=2))
 
@@ -193,6 +196,9 @@ def main():
         "centroid": [r5(oc[0]), r5(oc[1])],
         "radius_50_km": 4.2, "radius_90_km": 11.8,
         "time_window": [iso(T0 - timedelta(hours=20)), iso(T0 - timedelta(hours=8))],
+        # a search bracket, not a measured release time — the frontend renders the two
+        # differently and must never present one as the other (D12)
+        "time_window_method": "bounded",
         "ensemble_runs": 50, "abstain": False}))
 
     # ---- vessels.geojson + suspects.json

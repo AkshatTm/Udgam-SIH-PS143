@@ -46,7 +46,7 @@ Run this on every bundle, every time. It takes about ten minutes once you have d
 
 ## B2. Detect
 - [ ] Detection outlines sit **on** dark features, not beside them
-- [ ] Coordinates are in the right hemisphere — Ennore ~80°E/13°N, California ~−118°E/33°N, Georgia ~−81°E/31°N
+- [ ] Coordinates are in the right hemisphere. **The library straddles both**: Menuett −79.6°E/30.4°N · Panagia −123.9°E/37.8°N · Huntington −118.1°E/33.6°N · Alaska −142.7°E/59.6°N · Mumbai +72.2°E/18.5°N · Jamnagar +71.9°E/20.2°N
 - [ ] `area_km2` looks plausible against the drawn polygon (a 12 km² slick should not span half the scene)
 - [ ] `elongation` ≥ 1.0, `contrast_db` negative
 - [ ] `shape_class` matches what you see — a long streak should not say `blob`
@@ -58,9 +58,12 @@ These are the ones that matter most, because a wrong answer here looks completel
 - [ ] **At frame 0, particles overlap the slick polygon.** If they start somewhere else, the seeding is wrong
 - [ ] Particles move **coherently**, not as random noise
 - [ ] The cloud **widens** as you rewind — it must never narrow
-- [ ] **The origin is upstream.** Work out the expected direction *before* you look:
-  - **Ennore** — the coastal current runs south under the January north-east monsoon, so the origin must be **north-east** of the slick
-  - For each US case, ask Anushka for the expected upstream direction and check against it
+- [ ] **The origin is upstream.** Work out the expected direction *before* you look — write it down, then load, then compare:
+  - **Menuett** — Gulf Stream system, generally north-eastward. Origin should sit **south-west** of the slick
+  - **Panagia** — California Current, generally southward. Origin should sit **north**
+  - **Huntington** — Southern California Bight, weak and coastline-steered. Do not expect a clean answer
+  - **Alaska** — Alaska Current, generally westward. Origin should sit **east**. Also cross-check against the dark-vessel marker position
+  - **Mumbai and Jamnagar** — Arabian Sea, and September versus February are **different monsoon regimes**. Ask Anushka per case rather than assuming one answer covers both
   - **If the origin sits downstream, something is flipped. Reject the bundle.**
 - [ ] `r50 ≤ r90`, and both are plausible (single-digit to low-tens of km, not hundreds)
 - [ ] The time readout counts in hours, matches `t0`, and is not off by 5:30 (IST leaking in)
@@ -72,7 +75,9 @@ These are the ones that matter most, because a wrong answer here looks completel
 - [ ] Every suspect's track exists on the map
 - [ ] Closest-approach markers sit in high-probability regions, not empty water
 - [ ] Tracks look like shipping — smooth lines, no teleporting
-- [ ] `null` components render as **"n/a"**, never as a zero bar
+- [ ] `null` components render as **"n/a"**, never as a zero bar. **On the two `gfw_hourly` cases (Mumbai, Jamnagar), `gap` and `slowdown` MUST be `null`** — a zero there is an honesty bug claiming a measurement that hourly AIS cannot make
+- [ ] `ais_source` is shown on the Attribute screen, so the judge knows which sampling regime produced the result
+- [ ] If `natural_seep.flagged` is true (Mumbai), the caution panel renders **above** the suspect list, not as another card in the ranking
 - [ ] At least one exclusion, with a readable reason
 - [ ] Dark-vessel markers, if present, have nothing under them when you toggle the AIS layer off
 - [ ] **Read the top suspect's reasons out loud.** Do they make sense as a story? A fishing boat that never entered the origin ranking first is a bug, not a result
@@ -119,7 +124,7 @@ Your first diagnostic question, always. Getting this wrong wastes two people's t
 1.3 Make every optional field absent-safe. `age_hours` missing should hide a row, not throw. Fields are still arriving from three people.
 1.4 Do the dry run with Akshat on `case-000` through `build_case.py` — he has never run the pipeline, and finding the environment and path problems on the fake bundle is free.
 
-## PHASE 2 — Ennore, the first real bundle
+## PHASE 2 — Menuett, the first real bundle
 > 🚩 **WAIT for Akshat's first real bundle.**
 
 2.1 Run the full Part B protocol. Expect to reject it at least once — that is the gate working.
@@ -129,16 +134,18 @@ Your first diagnostic question, always. Getting this wrong wastes two people's t
 ## PHASE 3 — The US cases
 > 🚩 WAIT per case.
 
-3.1 **Re-run every check from scratch on the first US case.** Ennore at 80°E is identical in both longitude conventions; a 0–360 leak, a sign error or a hemisphere assumption stays invisible until California at −118°E. Nothing transfers.
-3.2 Huntington Beach specifically: expect an **infrastructure** finding and vessel **exclusions**. If a transiting vessel is ranked #1 there, that is very likely wrong — the anchor strike preceded the release by eight months. Flag it rather than shipping it.
-3.3 Golden Ray: expect the origin on the wreck. Salvage vessels should appear as exclusions, not suspects.
+3.1 **Re-run every check from scratch on each case, and especially on the first Indian one.** Four cases sit at negative longitude and two at positive. A 0–360 leak, a sign error or a hemisphere assumption can survive Menuett, Panagia, Huntington and Alaska and then surface on Mumbai. Nothing transfers between cases.
+3.2 **Huntington Beach**: expect an **infrastructure** finding and vessel **exclusions**. If a transiting vessel is ranked #1 there, that is very likely wrong — the anchor strike preceded the release by eight months. Flag it rather than shipping it.
+3.3 **Alaska**: expect a **dark-vessel** marker roughly 4.5 km from the slick, and the origin cloud should reach toward it. Toggle the AIS layer off and confirm there is genuinely nothing beneath the marker — that reveal is the single best fifteen seconds in the demo and it has to actually work.
+3.4 **Mumbai**: expect **three source types at once** — infrastructure, dark vessel, and a natural-seep flag. This is the busiest Attribute screen in the library; check that it stays readable rather than becoming a wall.
+3.5 **Mumbai and Jamnagar** are `gfw_hourly`. Confirm `gap` and `slowdown` render "n/a", not zero.
 
 ## PHASE 4 — The designed states
 > 🚩 WAIT for Soum's zero-oil case and Anushka's forced-abstain bundle. **Chase both** — you cannot build these against a state that has never existed, and both are strong demo moments.
 
 4.1 No-spill screen, against the real bundle.
 4.2 Abstain screen, against the real bundle.
-4.3 Ennore's greyed Attribute stage with its tooltip.
+4.3 The `gfw_hourly` presentation on Mumbai and Jamnagar: `gap` and `slowdown` rendering "n/a" with a tooltip, and the sampling-regime label on the Attribute screen.
 
 ## PHASE 5 — Gallery assembly
 5.1 Read `cases/index.json`; confirm ordering puts the strongest case first — a judge who clicks only one card must land on your best.
@@ -146,13 +153,13 @@ Your first diagnostic question, always. Getting this wrong wastes two people's t
 5.3 Verify badges match `case_type` and the first card is visually emphasised.
 
 ## PHASE 6 — The demo machine *(you own this)*
-6.1 Decide the machine with Akshat, then set it up: clone, install, all seven bundles, app running.
+6.1 Decide the machine with Akshat, then set it up: clone, install, all eight bundles, app running.
 6.2 **Run with wifi off.** If the basemap style is remote, vendor it locally or drop the basemap — the SAR raster is the real backdrop.
-6.3 Re-measure frame times with all seven cases loaded. You verified 60 fps at 3000 × 97 under software rendering; confirm it holds here.
+6.3 Re-measure frame times with all eight cases loaded. You verified 60 fps at 3000 × 97 under software rendering; confirm it holds here.
 6.4 Close everything else, disable notifications and auto-updates, display never sleeps, power plugged in, one browser window, no other tabs.
-6.5 Full click-path check across all seven cases.
-6.6 **Record the fallback video on this machine, before the freeze.** Full demo run, screen capture. Save locally and on a phone. This is the thing that always gets skipped and it is the only thing that saves you if the laptop dies.
-6.7 At freeze: check out `demo`, never pull again.
+6.5 Full click-path check across all eight cases.
+6.6 **Record the fallback video on this machine.** Full demo run, screen capture. Save locally and on a phone. Re-record it whenever the build shown changes. This is the thing that always gets skipped and it is the only thing that saves you if the laptop dies.
+6.7 Before each pull onto the demo machine: `validate_case.py cases/` PASSES, and the click path is re-run after pulling.
 
 ## PHASE 7 — Demo day
 7.1 **You drive the laptop** so Akshat can face the judges and gesture at the screen.
@@ -191,12 +198,12 @@ Your first diagnostic question, always. Getting this wrong wastes two people's t
 
 **F5. Definition of done**
 - [ ] QA checklist exists as a physical page; debug overlay built and hidden
-- [ ] Every one of the seven bundles has an explicit `QA PASS` from you
+- [ ] Every one of the eight bundles has an explicit `QA PASS` from you
 - [ ] Every reject logged with symptom, file, field, and resolution
 - [ ] Visual constants re-tuned against real data
 - [ ] No-spill, abstain and disabled-act states built against real bundles
 - [ ] Gallery ordered, thumbnails and badges verified
 - [ ] Demo machine set up, verified **with wifi off**, frame times re-measured
-- [ ] Click path run across all seven cases on the demo machine
-- [ ] Fallback video recorded before the freeze
-- [ ] `demo` branch checked out at freeze and never pulled again
+- [ ] Click path run across all eight cases on the demo machine
+- [ ] Fallback video recorded of the build being demoed
+- [ ] Click path re-run on the demo machine after its last pull

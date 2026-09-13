@@ -1,0 +1,16 @@
+{
+  "case_id": "case-000-d3",
+  "title": "SYNTHETIC — act-unavailable fixture",
+  "short_location": "Synthetic reference scene",
+  "case_type": "spill",
+  "satellite": "Sentinel-1A (fake)",
+  "scene_id": "FAKE-D3",
+  "detection_time": "2017-01-29T00:14:00Z",
+  "acts_available": ["detect", "trace", "verify"],
+  "gallery": {
+    "thumbnail": "thumb.png",
+    "blurb": "The oil is found and traced — but no AIS exists for these waters. What does the app do when a whole stage is missing?",
+    "difficulty": "medium"
+  },
+  "notes": "SYNTHETIC frontend fixture for the D3 act-unavailable state (docs/04 Part D, D3). NOT listed in cases/index.json and never shown to a judge. Mirrors the Ennore attribution gap: 'attribute' is absent from acts_available while 'trace' is present, so the Attribute stage must render greyed with a why-tooltip and the app must skip it in the flow (Trace primary action -> 'See what really happened' -> Verify). One oil detection is present so D1 (no-spill) never triggers; origin.abstain is false so D2 never triggers. Assets (bounds/sar/detections/particles/origin/verification) copied from case-000. The real D3 case is Ennore (Master Plan Part 3), which is also missing 'detect' (decision D16) and is blocked on upstream bundle files."
+}

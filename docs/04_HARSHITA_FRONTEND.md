@@ -87,7 +87,7 @@ Below: a grid of case cards. Each card carries:
 - The `gallery.blurb`, written as a **question** — *"588 barrels reached Orange County beaches. What released it?"* A question invites a click; a description does not.
 - A difficulty chip
 
-**The first card is visually emphasised** — slightly larger, or a soft "Start here" marker. A judge with no instructions needs one obvious entry point. Make it Ennore or Huntington Beach, whichever demos best.
+**The first card is visually emphasised** — slightly larger, or a soft "Start here" marker. A judge with no instructions needs one obvious entry point. Make it **Menuett** — it is the hero and the only case where the whole chain completes with gap evidence.
 
 **Ordering:** strongest case first, then the other spills, then look-alike and no-spill last. A judge who only clicks one card must land on your best one.
 
@@ -300,7 +300,7 @@ Still show the funnel counts, and the abstain reason. Refusing is a maturity sig
 **D3. Act unavailable.** `acts_available` missing an act. Grey the rail item, tooltip explaining **why**:
 > *"No free historical AIS is published for Indian waters — that data gap is part of what this project points at."*
 
-Ennore hits this. It must never crash and it must never look like a bug.
+No case in the current library disables an act outright — all six spill cases carry `attribute`. But **Mumbai and Jamnagar are `gfw_hourly`**, so individual scoring *components* come back `null` and must render "n/a" with a tooltip, and the case-level tooltip explains that free dense AIS is not published for Indian waters. It must never crash and it must never look like a bug.
 
 **D4. Loading.** Bundles run to megabytes. Show a skeleton with the case title and a progress hint, never a white screen. Show the map and SAR as soon as they're available and layer the rest in progressively.
 
@@ -348,22 +348,37 @@ Ennore hits this. It must never crash and it must never look like a bug.
 5.2 **Union camera framing** — extend `lib/extent.ts` to `bounds.json ∪ particle extent ∪ origin.bounds`. The real cloud sits ~98% outside the SAR scene and particles leave the top of frame around frame 45 of 97. Use a **per-stage camera** so Detect can frame the scene tightly while Trace fits the union — otherwise Detect loses 40% of its scale to make Trace possible.
 5.3 New fields: `ship_detections` as a map layer, `discharge_class` as a badge on the object card, `age_hours` + `age_method` on the origin card.
 
+5.4 **Two more fields, both new and both honesty-critical.**
+
+**`natural_seep`** — a block on `suspects.json`, **not a ranked suspect**. When `flagged` is true, render a distinct caution panel *above* the suspect list:
+> ⚠ **Documented natural seepage in this area.** Some or all of this feature may be geological rather than a discharge.
+
+It is a caveat on the entire finding, so it must not look like one more card in the ranking. **Mumbai** is the case that carries it.
+
+**`meta.ais_source`** — `noaa_dense` or `gfw_hourly`. On a `gfw_hourly` case, Jaiveer's `gap` and `slowdown` come back **`null` by design**, because one AIS position per vessel per hour cannot resolve a 30-minute silence. Render those as **"n/a"** with a tooltip explaining why, and put the sampling regime on the Attribute screen as a small label — *"AIS: hourly sampling (Global Fishing Watch)"* versus *"AIS: 71-second sampling (NOAA)"*.
+
+**A zero bar where a `null` belongs is an honesty bug, not a display bug** — it claims a measurement that was never possible. Mumbai and Jamnagar are the two cases this affects.
+
 ## PHASE 6 — Self-guiding pass
 Part C, C1 through C8. Then C9 — test on a stranger, watch, fix.
 
 ## PHASE 7 — Real data
 > 🚩 **WAIT for Akshat's first real bundle.**
 
-7.1 Load Ennore. Directional sanity: slick low and slightly west, particles fanning up and right, cloud north-east and above the top of the image. **If the origin ever renders south-west of the slick, something is flipped.**
+7.1 Load the first real bundle — **Menuett**, the hero. Directional sanity: the Gulf Stream system flows generally north-eastward there, so the origin cloud should sit **south-west** of the slick. **If the origin ever renders downstream of the slick, something is flipped — that is a data bug, reject it rather than adjusting the camera around it.**
 7.2 **Re-tune every visual constant.** All were fitted to a round in-frame blob; on a 4.4:1 streak sitting mostly off-screen, particle radius, opacity ramps, colour domain and zoom limits are all wrong at once. Your own report names this as the highest-probability failure and it is a schedule problem, not a code problem — start the hour the first bundle lands.
-7.3 Then each US case. **Watch negative longitude** — everything worked at 80°E; California is −118°.
+7.3 Then each remaining case, and **watch the hemisphere crossing.** Four are negative longitude — Menuett −79.6, Panagia −123.9, Huntington −118.1, Alaska −142.7 — and two are positive: Mumbai +72.2, Jamnagar +71.9. A convention leak that survives four Atlantic and Pacific cases will surface the moment you load Mumbai, which is the worst possible time to find it.
+
+**Alaska at 59.6 N** is the highest latitude in the library. Any `cos(lat)` term that was negligible at 30 N matters there — a degree of longitude is about half as wide. Check the 50% and 90% radius circles specifically; they are the thing that will look subtly wrong rather than obviously broken.
+
+**Alaska is also the dark-vessel reveal.** The marker sits ~4.5 km from the slick, and toggling the AIS layer off to show nothing beneath it is the single best fifteen seconds in the demo. Make that interaction obvious and make it work.
 7.4 Build D1 and D2 against the real bundles when they arrive.
 
 ## PHASE 8 — Demo machine and offline
 8.1 Run on the actual demo laptop. Re-measure frame times with all seven cases loaded.
 8.2 **Run with wifi off.** If the basemap style is remote, vendor it locally or drop the basemap.
 8.3 Fix the bundle re-download on case switch-back — with seven cases it will bite.
-8.4 Record the fallback video, on the demo machine, **before** the freeze.
+8.4 Record the fallback video on the demo machine, and re-record it whenever the build shown changes.
 
 ## PHASE 9 — Integration alongside Akshat
 He drives the pipeline side of each case; you drive the frontend side. When a bundle looks wrong on screen, you diagnose whether it is a render bug or a data bug and route it to the right owner. **Never patch data in the frontend** — surface the error, name the file, tell Akshat. A frontend workaround hides the bug until demo day and then it is someone else's.
@@ -390,7 +405,7 @@ He drives the pipeline side of each case; you drive the frontend side. When a bu
 
 # PART G — REFERENCE
 
-**G1. Stack, fixed.** Next.js · MapLibre GL JS (no token) · deck.gl `ScatterplotLayer` + `BitmapLayer` · Tailwind · Recharts · Zustand. **No localStorage or sessionStorage** — all state in memory. No new dependencies after the freeze.
+**G1. Stack, fixed.** Next.js · MapLibre GL JS (no token) · deck.gl `ScatterplotLayer` + `BitmapLayer` · Tailwind · Recharts · Zustand. **No localStorage or sessionStorage** — all state in memory. A new dependency is pinned and announced to the group.
 
 **G2. Performance rules.** Parse each bundle once; consider `Float32Array` for particle positions. Slider state feeds the deck layer only, never re-renders the map container. `updateTriggers` on data change. No per-frame allocation. Escape hatches if it ever stutters: decimate to every 2nd timestep, or 2000 particles — both invisible to a viewer, and **neither changes the schema**.
 
@@ -409,4 +424,4 @@ He drives the pipeline side of each case; you drive the frontend side. When a bu
 - [ ] Self-guiding pass complete, including idle reset — and tested on a stranger
 - [ ] All seven cases load and switch without re-download
 - [ ] Verified on the demo laptop **with wifi off**
-- [ ] Fallback video recorded before the freeze
+- [ ] Fallback video recorded of the build being demoed

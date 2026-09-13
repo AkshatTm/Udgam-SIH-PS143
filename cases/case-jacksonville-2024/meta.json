@@ -1,0 +1,19 @@
+{
+  "case_id": "case-jacksonville-2024",
+  "title": "Atlantic transit — 170 km off Jacksonville",
+  "short_location": "US Atlantic EEZ, off Jacksonville, Florida",
+  "case_type": "spill",
+  "satellite": "Sentinel-1A",
+  "scene_id": "S1A_IW_GRDH_1SDV_20240730T232129_20240730T232154_054997_06B32C_7973",
+  "detection_time": "2024-07-30T23:21:29Z",
+  "acts_available": [
+    "detect"
+  ],
+  "ais_source": "noaa_dense",
+  "gallery": {
+    "thumbnail": "thumb.png",
+    "blurb": "A 31-kilometre ribbon of oil in open ocean, 170 kilometres from the nearest coast. Who was here?",
+    "difficulty": "hard"
+  },
+  "notes": "HERO CASE. Target acts: detect, trace, attribute, verify — added as each stage lands. Open ocean, US Atlantic EEZ, scene acquired 2024-07-30 23:21:29Z. Export box -79.6782 30.2139 -79.5914 30.5541 (slick bbox padded 0.03 deg), 100% inside the scene footprint, dB clamp [-32, -19] from the box's own VV percentiles. The pad is 0.03 and not more because at 10 m across two float32 bands a wider box exceeds GEE's 48 MiB direct-download ceiling, and 10 m matters more than extra sea (D14). cerulean_slick.geojson is SkyTruth Cerulean's reference polygon for the same feature (slick 3046293, 31.17 km, 4.55 km2, model confidence 0.795) — a comparison target for Stage 1, NOT ground truth and NOT a NAAP detection. AIS RISK CLOSED (2026-09-12): NOAA pulled for 30-31 Jul and filtered 40-260 km offshore — reporting interval at this position is 69 s and holds out to 240 km, no thinning. Hero confirmed. That check also corrected the distance: ~170 km offshore, not ~100 km. NOT A GAP CASE (D30): inside Cerulean's own -8h/+6h window the documented vessel broadcast 714 times covering 14.0 of 14 hours, longest silence 130 s. The gap argument belongs to case-gulf-alaska-2023. PRE-REGISTERED BEFORE SCORING (D30): the gap component gives full marks to a competing vessel 7.4 km out at 12.5 kn, silent 142 min, and zero to the documented one — so this case may return partial or miss, and that ships. BLINDNESS (D31): this case is OPEN, because verifying AIS density required identifying the vessel. Usable for diagnostics; no weight or threshold may be set on it."
+}

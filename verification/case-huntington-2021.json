@@ -1,0 +1,29 @@
+{
+  "_status": "SCAFFOLD — official_finding is researched and citable. naap_result and assessment.explanation are TODO for Phase 4 (Akshat, by hand, after the stages run). Do not add 'verify' to meta.acts_available until assessment.explanation is real human prose.",
+
+  "official_finding": {
+    "summary": "The NTSB determined the probable cause of the San Pedro Bay Pipeline rupture was the proximity of established anchorage positions to the pipeline: on 25 January 2021 a strong cold front drove the containerships MSC DANIT and Beijing to drag anchor, and their anchors struck, displaced (~105 ft) and damaged the pipeline. Undetected, fatigue cracks grew until the pipeline leaked ~9 months later, on 1 October 2021. The volume released was worsened by Beta Offshore's insufficient controller training and failure to shut in the line promptly.",
+    "responsible_parties": [
+      {"name": "MSC DANIT", "mmsi": null, "imo": "9404649", "role": "anchor strike NTSB names as the initiating event"},
+      {"name": "Beijing", "mmsi": null, "imo": null, "role": "second containership that dragged anchor and contacted the pipeline in the same 25 Jan 2021 storm"},
+      {"name": "Amplify Energy Corp. / Beta Offshore", "mmsi": null, "imo": null, "role": "pipeline operator; delayed shutdown increased the volume released"}
+    ],
+    "source_name": "NTSB Marine Investigation Report MIR-24-01, 'Anchor Strike of Underwater Pipeline and Eventual Crude Oil Release'",
+    "source_url": "https://www.ntsb.gov/investigations/AccidentReports/Reports/MIR2401.pdf",
+    "source_type": "official_investigation",
+    "volume_reported": "588 barrels (~24,700 gallons)",
+    "caveat": "The anchor strikes preceded the oil release by ~8-9 months. No vessel was transiting or the proximate source at detection time (2 Oct 2021). The source at detection time is fixed infrastructure — the pipeline itself. Exact rupture coordinate to be pinned from MIR-24-01 / the USCG ROI; widely reported as ~4.5 nm offshore Huntington Beach in San Pedro Bay (~33.66 N, 118.11 W)."
+  },
+
+  "naap_result": {
+    "origin_summary": "TODO Phase 4 — fill from cases/case-huntington-2021/origin.json after Anushka's stage runs.",
+    "top_suspects": [],
+    "abstained": false
+  },
+
+  "assessment": {
+    "verdict": "partial",
+    "explanation": "TODO — HUMAN PROSE, Phase 4. Do not generate. Expected: 'hit' if Jaiveer's infrastructure module lands the origin on the pipeline right-of-way and excludes every transiting vessel (which is what the NTSB concluded); 'partial' if the infrastructure association is not implemented and the system can only say 'no vessel scored above threshold'.",
+    "what_would_have_helped": "TODO Phase 4."
+  }
+}

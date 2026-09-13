@@ -1,0 +1,19 @@
+{
+  "case_id": "case-nospill-zenodo",
+  "title": "Clean ocean — no spill",
+  "short_location": "Gulf of İskenderun, eastern Mediterranean",
+  "case_type": "nospill",
+  "provenance": "benchmark",
+  "satellite": "Sentinel-1",
+  "scene_id": "P3_No oil_00091",
+  "detection_time": "1970-01-01T00:00:00Z",
+  "acts_available": [
+    "detect"
+  ],
+  "gallery": {
+    "thumbnail": "thumb.png",
+    "blurb": "No oil — but not empty water. Does the system tell traffic from a spill?",
+    "difficulty": "easy"
+  },
+  "notes": "Zenodo Part III clean-ocean scene (DOI 10.5281/zenodo.13761290, CC-BY — the attribution is mandatory and must appear on a slide). LOCATION IS REAL: the tile carries EPSG:4326 and a real geotransform, so bounds.json holds its true box (W 36.5090 S 35.1392 E 36.6930 N 35.3232) and nothing about its placement on the map is invented. TIME IS NOT KNOWN: the TIFF carries no acquisition timestamp (the only tag is AREA_OR_POINT), so detection_time is a deliberate 1970 epoch sentinel — there is no real value to recover and none is implied. Say both halves out loud: we show you where, we do not know when, we do not guess. provenance is 'benchmark', so the CNN scene classifier scored this scene and its confidence is a model probability, not a rule margin (Master §6.3). Rejected at P(oil) 0.0003, threshold 0.143. Expected Stage 1 output: a FeatureCollection with zero features classified 'oil' — that is the correct result, not a failure. Bundle built by Soum and PASSES the validator (13 Sept); held out of cases/index.json pending the presentation-order decision. RADAR CONTACTS: the ship detector finds 31 contacts after land masking, clustered around 35.24-35.27 N — plausibly the İskenderun anchorage. They are UNATTRIBUTED radar contacts, not dark vessels: darkness needs an AIS cross-check at a known time, and this scene has no acquisition time (Master §6.3, D34). 'No spill' here means no oil, not empty water."
+}

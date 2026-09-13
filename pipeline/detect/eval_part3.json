@@ -1,0 +1,57 @@
+{
+  "split": "Zenodo Part III holdout, scene-level",
+  "gate_threshold": 0.14271368086338043,
+  "rows": [
+    {
+      "model": "Classical (v2_vh)",
+      "scene_accuracy": null,
+      "oil_recall": 0.05,
+      "lookalike_rejection": null,
+      "precision": 0.286,
+      "f1": 0.085,
+      "scene_recall": "4/36",
+      "iou_positives": null,
+      "iou_all": null,
+      "note": "row-level precision/recall/F1 on detected regions"
+    },
+    {
+      "model": "Classifier only",
+      "scene_accuracy": 0.9511,
+      "oil_recall": 0.9267,
+      "lookalike_rejection": 0.94,
+      "cleanocean_rejection": 0.9867,
+      "precision": null,
+      "f1": null,
+      "scene_recall": null,
+      "iou_positives": null,
+      "iou_all": null,
+      "note": "Layer 1 alone"
+    },
+    {
+      "model": "U-Net only (no gate)",
+      "scene_accuracy": null,
+      "oil_recall": 0.9667,
+      "lookalike_rejection": 0.46,
+      "cleanocean_rejection": 0.8267,
+      "precision": null,
+      "f1": null,
+      "scene_recall": "145/150",
+      "iou_positives": 0.4485,
+      "iou_all": 0.4041,
+      "note": "binarisation threshold 0.5"
+    },
+    {
+      "model": "Classifier + U-Net",
+      "scene_accuracy": null,
+      "oil_recall": 0.92,
+      "lookalike_rejection": 0.94,
+      "cleanocean_rejection": 0.9867,
+      "precision": null,
+      "f1": null,
+      "scene_recall": "138/150",
+      "iou_positives": 0.4349,
+      "iou_all": 0.4265,
+      "note": "binarisation threshold 0.5"
+    }
+  ]
+}

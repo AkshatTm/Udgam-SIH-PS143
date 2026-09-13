@@ -1,0 +1,11 @@
+{
+  "west": 36.50903,
+  "south": 35.13922,
+  "east": 36.693,
+  "north": 35.32319,
+  "width_px": 2048,
+  "height_px": 2048,
+  "db_min": -27.7,
+  "db_max": -14.1,
+  "vh_available": true
+}

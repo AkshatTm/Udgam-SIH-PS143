@@ -22,7 +22,7 @@ Zenodo Part III only (`data/zenodo_p3/`, gitignored, ~9.9 GB): 150 oil + 150 loo
 opencv-python, scikit-image, scikit-learn, rasterio, shapely, numpy. No GPU needed anywhere in this directory.
 
 ## Check before handover
-Plot `detections.geojson` over `sar.png` — polygons must sit on the dark patches, coordinates ~80.x E / 13.x N for Ennore. Then `python scripts/validate_case.py cases/<id>`.
+Plot `detections.geojson` over `sar.png` — polygons must sit on the dark patches, and the coordinates must match that case's `bounds.json` box. Then `python scripts/validate_case.py cases/<id>`.
 ```
 
 ---
@@ -104,7 +104,8 @@ Owns the entire judge-facing app. Full brief: `docs/04_HARSHITA_FRONTEND.md`.
 - **NEVER use localStorage or sessionStorage.** State lives in memory (Zustand).
 - **The frontend never calls Python.** It fetches static JSON from `cases/<id>/`. If a field is missing or malformed, show a visible error and tell Akshat — do not patch data client-side.
 - Stack is fixed: Next.js + MapLibre GL JS (no token) + deck.gl (ScatterplotLayer for particles, **BitmapLayer** for the origin grid — never HeatmapLayer, ruling D11: it renormalises per viewport so the answer changes as a judge zooms) + Tailwind + Recharts + Zustand. Decide Next vs Vite on day one and never switch.
-- `meta.acts_available` drives the stage rail. A missing act is a greyed stage with a tooltip, not a crash. Ennore has no `attribute`.
+- `meta.acts_available` drives the stage rail. A missing act is a greyed stage with a tooltip, not a crash. Every case currently ships `["detect"]` only and gains acts as stages land.
+- `meta.ais_source` is `noaa_dense | gfw_hourly`. On `gfw_hourly` cases the `gap` and `slowdown` bars are `null` and render "n/a", never a zero bar (D20).
 - Zero oil features in `detections.geojson` is the **no-spill case** — a designed state with a banner, not an error.
 
 ## Performance (the demo lives or dies here)

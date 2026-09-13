@@ -15,21 +15,35 @@ The JSON contracts. `case-000`. `validate_case.py`. `make_case000.py`. The repo 
 
 ## A2. What you have not done
 
-Exported a single real SAR scene. Picked any US case. Written any `verification.json`. Merged anything — **`main` still carries 2 commits while four branches hold the entire project.**
+Exported a single real SAR scene. Written any `verification.json`. Merged anything — **`main` still carries 2 commits while four branches hold the entire project.**
 
-## A3. What's now resolved
+You *have* now done the case selection, and it took an entire evening of honest searching that produced more than the cases themselves. See A3.
 
-**Ennore scene confirmed.** Four Sentinel-1 passes exist over the search box between 28 Jan and 15 Feb 2017, all `IW` mode, all `["VV","VH","angle"]`. The frame grid does not align to the lat/lon box, so two of the four are slivers. The usable one:
+## A3. What's now resolved — the case library is locked
 
-```
-S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04
-2017-01-29 00:31:32 UTC  =  06:01 IST, the morning after the collision
-Full coverage of Ennore / Chennai · VV + VH
-```
+**Six spill cases, all real data, no synthetic case.** Full details in Master §3.2. Summarised:
 
-Two of those four are adjacent frames of the same orbit pass, 25 s apart — same flyover, different frames. `..._6D04` is the one with full coverage; `..._7843` catches only a sliver.
+| # | Case | Scene status | What it gives you |
+|---|---|---|---|
+| 1 | **Menuett** — 30 Jul 2024, Atlantic | id truncated, **pull full id** | Hero. Gap detection on dense AIS. ⚠️ offshore AIS unverified |
+| 2 | **Panagia Thalass…** — 17 Mar 2023, Pacific | id truncated, **pull full id** | Second basin, and hero backup |
+| 3 | **Huntington Beach** — 2 Oct 2021 | `S1A_…_20211002T015821…_2BF9` confirmed, slick clear | Infrastructure + NTSB ground truth |
+| 4 | **Alaska dark vessel** — 16 May 2023 | id truncated, **pull full id** | Real radar-vs-AIS cross-check |
+| 5 | **Mumbai** — 3 Sep 2023 | id truncated, **pull full id** | All four source classes at once |
+| 6 | **Jamnagar** — 23 Feb 2024 | `S1A_IW_GRDH_1SDV_20240223T011114_20240223T011139_052679_065FA4_546D` confirmed | The undocumented Indian discharge |
+| 7 | **Look-alike** — Ennore 30 Nov 2023 | confirmed from the Arabian Sea sweep | Correct rejection |
+| 8 | **No-spill** — Zenodo Part 3 | Soum nominates | Correct rejection |
 
-**Still to do on Ennore:** zoom in and confirm a dark feature is actually visible on the water. A scene with no visible slick is not a hero case regardless of what the metadata says. Fallback is `..._49A5` (10 Feb).
+**Golden Ray is dropped (D17).** No SAR-visible slick, and Huntington makes the infrastructure point better because it has a federal investigation behind it.
+
+**Ennore 2017 is archived, not deleted (D18).** A published paper reports detecting this exact spill in Sentinel-1A, **visible in VV, using SLC data**. Our GRD probe found nothing. You cannot ship a "no SAR-visible slick" claim that contradicts the literature without reading the paper first. This is yours to close and it is not urgent — the library is complete without it.
+
+**The rule that came out of it, and it is worth more than the case:**
+> Before claiming any negative result about a documented incident, check whether someone has already published a positive one.
+
+You caught that yourself, by reading around the case rather than by testing code. A judge asking *"where's the paper that says the opposite?"* would have been a much worse moment.
+
+**What the search produced beyond the cases.** Five measured Indian-waters detection failures across two incidents — wind, revisit, timing, cloud, and a plume that probed as sediment rather than oil. Master §10 has the numbers. **That is a demo asset**, not wasted time: five failure modes with five different specific causes is the argument for why backward reconstruction exists, stated as evidence rather than assertion.
 
 ## A4. The backlog your team is waiting on
 
@@ -47,6 +61,10 @@ Two of those four are adjacent frames of the same orbit pass, 25 s apart — sam
 | A10 | Tug/tow display labels on suspect cards | Jaiveer | ruling |
 | A11 | `suspects.json` schema extension (source types, components, dark vessels, infrastructure) | Jaiveer | approve |
 | A12 | Confirm **2-band VV+VH GeoTIFF** exports, not PNG-only | Soum | commitment |
+| A13 | Approve `natural_seep` as a fourth `source_type` (D19) | — | ruling, already made |
+| A14 | Approve `ais_source` on `meta.json` (D20) | — | ruling, already made |
+| A15 | Tell Jaiveer to **verify NOAA density at Menuett** before anything else | Jaiveer | one message, **blocking** |
+| A16 | Tell the team the sealed answers file exists and you hold it (D21, Part H) | everyone | one message |
 
 ## A5. Problems I see that nobody raised
 
@@ -78,6 +96,12 @@ Broadcast all of these in one message. Each is blocking someone.
 
 **B7 — 2-band GeoTIFF, committed.** Per A5.
 
+**B8 — `natural_seep` is a fourth source type.** Cerulean flags the Mumbai case as sitting in a known natural seep area. Without a fourth class the system cannot say *"some of this may be geological"*, and that is both a real operational distinction and a credibility asset. It touches Jaiveer's `suspects.json` schema and Harshita's rendering.
+
+**B9 — `ais_source` is required whenever `attribute` is available.** `noaa_dense` or `gfw_hourly`. GFW is one position per vessel per hour against NOAA's ~71 seconds, so on a GFW case `gap` is structurally impossible and `slowdown` is very coarse. Those components return `null`, not zero. Jaiveer already has applicability-gating machinery for port traffic; this is the same pattern with a different trigger.
+
+**B10 — Blind evaluation.** You hold `docs/ANSWERS.md`; nobody else sees it. Tell the team it exists and who holds it, so they understand why *"is this right?"* goes unanswered during the week. Full reasoning in Part H.
+
 ---
 
 # PART C — THE PHASES
@@ -92,40 +116,46 @@ Broadcast all of these in one message. Each is blocking someone.
 
 ---
 
-## PHASE 1 — Case selection *(blocks literally everyone)*
+## PHASE 1 — Case onboarding *(replaces the old case-selection phase; blocks everyone)*
 
-### 1.1 Confirm Ennore
-Zoom to the tight box `[80.20, 13.10, 80.45, 13.35]` on scene `..._6D04`, VV stretched `{min:-22, max:-3}` and VH `{min:-28, max:-12}`. Look for a **dark streak or patch on the water**, ideally visible in both. Use the Inspector to read raw dB on the water — a real slick reads several dB below the surrounding sea.
+The cases are chosen. What remains is turning six Cerulean records and two scene ids into something your team can run against. **This is the residual Phase 1–3 work and it is the bottleneck right now** — three people have been building against fixtures for days.
 
-If nothing is visible: widen the VV stretch to `{min:-25,max:0}` first, then fall back to `..._49A5`. If neither shows anything, Ennore becomes a detect-only case with an honest note, and Huntington Beach becomes the hero. **That is survivable now — Ennore is 1 of 7, not 1 of 1.**
+### 1.1 Pull the full Sentinel-1 scene ids
+Cerulean truncates them in its detail panel (`S1A_IW_GRDH_1SDV_2024073…`). There is a **copy button** beside each. Get the full id for cases 1, 2, 4 and 5. Jamnagar and Huntington are already complete.
 
-### 1.2 Lock Huntington Beach
-Slick detected 1–3 Oct 2021, San Pedro Bay / Orange County. Search box roughly `[-118.3, 33.5, -117.8, 33.8]`. Source: **NTSB Marine Investigation Report MIR-24-01**, which determined MSC Danit's anchor contact with the San Pedro Bay Pipeline on 25 January 2021 was the initiating event leading to the October release.
+Without the full id the GEE export cannot select the scene, so this blocks Phase 2 entirely.
 
-**This is our exoneration-and-infrastructure case.** Expect the origin to land on the pipeline right-of-way, and expect every transiting vessel to be excluded. With Jaiveer's infrastructure module that is a **hit**, not a miss.
+### 1.2 Download the Cerulean record for every case
+Use the **download button** in the slick-details panel. Each record carries the slick polygon, the detection timestamp, the scene id, and the attributed source.
 
-### 1.3 Lock Golden Ray
-Significant discharge during salvage, ~31 Jul – 2 Aug 2021, St Simons Sound, Georgia. SkyTruth published satellite imagery showing plumes as far as 15 km from the site. Fixed wreck source. Search box roughly `[-81.5, 31.0, -81.2, 31.3]`.
+Two uses, and the second is the one people miss:
+- It is the source material for `verification.json` (Phase 4)
+- **The polygon is ground truth for Soum's segmentation on a real incident.** Right now every IoU number he has comes from the Zenodo test set. With these he can say *"on the Huntington Beach scene our segmentation achieves X IoU against SkyTruth Cerulean's operational detection of the same slick"* — a completely different and much stronger claim than benchmark-only figures. **Give him the polygons, not the answers** — see Part H.
 
-### 1.4 Find cases 4 and 5
-Transiting-vessel discharges in US waters. Primary source: **SkyTruth Cerulean's public map** (`cerulean.skytruth.org`) filtered to US waters — it is a searchable database of already-attributed slick/vessel pairs. Want a clean linear slick, a named vessel, and a date inside Oct 2014 – Sep 2024.
+### 1.3 Confirm VH availability per case
+Run `img.bandNames()` on each selected scene. Every case must come back `["VV","VH","angle"]`. If any is VV-only, **tell Soum immediately and name the case** — he has a VV-only fallback but he needs to know which, and the results slide notes the degradation honestly.
 
-**Two caveats to carry into `verification.json`:** Cerulean is another algorithm's output, not court-proven ground truth — write it as *"SkyTruth Cerulean attributed this slick to vessel X"*, never *"vessel X was proven responsible"*. And Cerulean is prior art; see Master §7 for how we answer that on stage.
+### 1.4 Set `ais_source` per case
+`noaa_dense` for cases 1–4 (US EEZ, NOAA Marine Cadastre). `gfw_hourly` for cases 5 and 6 (Indian EEZ, Global Fishing Watch). This field is **required** whenever `attribute` is in `acts_available`, and it decides which of Jaiveer's scoring components can fire at all (D20).
 
-Fallbacks if Cerulean does not yield two: NOAA Incident News archive, USCG investigation reports.
+### 1.5 Global Fishing Watch — register and check coverage
+Free API, **non-commercial use only**, and registration asks for a short description of your intended impact. Register early rather than at 2am.
 
-**This is the natural first research task for Urooz.**
+**A correction to carry:** the GFW report in circulation claims the AIS Vessel Presence dataset returns MMSI, name, IMO and positions. **It does not.** GFW's own documentation says it *"shows vessel presence patterns and movement corridors, but does not provide individual vessel positions"* — it is a gridded layer served through the 4Wings tile API. For tracks you want the **Vessels API** and the **Events API**; the latter includes **AIS-disabling events**, which is Jaiveer's gap analysis already productised and computed on GFW's full-resolution underlying data, so gap analysis may still be reachable *through that endpoint* even though it is impossible from the hourly presence layer. There is also a **SAR vessel detections** endpoint that flags non-broadcasting vessels — use it to *validate* Soum's ship detector, never to replace it, because building it ourselves is the differentiator.
 
-### 1.5 Cases 6 and 7
-Ask Soum for one convincing look-alike scene and one clean-ocean scene from Zenodo Part 3. He has 300 to choose from and he knows which fool the detector.
+Confirm Arabian Sea coverage for 2023-09-03 and 2024-02-23 at usable resolution. If it fails, cases 5 and 6 drop to `detect + trace` and the Indian story becomes *"the query reduces to one database lookup, and the database does not exist"* — which is still a strong screen. See Part I.
 
-### 1.6 The four checks, every case
-US waters (except Ennore) · date in Oct 2014 – **Sep 2024** (HYCOM's GEE archive ends 2024-09-05) · Sentinel-1 coverage confirmed by running the finder script · a **citable** official finding.
+### 1.6 The no-spill scene
+Ask Soum for one clean-ocean scene from Zenodo Part 3. **The look-alike case is already settled** — the Ennore 30 Nov 2023 scene is better than anything from Zenodo, because it is the same coast and sensor as a real spill with dark patches that provably cannot be oil.
 
-### 1.7 Announce each as it lands
-> 🚩 **Do not batch this.** Every case unblocks three people. Message the group per case with: scene id, UTC timestamp, bounds, polarisations. Jaiveer needs the date to download AIS; Anushka needs it to fetch the ocean; Soum needs the export.
+### 1.7 Write `cases/index.json` and the `meta.json` stubs
+Presentation order is 1 → 8 per Master §3. Each `meta.json` gets `case_id`, `title`, `short_location`, `case_type`, `scene_id`, `detection_time`, `acts_available`, `ais_source`, and the `gallery` block with a blurb written as a question.
 
----
+### 1.8 Announce each case as it lands
+> 🚩 **Do not batch this.** Every case unblocks three people on different tasks. Message the group per case with: scene id, UTC timestamp, bounding box, `ais_source`, and which acts apply. Jaiveer needs the date to download AIS, Anushka needs it to fetch the ocean, Soum needs the export.
+
+**One message that goes out first, before any case:** Jaiveer verifies NOAA AIS density at Menuett's position (30.384 N −79.634 W, ~100 km offshore). It is your hero case and NOAA leans on terrestrial receivers. If it comes back with a handful of positions rather than hundreds of vessels, **Panagia becomes hero and the presentation order reshuffles.** That is the only open item that could still force a replan.
+
 
 ## PHASE 2 — The export pipeline
 
@@ -154,6 +184,8 @@ Run `img.bandNames()` on every selected scene. If any US case comes back VV-only
 
 ### 2.5 Deliver case by case
 > 🚩 Soum's real-scene inference is blocked per case on 2.5. Anushka's field fetch is blocked on `meta.detection_time` being real.
+
+**Deliver in library order** — Menuett first, since it is the hero and the one the deck is built around. Then Panagia, Huntington, Alaska, Mumbai, Jamnagar, and the two rejection cases last (they are detect-only and cheap once the exporter works).
 
 ---
 
@@ -184,7 +216,11 @@ Build a bundle from `case-000` end to end through `build_case.py`, then load it 
 For each case with `verify`, research and write `verification.json` by hand.
 
 ### 4.1 Go to the primary source
-For Huntington Beach that is NTSB MIR-24-01 itself, not a news summary. For Golden Ray, USCG/Unified Command releases plus SkyTruth's published imagery. For Cerulean-sourced cases, the Cerulean record plus whatever press exists.
+For Huntington Beach that is **NTSB MIR-24-01 itself**, not a news summary — it is the only case in the library with a federal investigation behind it, and it is a document a judge can go and read.
+
+For Menuett, Panagia, Alaska and Mumbai the source is the **Cerulean record you downloaded in Phase 1.2**, plus any press that exists. Write it as *"SkyTruth Cerulean attributed this slick to vessel X"*, **never** *"vessel X was proven responsible"* — it is another algorithm's output with analyst review, not a court finding, and the distinction is one a judge may well probe.
+
+For **Jamnagar there is no source at all**, and that absence is the finding. `official_finding` records it explicitly rather than being left empty: no investigation, no named vessel, no published record, because India has no capability to produce one.
 
 ### 4.2 Fill `official_finding`
 Summary, responsible parties with IMO where you have it, source name and URL, source type, volume, and — importantly — `caveat`. Huntington Beach's caveat carries the whole case: **the anchor strike preceded the release by eight months, so no vessel was the proximate source at detection time.**
@@ -195,10 +231,12 @@ After the stages have run. Not from memory, not from an earlier draft, not from 
 ### 4.4 Write `assessment` honestly
 `verdict` ∈ `hit | partial | miss | not_applicable`. **The `explanation` is human prose. Never generate it.**
 
-Expected verdicts:
-- **Huntington Beach** — `hit` if the infrastructure module lands (origin on the pipeline, all vessels excluded, which is what NTSB concluded); `partial` without it
-- **Golden Ray** — `hit` if the origin lands on the wreck. Watch for salvage vessels appearing as suspects; they should be excluded as responders, and saying so explicitly is a good detail
-- **Cases 4 and 5** — genuinely unknown until they run. **A `miss` ships.** A team that shows a miss with an explanation of *why* reads as engineering; a team that shows only hits reads as marketing.
+Expected verdicts, written now so you notice if reality diverges:
+- **Menuett and Panagia** — genuinely unknown until they run. This is the point of the blind evaluation (Part H). **A `miss` ships**, and a team that shows one with an explanation of *why* reads as engineering; a team that shows only hits reads as marketing.
+- **Huntington Beach** — `hit` if the infrastructure module lands: origin on the pipeline right-of-way, every transiting vessel excluded, which is what the NTSB concluded. `partial` without it. **Naming a transiting vessel here would be wrong** — the anchor strike preceded the release by eight months, so no vessel was the proximate source at detection time. That caveat carries the whole case.
+- **Alaska** — `hit` if the origin cloud lands on or near the radar contact 4.5 km away. **State the asymmetry plainly:** a vessel dark to Cerulean's *commercial* AIS is a strong claim; a vessel absent from our *free NOAA* archive might be a coverage hole. Two independent absences is evidence; one is not.
+- **Mumbai** — expect a multi-source finding. The honest assessment may well be *"infrastructure and a dark vessel are both plausible, and the area has documented natural seepage."* That is a real analytical outcome, not a fudge, and it is the best possible demonstration of why source classification runs before attribution.
+- **Jamnagar** — `not_applicable`. There is no official finding because nobody investigated. The `official_finding` block records that absence explicitly rather than being left empty, and `what_would_have_helped` says: published Indian coastal AIS.
 
 ### 4.5 `docs/receipts.md`
 Every GEE scene id and UTC timestamp · every NOAA AIS filename · **Zenodo DOI 10.5281/zenodo.13761290, CC-BY — mandatory attribution, must appear on a slide** · every verification source URL · the Trujillo-Acatitla paper citation · SkyTruth Cerulean where used.
@@ -223,7 +261,7 @@ The loop, per case:
 
 **Step 6 is the part that was missing from the old plan.** The validator proves a bundle is *schema-valid*. It says nothing about whether it is *renderable* or *sensible*. Only Harshita can tell, because only she sees it. See Part D and her document.
 
-### 5.1 Ennore first, all the way to the browser
+### 5.1 Menuett first, all the way to the browser
 Expected bug classes, in the order they usually appear:
 1. Coordinate swaps — the validator names them
 2. `meta.detection_time` vs `particles.t0` mismatch — validator catches >60 s
@@ -231,11 +269,15 @@ Expected bug classes, in the order they usually appear:
 4. Origin cloud on land — check the centroid against a coastline
 5. Origin cloud rendering off-screen — expected, and it is Harshita's union-camera fix, not a data bug
 
-### 5.2 Then Huntington Beach — and re-run every check from scratch
-**Ennore at 80°E is identical in both longitude conventions.** A 0–360 leak, a sign error, or a hemisphere assumption stays invisible until California at −118°E. Do not assume anything transfers. This is the single most likely place for a new bug after everything already works.
+### 5.2 Then Panagia, Huntington and Alaska — and re-run every check from scratch each time
+Menuett at −79.6°E, Panagia at −123.9°E, Alaska at −142.7°E, Mumbai at +72.2°E, Jamnagar at +71.9°E. **The library straddles both hemispheres**, which is good for robustness and dangerous for assumptions. A 0–360 longitude leak or a sign error that survives four Atlantic cases will surface the moment you cross into the Indian Ocean. Do not assume anything transfers between cases.
 
-### 5.3 Then Golden Ray, cases 4 and 5, then 6 and 7
-Cases 6 and 7 are cheap once the exporter works — detect-only, and the correct output is zero oil features.
+Alaska at 59.5°N is also the highest latitude in the library. `cos(lat)` corrections that were negligible at 30°N matter there — a degree of longitude is about half as wide.
+
+### 5.3 Then Mumbai and Jamnagar, then the two rejection cases
+Mumbai and Jamnagar are `gfw_hourly`, so Jaiveer's `gap` and `slowdown` components should come back `null` rather than zero. **Check that in the bundle** — a zero where a `null` belongs is an honesty bug, not a display bug.
+
+Cases 7 and 8 are cheap once the exporter works — detect-only, and the correct output is zero oil features.
 
 ### 5.4 Log every seam event
 `docs/updates/_INTEGRATION.md`: what you received, what the validator said, what broke, who fixed it, what state the bundle ended in. When four people's numbers change under you, this is the only record of why.
@@ -264,15 +306,16 @@ Never pretend CleanSeaNet or Cerulean don't exist. Master §7 has the three resp
 
 ---
 
-## PHASE 7 — Freeze and demo day
+## PHASE 7 — Demo prep and demo day
 
-### 7.1 Freeze, twelve hours before 15 Sept 17:00
+### 7.1 The demo machine runs the latest validated `main`
+Work continues on `main` up to the demo. Before anything reaches the demo machine:
 ```bash
-git checkout -b demo && git push -u origin demo
+git pull && python scripts/validate_case.py cases/
 ```
-Demo machine runs `demo` and never pulls again. `main` may keep moving. **No exceptions, including for you** — your own runbook names the night-before improvement as the most common way strong teams lose demos.
+A pull that changes what is shown means re-running 7.2 on that machine.
 
-### 7.2 Freeze checklist
+### 7.2 Demo-prep checklist
 - [ ] All seven bundles present, `validate_case.py` PASS on each
 - [ ] App runs on the demo machine **with wifi off**
 - [ ] Every case loads, every layer toggles, the slider scrubs, every panel populates
@@ -286,6 +329,47 @@ Demo machine runs `demo` and never pulls again. `main` may keep moving. **No exc
 
 ### 7.4 Demo-day roles
 **You** drive the narrative and the hostile questions. **Harshita** drives the laptop so you can face the judges. **Soum, Anushka, Jaiveer** each answer on their own stage — one sentence, then hand back. One person talks at a time.
+
+---
+
+# PART H — BLIND EVALUATION *(yours to enforce)*
+
+Every case has a documented outcome — a Cerulean attribution, an NTSB finding, a dark-vessel id. **All of it lives in `docs/ANSWERS.md`, which you hold and nobody else sees.** Not in the repo, not in the group, not on a slide until Phase 4.
+
+**Why this matters more than it sounds.** If Jaiveer knows Menuett is the answer while tuning weights, he will tune until Menuett ranks first. If Soum knows where the slick is, he will lower the threshold until it appears. If Anushka knows the origin, she will read a wrong cloud as close enough. **None of that is dishonesty** — it is what anyone does when the target is visible. But it collapses "our system identified the vessel" into "we tuned it until it did", and a December panel will ask which happened.
+
+**What you hand over, and what you hold back:**
+
+| Person | Gets | Never gets |
+|---|---|---|
+| Soum | `sar_vv_vh.tif`, `sar.png`, `bounds.json`. Cerulean's slick polygon **only after** his detector has produced its own, so the IoU comparison is honest | Where the slick is, before he finds it |
+| Anushka | Case list with `detection_time` and bounds; Soum's detections when they land | The documented origin or release time |
+| Jaiveer | Case list with dates, bounding boxes and `ais_source`; real `origin.json` when it lands | **Vessel names, MMSIs, IMOs.** His box at `2 × radius_90_km` contains the culprit and plenty of decoys anyway |
+| Harshita | Bundles as produced | The answers |
+
+**Tell everyone the file exists and that you hold it.** Hiding its existence would be worse — it explains why you are not answering *"is this right?"* during the week, and it turns the verification screen into a genuine reveal rather than a restatement. Including when it is wrong.
+
+**And hold the line.** No hints, no nudges, no raised eyebrows when someone's number looks off. The moment a bundle validates, you open the file and the comparison is real.
+
+---
+
+# PART I — THE INDIAN CASES
+
+Cases 5 and 6 are different in kind from 1–4 and the difference is the point.
+
+**They are `gfw_hourly`.** One position per vessel per hour against NOAA's ~71 seconds. `gap` cannot fire; `slowdown` is coarse; proximity precision drops to tens of km. Those are `null`, and the screen says "n/a".
+
+**The story that makes it land:**
+> *"Attribution quality is bounded by AIS sampling density, not by our method. In US waters at 71-second sampling we resolve to a single vessel with a transponder gap as evidence. In Indian waters at hourly sampling we resolve to a small candidate set and cannot assess gaps at all. Same pipeline, same physics — different data."*
+
+That is a policy conclusion drawn from your own measurements, and it is exactly the register NTRO works in.
+
+**If GFW coverage fails entirely**, the Indian cases run `detect + trace` and the screen becomes stronger rather than weaker. A chronic slick has vessel-track geometry, so the backward reconstruction yields a **line segment**, not a point — which gives you the vessel's course, an implied speed from slick length over the age band, and a projected outbound track from the head:
+> *"A vessel was here, on this heading, at roughly this speed, discharging over this window. Here is its outbound track. Any AIS record covering this box and this window would resolve it to a specific ship in seconds."*
+
+You have reduced an unsolved discharge to a single database query, and then shown that the query cannot be run. The gap stops being something you assert and becomes something the judge watches you hit.
+
+**Anonymise the top suspect on screen** for both Indian cases. Mask the MMSI, label it "Vessel A", keep the full data one click away. Naming a real vessel as a polluter with no investigation behind it is a real exposure, and you lose nothing — *leads, not verdicts* was already the line.
 
 ---
 
@@ -355,12 +439,16 @@ A short sync between the two of you every time a bundle changes state. Not a mee
 
 # PART F — RISKS
 
-**F1. Case selection slips.** Everything is downstream. Announce per case, never batched.
+**F1. Menuett's AIS coverage is unverified.** It is the hero, at ~100 km offshore where NOAA's terrestrial receivers thin. **This is the only open item that could still force a replan.** Jaiveer checks it first; Panagia is the fallback hero and Alaska moves up.
+
+**F1b. Case onboarding slips.** The cases are chosen but the scene ids are truncated and nothing is exported. Three people are still on fixtures. Announce per case, never batched.
 **F2. You take on component work.** Your value is slack. If Ennore fails, if an export is wrong, if a seam breaks — you are the person with room. Guard it.
 **F3. Negative longitude.** Everything works at 80°E and breaks at −118°. Phase 5.2.
 **F4. `verification.json` gets deprioritised.** It is the strongest new idea and it is invisible until the last screen. Do it in Phase 4, not at the end.
+
+**F4b. The blind evaluation quietly erodes.** Under pressure someone asks "is this right?" and you answer. Then the claim is gone and you cannot get it back. Hold it.
 **F5. Numbers change under you.** A re-verified scene changes the ocean, which changes the origin, which changes the suspects, which changes the deck. Log every change in `_INTEGRATION.md` and re-check the slides.
-**F6. Freeze slips.** An unrehearsed better demo loses to a rehearsed worse one.
+**F6. An unvalidated change reaches the demo machine.** Every pull onto it is followed by the validator and the click path (Phase 7.1).
 
 ---
 
@@ -375,17 +463,24 @@ python pipeline/export/build_case.py --case <id>
 ```
 
 **G2. Confirmed constants**
-- Ennore scene: `S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04`, 2017-01-29 00:31:32 UTC, VV+VH, IW
+- Jamnagar scene: `S1A_IW_GRDH_1SDV_20240223T011114_20240223T011139_052679_065FA4_546D`, 2024-02-23 01:11:14 UTC, DESCENDING, rel. orbit 107, VV+VH, IW
+- Jamnagar slick, measured: inside VV −25.41 / VH −47.36 dB; clean water VV −17.24 / VH −33.12 — ~8 dB VV depression
+- Huntington scene: `S1A_…_20211002T015821…_2BF9`, 2021-10-02 01:58:21 UTC; sea median −20.9 dB VV, slick core −28 to −32 dB
+- Archived: Ennore 2017 scene `S1A_IW_GRDH_1SDV_20170129T003132_20170129T003157_015039_01892E_6D04` (D18)
 - HYCOM GEE archive ends **2024-09-05** — every case must predate it
 - HYCOM velocity: scale 0.001, **divide by 1000**
 - `duration = (n_steps − 1) × timestep_minutes`; 97 steps × 15 min = 24 h exactly
 
 **G3. Definition of done**
 - [ ] `main` carries all four branches; `TRAPS.md` fixed; all Part B rulings broadcast
-- [ ] Seven cases selected, verified, and announced individually
+- [ ] Menuett's NOAA AIS density verified, hero confirmed or reassigned
+- [ ] Full scene ids pulled for cases 1, 2, 4, 5; Cerulean records downloaded for all
+- [ ] `ais_source` set on every case with `attribute`; GFW registered and Arabian Sea coverage checked
+- [ ] Eight bundles selected, verified, and announced individually
+- [ ] `docs/ANSWERS.md` created and held; the team told it exists
 - [ ] 2-band GeoTIFF + PNG + bounds + thumb exported for every case
 - [ ] Validator hardened; `build_case.py` assembling and checking
 - [ ] `verification.json` written by hand for every case that has one
 - [ ] `receipts.md` complete, including the CC-BY attribution
 - [ ] All seven bundles validated **and** signed off by Harshita in the browser
-- [ ] Deck done, two rehearsals, freeze executed, fallback video exists
+- [ ] Deck done, two rehearsals, demo-prep checklist run, fallback video exists

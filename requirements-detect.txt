@@ -1,0 +1,29 @@
+# Naap — Stage 1 deep-learning extras. Soum only. NOT part of requirements.txt.
+#
+#   pip install -r requirements-detect.txt --index-url https://download.pytorch.org/whl/cu124
+#
+# WHY THIS IS A SEPARATE FILE, and not three lines appended to requirements.txt:
+#
+#   1. --index-url is not per-package. Putting it in requirements.txt repoints EVERY dependency
+#      in that file at the PyTorch mirror, for all six laptops. The mirror does not carry
+#      earthengine-api, duckdb or geopandas, so a clean install would simply fail. There is no
+#      way to scope it to one line; pip has no such syntax. (--extra-index-url does scope, but
+#      it also lets pip silently prefer a same-named package from either index, which is worse.)
+#
+#   2. torch+cu124 is ~2.5 GB. Five people who never run the detector should not download it to
+#      get numpy. requirements.txt stays the thing everyone installs and it stays small.
+#
+# Root CLAUDE.md: a new dependency is pinned with its justification next to it and announced to
+# the group. This file is that justification; pinned 13 Sept — Akshat.
+#
+# Verified by Soum on an RTX 4050, Python 3.13.5, CUDA 12.4 build. The repo standard is Python
+# 3.11 (requirements.txt) and both packages publish cp311 wheels, so the venv everyone else has
+# will take these. If 3.11 resolves to something other than 2.6.0/0.21.0, STOP and say so in the
+# group rather than letting two laptops train against different versions.
+#
+# CPU-ONLY MACHINES: same two lines from plain PyPI, no --index-url needed. Only TRAINING wants
+# the GPU. Inference on the shipped scene_classifier.pt runs on CPU, which is what the demo does
+# — nothing on stage on 15 Sept requires CUDA.
+
+torch==2.6.0
+torchvision==0.21.0

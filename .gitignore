@@ -19,6 +19,9 @@ __pycache__/
 # Big raw formats — nothing over ~20 MB belongs in this repo
 *.tif
 *.tiff
+# ...except the case bundle's 2-band SAR GeoTIFF: Stage 1 reads it from cases/<id>/ and the
+# no-imports architecture needs it to travel with the repo (~8-10 MB/case at 10 m, tight box).
+!cases/*/sar_vv_vh.tif
 *.7z
 *.zip
 *.npz
@@ -27,6 +30,22 @@ __pycache__/
 
 # Intermediate stage outputs — regenerable, the bundle in cases/ is the artefact
 pipeline/*/out/
+
+# Trained weights. GitHub hard-rejects any blob over 100 MB and models/ is 534 MB:
+# classifier_vv_only.pkl is 204 MB and unet.pt / unet_baseline.pt are 121 MB each. We ship
+# CODE, not weights — the training scripts and the eval JSONs are the reproducible artefact,
+# and a 300-tree unbounded RandomForest is cheaper to retrain than to store. No LFS: the quota
+# is shared, the objects outlive the repo, and nothing in the demo loads these files.
+# NOTE (Soum, 13 Sept): these patterns must be **/models/*, not models/*. A gitignore pattern
+# containing a slash is anchored to the directory holding the .gitignore, so "models/*" matches
+# only a top-level models/ — which does not exist. The real path is pipeline/detect/models/, so
+# the 534 MB stayed fully stageable and the push would have been rejected by GitHub.
+**/models/*
+!**/models/.gitkeep
+# ...except the small ones the demo actually needs, and every metric file, which is evidence
+# and must be in the repo whether or not the weights are (CLAUDE.md: "internals are binding").
+!**/models/*.json
+!**/models/scene_classifier.pt
 
 # Throwaway end-to-end smoke / dry-run bundles (scripts/make_case000.py --scene-only)
 cases/case-smoke/
@@ -44,6 +63,14 @@ web/public/maplibre/
 *.pem
 .earthengine/
 credentials.json
+
+# Per-teammate handoff briefs — shared by hand (WhatsApp), never pushed
+HANDOFF_*.md
+
+# THE SEALED ANSWERS (Master Plan D21 / Part 16). Akshat holds this; nobody else sees it, and
+# it must never reach a branch. docs/ANSWERS.README.md IS committed, so the team knows the
+# file exists and who has it — hiding its existence would be worse than holding it.
+docs/ANSWERS.md
 
 # OS noise
 .DS_Store

@@ -1,0 +1,28 @@
+{
+  "_status": "SCAFFOLD — known-source case (D16), no SAR-visible slick. official_finding is drafted from widely-reported facts but AKSHAT must (1) replace source_url with a real primary/press citation, (2) confirm the final official oil-volume figure and its revision history, (3) pin the collision coordinate. naap_result and assessment.explanation are Phase-4 TODO (human prose, after the trace stage runs). Do NOT rely on this file's numbers until Akshat has checked them against a source. verification.json deliberately will not validate until assessment.explanation is real prose.",
+
+  "official_finding": {
+    "summary": "Before dawn on 28 January 2017, the outbound oil tanker MT Dawn Kanchipuram and the inbound LPG tanker MT BW Maple collided in the approach channel off Kamarajar (Ennore) Port, north of Chennai. Bunker/fuel oil released from Dawn Kanchipuram drifted south and heavily oiled Chennai's northern shoreline (Ernavur, Thiruvottiyur) and later the Marina. The initial official spill estimate was very low (order of 1 tonne) and was revised upward repeatedly over the following days; independent assessments put the release at a substantially larger figure. INCOIS issued oil-spill drift forecasts to the Indian Coast Guard during the response.",
+    "responsible_parties": [
+      {"name": "MT Dawn Kanchipuram", "mmsi": null, "imo": "TODO — Akshat to add IMO", "role": "outbound oil tanker; source of the released bunker/fuel oil"},
+      {"name": "MT BW Maple", "mmsi": null, "imo": "TODO — Akshat to add IMO", "role": "inbound LPG tanker; the other vessel in the collision"}
+    ],
+    "source_name": "TODO — Akshat: DG Shipping / MoEF&CC enquiry report, or Indian Coast Guard / INCOIS OSDAG bulletin, or a contemporaneous press account of record",
+    "source_url": "TODO — must be a real, non-empty URL before this case ships; the validator enforces it",
+    "source_type": "press_account",
+    "volume_reported": "TODO — Akshat to confirm the final official figure and note the upward revisions from the initial ~1 tonne estimate",
+    "caveat": "There is no SAR-visible slick in the 29 Jan 2017 Sentinel-1 dawn pass — sheltered water, low wind. This is a known-source case: the origin is the documented collision position in the Kamarajar Port approach channel, not a NAAP detection. There is no attribution act because Indian coastal AIS is not publicly available in bulk — so NAAP cannot independently place either vessel, and we say so."
+  },
+
+  "naap_result": {
+    "origin_summary": "TODO Phase 4 — fill from cases/case-ennore-2017/origin.json after the trace stage runs (seeded from meta.known_origin). Report where the backward-drift origin cloud lands relative to the collision position and, if possible, how the release window compares with the INCOIS forecast.",
+    "top_suspects": [],
+    "abstained": false
+  },
+
+  "assessment": {
+    "verdict": "not_applicable",
+    "explanation": "TODO — HUMAN PROSE, Phase 4. Do not generate. This is India-relevance and a trace/verify demonstration: NAAP was given a documented collision origin and asked to reconstruct where and when the oil entered the water; there is no vessel shortlist to be right or wrong about because there is no public AIS. State honestly that SAR did not image the slick and the origin here is a known source. If the backward-drift origin window is consistent with the reported collision time, say so as a physics sanity-check, not as an attribution result.",
+    "what_would_have_helped": "TODO Phase 4 — e.g. public Indian coastal AIS (would enable an attribution act), or an optical scene closer to the event, or the INCOIS forecast fields for a direct backward-vs-forward comparison."
+  }
+}

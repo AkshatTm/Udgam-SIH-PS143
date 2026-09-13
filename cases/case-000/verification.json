@@ -1,0 +1,28 @@
+{
+  "_status": "SYNTHETIC FIXTURE - hand-written by Harshita for the P1.1 Verify screen. case-000 is the FAKE contract-reference bundle and is not in cases/index.json. Every value below is invented to exercise the Verify UI against the frozen section 6.8 contract. Nothing here is a real finding and nothing should be cited.",
+
+  "official_finding": {
+    "summary": "Synthetic reference finding. A hypothetical investigation attributes the fixture slick to a mid-channel transfer between a coastal tanker and a shore terminal; this text exists only to render the Verify screen and describes no real event.",
+    "responsible_parties": [
+      {"name": "MV Example Carrier", "mmsi": "000000001", "imo": "0000001", "role": "synthetic: the vessel NAAP's origin cloud points at"},
+      {"name": "Example Bay Terminal", "mmsi": null, "imo": null, "role": "synthetic: a shore-side operator NAAP has no way to see"}
+    ],
+    "source_name": "Synthetic reference document (no real source)",
+    "source_url": "https://example.gov/reference",
+    "source_type": "synthetic_reference",
+    "volume_reported": "0 barrels (synthetic)",
+    "caveat": "This is the case-000 contract fixture. The slick, the origin, the vessels and this finding are all invented to drive the Verify screen end to end."
+  },
+
+  "naap_result": {
+    "origin_summary": "Synthetic: the fixture origin cloud sits on the fixture slick, roughly 1 km from the invented transfer point.",
+    "top_suspects": ["000000001"],
+    "abstained": false
+  },
+
+  "assessment": {
+    "verdict": "partial",
+    "explanation": "Synthetic fixture prose (never generated for a real case). NAAP localised the fixture origin to about the right area and named the one synthetic vessel its cloud overlapped; the invented official finding also names a shore-side operator that NAAP, working from SAR and AIS alone, has no way to identify. This paragraph exists solely to render the Verify screen against the frozen contract.",
+    "what_would_have_helped": "Synthetic: a real case bundle with a real official finding."
+  }
+}

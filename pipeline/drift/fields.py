@@ -223,14 +223,54 @@ def make_fake(kind="analytic", lon0=80.35, lat0=13.25, **kw):
 
 
 def load_case_field(case_id, repo_root=None, **kw):
-    """The real field for a case. Phase 2 onward, this is what run.py should reach for."""
+    """The real field for a case. Phase 2 onward, this is what run.py should reach for.
+
+    The cache is checked AGAINST THE BUNDLE before it is trusted. A file called
+    `case-gulf-2019.npz` is not evidence that it holds the Gulf in 2019 -- the name is
+    whatever was typed on the command line. So we re-derive the box and time from
+    `cases/<id>/meta.json` + `bounds.json` and refuse a cache that disagrees.
+
+    This catches the two ways a wrong ocean reaches the integrator: a cache fetched under a
+    case that did not exist yet, and a stale cache left behind after the scene, the bounds or
+    the detection time changed. Both produce a completely plausible origin cloud.
+    """
+    import json
+    from datetime import datetime, timezone
     from pathlib import Path
+
     root = Path(repo_root) if repo_root else Path(__file__).resolve().parents[2]
     path = root / "data" / "fields" / f"{case_id}.npz"
     if not path.exists():
         raise SystemExit(f"no cached field at {path}\n"
                          f"run: python pipeline/drift/fetch_fields.py --case {case_id}")
-    return GriddedField(path, **kw)
+    field = GriddedField(path, **kw)
+
+    case_dir = root / "cases" / case_id
+    meta_path, bounds_path = case_dir / "meta.json", case_dir / "bounds.json"
+    if meta_path.exists():
+        z = np.load(path, allow_pickle=False)
+        meta = json.loads(meta_path.read_text())
+        t0 = datetime.fromisoformat(meta["detection_time"].replace("Z", "+00:00"))
+        cached_t0 = datetime.fromtimestamp(int(z["t0_epoch"]), tz=timezone.utc)
+        if abs((cached_t0 - t0).total_seconds()) > 60:
+            raise SystemExit(
+                f"{path} was fetched for {cached_t0:%Y-%m-%dT%H:%MZ} but {case_id}'s "
+                f"detection_time is {t0:%Y-%m-%dT%H:%MZ}.\n"
+                f"  This cache is a different ocean than the case needs. Refetch:\n"
+                f"  python pipeline/drift/fetch_fields.py --case {case_id} --force")
+        if bounds_path.exists():
+            b = json.loads(bounds_path.read_text())
+            bb = z["bbox"]
+            # the cache must COVER the scene; a wider download is fine, a shifted one is not
+            if (bb[0] > b["west"] + 1e-6 or bb[1] > b["south"] + 1e-6
+                    or bb[2] < b["east"] - 1e-6 or bb[3] < b["north"] - 1e-6):
+                raise SystemExit(
+                    f"{path} covers [W {bb[0]}, S {bb[1]}, E {bb[2]}, N {bb[3]}] which does "
+                    f"not contain {case_id}'s scene "
+                    f"[W {b['west']}, S {b['south']}, E {b['east']}, N {b['north']}].\n"
+                    f"  This cache belongs to a different place. Refetch:\n"
+                    f"  python pipeline/drift/fetch_fields.py --case {case_id} --force")
+    return field
 
 
 def speed(u, v):

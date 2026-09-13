@@ -114,6 +114,33 @@ input[type="range"]:disabled::-webkit-slider-runnable-track {
   background: rgba(255, 255, 255, 0.06);
 }
 
+/* Resting pulse — a slow breathing halo on the thumb while the Trace rewind sits stopped
+   at T−24h, hinting the slider is interactive. Applied via .slider-resting from TimeSlider. */
+@keyframes thumb-resting-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(249, 115, 22, 0.08);
+  }
+}
+input[type="range"].slider-resting:not(:disabled)::-webkit-slider-thumb {
+  animation: thumb-resting-pulse 2.4s ease-in-out infinite;
+}
+input[type="range"].slider-resting:not(:disabled)::-moz-range-thumb {
+  animation: thumb-resting-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  input[type="range"].slider-resting:not(:disabled)::-webkit-slider-thumb {
+    animation: none;
+  }
+  input[type="range"].slider-resting:not(:disabled)::-moz-range-thumb {
+    animation: none;
+  }
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

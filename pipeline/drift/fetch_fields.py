@@ -36,7 +36,8 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 from check_gee import (CURRENTS, CURRENT_BANDS, WINDS, WIND_BANDS, LOOKBACK_HOURS,
-                       DEFAULT_PROJECT, load_case_window)
+                       DEFAULT_PROJECT, load_case_window, required_pad_km,
+                       pad_degrees, DEFAULT_VMAX_MS)
 
 # Native resolutions. HYCOM is 1/12 deg (~9 km); ERA5 is 0.25 deg (~28 km). Asking for finer
 # than native just makes GEE resample and the download bigger for no extra information.
@@ -45,14 +46,28 @@ SCALE_WINDS_M = 27750
 
 MAX_PLAUSIBLE_SPEED_MS = 3.0
 
+# HYCOM's GEE archive boundary. A forward window can walk off the end of it even
+# when the scene itself is comfortably inside (Master 3.1, risk F6).
+HYCOM_ARCHIVE_END = datetime(2024, 9, 5, tzinfo=timezone.utc)
 
-def pull(ee, coll_id, bands, bbox, t0, hours, scale, label, divide_by=1.0):
-    """One collection -> (lons, lats, times_utc, a, b) with a/b shaped [time, lat, lon]."""
+
+def pull(ee, coll_id, bands, bbox, t0, hours, scale, label, divide_by=1.0,
+         forward_hours=0.0):
+    """One collection -> (lons, lats, times_utc, a, b) with a/b shaped [time, lat, lon].
+
+    `forward_hours` extends the window PAST t0. Phase 2 needs it: forward drift from the slick
+    runs into the future, and a field that stops at t0 does not refuse -- GriddedField clamps
+    its time index at the edge, so every step past t0 re-uses the last snapshot. A 24 h forward
+    run through one frozen snapshot is a steady-state extrapolation wearing a forecast's
+    clothes, and nothing about the output says so. Measured on case-000: current and wind are
+    bit-identical at t0, t0+6h, t0+12h and t0+24h.
+    """
     region = ee.Geometry.Rectangle(bbox)
     start = t0 - timedelta(hours=hours)
+    end = t0 + timedelta(hours=float(forward_hours))
     coll = (ee.ImageCollection(coll_id)
             .filterBounds(region)
-            .filterDate(start.strftime("%Y-%m-%dT%H:%M:%S"), t0.strftime("%Y-%m-%dT%H:%M:%S"))
+            .filterDate(start.strftime("%Y-%m-%dT%H:%M:%S"), end.strftime("%Y-%m-%dT%H:%M:%S"))
             .select(bands))
 
     print(f"  {label}: requesting {coll_id} at {scale} m ...", flush=True)
@@ -119,6 +134,18 @@ def main():
     ap.add_argument("--hours", type=int, default=LOOKBACK_HOURS)
     ap.add_argument("--out", default=None, help="default data/fields/<case>.npz")
     ap.add_argument("--force", action="store_true", help="refetch even if the cache exists")
+    ap.add_argument("--rewind-hours", type=float, default=24.0,
+                    help="how far back run.py will rewind; the pad is sized from this")
+    ap.add_argument("--vmax-ms", type=float, default=DEFAULT_VMAX_MS,
+                    help="worst-case surface current for the pad. Use 2.0 for the Gulf Stream "
+                         "(case-jacksonville-2024) and anywhere else fast (Phase 3.1)")
+    ap.add_argument("--pad-km", type=float, default=None,
+                    help="override the computed pad entirely, in km")
+    ap.add_argument("--forward-hours", type=float, default=24.0,
+                    help="extend the time window PAST detection_time, for Phase 2 forward "
+                         "drift. 0 fetches only the past, which makes any forward run a "
+                         "frozen-snapshot extrapolation. HYCOM's archive ends 2024-09-05, so "
+                         "check the case date plus this window stays inside it.")
     a = ap.parse_args()
 
     out = Path(a.out) if a.out else REPO / "data" / "fields" / f"{a.case}.npz"
@@ -127,21 +154,42 @@ def main():
         return 0
     out.parent.mkdir(parents=True, exist_ok=True)
 
+    # Resolve the case BEFORE touching Earth Engine. A typo'd or not-yet-created case should
+    # fail in a second, not after an auth round trip -- and it must never get far enough to
+    # write a cache under a name it does not belong to.
+    bbox, t0, origin = load_case_window(a.case, REPO / "cases",
+                                        rewind_hours=a.rewind_hours,
+                                        vmax_ms=a.vmax_ms, pad_km=a.pad_km)
+    pad_km_used = a.pad_km if a.pad_km else required_pad_km(a.rewind_hours, a.vmax_ms)
+
     import ee
     ee.Initialize(project=a.project)
-
-    bbox, t0, origin = load_case_window(a.case, REPO / "cases")
     print("=" * 78)
     print(f"  case    {a.case}  ({origin})")
-    print(f"  region  [W {bbox[0]}, S {bbox[1]}, E {bbox[2]}, N {bbox[3]}]")
-    print(f"  window  {(t0 - timedelta(hours=a.hours)):%Y-%m-%dT%H:%MZ}  ->  {t0:%Y-%m-%dT%H:%MZ}")
+    print(f"  region  [W {bbox[0]:.3f}, S {bbox[1]:.3f}, E {bbox[2]:.3f}, N {bbox[3]:.3f}]")
+    _dlon, _dlat = pad_degrees(pad_km_used, bbox[1], bbox[3])
+    print(f"  pad     {pad_km_used:.0f} km  =  {_dlon:.3f} deg lon x {_dlat:.3f} deg lat "
+          f"(converted at the poleward edge, {max(abs(bbox[1]), abs(bbox[3])):.1f} deg)")
+    print(f"          sized for {a.rewind_hours:.0f} h of rewind at up to {a.vmax_ms:.1f} m/s")
+    win_end = t0 + timedelta(hours=a.forward_hours)
+    print(f"  window  {(t0 - timedelta(hours=a.hours)):%Y-%m-%dT%H:%MZ}  ->  "
+          f"{win_end:%Y-%m-%dT%H:%MZ}")
+    print(f"          {a.hours:.0f} h before t0 (backward rewind) + "
+          f"{a.forward_hours:.0f} h after (Phase 2 forward drift)")
+    if win_end > HYCOM_ARCHIVE_END:
+        raise SystemExit(
+            f"the forward window reaches {win_end:%Y-%m-%d}, past HYCOM's GEE archive end "
+            f"{HYCOM_ARCHIVE_END:%Y-%m-%d}.\n"
+            f"  Reduce --forward-hours, or accept no forward drift on this case and say so.")
     print("=" * 78)
 
     # HYCOM arrives as int * 0.001 m/s. This division is the only place it happens.
     clon, clat, ctime, cu, cv = pull(ee, CURRENTS, CURRENT_BANDS, bbox, t0, a.hours,
-                                     SCALE_CURRENTS_M, "currents", divide_by=1000.0)
+                                     SCALE_CURRENTS_M, "currents", divide_by=1000.0,
+                                     forward_hours=a.forward_hours)
     wlon, wlat, wtime, wu, wv = pull(ee, WINDS, WIND_BANDS, bbox, t0, a.hours,
-                                     SCALE_WINDS_M, "winds", divide_by=1.0)
+                                     SCALE_WINDS_M, "winds", divide_by=1.0,
+                                     forward_hours=a.forward_hours)
 
     c_med, c_p99, c_max = describe("current", cu, cv)
     describe("wind", wu, wv)
@@ -168,6 +216,22 @@ def main():
         print(f"  WARNING  median current {c_med:.2f} m/s is high for a coastal shelf.")
     else:
         print(f"  Current field looks like an ocean: median {c_med:.2f} m/s, max {c_max:.2f} m/s.")
+    # Phase 3.1: the pad was sized from an ASSUMED worst-case speed. Now that the field is
+    # here, check that assumption against the field's own p99 -- this is the only moment the
+    # two numbers can be compared, and a pad that is too small is silent afterwards.
+    needed_km = required_pad_km(a.rewind_hours, max(c_p99, 0.01))
+    if needed_km > pad_km_used * 1.001:
+        print(f"  !! PAD TOO SMALL  the field's 99th-percentile current is {c_p99:.2f} m/s, which "
+              f"reaches {c_p99 * a.rewind_hours * 3.6:.0f} km in {a.rewind_hours:.0f} h.")
+        print(f"                    With safety that needs a {needed_km:.0f} km pad; this cache "
+              f"has {pad_km_used:.0f} km.")
+        print(f"                    Particles can reach the box edge, slide along it, and produce "
+              f"a plausible WRONG cloud.")
+        print(f"                    Refetch:  python pipeline/drift/fetch_fields.py --case "
+              f"{a.case} --vmax-ms {max(c_p99, a.vmax_ms) + 0.2:.1f} --force")
+    else:
+        print(f"  Pad check: p99 {c_p99:.2f} m/s needs {needed_km:.0f} km, cache has "
+              f"{pad_km_used:.0f} km. OK.")
     print("  Next: python pipeline/drift/plot_quiver.py --case " + a.case)
     print("=" * 78)
     return 0

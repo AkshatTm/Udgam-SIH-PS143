@@ -154,6 +154,28 @@ def verify_missing_source_url(d):
     return "source_url"
 
 
+def trace_without_known_origin(d):
+    """D16 — a trace bundle with no 'detect' act and no meta.known_origin has nothing to
+    seed the rewind from."""
+    m = read(d, "meta.json")
+    m["acts_available"] = [a for a in m["acts_available"] if a != "detect"]
+    m.pop("known_origin", None)
+    write(d, "meta.json", m)
+    return "known_origin"
+
+
+def known_origin_lonlat_swapped(d):
+    """meta.known_origin written as [lat, lon] — the same swap the coordinate checker
+    catches everywhere else, now on the documented fixed source."""
+    m = read(d, "meta.json")
+    b = read(d, "bounds.json")
+    lon = (b["west"] + b["east"]) / 2
+    lat = (b["south"] + b["north"]) / 2
+    m["known_origin"] = [lat, lon]  # deliberately swapped
+    write(d, "meta.json", m)
+    return "swapped"
+
+
 def dark_vessel_has_mmsi(d):
     """A dark vessel is radar-only — giving it an MMSI invents an AIS identity."""
     s = read(d, "suspects.json")
@@ -161,6 +183,77 @@ def dark_vessel_has_mmsi(d):
                           "lon": 80.4, "lat": 13.2, "score": 0.6, "mmsi": "123456789"}]
     write(d, "suspects.json", s)
     return "mmsi must be null"
+
+
+def ais_source_missing(d):
+    """'attribute' without ais_source. The scorer cannot know whether gap and slowdown are
+    even measurable, so every component score becomes uninterpretable (D20)."""
+    m = read(d, "meta.json")
+    m.pop("ais_source", None)
+    write(d, "meta.json", m)
+    return "ais_source"
+
+
+def gfw_hourly_reports_a_gap(d):
+    """The honesty bug this whole rule exists for: at one position per vessel per hour you
+    cannot observe a 30-minute transponder silence. A number here is not a low score — it is
+    a measurement that was never made."""
+    m = read(d, "meta.json")
+    m["ais_source"] = "gfw_hourly"
+    write(d, "meta.json", m)
+    s = read(d, "suspects.json")
+    s["suspects"][0].setdefault("components", {})["gap"] = 0.0
+    write(d, "suspects.json", s)
+    return "null"
+
+
+def forward_particles_are_a_copy(d):
+    """particles_forward.json relabelled from the rewind instead of integrated forwards."""
+    p = read(d, "particles.json")
+    write(d, "particles_forward.json", p)
+    return "forward"
+
+
+def seep_flagged_without_a_source(d):
+    """A natural-seep flag with nothing behind it — the exact claim we could not substantiate
+    on Mumbai. 'Some of this may be geological' needs a citation or it does not go on screen."""
+    s = read(d, "suspects.json")
+    s["natural_seep"] = {"flagged": True, "source": "", "note": ""}
+    write(d, "suspects.json", s)
+    return "natural_seep"
+
+
+def component_note_names_nothing(d):
+    """A note explaining a bar that does not exist. Either the component was renamed and the
+    note was left behind, or the note is inventing a component the card never shows."""
+    s = read(d, "suspects.json")
+    sus = s["suspects"][0]
+    sus.setdefault("components", {})
+    sus["component_notes"] = {"kraken_index": "no kraken detected in the window"}
+    write(d, "suspects.json", s)
+    return "component_notes.kraken_index"
+
+
+def null_component_without_a_note(d):
+    """A gated component with nothing behind it. The card renders 'n/a' and the judge asks why —
+    which is the one question we should always be able to answer (D29)."""
+    s = read(d, "suspects.json")
+    sus = s["suspects"][0]
+    sus.setdefault("components", {})["slowdown"] = None
+    sus.pop("component_notes", None)
+    write(d, "suspects.json", s)
+    return "component_notes"
+
+
+def component_is_constant_across_the_fleet(d):
+    """type_prior = 1.00 for every vessel in an offshore lane. It ranks nobody above anybody and
+    silently adds its full weight to every score on screen (D28)."""
+    s = read(d, "suspects.json")
+    for sus in s["suspects"]:
+        sus.setdefault("components", {})["type_prior"] = 1.0
+        sus.setdefault("component_notes", {})
+    write(d, "suspects.json", s)
+    return "separates nobody"
 
 
 MUTATIONS = [
@@ -175,6 +268,17 @@ MUTATIONS = [
     ("verification verdict not in the 4 values", verify_verdict_invalid, "verdict",  False),
     ("verification source_url empty",           verify_missing_source_url, "source_url", False),
     ("dark vessel carries an invented MMSI",    dark_vessel_has_mmsi,    "mmsi must be null", False),
+    ("trace act with no detect and no known_origin", trace_without_known_origin, "known_origin", False),
+    ("meta.known_origin written as [lat, lon]", known_origin_lonlat_swapped, "swapped", False),
+    ("attribute act with no ais_source",        ais_source_missing,      "ais_source", False),
+    ("gfw_hourly case reports a numeric gap",   gfw_hourly_reports_a_gap, "null",    False),
+    ("particles_forward is a copy of the rewind", forward_particles_are_a_copy, "forward", False),
+    ("natural_seep flagged with no source",     seep_flagged_without_a_source, "natural_seep", False),
+    ("component_notes names a component that doesn't exist", component_note_names_nothing,
+     "component_notes.kraken_index", False),
+    ("null component with no note behind it",   null_component_without_a_note, "component_notes", True),
+    ("a component scoring identically for every suspect", component_is_constant_across_the_fleet,
+     "separates nobody", True),
 ]
 
 

@@ -16,7 +16,213 @@ docs/updates/anushka.md. Read the top entry and tell me where I left off."*
 | 1 | Fake fields + RK2 stepper + four known-answer tests | ✅ **code done — 4/4 green.** 3 human steps left, see "Phase 1 — what remains" |
 | 2 | Real HYCOM + ERA5 loaders, quiver plot | ✅ **done 2026-09-07.** Field cached, quiver posted, test-4 guards green on real fields |
 | 3 | Backward + 50-run ensemble → real `particles.json` / `origin.json` | ✅ **done 2026-09-07.** Real files written, validator PASS 0 warnings, tests 5/5. Rerun on Soum's real detections when they land |
-| 4 | Buffer Wed; rerun on the US case | ⬜ not started |
+| 4 | Coastline upgrade (GSHHG) + stranding, decision D7 | ✅ **done 2026-09-13.** Suite 8/8, 54/54. New dependency needs Akshat's confirmation (D7) |
+
+---
+
+## [2026-09-13 00:20] Phase 4 — GSHHG coastline + stranding (decision D7)
+
+**Done:** Six things landed together.
+
+New `pipeline/drift/coastline.py` wraps GSHHG via `global-land-mask` at ~1 km, replacing a land
+mask that was derived from the velocity field's own validity at 9 km. The (lat, lon) ->
+[lon, lat] conversion happens in exactly one function.
+
+`step.integrate_stranding()`: particles that reach land freeze at their LAST WET position and
+are flagged. Sticky — a stranded particle stays stranded. Added as a separate function so
+`integrate()`'s return signature does not change.
+
+`ensemble.run_once` / `run_ensemble` carry an optional `is_land` mask without changing their
+return arity; per-member stranded fraction recorded in `members[]`.
+
+`origin.json` gains `stranded_fraction` (Phase 4.3). OMITTED entirely when no real coastline is
+available, because a false `0.0` would be a claim we cannot make.
+
+`run.py` prints which mask was used and the stranded fraction, and warns loudly above 10%.
+
+New suite 8 in `pipeline/drift/coast_tests.py`, six assertions: shoreline loaded, known
+land/ocean plus all seven case centres in water, the lat/lon swap, a particle driven ashore
+stopping at its last wet position, a particle seeded on land never moving, and mid-ocean
+particles stranding nobody. Suite now **8/8, 54/54**.
+
+Phase 4.4 CHECK PASSED on case-000 at 3000 particles x 50 runs: origin moved 0.53 km
+(centroid 80.62097, 13.69967 -> 80.6188, 13.6954), r90 17.30 -> 17.6 km, r50 8.78 -> 8.8 km,
+1.31% of ensemble endpoints stranded (1.13% of the control run). Seed is fixed at 143, so the
+move is attributable to stranding rather than sampling. Immaterial against r50 8.8 km.
+
+Edge guard independently reported 11.6 km of clearance, matching the figure in the brief.
+
+New dependency: `global-land-mask==1.0.0`, pinned in `requirements.txt` with its justification.
+
+**Files touched:** `pipeline/drift/coastline.py` (new) · `pipeline/drift/coast_tests.py` (new) ·
+`pipeline/drift/step.py` (modified) · `pipeline/drift/ensemble.py` (modified) ·
+`pipeline/drift/run.py` (modified) · `pipeline/drift/tests.py` (modified) ·
+`requirements.txt` (modified)
+
+**Run command:**
+```bash
+python pipeline/drift/tests.py
+```
+Expected output: `8/8 tests passed (54/54 individual assertions)`.
+
+**Checkpoint artefact:** `pipeline/drift/out/heatmap_case-000.png` via
+`python pipeline/drift/plot_heatmap.py --case case-000`.
+
+**Open issues:**
+- `global-land-mask==1.0.0` lands after `requirements.txt`'s stated no-new-dependencies date and
+  needs Akshat's confirmation under D7 (see `HANDOFF_ANUSHKA_ASK.md`) — Phase 4 comes back out
+  if it's not confirmed.
+- Phase 2 and the Phase 3.3 abstain bundle are the only remaining unblocked work.
+
+---
+
+## [2026-09-13 00:00] Phase 3 — adaptive field-box pad, loud edge guard, negative-longitude/high-latitude tests, acute gate on C3.1
+
+**Done:** Four things landed together.
+
+Phase 3.1 (adaptive pad): `check_gee.py` gains `required_pad_km` / `padded_bbox` /
+`pad_degrees`. The pad is sized from rewind hours x a worst-case speed (with a 55 km floor),
+and converted to degrees at the box's **poleward edge**, not mid-latitude — converting at
+mid-latitude would have under-sized the Alaska pad by the cos(lat) ratio (1.70x at 59.56 N vs
+30.38 N). `fetch_fields.py` gains `--vmax-ms`, `--pad-km`, `--rewind-hours`, and a post-fetch
+p99 check that names the exact refetch command when the downloaded box turns out too small.
+
+Phase 3.1 (loud guard): `step.assert_inside_field_box` + `edge_distance_km` +
+`FieldBoxEdge`, wired into `run.py` **before any file is written**, so a cloud whose particles
+reached the box edge cannot ship as a bundle. `case-000` clears the guard by ~14.8 km (limit
+10 km).
+
+Phase 3.2 + high latitude: new `pipeline/drift/geo_tests.py`, suite 7, ten assertions.
+Covers negative longitude, the antimeridian wrap, `wrap_lon` against a 0-360 leak, the
+cos(lat) longitude delta at 59.56 N, the 1.70x ratio against Jacksonville, a high-latitude
+round trip, and all seven library positions checked from scratch.
+
+`age.py`: C3.1 is now gated on `discharge_class == "acute"`, the same gate C3.3 already had,
+because on a chronic slick the major axis reflects the vessel's track, not shear. New
+assertion 6r.
+
+Suite is now **7/7, 48/48**.
+
+**Files touched:** `pipeline/drift/check_gee.py` (modified) · `pipeline/drift/fetch_fields.py`
+(modified) · `pipeline/drift/step.py` (modified) · `pipeline/drift/run.py` (modified) ·
+`pipeline/drift/geo_tests.py` (new) · `pipeline/drift/tests.py` (modified) ·
+`pipeline/drift/age.py` (modified) · `pipeline/drift/age_tests.py` (modified)
+
+**Run command:**
+```bash
+python pipeline/drift/tests.py
+```
+Expected output: `7/7 tests passed (48/48 individual assertions)`.
+
+**Checkpoint artefact:** `python pipeline\drift\run.py --case case-000 --real --particles 600
+--runs 6` prints `edge guard  closest particle sits 14.8 km inside the field box (limit 10
+km)`. Pad check: `required_pad_km(24, 2.0)` = 224.64 km, `padded_bbox(...)` =
+`[-146.77, 57.48, -138.65, 61.63]` for the Gulf of Alaska box.
+
+**Open issues:**
+- Jacksonville needs `--vmax-ms 2.0` at fetch time.
+- Three Part C departures still awaiting Akshat's ratification
+  (`docs/STAGE2_AGE_DECISION_BRIEF.md`).
+
+**Next:** get Akshat's ratification on the Part C departures; rerun fetch for Jacksonville
+with the correct `--vmax-ms`.
+
+---
+
+## [2026-09-12 00:00] Phase 1 — age estimation (Part C)
+
+**Done:** Built `pipeline/drift/age.py`, implementing Part C of the brief: C3.1 shear
+dispersion, C3.2 Fay spreading, C3.3 elongation-under-shear, C3.4 weathering flag, and the C4
+combine rules. It patches `age_hours`, `age_method`, `age_weathering` and `age_estimators` into
+`out/origin.json`, and writes full diagnostics to `out/age_<case>.json`, which stays out of the
+case bundle. `pipeline/drift/age_tests.py` adds suite 6 (17 assertions), wired into
+`tests.py`. Suite is now 6/6, 37/37.
+
+Three departures from the brief's Part C are documented in `docs/STAGE2_AGE_DECISION_BRIEF.md`
+and await Akshat's ratification:
+- (a) C3.1 matches major-axis length, not area, because a 2D incompressible flow preserves a
+  cloud's area.
+- (b) C3.3 uses the exact patch-aspect inversion `St = sqrt(a + 1/a - 2)` instead of
+  `sqrt(1 + (St)^2)`, which is about 3.2x shorter.
+- (c) C3.2 requires an independently reported release volume and returns a regime verdict
+  rather than an age at SAR scale.
+
+Also added a field-time-coverage guard that drops candidate ages outside the cached field's
+span, because `fetch_fields.py`'s 30 h window yields only ~24 h of daily HYCOM coverage.
+
+**Files touched:** `pipeline/drift/age.py` (new) · `pipeline/drift/age_tests.py` (new) ·
+`pipeline/drift/tests.py` (modified, wires in suite 6) · `docs/STAGE2_AGE_DECISION_BRIEF.md`
+(new) · `docs/STAGE2_COMPONENT_REPORT.md` (new)
+
+**Run command:**
+```bash
+python pipeline/drift/age.py --case <id> --real [--volume-m3 N]
+```
+Expected output: patched `out/origin.json` with `age_hours`/`age_method`/`age_weathering`/
+`age_estimators`, plus `out/age_<case>.json` diagnostics.
+
+**Checkpoint artefact:** `python pipeline\drift\tests.py` → `6/6 tests passed (37/37
+individual assertions)`.
+
+**Open issues:**
+- 1.6 validation not run yet (blind protocol — bands first).
+- `age_hours` emits `null` when no estimator fires, which may not satisfy the validator's new
+  `[low, high]` check.
+- `combine_bands` can return a degenerate band when two estimators touch at a single point.
+
+**Next:** run 1.6 validation against `scripts/validate_case.py`, then get Akshat's ratification
+on the three Part C departures above.
+
+---
+
+## [2026-09-07 23:10] Silent-fallback bug: a case that does not exist got another case's ocean  🐛→✅
+
+**Found by running `--case case-gulf-2019` before that bundle existed.** Both `check_gee.py`
+and `fetch_fields.py` fell back to the hardcoded Ennore defaults, downloaded **January 2017
+Bay of Bengal** water, and cached it as `data/fields/case-gulf-2019.npz`. Everything printed
+PASS. The field statistics looked like a real ocean, because they were one.
+
+**Why this was the dangerous kind of wrong.** Nothing in the cache revealed the swap:
+`fetch_fields.py` writes `case_id=<what you typed>`, so the file said "case-gulf-2019" inside
+as well as outside. `run.py --real` loads whatever `data/fields/<case>.npz` holds. Had the
+real Gulf bundle landed a day later, the cache would already have been there, `--force` would
+never have been passed, and Stage 2 would have rewound a Gulf of Mexico slick through
+Coromandel coast currents from seven years earlier — and handed Stage 3 a perfectly plausible
+origin cloud. No crash, no NaN, no warning. This is the exact failure mode this component
+exists to defend against, one directory up from the physics.
+
+### Fixed three ways
+
+| Fix | File | Behaviour now |
+|---|---|---|
+| A named case must exist | `check_gee.py` (`load_case_window`, used by both scripts) | Missing `meta.json` is a hard stop naming the directory. The Ennore defaults survive **only** for `check_gee.py` with no `--case`, which is an auth smoke test, not a case run |
+| The cache must prove it belongs to the case | `fields.py` (`load_case_field`) | Re-derives box and time from `meta.json` + `bounds.json` and refuses a cache whose `t0` differs by >60 s, or whose bbox does not contain the scene. Also catches a **stale** cache after a scene, bounds or detection_time change |
+| Fail before the network, not after | `fetch_fields.py` | Case resolved before `import ee` / `ee.Initialize()`, so a typo costs a second instead of an auth round trip |
+
+### Verified by forging bad caches, not by reasoning about them
+
+```
+named case with no bundle      -> stops, names the directory, refuses to substitute
+cache dated 2019 vs case 2017  -> "This cache is a different ocean than the case needs"
+cache boxed on the Gulf        -> "covers [W -91.0 ...] which does not contain case-000's scene"
+wider box, same place and time -> correctly ALLOWED (a superset is a valid cache)
+```
+
+Tests still 5/5, 20/20. `--real` on case-000 still reproduces
+`origin (80.6210, 13.6997) r50=8.8 r90=17.3` exactly — the guards add no drift.
+
+### Also fixed, same run
+
+`check_gee.py`'s HYCOM sample-value message ended with a leftover **"Divide by 100 in the
+loader, once."** immediately after the corrected sentence telling you to divide by 1000. The
+2026-09-07 unit correction missed the trailing line. It printed on every preflight PASS, and
+it is the single sentence most likely to be copied by someone in a hurry. Removed.
+
+### Left for a human
+
+`data/fields/_to_delete/case-gulf-2019.npz` — the bogus cache, moved aside rather than
+deleted (the workspace cannot delete inside the repo). `data/` is gitignored, so it is
+invisible to git; delete the folder when convenient.
 
 ---
 
