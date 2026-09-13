@@ -11,12 +11,12 @@ after the demo, before December.
 
 ## 0. First 30 minutes — clear the ground
 
-- [ ] **P0 — Get anything unpushed off their laptops.** Harshita has **no branch on origin**; her
+- [x] **P0 — Get anything unpushed off their laptops.** Harshita has **no branch on origin**; her
   last commit on `main` is 13 Sept 13:56. Anushka's last commit is 13 Sept 15:05. Her log stops
   at Phase 4, so work may be sitting locally. Ask both: *"push everything now, even half-done, to
   `harshita` / `anushka`."* **Do this before touching `web/` or `pipeline/drift/`**, or your fixes
   will collide with theirs.
-- [ ] **P0 — Commit tonight's uncommitted rulings.** They are now on branch `akshat-takeover`,
+- [x] **P0 — Commit tonight's uncommitted rulings.** They are now on branch `akshat-takeover`,
   still uncommitted:
   - B6: `attribute` added to Farallones, Huntington and Mumbai (all three validate PASS)
   - D36: `score.py` now measures `closest_km` to the grid peak
@@ -35,7 +35,7 @@ after the demo, before December.
   current `score.py`. That puts peak-based `closest_km` (D36) and the D37 fields into the
   committed bundles; the data is on his laptop only. Mumbai uses `--no-ais`. It clears the D37
   warnings.
-- [ ] **P0 — Resync the frontend copy after every bundle change.** `web/public/cases` is stale:
+- [x] **P0 — Resync the frontend copy after every bundle change.** `web/public/cases` is stale:
   - Farallones, Huntington and Mumbai lack `suspects.json` and the attribute act.
   - It still holds retired `case-golden-ray-2021` and `case-ennore-2017`.
   ```bash
@@ -74,7 +74,7 @@ The `explanation` is human prose. **Never generated.** A `miss` with a reason sh
 
 ### 1B. Rulings still owed (P0 for the first two)
 
-- [ ] **Infrastructure candidates for Huntington (and Mumbai).** Jaiveer's Phase 4 module is built
+- [x] **Infrastructure candidates for Huntington (and Mumbai).** Jaiveer's Phase 4 module is built
   and tested, but `infrastructure[]` is **empty on every case**, because no candidate position is
   declared.
   - He needs a ruling on a new `meta.json` key, `infrastructure_candidates`: name, `[lon, lat]`,
@@ -84,7 +84,7 @@ The `explanation` is human prose. **Never generated.** A `miss` with a reason sh
   - **Without it, Huntington's verdict is `partial`.**
   - Mumbai's candidate is already probed (score 0.368, sits on the slick's eastern tip, *outside*
     the origin grid). That tension should be stated, not hidden.
-- [ ] **Stage 3 issue register leftovers** (`docs/STAGE3_ISSUE_REGISTER.md`):
+- [x] **Stage 3 issue register leftovers** (`docs/STAGE3_ISSUE_REGISTER.md`):
   - A1: Menuett is not a gap case, so plan text needs an edit.
   - A5 / A6: `trajectory` and `type_prior` weights. **No weight moves** until Jaiveer's Phase 8
     curve exists. Say that on the honesty slide.
@@ -95,23 +95,23 @@ The `explanation` is human prose. **Never generated.** A `miss` with a reason sh
   - D2: Master Part 3 is stale on Menuett and on distance.
   - D3: D-number drift.
   - E1: narrative for Phases 4–7 that won't ship.
-- [ ] **`wind_share` into the contract** (Master §6.5 + validator + `web/lib/contracts.ts`), as a
+- [x] **`wind_share` into the contract** (Master §6.5 + validator + `web/lib/contracts.ts`), as a
   0–1 fraction, **omitted, never zeroed**, on synthetic fields. It's display-only until then.
-- [ ] **Reword D33's justification.** Behaviour stays; the stated reason was the channel-swap bug.
+- [x] **Reword D33's justification.** Behaviour stays; the stated reason was the channel-swap bug.
 
 ### 1C. Gallery copy fixes in `meta.json` (P0, 5 min)
 
-- [ ] `case-huntington-2021` blurb: *"Which ship released it?"* steers judges to a vessel when the
+- [x] `case-huntington-2021` blurb: *"Which ship released it?"* steers judges to a vessel when the
   source was a pipeline. Use *"What released it?"*
-- [ ] `case-gulf-alaska-2023` blurb: *"Radar sees a ship here"* implies **our** radar. Our detector
+- [x] `case-gulf-alaska-2023` blurb: *"Radar sees a ship here"* implies **our** radar. Our detector
   finds no contact (D34). Reword so the contact is attributed to Cerulean, or drop the radar claim.
 
 ### 1D. Claims, sources, receipts (P0 before the deck is final)
 
-- [ ] **Mumbai "natural seep area"**: source it or remove it (D19 amended). It is unsourced today.
+- [x] **Mumbai "natural seep area"**: source it or remove it (D19 amended). It is unsourced today.
 - [ ] `receipts.md` TODOs: CPCL release date and quantity (read the NGT O.A. 180/2023 PDF), HYCOM
   cadence per case, Ennore 2017 official reference.
-- [ ] **Vessel IDs in pushed git history** (`ee19819` → `72b9540`). Decide: amend Master §16.1 to
+- [x] **Vessel IDs in pushed git history** (`ee19819` → `72b9540`). Decide: amend Master §16.1 to
   say Farallones' blindness assumes nobody read that window, or rewrite history (not advised this
   close). Case 1's name is also in `jaiveer.md` and the progress docs; case 1 is open, so it's
   flagged, not scrubbed.
@@ -158,7 +158,7 @@ Stage 2 is **functionally complete**: all six spill cases ship `particles.json`,
 **Test 6r now passes** (verified 14 Sept). The suite then stops only on a missing local
 `data/fields/case-000.npz` cache, which is environmental. What's left is small.
 
-- [ ] **P0 — D35 seed note.** No case's `meta.json` records which detection seeded the trace
+- [x] **P0 — D35 seed note.** No case's `meta.json` records which detection seeded the trace
   (`grep seeded_from cases/*/meta.json` finds nothing).
   - Append `seeded_from` (det id or "merged ribbon"), `n_oil` and merged yes/no to `meta.notes`
     from `pipeline/drift/publish_all.py` (`ensure_trace`, line ~70).
@@ -167,17 +167,17 @@ Stage 2 is **functionally complete**: all six spill cases ship `particles.json`,
   - Matters most on Mumbai: seed `det-01` is 1.5 km² while `det-02` is 5× larger.
   - Check `ensure_trace` touches only `meta.json` before running it, so it doesn't re-integrate
     drift.
-- [ ] **P1 — Mumbai grid extent.** Jaiveer measured slick termini spanning 72.137–72.240°E against
+- [x] **P1 — Mumbai grid extent.** Jaiveer measured slick termini spanning 72.137–72.240°E against
   an origin grid ending at 72.151°E. Most of the 21 km slick lies east of the grid.
   - Likely cause: the trace seeds from the small `det-01`, not the whole event.
   - Look at the heatmap with the detections overlaid before quoting anything about Mumbai's origin.
   ```bash
   python pipeline/drift/plot_heatmap.py --case case-mumbai-2023
   ```
-- [ ] **P0 — Stage 2 slide numbers.** Pull the per-case r50/r90, `wind_share` and the OpenDrift
+- [x] **P0 — Stage 2 slide numbers.** Pull the per-case r50/r90, `wind_share` and the OpenDrift
   550 m from `docs/_archive/anushka/STAGE2_NUMBERS.md` into the deck. Framing rules are the §1E
   table above.
-- [ ] **P1 — Per-case physics sanity (her Phase 5.3 list).** For each spill case:
+- [x] **P1 — Per-case physics sanity (her Phase 5.3 list).** For each spill case:
   - particles at frame 0 overlap the slick
   - origin centroid not on land
   - `particles.t0` = `meta.detection_time`
@@ -297,6 +297,63 @@ Condensed checklist (full version: `docs/_archive/harshita/05_HARSHITA_INTEGRATI
 open issues.*
 
 <!-- first entry here -->
+
+### 14 Sept — §0–§2: rulings D38, seed notes, claims, verification prep (Claude, parallel to the §3 session)
+
+**Done.**
+- **§0.**
+  - Validator 23/23 and `cases/` PASS.
+  - `akshat-takeover` merged into `main` and pushed (`cf728c2`).
+  - `sync_web_cases.py --clean` run.
+  - Mumbai `--no-ais` re-scored locally with current `score.py`: byte-identical to the bundle, so no Mumbai re-score is needed.
+  - The Jaiveer re-score request (Jacksonville, Farallones, Huntington) is **drafted, not yet sent**.
+- **§1C.** Huntington blurb "What released it?". Gulf of Alaska blurb no longer claims our radar, and its notes drop the stale "radar-versus-AIS cross-check" claim.
+- **§1B, D38.**
+  - `meta.infrastructure_candidates` is ruled into Master §6.1. Primary public sources only, never ANSWERS or Cerulean ids.
+  - Validator check added: missing `source` and lon/lat swap. `wind_share` is in §6.5 and validated as a 0–1 fraction.
+  - Three new mutations, **26/26**.
+  - Huntington declares the San Pedro Bay Pipeline at **NTSB MIR-24-01's casualty location 33°34.20′ N 118°7.26′ W**, read from the report PDF.
+  - **Measured before the re-score:** the point is outside the origin grid, 6.75 km from the peak and 8.2 km from the slick terminus. It scores ≈0.006, below the 0.25 floor, so **Huntington stays `partial`**. Not tuned.
+- **D33 reworded.** Networks do transfer once channels match; live cases stay classical on the IoU evidence.
+- **Issue register.** Resolutions table added for A1, A5/A6, A8, B3, B5, D1, D2, D3 and E1.
+- **§1D.**
+  - Natural-seep claim removed from `02_SOUM_DETECTION.md`, the §6.7 example and the open-items row.
+  - Glossary "VH is the discriminator" removed.
+  - §16.1 / D31: Farallones is **blind on weights, not provably on identity**, because Jaiveer's asks came from reading `ee19819`. The stage line quotes no count.
+  - `receipts.md`: 118 m qualified as synthetic, 550 m Jacksonville added, NTSB 4.75 nm and coordinate added.
+  - The NGT PDF is a 95-page scan with no text layer, so that TODO stays.
+- **§2.**
+  - `publish_all.py --notes-only` writes the D35 seed sentence into all six `meta.notes`. It reuses `run.merge_oil_features` and checks that the frame-0 mean matches the chosen seed and not the alternative (≤0.04 km vs ≥3.9 km). Idempotent.
+  - **Mumbai seeds det-01 = 1.48 of 9.55 km².**
+  - The Mumbai "grid extent" concern is not a grid bug. The origin is correctly up-drift (NNW). The unseeded det-02 is where Cerulean's candidates sit.
+  - Physics sanity on all six: t0 = detection_time, r50 ≤ r90, centroid and peak off land (GSHHG), frame-0 inside the slick 0.93–0.99.
+- **§1A prep.**
+  - `naap_result` filled from the bundles in all six `verification/*.json`. Stale wind shares corrected in the facts-to-weigh lists: Alaska 0.73, Jamnagar 0.62.
+  - `caveat`, `verdict` and `explanation` are **left for Akshat**. `verify` is not added.
+  - Per-case fact sheets live outside the repo, because they contain ANSWERS content.
+- **§1E.** `docs/DECK_NUMBERS.md`: every safe number with its receipt and its "never say".
+
+**Files touched:** `scripts/validate_case.py` · `scripts/test_validator.py` · `pipeline/drift/publish_all.py` ·
+`cases/case-*/meta.json` (6) · `docs/00_MASTER_PLAN.md` · `docs/STAGE3_ISSUE_REGISTER.md` · `docs/receipts.md` ·
+`docs/02_SOUM_DETECTION.md` · `docs/DECK_NUMBERS.md` · `verification/case-huntington-2021.json` (+5 untracked drafts)
+
+**Run command:**
+```bash
+python scripts/test_validator.py                        # 26/26
+python pipeline/drift/publish_all.py --notes-only       # six OK, second run "unchanged"
+python scripts/validate_case.py cases/                  # PASS
+```
+
+**Open issues.**
+- **Verdicts will read worse than pre-registered, and that needs deciding before the deck.**
+  - On both Cerulean vessel cases, our plausible set contains **none** of Cerulean's attributed vessels.
+  - The likely common cause is timing: we rewind 16–24 h with age not estimated.
+  - Gulf of Alaska's origin is 16.6 km from the contact.
+  - Detail is in the fact sheets.
+- Jaiveer: re-score ×3; `excluded[]` empty on all scored cases; Farallones `type_prior` not gating (D28).
+- Web session: `wind_share?: number` in `contracts.ts`.
+- Still open: CPCL date/quantity (needs OCR or reading by eye), per-case HYCOM cadence (Anushka's cache), Mumbai merged-ribbon re-trace (post-demo, invalidates the score).
+- `trajectory` still bears toward the centroid (B3), left until after the demo.
 
 ### 14 Sept — §3 frontend fixes + automated pre-QA (Claude, parallel to the §0–2 session)
 
