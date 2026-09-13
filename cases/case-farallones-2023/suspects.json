@@ -12,7 +12,7 @@
       "mmsi": "636016487",
       "name": "HORIZON",
       "vessel_type": "cargo",
-      "score": 0.647,
+      "score": 0.62,
       "components": {
         "proximity": 0.844,
         "parity": null,
@@ -20,7 +20,7 @@
         "trajectory": 1.0,
         "gap": 0.0,
         "slowdown": 0.0,
-        "type_prior": 1.0
+        "type_prior": null
       },
       "component_notes": {
         "proximity": "origin-grid probability at closest approach",
@@ -29,12 +29,12 @@
         "trajectory": "on approach 9 km out, course 340 deg against 355 deg toward the origin (15 deg off)",
         "gap": "longest silence overlapping the window: 3 minutes",
         "slowdown": "9.7 kn at closest approach against an under-way median of 9.8 kn",
-        "type_prior": "vessel type cargo"
+        "type_prior": "every candidate scores the same vessel-class prior (1.00; cargo, tanker), so it separates none of them (D28)"
       },
-      "weight_live": 0.7,
-      "components_available": 5,
+      "weight_live": 0.65,
+      "components_available": 4,
       "components_total": 7,
-      "closest_km": 2.47,
+      "closest_km": 2.34,
       "closest_time": "2023-03-16T21:03:33Z",
       "grid_probability": 0.844,
       "heading_consistent": true,
@@ -50,7 +50,7 @@
       "mmsi": "338221000",
       "name": "OVERSEAS BOSTON",
       "vessel_type": "tanker",
-      "score": 0.404,
+      "score": 0.345,
       "components": {
         "proximity": 0.075,
         "parity": null,
@@ -58,7 +58,7 @@
         "trajectory": 1.0,
         "gap": null,
         "slowdown": 0.0,
-        "type_prior": 1.0
+        "type_prior": null
       },
       "component_notes": {
         "proximity": "origin-grid probability at closest approach",
@@ -67,12 +67,12 @@
         "trajectory": "on approach 9 km out, course 137 deg against 177 deg toward the origin (40 deg off)",
         "gap": "1-minute silence begins on the search-box boundary \u2014 the vessel left the search area and returned, which is not a transponder gap",
         "slowdown": "14.0 kn at closest approach against an under-way median of 14.3 kn",
-        "type_prior": "vessel type tanker"
+        "type_prior": "every candidate scores the same vessel-class prior (1.00; cargo, tanker), so it separates none of them (D28)"
       },
-      "weight_live": 0.55,
-      "components_available": 4,
+      "weight_live": 0.5,
+      "components_available": 3,
       "components_total": 7,
-      "closest_km": 6.51,
+      "closest_km": 7.87,
       "closest_time": "2023-03-17T03:19:32Z",
       "grid_probability": 0.075,
       "heading_consistent": true,
@@ -88,7 +88,7 @@
       "mmsi": "210007000",
       "name": "AURORA SB",
       "vessel_type": "cargo",
-      "score": 0.114,
+      "score": 0.046,
       "components": {
         "proximity": 0.099,
         "parity": null,
@@ -96,7 +96,7 @@
         "trajectory": 0.0,
         "gap": 0.0,
         "slowdown": 0.0,
-        "type_prior": 1.0
+        "type_prior": null
       },
       "component_notes": {
         "proximity": "origin-grid probability at closest approach",
@@ -105,12 +105,12 @@
         "trajectory": "on approach 10 km out, course 160 deg against 302 deg toward the origin (141 deg off)",
         "gap": "longest silence overlapping the window: 2 minutes",
         "slowdown": "11.0 kn at closest approach against an under-way median of 11.1 kn",
-        "type_prior": "vessel type cargo"
+        "type_prior": "every candidate scores the same vessel-class prior (1.00; cargo, tanker), so it separates none of them (D28)"
       },
-      "weight_live": 0.7,
-      "components_available": 5,
+      "weight_live": 0.65,
+      "components_available": 4,
       "components_total": 7,
-      "closest_km": 10.42,
+      "closest_km": 14.99,
       "closest_time": "2023-03-17T04:32:12Z",
       "grid_probability": 0.099,
       "heading_consistent": false,
@@ -123,7 +123,14 @@
   ],
   "dark_vessels": [],
   "infrastructure": [],
-  "excluded": [],
+  "excluded": [
+    {
+      "mmsi": "367008770",
+      "name": "NAVAJO",
+      "closest_km": null,
+      "reason": "no AIS position report inside the release window \u2014 the track enters or leaves the search box either side of it"
+    }
+  ],
   "abstained": false,
   "abstain_reason": null
 }

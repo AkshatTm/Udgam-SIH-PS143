@@ -401,6 +401,69 @@ def score_vessel(track, grid, t0, t1, ais_source, discharge_class, box):
     }
 
 
+def rescore(s):
+    """Recompute score and weight_live from the components in place.
+
+    Used after a gate is applied post-ranking. Identical arithmetic to score_vessel —
+    if these two ever disagree the cards stop matching the ranking, so they stay
+    together in this file rather than drifting apart.
+    """
+    comps = s["components"]
+    live = sum(WEIGHTS[k] for k, c in comps.items() if c.applicable)
+    total = (sum(WEIGHTS[k] * c.value for k, c in comps.items() if c.applicable) / live
+             if live > 0 else 0.0)
+    s["score"] = round(min(1.0, max(0.0, total)), 3)
+    s["weight_live"] = round(live, 3)
+    return s
+
+
+def apply_homogeneous_type_gate(candidates):
+    """D28: `type_prior` returns null when every candidate shares a type class.
+
+    Measured on the Galveston fleet: 1.00 for all 17 vessels in an offshore lane, where
+    everything is a tanker or a cargo ship. A component returning the same value for
+    every candidate changes no ranking, and because that value is 1.00 it pulls every
+    renormalised score toward 1.00 — 5% of inflation that separates nobody. Gating it
+    restores the score to what the evidence that actually discriminates says.
+
+    WHY THIS IS NOT APPLIED TO A COMPONENT SITTING AT ZERO, though the validator asks:
+    the direction of the effect depends on the value, not on the uniformity. Renormalising
+    divides by the live weight, so dropping a component at 1.00 LOWERS the score and
+    dropping one at 0.00 RAISES it. Worked on Farallones/HORIZON, whose live components
+    are proximity 0.84, trajectory 1.00, gap 0.00, slowdown 0.00, type_prior 1.00:
+
+        as scored                     0.452 / 0.70 = 0.646
+        type_prior gated (D28)        0.402 / 0.65 = 0.619   <- deflates, intended
+        slowdown gated                0.452 / 0.65 = 0.695   <- inflates, the opposite
+
+    And `slowdown 0.00` on every vessel is a measured statement about the fleet — nobody
+    slowed near the origin — not a component we were unable to measure. Gating it would
+    claim we could not tell, which is false, and would raise every score while doing it.
+    Frozen convention 4 in both directions at once. Raised with Akshat; unchanged here.
+    """
+    live = [s for s in candidates if s["components"]["type_prior"].applicable]
+    if len(live) < 2:
+        return False
+    # Gated on the VALUE, not the type class. D28's trigger sentence says "share a type
+    # class", but its reasoning is "a component that returns the same value for every
+    # candidate changes no ranking" — and those are not the same test, because TYPE_PRIOR
+    # maps tanker and cargo to 1.0 alike. Farallones is the case that separates them: one
+    # tanker and two cargo ships, three type classes' worth of variety by the letter of the
+    # rule, and an identical 1.00 for all three by its purpose. Gating on the value is what
+    # the rationale asks for.
+    values = {s["components"]["type_prior"].value for s in live}
+    if len(values) != 1:
+        return False
+    only = values.pop()
+    classes = sorted({s["track"].vessel_type or "unknown" for s in live})
+    for s in live:
+        s["components"]["type_prior"] = Component.not_applicable(
+            f"every candidate scores the same vessel-class prior ({only:.2f}; "
+            f"{', '.join(classes)}), so it separates none of them (D28)")
+        rescore(s)
+    return True
+
+
 def reasons_for(s):
     """1-3 short plain-language strings for a judge-facing card, generated from
     whichever components actually fired. These go on screen, so they say what was
@@ -605,11 +668,11 @@ def main():
         # in `abstain_reason` instead, in words, where nothing can round it off: the counts
         # are zero because nothing was searched, NOT because the water was empty. Do not let
         # a card render "0 vessels in region" without that sentence next to it.
-        tracks, in_window, plausible = {}, [], []
+        tracks, in_window, plausible, considered, silent = {}, [], [], [], []
         in_region = dropped_short = 0
         box = None
     else:
-        in_window, plausible = [], []
+        in_window, plausible, considered, silent = [], [], [], []
         tracks = load_tracks(a.parquet)
         if not tracks:
             raise SystemExit("no usable tracks in the parquet")
@@ -632,9 +695,29 @@ def main():
 
         for t in in_window:
             s = score_vessel(t, grid, t0, t1, ais_source, discharge_class, box)
-            if s and s["grid_probability"] > PLAUSIBLE_GRID_MIN:
+            if not s:
+                # The track overlaps the window but holds no position report inside it —
+                # it entered or left the box either side of the release. Nothing can be
+                # scored, and that is itself a clean, stateable exclusion rather than a
+                # vessel to drop silently. Farallones' NAVAJO is the worked example.
+                silent.append(t)
+                continue
+            if s["grid_probability"] > PLAUSIBLE_GRID_MIN:
                 plausible.append(s)
+            else:
+                # In the window, scored, and below the plausible cut. These were thrown
+                # away entirely until now, which is why three real cases produced zero
+                # exclusions: with `plausible` <= TOP_N there was nothing left over to
+                # exclude FROM. But a vessel that sat in the search box through the whole
+                # release window and never entered the high-probability region is the
+                # cleanest exclusion the system can make — it is the first example the
+                # task doc gives — and discarding it hid the strongest evidence of
+                # narrowing rather than accusing.
+                considered.append(s)
 
+        plausible.sort(key=lambda s: s["score"], reverse=True)
+        considered.sort(key=lambda s: s["score"], reverse=True)
+        apply_homogeneous_type_gate(plausible)
         plausible.sort(key=lambda s: s["score"], reverse=True)
 
     # ------------------------------------------------------------------- abstention
@@ -689,7 +772,9 @@ def main():
     doc["infrastructure"] = infra
 
     # -------------------------------------------------------------------- exclusions
-    pool = plausible[len(top):] if not abstained else plausible
+    # Plausible-but-unranked first (they were real contenders), then the vessels that were
+    # present through the window but never reached the plausible cut.
+    pool = (plausible[len(top):] if not abstained else list(plausible)) + considered
     for s in pool:
         r = exclusion_reason(s)
         if r:
@@ -701,6 +786,20 @@ def main():
             })
         if len(doc["excluded"]) >= MAX_EXCLUSIONS:
             break
+
+    # Last, the vessels with nothing to score: present in the box across the window, but
+    # no position report inside it. `closest_km` is null rather than a number, because
+    # there was no closest approach to measure — the same rule as any other component.
+    for t in silent:
+        if len(doc["excluded"]) >= MAX_EXCLUSIONS:
+            break
+        doc["excluded"].append({
+            "mmsi": t.mmsi,
+            "name": t.name or "",
+            "closest_km": None,
+            "reason": "no AIS position report inside the release window — the track enters "
+                      "or leaves the search box either side of it",
+        })
 
     # vessels.geojson: the plausible set only, so the map draws what was considered —
     # and clipped to the release window with an hour either side. The full 24-hour track

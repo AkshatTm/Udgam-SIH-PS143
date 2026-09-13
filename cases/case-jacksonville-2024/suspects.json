@@ -31,7 +31,10 @@
         "slowdown": "12.0 kn at closest approach against an under-way median of 12.5 kn",
         "type_prior": "vessel type cargo"
       },
-      "closest_km": 10.22,
+      "weight_live": 0.85,
+      "components_available": 6,
+      "components_total": 7,
+      "closest_km": 1.3,
       "closest_time": "2024-07-30T04:44:49Z",
       "grid_probability": 0.946,
       "heading_consistent": true,
@@ -66,7 +69,10 @@
         "slowdown": "15.7 kn at closest approach against an under-way median of 15.2 kn",
         "type_prior": "vessel type other"
       },
-      "closest_km": 10.13,
+      "weight_live": 0.85,
+      "components_available": 6,
+      "components_total": 7,
+      "closest_km": 1.13,
       "closest_time": "2024-07-30T01:58:44Z",
       "grid_probability": 0.943,
       "heading_consistent": true,
@@ -80,7 +86,26 @@
   ],
   "dark_vessels": [],
   "infrastructure": [],
-  "excluded": [],
+  "excluded": [
+    {
+      "mmsi": "319246600",
+      "name": "RANDY BETH",
+      "closest_km": 50.25,
+      "reason": "heading away from the origin throughout the window"
+    },
+    {
+      "mmsi": "636021112",
+      "name": "METALLICA",
+      "closest_km": null,
+      "reason": "no AIS position report inside the release window \u2014 the track enters or leaves the search box either side of it"
+    },
+    {
+      "mmsi": "338413012",
+      "name": "MAVERICK",
+      "closest_km": null,
+      "reason": "no AIS position report inside the release window \u2014 the track enters or leaves the search box either side of it"
+    }
+  ],
   "abstained": false,
   "abstain_reason": null
 }

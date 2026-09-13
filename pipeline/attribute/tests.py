@@ -783,6 +783,71 @@ class TestEvidenceBreadthReachesTheCard(unittest.TestCase):
                          "disagree the card is describing a different set than the score")
 
 
+class TestHomogeneousTypeGate(unittest.TestCase):
+    """D28. The rule's trigger sentence and its rationale disagree, and these pin which
+    one the code follows — see apply_homogeneous_type_gate's docstring."""
+
+    def candidate(self, vessel_type, type_prior_value, proximity=0.5):
+        return {
+            "track": StubTrack(vessel_type=vessel_type),
+            "components": {
+                "proximity": score.Component(proximity),
+                "parity": score.Component.not_applicable("test"),
+                "temporality": score.Component.not_applicable("test"),
+                "trajectory": score.Component.not_applicable("test"),
+                "gap": score.Component.not_applicable("test"),
+                "slowdown": score.Component.not_applicable("test"),
+                "type_prior": score.Component(type_prior_value),
+            },
+            "score": 0.0, "weight_live": 0.0,
+        }
+
+    def test_identical_value_across_different_classes_still_gates(self):
+        """Farallones: one tanker, two cargo — different classes, identical 1.00 prior."""
+        cands = [self.candidate("tanker", 1.0), self.candidate("cargo", 1.0)]
+        self.assertTrue(score.apply_homogeneous_type_gate(cands))
+        for c in cands:
+            self.assertFalse(c["components"]["type_prior"].applicable)
+            self.assertIn("D28", c["components"]["type_prior"].note)
+
+    def test_differing_values_are_left_alone(self):
+        cands = [self.candidate("tanker", 1.0), self.candidate("passenger", 0.2)]
+        self.assertFalse(score.apply_homogeneous_type_gate(cands))
+        self.assertTrue(cands[0]["components"]["type_prior"].applicable)
+
+    def test_a_single_candidate_is_never_gated(self):
+        cands = [self.candidate("cargo", 1.0)]
+        self.assertFalse(score.apply_homogeneous_type_gate(cands),
+                         "one candidate cannot be 'the same for everybody'")
+
+    def test_gating_a_value_of_one_lowers_the_score(self):
+        """The direction that makes D28 correct. proximity 0.50 at weight 0.30 plus
+        type_prior 1.00 at 0.05: 0.200/0.35 = 0.571 before, 0.150/0.30 = 0.500 after."""
+        cands = [self.candidate("tanker", 1.0), self.candidate("cargo", 1.0)]
+        for c in cands:
+            score.rescore(c)
+        before = cands[0]["score"]
+        score.apply_homogeneous_type_gate(cands)
+        self.assertAlmostEqual(before, 0.571, places=3)
+        self.assertAlmostEqual(cands[0]["score"], 0.500, places=3)
+        self.assertLess(cands[0]["score"], before)
+
+    def test_gating_a_value_of_zero_would_raise_it_instead(self):
+        """Why the same gate is NOT applied to a component sitting at 0.0. Same fixture,
+        type_prior 0.00: 0.150/0.35 = 0.429 before, 0.150/0.30 = 0.500 after — the score
+        goes UP. A uniform zero is a measured finding about the fleet, and removing it
+        inflates every score while claiming we could not measure what we did measure."""
+        cands = [self.candidate("tanker", 0.0), self.candidate("cargo", 0.0)]
+        for c in cands:
+            score.rescore(c)
+        before = cands[0]["score"]
+        score.apply_homogeneous_type_gate(cands)
+        self.assertAlmostEqual(before, 0.429, places=3)
+        self.assertAlmostEqual(cands[0]["score"], 0.500, places=3)
+        self.assertGreater(cands[0]["score"], before,
+                           "this is the inversion the validator's D28 hint misses")
+
+
 class TestInfrastructure(unittest.TestCase):
     """Phase 4. Hand-computed geometry: a square slick 0.02 deg on a side at the equator-ish
     latitude 33.6, so the arithmetic is checkable on paper rather than read back out of the

@@ -9,7 +9,26 @@
   "suspects": [],
   "dark_vessels": [],
   "infrastructure": [],
-  "excluded": [],
+  "excluded": [
+    {
+      "mmsi": "538005806",
+      "name": "MARLIN APATITE",
+      "closest_km": 2.87,
+      "reason": "never entered the high-probability region of the origin"
+    },
+    {
+      "mmsi": "319147800",
+      "name": "DALI",
+      "closest_km": 2.86,
+      "reason": "heading away from the origin throughout the window"
+    },
+    {
+      "mmsi": "370320000",
+      "name": "COSCO NAGOYA",
+      "closest_km": 3.11,
+      "reason": "heading away from the origin throughout the window"
+    }
+  ],
   "abstained": true,
   "abstain_reason": "the top two vessels score within a few percent of each other and cannot be separated on this evidence"
 }
