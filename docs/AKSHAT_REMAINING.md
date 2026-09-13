@@ -11,9 +11,9 @@ after the demo, before December.
 > still genuinely open; stale claims are corrected in place and marked *(was: ...)*.
 > **State right now:** `origin/main` and local `main` both at `94206c4`; validator 26/26; 100 Stage 3
 > tests; `cases/` PASS on all 9 with 6 warnings, 3 of them by design on the no-oil cases.
-> **What is actually left: §1A verification prose (nothing ships on Verify without it), §1E the deck
-> itself, §1F rehearsals, §3B human QA, §3C the demo machine and the fallback video.** Everything
-> else on this page is done.
+> **What is actually left: §1A verification prose (nothing ships on Verify without it), §1E
+> rehearsals, §3B human QA, §3C the demo machine and the fallback video.** Everything else on this
+> page is done. **The deck is not tracked here — Akshat builds it separately.**
 
 ---
 
@@ -104,7 +104,7 @@ The `explanation` is human prose. **Never generated.** A `miss` with a reason sh
 - [x] **Stage 3 issue register leftovers** (`docs/STAGE3_ISSUE_REGISTER.md`):
   - A1: Menuett is not a gap case, so plan text needs an edit.
   - A5 / A6: `trajectory` and `type_prior` weights. **No weight moves** until Jaiveer's Phase 8
-    curve exists. Say that on the honesty slide.
+    curve exists. Say that whenever the weights are discussed.
   - A8: repeat offenders can't be demonstrated. Reframe it as roadmap.
   - B3: the peak sits 10.65 km from the centroid, so the r50/r90 rings are centroid-centred.
   - B5: validator warnings, mostly solved by the reach fix.
@@ -123,7 +123,7 @@ The `explanation` is human prose. **Never generated.** A `miss` with a reason sh
 - [x] `case-gulf-alaska-2023` blurb: *"Radar sees a ship here"* implies **our** radar. Our detector
   finds no contact (D34). Reword so the contact is attributed to Cerulean, or drop the radar claim.
 
-### 1D. Claims, sources, receipts (P0 before the deck is final)
+### 1D. Claims, sources, receipts (P0 before anything is presented)
 
 - [x] **Mumbai "natural seep area"**: source it or remove it (D19 amended). It is unsourced today.
 - [ ] `receipts.md` TODOs — **partly closed.** Done: the 118 m OpenDrift figure is qualified as
@@ -136,37 +136,16 @@ The `explanation` is human prose. **Never generated.** A `miss` with a reason sh
   close). Case 1's name is also in `jaiveer.md` and the progress docs; case 1 is open, so it's
   flagged, not scrubbed.
 
-### 1E. The deck — Phase 6 (P0)
-
-About ten slides; structure in `docs/_archive/akshat/01_AKSHAT_INTEGRATION.md` Phase 6. What is
-**safe** and what is **dead**:
-
-| Say | Never say |
-|---|---|
-| Adding a second polarisation took val F1 0.346 → 0.643 | "VH is the discriminator" (the feature was computed from VV) |
-| Networks transfer once channels match; live cases stay classical (median IoU vs Cerulean 0.483) | "The networks don't transfer" |
-| r50/r90 = **precision** across 50 runs | "accurate to X km" |
-| OpenDrift agrees within **550 m on Jacksonville** over a 140 km rewind | "118 m" as a real-case number — that is synthetic `case-000`. *(`receipts.md` is fixed: it qualifies the 118 m and carries the 550 m.)* |
-| Age ships as **not estimated**, with the gate reason (no detection is `acute`) | Any age accuracy claim, including "N = 1 on Huntington" (withdrawn) |
-| Direction arrows on Jacksonville and Farallones only | Arrows on Huntington (143° reversal), Mumbai, Jamnagar |
-| Error budget as a **library average** (inverts on Alaska and Jamnagar) | Error budget as universal |
-| Galveston 987 → 897 → 17 → abstain; Huntington abstains on a real case with **3 named exclusions** | — |
-| **The Phase 8 curve now exists** (D39, `docs/STAGE3_PHASE8.md`): offshore top-1 **0.910**, **0.488** on hourly AIS, **0.653** at one r90 of origin error, **0.556** against an offender with no behavioural signature | *(was: "the Phase 8 curve doesn't exist yet")* Any of it as **accuracy on the six live cases** — it is a *ranking* number given a stated origin quality, and an upper bound |
-| Both Indian cases **search real vessels** and abstain because none entered the origin cloud (D40) | "there is no AIS in Indian waters" — that was our own error, corrected 14 Sept |
-| Zenodo DOI 10.5281/zenodo.13761290, CC-BY, **mandatory on a slide** | — |
-
-Prior-art slide first: CleanSeaNet, Cerulean, INCOIS (Master Part 11).
-
-### 1F. Demo prep — Phase 7 (P0, see also §3C)
+### 1E. Demo prep — Phase 7 (P0, see also §3C)
 
 - [ ] Demo machine pulls latest validated `main`, then runs `python scripts/validate_case.py cases/`
-- [ ] Deck PDF on the machine and on a phone
+- [ ] Deck PDF on the machine and on a phone *(the deck itself is built outside this plan)*
 - [ ] **Two timed rehearsals** with someone playing hostile judge (Q&A list: archived 01, Part E)
 - [ ] Charger, HDMI adapter, hotspot
 - [ ] **Decide who drives the laptop.** It was Harshita, so that you face the judges. Confirm she's
   still doing it.
 
-### 1G. P2
+### 1F. P2
 
 `verification.json` for Ennore-2017 (SLC retry, D18) · deployment-cost figure · rename channels in
 `build_cache.py` (needs retrain) · a Python 3.11 venv check of the torch install (Soum).
@@ -196,9 +175,11 @@ Stage 2 is **functionally complete**: all six spill cases ship `particles.json`,
   ```bash
   python pipeline/drift/plot_heatmap.py --case case-mumbai-2023
   ```
-- [x] **P0 — Stage 2 slide numbers.** Pull the per-case r50/r90, `wind_share` and the OpenDrift
-  550 m from `docs/_archive/anushka/STAGE2_NUMBERS.md` into the deck. Framing rules are the §1E
-  table above.
+- [x] **P0 — Stage 2 numbers, with their framing.** Per-case r50/r90, `wind_share` and the
+  OpenDrift 550 m are collected in `docs/DECK_NUMBERS.md`, each with its source and its "never
+  say" (r50/r90 are precision, not accuracy; the 118 m is synthetic; direction arrows only on
+  Jacksonville and Farallones). That file is a **claims reference, not a deck plan** — it exists so
+  that whoever writes a slide, a paper, or an answer to a judge quotes a measured number.
 - [x] **P1 — Per-case physics sanity (her Phase 5.3 list).** For each spill case:
   - particles at frame 0 overlap the slick
   - origin centroid not on land
@@ -310,10 +291,12 @@ What is left, in order:
 1. **§1A verification prose**, case by case in library order, with §3B QA right after each case.
    Nothing ships on Screen 4 until this exists, and only you can write it.
 2. **§3A item 9 re-check** — Mumbai and Jamnagar changed shape after the frontend pass (D40).
-3. **§1E the deck itself.** Every number is in `docs/DECK_NUMBERS.md` with its receipt and its
-   "never say"; the slides still have to be built.
-4. **§3C demo machine + fallback video**, then **§1F rehearsals ×2**.
-5. If time: §1D's remaining receipts (CPCL needs OCR), §2's P2 items, issue **F1**.
+3. **§3C demo machine + fallback video**, then **§1E rehearsals ×2**.
+4. If time: §1D's remaining receipts (CPCL needs OCR), §2's P2 items, issue **F1**.
+
+*(The deck is deliberately absent — Akshat builds it separately. `docs/DECK_NUMBERS.md` stays as a
+claims reference for it: every measured number with its receipt and its "never say", including the
+mandatory Zenodo CC-BY attribution.)*
 
 ---
 
