@@ -2,6 +2,116 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-13 16:30] Catch-up: final plan docs, receipts filled, four branches merged, Stage 2 live on six cases
+
+*This entry covers everything from `ee19819` (03:29) to `483a2b7` (16:27) that never got logged
+here. Merge-by-merge detail for the 02:27 and 02:44 merges is in `_INTEGRATION.md`
+(`4dea3fb`, `09e0e20`).*
+
+**Done:**
+- **Final plan docs landed (`ee19819`).** Replaced `00`–`06`, `RUNBOOK.md` and `receipts.md` with
+  the final versions. They supersede the older copies on `main`. The dependency rule now reads the
+  same everywhere (`CLAUDE.md`, `README.md`, both requirements files, code comments): **pin it,
+  write the justification next to it, announce it to the group.**
+- **Removed the demo freeze and the dependency freeze (`835295e`).** Work continues on `main` up to
+  the demo. The demo machine pulls the latest validated `main` and re-runs the validator and click
+  path after every pull. The frozen JSON contracts did not change.
+- **Filled `receipts.md` (`ad21697`):**
+  - Layer 2 is recorded as **0.435 oil-class IoU**. There is no "23%" detection figure. That was a
+    crossed wire with Stage 2's 23% `wind_share`.
+  - Soum's IoU against Cerulean on five cases: **median 0.483**, range 0.165–0.728. Worded as
+    agreement with Cerulean, not accuracy.
+  - Anushka's OpenDrift check: origins **118 m** apart. This proves the implementation, not the
+    answer.
+  - Recorded that HYCOM cadence varies by case (daily vs 3-hourly), so "daily" is not a rule.
+  - Added verified references for Ennore 2017 and the December 2023 CPCL release. The CPCL
+    date and quantity stay `TODO` until the NGT filing is read.
+- **Merged `origin/soum` and `origin/anushka` at 03:40 and 04:05** (`1956220`, `fdf5848`,
+  `85b7f79`):
+  - Soum: `iou_cerulean.py` and its JSON output.
+  - Anushka: `compare_opendrift.py`, forward-drift tests, the age.py rework and `STAGE2_NUMBERS.md`.
+- **Merged Anushka's Stage 2 for six cases (`509fda9`).** Jacksonville, Farallones, Huntington,
+  Gulf of Alaska, Mumbai and Jamnagar now ship `particles.json`, `particles_forward.json` and
+  `origin.json`. `acts_available = ['detect','trace']` on all six. The merge also brings
+  `publish_all.py`, the Gulf Stream displacement guard, the ribbon merge, the measured major axis,
+  and a separate pinned `requirements-opendrift.txt`.
+- **Fixed mojibake from `publish_all.py` (`4b7c304`).** `ensure_trace` read `meta.json` without an
+  encoding. On Windows that decoded the UTF-8 em dashes and degree signs as cp1252 and wrote them
+  back garbled. It now reads and writes UTF-8 explicitly. Regenerated the five affected
+  `meta.json` files from their pre-merge versions. Jacksonville's had no non-ASCII text.
+- **Merged `origin/harshita` (`e541196`).** Adds only her log: a browser QA pass of Detect on all
+  nine gallery cases. Polygons line up, hemispheres are correct (including Mumbai and Jamnagar at
+  positive longitudes), and the no-spill states render. She states it was not a re-validation.
+- **Merged `origin/jaiveer-phase2` (`14196b7`).** Stage 3 Phase 1 `score.py`:
+  - Seven components, renormalised over only the applicable ones.
+  - Grid-sampled proximity (D8), D9 gating, and a new box-boundary gate.
+  - On real Galveston AIS: 987 → 897 → 17 vessels, then abstains with the top two 1.1% apart.
+  - Validator PASS. Rankings are identical on Linux and Windows, which closes R10.
+  - He measures `trajectory` on approach from outside r90. As specified, it scored 0.00 for 16 of
+    17 vessels.
+  - Progress report: `docs/STAGE3_PROGRESS_2026-09-13.md`.
+- **Merged `origin/soum` (`483a2b7`) and resolved one conflict in `01_AKSHAT_INTEGRATION.md`**,
+  keeping Soum's correction:
+  - **Channel-order bug.** Zenodo band 1 is VH and band 2 is VV, the reverse of what
+    `build_cache.py` assumed. Our GEE exports are correct.
+  - **The networks do transfer after all.** Once the channels match, P(oil) is 0.84–0.9999 on the
+    six spill cases, and Ennore still rejects (0.0021).
+  - **Live cases stay classical.** Corrected Layer 2 has median IoU 0.504 against classical 0.483
+    and loses on three of five cases, so it is not worth swapping in this late.
+  - **Two deck claims are dead:** "VH is the discriminator" (the feature was computed from VV) and
+    "the networks don't transfer". What survives: adding a second polarisation took val F1 from
+    0.346 to 0.643.
+  - **`case-nospill-zenodo` was farmland, not ocean.** Tile 00091 is the Ghab plain, about 150 km
+    inland, and its 31 "contacts" were buildings. Every automated gate passed it. Soum replaced it
+    with tile 00027: verified open water, 0 oil, 0 contacts. The blurb is now "Open ocean, nothing
+    on it. Does the system say so?"
+
+**Files touched (mine):** `CLAUDE.md` · `README.md` · `docs/00`–`06_*.md` · `docs/RUNBOOK.md` ·
+`docs/receipts.md` · `requirements.txt` · `requirements-detect.txt` · `pipeline/attribute/tests.py` ·
+`pipeline/detect/CLAUDE.md` · `pipeline/drift/step.py` (wording) · `pipeline/drift/publish_all.py` ·
+`cases/case-{farallones-2023,gulf-alaska-2023,huntington-2021,jamnagar-2024,mumbai-2023}/meta.json`
+· the merge resolution in `docs/01_AKSHAT_INTEGRATION.md`
+
+**Run command:**
+```bash
+python scripts/validate_case.py cases/
+python scripts/test_validator.py
+```
+Expected output: `PASS cases/index.json + all listed cases`. The six spill cases show
+`acts=['detect','trace']`, and the three rejection cases each have one expected zero-oil warning.
+The validator self-test reports `21/21 mutations correctly caught and named`. Both were re-run at
+16:30 on `483a2b7` and confirmed.
+
+**Checkpoint artefact:** validator output above · Harshita's browser QA of all nine cases
+(`docs/updates/harshita.md`) · Jaiveer's Galveston run (`docs/STAGE3_PROGRESS_2026-09-13.md`).
+
+**Open issues:**
+- **Jacksonville trace gives 149 warnings.** Particles at steps 48 and 96 fall well outside the
+  scene bounds. It still PASSES, but the time slider will show particles leaving the map. Check
+  with Anushka whether that is real Gulf Stream transport (the displacement guard suggests yes) or
+  whether the map view needs to expand.
+- **No `attribute` act on any live case yet.** Jaiveer's scorer has only run on the Galveston
+  fixture. The next structural gap is `vessels.geojson` and `suspects.json` on the live cases.
+- **Rule on Jaiveer's `trajectory` change.** Measuring on approach fixes the geometry, but he
+  himself calls the corrected score near-tautological (1.00 for 13 of 15). Decide whether it keeps
+  its weight.
+- **Deck:** Urooz must pull "VH is the discriminator" and "the networks don't transfer". Use the
+  safe sentence in `receipts.md` instead.
+- **Decide the nospill blurb.** Soum set it "pending your call".
+- **D33's stated justification is now wrong.** Provenance routing still produces correct output,
+  but the reason it gives in the Master Plan was the channel swap. Reword it, but don't change the
+  behaviour.
+- `build_cache.py` still carries the wrong channel names, on purpose and with a docstring
+  explaining why. Renaming means rebuilding the cache and retraining. Leave it until after the
+  demo.
+- Carried over from earlier entries: the CPCL release date and quantity (read the NGT PDF), no
+  browser check of the benchmark "time unknown" header, Delta contact identity unchecked.
+
+**Next:** get `attribute` running on one live case (Jacksonville) so the first three-stage bundle
+exists. In parallel, send Urooz the two deck corrections.
+
+---
+
 ## [2026-09-13] D34 follow-up — rerun verified, edge rule declined, Zenodo indexed, sentinel date fixed
 
 **Done:**
