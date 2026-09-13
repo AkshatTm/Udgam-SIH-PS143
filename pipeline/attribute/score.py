@@ -46,6 +46,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import geo
+from infrastructure import INFRA_SCORE_FLOOR, find_infrastructure
 from tracks import MIN_POINTS, load_tracks
 
 HERE = Path(__file__).resolve().parent
@@ -562,9 +563,11 @@ def main():
             "Expected 'noaa_dense' or 'gfw_hourly'.")
 
     discharge_class = None
+    detections_doc = {}
     det_path = case_dir / "detections.geojson"
     if det_path.exists():
-        for f in json.loads(det_path.read_text(encoding="utf-8")).get("features", []):
+        detections_doc = json.loads(det_path.read_text(encoding="utf-8"))
+        for f in detections_doc.get("features", []):
             if (f.get("properties") or {}).get("classification") == "oil":
                 discharge_class = f["properties"].get("discharge_class")
                 break
@@ -637,6 +640,16 @@ def main():
 
     doc = build_outputs(top, funnel, grid, abstained, why)
 
+    # ---------------------------------------------------------------- fixed infrastructure
+    # Phase 4. This runs regardless of whether we abstained on vessels, and deliberately so:
+    # abstention says "these ships cannot be separated", which is not the same claim as "no
+    # vessel did it" and says nothing at all about a pipeline. Huntington is the case that
+    # makes the difference concrete — the scorer refuses to separate its top two vessels, and
+    # the correct finding there is still a fixed source.
+    best_vessel = plausible[0]["score"] if plausible else None
+    infra, infra_diag = find_infrastructure(meta, detections_doc, grid, best_vessel)
+    doc["infrastructure"] = infra
+
     # -------------------------------------------------------------------- exclusions
     pool = plausible[len(top):] if not abstained else plausible
     for s in pool:
@@ -691,6 +704,22 @@ def main():
     print(f"\nexclusions    {len(doc['excluded'])}")
     for e in doc["excluded"]:
         print(f"  - {e['name'] or e['mmsi']}: {e['reason']}")
+    print(f"\ninfrastructure {len(infra)} finding(s)   "
+          f"[{infra_diag['candidates']} candidate(s) declared, "
+          f"{infra_diag['termini']} terminus point(s) on the slick]")
+    for f in infra:
+        tkm = "n/a" if f["terminus_km"] is None else f"{f['terminus_km']:.2f} km"
+        print(f"  - {f['name']} ({f['kind']})  score {f['score']:.3f}   "
+              f"origin_p {f['origin_probability']:.2f}   terminus {tkm}")
+        for r in f["reasons"]:
+            print(f"      {r}")
+    for name in infra_diag.get("below_floor", []):
+        print(f"  - {name}: below the {INFRA_SCORE_FLOOR} floor, not reported")
+    if infra_diag["candidates"] == 0 and infra_diag["termini"]:
+        print("  no candidate declared in meta.json/infrastructure_candidates, so nothing is")
+        print("  named. Slick termini were computed and are available; a fixed point with no")
+        print("  declared structure behind it is water the drift model liked, not a finding.")
+
     print(f"\nwrote {out_dir / 'vessels.geojson'}  ({len(features)} tracks)")
     print(f"      {out_dir / 'suspects.json'}")
     print(f"\nNow run:  python scripts/validate_case.py {case_dir}")

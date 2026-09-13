@@ -41,6 +41,7 @@ sys.path.insert(0, str(HERE))
 
 import geo                                     # noqa: E402
 import ingest                                  # noqa: E402
+import infrastructure                          # noqa: E402
 import score                                   # noqa: E402
 from tracks import MAX_INTERP_GAP_MIN, Track, load_tracks   # noqa: E402
 
@@ -780,6 +781,125 @@ class TestEvidenceBreadthReachesTheCard(unittest.TestCase):
         self.assertEqual(s["components_available"] + nulls, s["components_total"],
                          "available + null must account for every component; if these "
                          "disagree the card is describing a different set than the score")
+
+
+class TestInfrastructure(unittest.TestCase):
+    """Phase 4. Hand-computed geometry: a square slick 0.02 deg on a side at the equator-ish
+    latitude 33.6, so the arithmetic is checkable on paper rather than read back out of the
+    module. The point of these is the refusals as much as the scoring — a structure named with
+    no provenance is the infrastructure version of a vessel name that is not in the AIS file.
+    """
+
+    def square_detection(self, classification="oil"):
+        ring = [[-118.10, 33.60], [-118.08, 33.60], [-118.08, 33.62],
+                [-118.10, 33.62], [-118.10, 33.60]]
+        return {"type": "FeatureCollection", "features": [{
+            "type": "Feature",
+            "geometry": {"type": "Polygon", "coordinates": [ring]},
+            "properties": {"id": "det-01", "classification": classification,
+                           "centroid": [-118.09, 33.61], "area_km2": 4.0},
+        }]}
+
+    def flat_grid(self, value=1.0):
+        """A 3x3 origin grid, uniform, covering the slick and a margin around it."""
+        return geo.OriginGrid({
+            "bounds": {"west": -118.15, "south": 33.55, "east": -118.03, "north": 33.67},
+            "shape": [3, 3],
+            "values": [value] * 9,
+            "centroid": [-118.09, 33.61],
+            "radius_50_km": 1.0, "radius_90_km": 2.0,
+            "time_window": ["2021-10-01T00:00:00Z", "2021-10-01T12:00:00Z"],
+            "time_window_method": "convergence", "abstain": False,
+        })
+
+    def candidate(self, **over):
+        c = {"name": "Test Pipeline", "lon": -118.09, "lat": 33.62,
+             "kind": "pipeline", "source": "unit test"}
+        c.update(over)
+        return {"infrastructure_candidates": [c]}
+
+    # ------------------------------------------------------------------ termini
+    def test_corners_of_a_square_are_the_termini(self):
+        termini, diag = infrastructure.slick_termini(self.square_detection())
+        # The four corners sit at the max radius from the centre; the closing vertex repeats
+        # the first, so five points clear 0.75 * max_radius and no edge midpoint does.
+        self.assertEqual(len(termini), 5)
+        self.assertEqual(diag[0]["terminus_points"], 5)
+        self.assertEqual(diag[0]["perimeter_points"], 5)
+
+    def test_lookalikes_are_not_given_termini(self):
+        termini, diag = infrastructure.slick_termini(self.square_detection("lookalike"))
+        self.assertEqual(termini, [], "a wind shadow is not a slick and has no source end")
+        self.assertEqual(diag, [])
+
+    # ------------------------------------------------------------------ refusals
+    def test_candidate_without_a_source_is_refused(self):
+        with self.assertRaises(SystemExit) as e:
+            infrastructure.load_candidates(self.candidate(source=""))
+        self.assertIn("source", str(e.exception))
+
+    def test_candidate_with_swapped_coordinates_is_refused(self):
+        with self.assertRaises(SystemExit) as e:
+            infrastructure.load_candidates(self.candidate(lon=33.62, lat=-118.09))
+        self.assertIn("longitude", str(e.exception).lower())
+
+    def test_no_candidates_means_no_findings(self):
+        found, diag = infrastructure.find_infrastructure(
+            {}, self.square_detection(), self.flat_grid(), 0.5)
+        self.assertEqual(found, [])
+        self.assertEqual(diag["candidates"], 0)
+        self.assertEqual(diag["termini"], 5,
+                         "termini are still measured — only the naming is withheld")
+
+    # ------------------------------------------------------------------ scoring
+    def test_a_candidate_on_a_terminus_scores_the_full_weight(self):
+        # origin probability 1.0 everywhere, and the candidate sits on the corner
+        # [-118.10, 33.62], so both terms are at their maximum: 0.60 + 0.40 = 1.00.
+        found, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.62), self.square_detection(),
+            self.flat_grid(1.0), None)
+        self.assertEqual(len(found), 1)
+        self.assertAlmostEqual(found[0]["score"], 1.0, places=3)
+        self.assertAlmostEqual(found[0]["terminus_km"], 0.0, places=3)
+
+    def test_distance_from_the_terminus_decays_the_score(self):
+        near, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.62), self.square_detection(),
+            self.flat_grid(1.0), None)
+        far, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.65), self.square_detection(),
+            self.flat_grid(1.0), None)
+        self.assertLess(far[0]["score"], near[0]["score"])
+        self.assertGreater(far[0]["terminus_km"], near[0]["terminus_km"])
+
+    def test_a_candidate_outside_the_origin_cloud_loses_the_origin_term(self):
+        # Far outside the 3x3 grid's bounds, so grid.contains is False and p_origin is 0.0.
+        found, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-119.50, lat=34.90), self.square_detection(),
+            self.flat_grid(1.0), None)
+        self.assertEqual(found, [], "no origin support and no slick nearby is below the floor")
+
+    def test_a_competing_vessel_is_stated_rather_than_deducted(self):
+        """Section 4.3: when both are plausible we report both. The vessel score must shape
+        the reasons and must NOT change the number — a score that quietly moves because
+        something else scored well is not auditable."""
+        alone, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.62), self.square_detection(),
+            self.flat_grid(1.0), None)
+        contested, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.62), self.square_detection(),
+            self.flat_grid(1.0), 0.90)
+        self.assertEqual(alone[0]["score"], contested[0]["score"])
+        self.assertTrue(any("no vessel was scorable" in r for r in alone[0]["reasons"]))
+        self.assertTrue(any("also remains plausible" in r for r in contested[0]["reasons"]))
+
+    def test_every_finding_declares_where_its_coordinate_came_from(self):
+        found, _ = infrastructure.find_infrastructure(
+            self.candidate(lon=-118.10, lat=33.62), self.square_detection(),
+            self.flat_grid(1.0), None)
+        self.assertEqual(found[0]["declared_source"], "unit test")
+        self.assertTrue(any("declared case input" in r for r in found[0]["reasons"]),
+                        "the card has to say the position was looked up, not detected")
 
 
 if __name__ == "__main__":
