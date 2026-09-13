@@ -154,6 +154,14 @@ ONLY** — that condition is real and belongs on the data-provenance slide. Toke
 **Cases 5 and 6 keep `attribute`.** `gap` and `slowdown` still come back `null` — that is hourly
 sampling (D20), not a coverage failure, and the card says "n/a".
 
+Re-run 2026-09-14 (same token, same result) after Jaiveer flagged that `gfw_probe.py`'s own
+docstring still said "NOT yet run" — the banner was stale, not the finding; it is now corrected.
+`case-mumbai-2023/meta.json` already had a scored `suspects.json`/`vessels.geojson` sitting
+unused because `acts_available` had never been updated — added `attribute`, validates PASS.
+`case-jamnagar-2024` has no scored output yet (no GFW-hourly track ingest has been built against
+this coverage), so it stays `detect + trace` until that ingest exists — the *access path* is
+answered, the *ingest script* is a separate, unstarted piece of work.
+
 ⚠️ **A false negative we nearly recorded here.** The first probe returned HTTP 403 on every
 endpoint and the script concluded *"no usable GFW coverage — cases 5 and 6 drop to detect+trace."*
 It was **Cloudflare error 1010, "browser signature banned"** — the gateway rejecting urllib's

@@ -391,7 +391,10 @@ def score_vessel(track, grid, t0, t1, ais_source, discharge_class, box):
         "weight_live": round(live, 3),
         "closest_time": when,
         "closest_pos": pos,
-        "closest_km": round(geo.haversine_km(pos[0], pos[1], *grid.centroid), 2),
+        # D36: measured to the grid peak, not origin.centroid — on an elongated
+        # cloud the two can be far apart (Jacksonville: peak 10.65 km off centroid),
+        # and a vessel sitting on the peak should not read as "10 km away".
+        "closest_km": round(geo.haversine_km(pos[0], pos[1], *grid.peak_lonlat()), 2),
         "grid_probability": round(prox.value, 3) if prox.applicable else 0.0,
         "edge_truncated": bool(box and box.on_edge(pos[0], pos[1])),
         "gap_minutes": track.gap_overlapping(t0, t1),
@@ -479,10 +482,10 @@ def clipped_feature(track, t0, t1, pad_hours=TRACK_PAD_HOURS):
 
 
 def build_outputs(scored, funnel, grid, abstained, abstain_reason):
-    """`suspects.json` per 6.7, plus three fields that are not in the schema yet.
+    """`suspects.json` per 6.7 — including `component_notes` (D29) and `weight_live` /
+    `components_available` / `components_total` (D37), blessed into the schema 14 Sept.
 
-    `component_notes`, `weight_live` and `components_available` are all additive and
-    all exist for the same reason: **the score alone does not say how much evidence
+    All four exist for the same reason: **the score alone does not say how much evidence
     stands behind it.**
 
     When components are not applicable their weight is redistributed across the rest
@@ -494,9 +497,8 @@ def build_outputs(scored, funnel, grid, abstained, abstain_reason):
     cases it is the normal state rather than an edge case.
 
     Emitting the numbers is not the fix — the fix is what the card shows, which is
-    Akshat's ruling and Harshita's layout. But the frontend cannot render what it has
-    not been given, so the data ships now and neither of them waits on me. Schema
-    amendment requested; if it is refused these three keys come out together.
+    Akshat's ruling and Harshita's layout. The data was worth shipping ahead of the
+    ruling so neither of them had to wait on it.
     """
     suspects = []
     for s in scored:

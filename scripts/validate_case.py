@@ -674,6 +674,25 @@ def check_suspects(d, known_mmsi, origin, box=None, ais_source=None):
                 warn(f"{w}: components {missing} are null with no component_notes entry — "
                      "the card will render 'n/a' with nothing behind it (D29)")
 
+        # weight_live / components_available / components_total (D37) — a renormalised
+        # score says nothing about how much evidence stands behind it on its own. WARN,
+        # not ERR: bundles scored before 14 Sept predate these fields and re-scoring them
+        # is not this validator's job.
+        if isinstance(comps, dict):
+            for key in ("weight_live", "components_available", "components_total"):
+                if key not in sus:
+                    warn(f"{w}: missing '{key}' — re-score with current score.py so the "
+                         "card can show how much evidence backs this score (D37)")
+            if "components_available" in sus and "components_total" in sus:
+                n_null = sum(1 for v in comps.values() if v is None)
+                expect_available = len(comps) - n_null
+                if sus["components_available"] != expect_available:
+                    err(f"{w}: components_available={sus['components_available']} does not "
+                        f"match {expect_available} non-null entries in components")
+                if sus["components_total"] != len(comps):
+                    err(f"{w}: components_total={sus['components_total']} does not match "
+                        f"{len(comps)} entries in components")
+
     # A component that returns the SAME value for every scored suspect discriminates nothing:
     # it adds a constant to every score, changes no ranking, and inflates the numbers on screen
     # by its full weight. This is the check that catches type_prior = 1.00 across a homogeneous
