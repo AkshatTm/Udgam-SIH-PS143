@@ -74,7 +74,8 @@ def ensure_trace(case, dry):
     copies zero files and still exits 0 -- which reads as success.
     """
     meta_path = REPO / "cases" / case / "meta.json"
-    meta = json.loads(meta_path.read_text())
+    # explicit utf-8: Windows defaults to cp1252 and turned every em dash in meta.json into mojibake
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
     acts = meta.get("acts_available", [])
     if "trace" in acts:
         return False
@@ -86,7 +87,7 @@ def ensure_trace(case, dry):
     order = ["detect", "trace", "attribute", "verify"]
     acts = sorted(set(acts) | {"trace"}, key=lambda a: order.index(a) if a in order else 99)
     meta["acts_available"] = acts
-    meta_path.write_text(json.dumps(meta, indent=2) + "\n")
+    meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return True
 
 

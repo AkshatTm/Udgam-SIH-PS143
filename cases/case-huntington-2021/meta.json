@@ -1,6 +1,6 @@
 {
   "case_id": "case-huntington-2021",
-  "title": "Huntington Beach \u00e2\u20ac\u201d San Pedro Bay Pipeline",
+  "title": "Huntington Beach — San Pedro Bay Pipeline",
   "short_location": "San Pedro Bay, Orange County, California",
   "case_type": "spill",
   "satellite": "Sentinel-1A",
@@ -16,5 +16,5 @@
     "blurb": "588 barrels of crude reached the Orange County coast. Which ship released it?",
     "difficulty": "hard"
   },
-  "notes": "Infrastructure + exoneration case. The San Pedro Bay Pipeline (operator Amplify Energy / Beta Offshore) began leaking the evening of 1 Oct 2021, ~4.5 nm off Huntington Beach; first leak alarm 1 Oct 16:10 PDT (23:10Z), final shutdown 2 Oct 06:04 PDT. This S1A pass is ~2.8 h after the first alarm, oil still leaking. NTSB MIR-24-01 attributes the cause to the containerships MSC DANIT and Beijing dragging anchor and striking the pipeline on 25 Jan 2021 \u00e2\u20ac\u201d 8 months before the release. Expect the origin on the pipeline right-of-way and every transiting vessel excluded. acts: add trace/attribute/verify as stages land."
+  "notes": "Infrastructure + exoneration case. The San Pedro Bay Pipeline (operator Amplify Energy / Beta Offshore) began leaking the evening of 1 Oct 2021, ~4.5 nm off Huntington Beach; first leak alarm 1 Oct 16:10 PDT (23:10Z), final shutdown 2 Oct 06:04 PDT. This S1A pass is ~2.8 h after the first alarm, oil still leaking. NTSB MIR-24-01 attributes the cause to the containerships MSC DANIT and Beijing dragging anchor and striking the pipeline on 25 Jan 2021 — 8 months before the release. Expect the origin on the pipeline right-of-way and every transiting vessel excluded. acts: add trace/attribute/verify as stages land."
 }
