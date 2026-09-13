@@ -1,6 +1,13 @@
 # ANUSHKA — Stage 2: Drift, Origin, Age
 *v3. Read with 00_MASTER_PLAN.md. Organised in phases, not days.*
 
+> ### Historical brief — kept as the record of what Anushka built
+>
+> Remaining work from this document transferred to [`docs/team/akshat-remaining.md`](akshat-remaining.md)
+> on 14 Sept 2026. **Do not track live work here.** It is preserved, and promoted out of the
+> archive, because it is the fullest account of the reasoning behind Stage 2 (drift, origin, age) — read it to
+> prepare, to review, or to pick the stage up.
+
 > **Note for Akshat:** Parts B and C explain what this stage does and why, in plain terms. Read them before reviewing her work. This is the stage whose errors are hardest to see, because a wrong answer here looks completely plausible — it is a map with a cloud on it, and nothing about it announces that the cloud is in the wrong place.
 
 ---

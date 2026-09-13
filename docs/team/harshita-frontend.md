@@ -1,6 +1,13 @@
 # HARSHITA — Frontend, then Integration
 *v2. Read with 00_MASTER_PLAN.md. Organised in phases, not days.*
 
+> ### Historical brief — kept as the record of what Harshita built
+>
+> Remaining work from this document transferred to [`docs/team/akshat-remaining.md`](akshat-remaining.md)
+> on 14 Sept 2026. **Do not track live work here.** It is preserved, and promoted out of the
+> archive, because it is the fullest account of the reasoning behind the frontend — read it to
+> prepare, to review, or to pick the stage up.
+
 > **You own the only thing the judges actually look at.** Four people produce numbers in files. Your screen is what turns those numbers into something a person understands in five minutes — and, per the HOD's requirement, understands **with nobody standing next to them.** That last part changes the job from "build the UI" to "build something that teaches itself", and Parts B and C are entirely about that.
 
 ---

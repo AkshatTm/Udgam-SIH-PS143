@@ -1,6 +1,13 @@
 # AKSHAT — Integration, Cases, Contracts, Verification
 *v3. Read with 00_MASTER_PLAN.md (v4) and 05_HARSHITA_INTEGRATION.md. Organised in phases, not days.*
 
+> ### Historical brief — kept as the record of what Akshat built
+>
+> Remaining work from this document transferred to [`docs/team/akshat-remaining.md`](akshat-remaining.md)
+> on 14 Sept 2026. **Do not track live work here.** It is preserved, and promoted out of the
+> archive, because it is the fullest account of the reasoning behind the producer side of integration — read it to
+> prepare, to review, or to pick the stage up.
+
 > **You are the producer side of integration: everything upstream of the case bundle.** Harshita owns everything downstream of it. The handoff is a named gate (Part D). You are also the only person on this project with zero components of your own — that is deliberate. **Your value is slack.** When someone's handoff breaks, you are the person with room to fix it. Protect that by refusing extra work, not by taking it.
 
 ---

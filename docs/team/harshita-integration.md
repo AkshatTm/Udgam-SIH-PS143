@@ -1,6 +1,13 @@
 # HARSHITA — Integration: the Human Gate
 *v2. Companion to 04_HARSHITA_FRONTEND.md. Read with 00_MASTER_PLAN.md and 01_AKSHAT_INTEGRATION.md. Organised in phases, not days.*
 
+> ### Historical brief — kept as the record of what Harshita built
+>
+> Remaining work from this document transferred to [`docs/team/akshat-remaining.md`](akshat-remaining.md)
+> on 14 Sept 2026. **Do not track live work here.** It is preserved, and promoted out of the
+> archive, because it is the fullest account of the reasoning behind the consumer side of integration — read it to
+> prepare, to review, or to pick the stage up.
+
 > **Your frontend document covers what you build. This one covers what you do once real data starts arriving.** You are the second half of integration: Akshat owns everything upstream of the case bundle, you own everything downstream of it. He proves a bundle is *valid*; you prove it is *true*. Those are different questions and only one of them can be automated.
 
 ---
