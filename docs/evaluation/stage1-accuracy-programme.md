@@ -4,7 +4,7 @@
 The narrative and the reasoning live in `docs/updates/soum.md`; this is the one-screen answer to
 "where is it".*
 
-**Last updated: 2026-09-14 04:30**
+**Last updated: 2026-09-14 05:40** — caches rebuilt, stopped for the night before the retrain.
 
 ---
 
@@ -51,7 +51,7 @@ Two bands hold **74.7%** of the metric and are the only two we lose.
 | **E0** validation protocol | ✅ **done** | `split.py` + `evaluate_val.py`. Old split had **1** scene ≥30% in validation; now **3**, rotated over 3 folds. Proxy verified faithful (≥30% collapses to 0.17 vs 0.88 below it). **Fold spread 0.0599 — nothing smaller is measurable.** ⚠️ `train_unet` still selects on tile IoU, not val-scene |
 | **E8a** oracle ceiling | ✅ **done** | **0.8446** verified independently (agent said 0.838). Boundary decomposition: at ≥30%, **81% of oracle error is within 5 px of the annotator's line** — that band is annotation-limited |
 | **E1** channel fix + ablation | ✅ **done — NULL** | Four measurements agree it buys nothing: tile IoU 0.6997/0.6911/0.6994, pooled 0.6606/0.6513/0.6549 (spread 0.0093 vs fold noise 0.0599), ≥30% band 0.26–0.28 in all three. **Hypothesis retired.** Kept the rename for hygiene |
-| **E2** sea-referenced normalisation | 🔄 **in progress** | Estimator built, safety gate **PASSES** on 2,570 scenes. Scale was **1.8×–4.2× too wide** on the ≥30% band; bands up to 3–10% untouched (0.000 shift, 1.000 scale). **Caches rebuilding now**, then retrain |
+| **E2** sea-referenced normalisation | 🔄 **caches built — retrain is the next step** | Estimator built, safety gate **PASSES** on 2,570 scenes. Scale was **1.8×–4.2× too wide** on the ≥30% band; bands up to 3–10% untouched (0.000 shift, 1.000 scale). Both caches now on disk, channel order corrected (`vv_med` −20.20 dB, was −32.87). **Retrain not started — deliberately stopped here** |
 | **E4** loss — Focal+Dice / Tversky | ⬆️ **promoted, not started** | E1 points here: **zero of 200 easy tiles exceed 0.99** in any config, and focal γ=2 de-weights confident pixels by construction |
 | **E3** high-coverage regime | ❌ not started | Only **9** training scenes ≥30%, covering 38% of the holdout's oil mass |
 | **E5** TTA + seed ensemble | ❌ not started | Deliberately last — running it early inflates every intermediate comparison |
@@ -90,3 +90,34 @@ Two bands hold **74.7%** of the metric and are the only two we lose.
   corrected channel order, which isolates normalisation as the only variable.
 - **Channel order in the new caches is transposed** relative to every existing checkpoint —
   channel 0 is now VV. Old models are incompatible. Retrains write to **tagged** files only.
+
+## Caches on disk, ready to train from
+
+| cache | scenes | tiles | normalisation | note |
+|---|---|---|---|---|
+| `P12` | 2,570 | 28,129 | median | the baseline |
+| `P12sea` | 2,570 | 27,640 | sea-referenced (E2) | 489 fewer tiles, mostly hard negatives |
+
+Both carry the corrected channel order: `vv_med` median **−20.20 dB** against `vh_med` **−32.87**,
+i.e. VV is in channel 0, in 99.9% of scenes. The old cache had these transposed.
+
+⚠️ **The two caches differ by TWO changes, not one.** Beyond normalisation, the sea cache's
+coastline land mask marks land invalid, so more tiles exceed `MAX_INVALID_FRAC` and are dropped —
+6,373 hard negatives against 6,850. Do not report the comparison as isolating normalisation.
+
+## Next session — exact commands
+
+```bash
+# baseline and E2, same budget, same stratified fold, TAGGED outputs
+python pipeline/detect/train_unet.py --epochs 12 --patience 12     --split stratified --fold 0 --tag base_median          # trains from P12
+python pipeline/detect/train_unet.py --epochs 12 --patience 12     --split stratified --fold 0 --tag e2_sea               # NEEDS --cache P12sea (not yet wired)
+
+python pipeline/detect/evaluate_val.py --fold 0 --ckpt pipeline/detect/models/unet_base_median.pt
+python pipeline/detect/evaluate_val.py --fold 0 --ckpt pipeline/detect/models/unet_e2_sea.pt
+```
+
+**`train_unet.py` has no `--cache` flag yet** — it hardcodes `TileStore("P12")`. That is the first
+edit of the next session, before any training.
+
+**Read the ≥30% band, not the pooled number.** Pooled moves by less than the 0.0599 fold spread
+unless that band moves a lot. Today it sits at 0.26–0.28; the oracle says 0.959 is available.
