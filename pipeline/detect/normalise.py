@@ -88,6 +88,11 @@ SEA_MIN_PROM = 0.04         # a peak must clear 4% of the tallest peak to count
 SEA_MIN_SEP_DB = 1.5        # two modes closer than this are one mode
 SEA_MIN_FRAC = 0.02         # the bright mode must hold >=2% of valid pixels, or it
                             # is a handful of ships rather than the sea
+SEA_MAX_SHIFT_DB = 9.0      # a "sea" mode more than this far above the scene median
+                            # is not sea. Oil-vs-sea contrast at C-band VV is 4.3-9.0
+                            # dB measured on this corpus, and the largest genuine
+                            # shift over all of Parts I+II is 5.42 dB. The rejected
+                            # cases run 10.6, 11.9, 14.0 and 21.0 dB — land.
 SEA_MAX_MAD_RATIO = 1.0     # the bright mode must be no ROUGHER than the dark one.
                             # Sea under steady wind is homogeneous speckle; oil sits
                             # near the noise floor and is structurally variable; LAND
@@ -102,9 +107,55 @@ SEA_POLISH_ITER = 3
 SEA_TOL = 0.02              # dB; stop when the reference stops moving
 
 
-def valid_mask(band):
-    """Finite, and not the exact-zero nodata sentinel (TRAPS #22)."""
-    return np.isfinite(band) & (band != 0.0)
+LAND_WINDOW_PX = 51         # matches darkspot.prepare's land_window_px
+LAND_DELTA_DB = 7.0         # matches darkspot.prepare's land_delta_db
+
+
+def land_mask(band, finite=None, window=LAND_WINDOW_PX, delta=LAND_DELTA_DB):
+    """Pixels whose LOCAL mean sits well above the sea -> land.
+
+    This is the population filter the histogram needs, not a detection mask, so it
+    is deliberately lighter than `darkspot.prepare()`: that one adds closing, hole
+    filling, a minimum-area test and a 40 px dilation because it must not let a
+    coastal sidelobe become a detection. Here we only need land OUT of the sample
+    before estimating a sea level, and the local-mean test alone does that at a
+    third of the cost. The two share the same two constants on purpose.
+
+    `sea_ref` is the 20th percentile of local means, which is robust to a scene that
+    is a third land — the same trick darkspot uses.
+    """
+    from scipy import ndimage as ndi
+    if finite is None:
+        finite = np.isfinite(band) & (band != 0.0)
+    if not finite.any():
+        return np.zeros_like(band, bool)
+    glob = float(np.median(band[finite]))
+    loc = ndi.uniform_filter(np.where(finite, band, glob).astype(np.float32), size=window)
+    sea_ref = float(np.percentile(loc[finite], 20))
+    return (loc > sea_ref + delta) | ~finite
+
+
+def valid_mask(band, exclude_land=False):
+    """Finite, not the exact-zero nodata sentinel (TRAPS #22), and optionally not land.
+
+    WHY exclude_land EXISTS. `build_cache.normalise()`'s docstring has always said
+    valid means "not NaN, not exact-zero, not masked land" — but the implementation
+    never masked land. That gap is what failed the first two E2 audits: on 22 of the
+    Parts I+II look-alike and no-oil scenes the brightest histogram mode is a
+    coastline, so the estimator picked land as "sea" and moved the reference by up to
+    21 dB. A reference on land makes the entire ocean read as oil.
+
+    No threshold on the shift can fix that, and I tried: sweeping the cap from 9 dB
+    down to 5 dB never separated the two populations, because genuine look-alike
+    scenes with a 30-50% dark patch legitimately re-reference by 3-6 dB. What DOES
+    separate them is where the reference lands — the land cases sit at -7 to -15 dB,
+    which is not ocean. Excluding land from the sample is the fix; capping the
+    symptom is not.
+    """
+    v = np.isfinite(band) & (band != 0.0)
+    if exclude_land:
+        v &= ~land_mask(band, v)
+    return v
 
 
 def median_reference(band, valid=None):
@@ -124,7 +175,7 @@ def median_reference(band, valid=None):
     return med, 1.4826 * mad + EPS
 
 
-def sea_reference(band, valid=None, bins=SEA_BINS, min_prom=SEA_MIN_PROM,
+def sea_reference(band, valid=None, exclude_land=True, bins=SEA_BINS, min_prom=SEA_MIN_PROM,
                   min_sep_db=SEA_MIN_SEP_DB, min_frac=SEA_MIN_FRAC,
                   k=SEA_K, polish_iter=SEA_POLISH_ITER, tol=SEA_TOL):
     """Sea level as the BRIGHTEST significant mode -> (ref, scale, info).
@@ -138,10 +189,10 @@ def sea_reference(band, valid=None, bins=SEA_BINS, min_prom=SEA_MIN_PROM,
     from scipy.signal import find_peaks
 
     if valid is None:
-        valid = valid_mask(band)
+        valid = valid_mask(band, exclude_land=exclude_land)
     med0, scale0 = median_reference(band, valid)
     info = {"n_modes": 0, "cut_db": None, "frac_sea": 1.0, "shift_db": 0.0,
-            "mad_ratio": None, "rejected": None}
+            "mad_ratio": None, "rejected": None, "mode": "median"}
     if not valid.any():
         return med0, scale0, info
 
@@ -177,17 +228,44 @@ def sea_reference(band, valid=None, bins=SEA_BINS, min_prom=SEA_MIN_PROM,
 
     ref = float(np.median(sea))
     scale = 1.4826 * float(np.median(np.abs(sea - ref))) + EPS
+    frac_sea = float(sea.size) / float(v.size)
+    info["frac_sea"] = frac_sea
 
-    # Land guard. See SEA_MAX_MAD_RATIO.
+    # ------------------------------------------------------------------
+    # WHICH OF THE TWO FAILURES IS THIS? They need different answers, and
+    # conflating them is what made the first design unsafe.
+    #
+    # Measured on the 12 Part III scenes that score IoU 0.085:
+    #   4 of 12 are >50% oil  -> the median sits INSIDE the slick.
+    #                            Reference AND scale are wrong.
+    #   8 of 12 are 30-50%    -> the median is still in the sea.
+    #                            Only the SCALE is inflated by the bimodality.
+    #
+    # The 30-50% case is the majority AND the safe one: keeping the median as the
+    # reference means the reference cannot be moved onto land, which is exactly the
+    # accident that failed the first audit (p99 shift 13.96 dB on no-oil scenes,
+    # max 21.0 dB). So the reference is only overridden when the dark mode is
+    # genuinely the majority, and even then only if the move is physically
+    # plausible for oil.
+    # ------------------------------------------------------------------
+    if frac_sea >= 0.5:
+        # Median already sits in the bright (sea) mode. Keep it — take only the
+        # uncontaminated scale.
+        info.update(cut_db=cut, shift_db=0.0, mode="scale-only")
+        return med0, scale, info
+
+    # Dark mode is the majority: the median really is inside the slick.
     dark = v[v <= cut]
     if dark.size >= 64:
         dmed = float(np.median(dark))
         dmad = 1.4826 * float(np.median(np.abs(dark - dmed))) + EPS
-        ratio = scale / dmad
-        info["mad_ratio"] = float(ratio)
-        if ratio > SEA_MAX_MAD_RATIO:
+        info["mad_ratio"] = float(scale / dmad)
+        if scale / dmad > SEA_MAX_MAD_RATIO:
             info["rejected"] = "bright mode rougher than dark mode — land, not sea"
             return med0, scale0, info
+    if (ref - med0) > SEA_MAX_SHIFT_DB:
+        info["rejected"] = f"shift {ref - med0:.1f} dB exceeds the oil-contrast ceiling — land"
+        return med0, scale0, info
 
     # Polish. Safe now: ref already sits in the sea mode, so clipping the dark tail
     # removes residual oil bleed rather than failing to escape the slick.
@@ -203,8 +281,7 @@ def sea_reference(band, valid=None, bins=SEA_BINS, min_prom=SEA_MIN_PROM,
         if moved < tol:
             break
 
-    info.update(cut_db=cut, frac_sea=float(sea.size) / float(v.size),
-                shift_db=float(ref - med0))
+    info.update(cut_db=cut, shift_db=float(ref - med0), mode="full-override")
     return ref, scale, info
 
 
@@ -341,7 +418,10 @@ def _audit(limit=None):
                 b = ds.read(2).astype(np.float32)
         except Exception:
             continue
-        v = valid_mask(b)
+        # Land OUT of the sample before anything is estimated — that is the fix the
+        # first two audits forced. Both estimators see the same population, so the
+        # shift measured below is purely the estimator's effect, not land's.
+        v = valid_mask(b, exclude_land=True)
         if not v.any():
             continue
         med, _ = median_reference(b, v)
