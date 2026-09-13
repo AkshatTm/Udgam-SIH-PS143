@@ -1,0 +1,15 @@
+{
+  "funnel": {
+    "in_region": 0,
+    "in_window": 0,
+    "plausible": 0,
+    "scored": 0,
+    "dropped_short_track": 0
+  },
+  "suspects": [],
+  "dark_vessels": [],
+  "infrastructure": [],
+  "excluded": [],
+  "abstained": true,
+  "abstain_reason": "no AIS archive we hold covers this region, so no vessel was considered \u2014 the funnel counts are zero because nothing was searched, not because the water was empty. meta.json declares ais_source 'gfw_hourly'; that data was not obtainable for this case. Fixed-source association is unaffected and is reported below."
+}

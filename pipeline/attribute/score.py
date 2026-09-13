@@ -539,13 +539,25 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--case", help="case id under cases/")
     g.add_argument("--case-dir", help="explicit path to a case bundle")
-    ap.add_argument("--parquet", required=True, help="output of ingest.py")
+    ap.add_argument("--parquet", help="output of ingest.py")
+    ap.add_argument("--no-ais", action="store_true",
+                    help="run without any AIS at all: fixed-source association only. For a "
+                         "case in a region no AIS archive we hold covers. Must be passed "
+                         "deliberately — it is never inferred from a missing --parquet, "
+                         "because a forgotten argument would otherwise silently produce a "
+                         "bundle that had considered no vessels.")
     ap.add_argument("--out-dir", help="where to write (default: the case bundle itself)")
     ap.add_argument("--top", type=int, default=TOP_N)
     ap.add_argument("--ranking", action="store_true",
                     help="print the full scored ranking, including when we abstain. "
                          "Diagnostics only — it never changes what is written.")
     a = ap.parse_args()
+
+    if bool(a.parquet) == bool(a.no_ais):
+        raise SystemExit(
+            "pass exactly one of --parquet or --no-ais.\n"
+            "  --parquet is the normal path. --no-ais says, deliberately and on the record,\n"
+            "  that no AIS archive covers this region, so no vessel can be considered at all.")
 
     case_dir = Path(a.case_dir) if a.case_dir else REPO / "cases" / a.case
     if not case_dir.is_dir():
@@ -578,37 +590,61 @@ def main():
     print(f"window        {iso(t0)} .. {iso(t1)}")
     print(f"ais_source    {ais_source}    discharge_class {discharge_class or '(none)'}")
 
-    tracks = load_tracks(a.parquet)
-    if not tracks:
-        raise SystemExit("no usable tracks in the parquet")
+    if a.no_ais:
+        # ------------------------------------------------- no AIS archive for this region
+        # Mumbai and Jamnagar sit outside NOAA Marine Cadastre, and Gulf of Alaska turns out
+        # to as well — every NOAA daily file stops near 50 N. Without an AIS source there is
+        # no vessel to consider, but the fixed-source and slick geometry are untouched by
+        # that, so Phase 4 still has everything it needs.
+        #
+        # The funnel goes to zeros because the validator compares the four counts and needs
+        # integers; nulls would not survive the monotonic check. That makes the counts the
+        # one place in this file where a zero is doing a null's job, so the claim is stated
+        # in `abstain_reason` instead, in words, where nothing can round it off: the counts
+        # are zero because nothing was searched, NOT because the water was empty. Do not let
+        # a card render "0 vessels in region" without that sentence next to it.
+        tracks, in_window, plausible = {}, [], []
+        in_region = dropped_short = 0
+        box = None
+    else:
+        in_window, plausible = [], []
+        tracks = load_tracks(a.parquet)
+        if not tracks:
+            raise SystemExit("no usable tracks in the parquet")
 
-    import duckdb
-    con = duckdb.connect()
-    n_all, west, east, south, north = con.execute(
-        "SELECT count(DISTINCT mmsi), min(lon), max(lon), min(lat), max(lat) "
-        "FROM read_parquet(?)", [str(a.parquet)]).fetchone()
-    con.close()
-    box = SearchBox(west, south, east, north)
+        import duckdb
+        con = duckdb.connect()
+        n_all, west, east, south, north = con.execute(
+            "SELECT count(DISTINCT mmsi), min(lon), max(lon), min(lat), max(lat) "
+            "FROM read_parquet(?)", [str(a.parquet)]).fetchone()
+        con.close()
+        box = SearchBox(west, south, east, north)
 
-    in_region = n_all
-    dropped_short = n_all - len(tracks)
+        in_region = n_all
+        dropped_short = n_all - len(tracks)
 
-    in_window, plausible = [], []
-    for t in tracks.values():
-        if t.end < t0 or t.start > t1:
-            continue
-        in_window.append(t)
+        for t in tracks.values():
+            if t.end < t0 or t.start > t1:
+                continue
+            in_window.append(t)
 
-    for t in in_window:
-        s = score_vessel(t, grid, t0, t1, ais_source, discharge_class, box)
-        if s and s["grid_probability"] > PLAUSIBLE_GRID_MIN:
-            plausible.append(s)
+        for t in in_window:
+            s = score_vessel(t, grid, t0, t1, ais_source, discharge_class, box)
+            if s and s["grid_probability"] > PLAUSIBLE_GRID_MIN:
+                plausible.append(s)
 
-    plausible.sort(key=lambda s: s["score"], reverse=True)
+        plausible.sort(key=lambda s: s["score"], reverse=True)
 
     # ------------------------------------------------------------------- abstention
     abstained, why = False, None
-    if grid.abstain:
+    if a.no_ais:
+        abstained, why = True, (
+            f"no AIS archive we hold covers this region, so no vessel was considered — the "
+            f"funnel counts are zero because nothing was searched, not because the water was "
+            f"empty. meta.json declares ais_source {ais_source!r}; that data was not "
+            f"obtainable for this case. Fixed-source association is unaffected and is "
+            f"reported below.")
+    elif grid.abstain:
         abstained, why = True, ("Stage 2 flagged the origin cloud as too diffuse to "
                                 "attribute at acceptable confidence")
     elif len(plausible) > ABSTAIN_MAX_PLAUSIBLE_VESSELS:
