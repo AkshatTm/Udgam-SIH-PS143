@@ -90,8 +90,28 @@ The failure signature reproduces unmistakably — a 5× cliff into the top band.
 is **not** comparable to Part III's 0.435: only 3 scenes sit in the collapsed band here versus
 12 there, so it carries far less pooled weight, and 10–30% is genuinely easier on this
 population (0.883 vs 0.660). **Use this metric for measuring change, never for predicting the
-Part III value**, and do not quote a val delta as a Part III delta. 3-fold rotation running to
-get the ≥30% spread; nothing gets tuned on a difference smaller than it.
+Part III value**, and do not quote a val delta as a Part III delta.
+
+**3-fold rotation result — and the measurement floor is uncomfortably high.**
+
+| fold | pooled | 95% CI | ≥30% band (n=3) |
+|---|---|---|---|
+| 0 | 0.6350 | [0.523, 0.744] | **0.1714** |
+| 1 | 0.6252 | [0.493, 0.760] | **0.2737** |
+| 2 | 0.6851 | [0.589, 0.761] | **0.4286** |
+| | mean **0.6484**, spread **0.0599** | | mean ~0.29, range **0.257** |
+
+Every other band is identical across folds (0.6120 / 0.7047 / 0.7865 / 0.8832), which confirms
+the rotation touches only the ≥30% assignment as intended. But that band swings **0.17 to 0.43
+on three scenes** — a 2.5× range. **Nothing below ~0.06 pooled, or a large move in the ≥30%
+band, is measurable on this proxy.** The expected effect (a 2.2× scale correction) should clear
+that comfortably; a modest one would not be distinguishable from fold noise.
+
+**⚠ The baseline ≥30% numbers above are LEAKY and flatter the baseline.** The shipped checkpoint
+was trained with the old `train_test_split(uniq, 0.15, random_state=42)`, which put **8 of the 9**
+≥30% scenes into training. So most of what fold 0/1/2 "hold out" was in that model's training
+set — and it still scores 0.17–0.43, which is the point. Every retrained model from here must use
+`split.py`, or the comparison is not like-for-like.
 
 ### Dataset findings worth knowing independently of any retrain
 
