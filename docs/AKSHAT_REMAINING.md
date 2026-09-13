@@ -7,6 +7,14 @@ there). Soum and Jaiveer keep their own work, which is not listed here except wh
 **Priority key.** **P0**: needed for the demo. **P1**: do if time allows before 17:00. **P2**:
 after the demo, before December.
 
+> **Audited against the repo 14 Sept (late), at `94206c4`.** Every item below is either ticked or
+> still genuinely open; stale claims are corrected in place and marked *(was: ...)*.
+> **State right now:** `origin/main` and local `main` both at `94206c4`; validator 26/26; 100 Stage 3
+> tests; `cases/` PASS on all 9 with 6 warnings, 3 of them by design on the no-oil cases.
+> **What is actually left: §1A verification prose (nothing ships on Verify without it), §1E the deck
+> itself, §1F rehearsals, §3B human QA, §3C the demo machine and the fallback video.** Everything
+> else on this page is done.
+
 ---
 
 ## 0. First 30 minutes — clear the ground
@@ -31,10 +39,11 @@ after the demo, before December.
   git check-ignore docs/ANSWERS.md            # must print the path, never commit it
   ```
   Then commit, PR to `main`, merge.
-- [x] **P0 — ~~Ask Jaiveer to re-score~~ DONE 14 Sept without him: AIS rebuilt from the public NOAA archive, all three re-scored.** Jacksonville, Farallones, Huntington and Mumbai with the
-  current `score.py`. That puts peak-based `closest_km` (D36) and the D37 fields into the
-  committed bundles; the data is on his laptop only. Mumbai uses `--no-ais`. It clears the D37
-  warnings.
+- [x] **P0 — ~~Ask Jaiveer to re-score~~ DONE 14 Sept without him.** The parquets were only on his
+  laptop, but NOAA Marine Cadastre is a public download: rebuilt in ~4 minutes, then Jacksonville,
+  Farallones and Huntington re-scored. Jacksonville and Huntington reproduce his funnel and ranking
+  exactly. D36 `closest_km` and the D37 fields are now in the bundles, and Jacksonville validates
+  with **0 warnings**. *(was: "Mumbai uses `--no-ais`" — Mumbai now runs on real GFW AIS, D40.)*
 - [x] **P0 — Resync the frontend copy after every bundle change.** `web/public/cases` is stale:
   - Farallones, Huntington and Mumbai lack `suspects.json` and the attribute act.
   - It still holds retired `case-golden-ray-2021` and `case-ennore-2017`.
@@ -48,12 +57,20 @@ after the demo, before December.
 
 ### 1A. Verification — Phase 4, pure writing, nobody else can do it (P0)
 
-All six files in `verification/` still carry `TODO` in `caveat`, `naap_result`, `verdict` and
-`explanation`. **No live case has the `verify` act.** Screen 4 is empty for every case in the demo.
+**`naap_result` is now filled in all six files from the bundles** (verified: no `TODO` left in any
+of them), and the stale wind shares in the facts-to-weigh lists were corrected. Huntington's verdict
+is pre-filled `partial` and Jamnagar's `not_applicable`; the other four are still `TODO`.
+**What is still owed is the human prose: `caveat` where marked, `verdict`, `explanation`,
+`what_would_have_helped`.** **No live case has the `verify` act** — checked, only the synthetic
+fixtures do — so Screen 4 is still empty for every case in the demo.
+
+Per-case fact sheets (bundle numbers, the sealed-record comparison, the traps) sit in the scratchpad
+beside the map overlays. They contain ANSWERS content and must never be committed.
 
 For each case: open `docs/ANSWERS.md` and the primary source → fill `official_finding.caveat` →
-fill `naap_result` **from the bundle files, not memory** → write `assessment` by hand → add
-`"verify"` to `meta.acts_available` → build → validate → sync.
+check `naap_result` against the bundle → write `assessment` by hand → add
+`"verify"` to `meta.acts_available` → **drop that file's line from `.git/info/exclude`** → build →
+validate → sync.
 
 ```bash
 python pipeline/export/build_case.py --case <id>
@@ -63,12 +80,12 @@ python scripts/sync_web_cases.py
 
 | Case | Stage 3 state now | Expected verdict (pre-registered in the archived 01 §4.4) | Watch out for |
 |---|---|---|---|
-| Jacksonville | scored, 2 suspects, top two 6.2% apart | open case (D31); possibly `partial`/`miss` (D30) | The D30 pre-registered competitor never reached the plausible set — say so, don't read it as "prediction wrong" |
-| Farallones | scored, clean separation | **headline blind result**, unknown until you open ANSWERS | Scene has other Cerulean slicks; ours is the 19.6 km one. Confirm full vessel name from the slick page |
-| Huntington | **abstained** (0.730 vs 0.729) | `partial` unless infrastructure finding lands (see 1B) | Naming a transiting vessel would be wrong; the abstention is the good part |
-| Mumbai | abstained, no AIS searched | multi-source / likely `not_applicable` or `partial` | "0 vessels" means **nothing searched**. Natural-seep claim still unsourced (1D) |
-| Gulf of Alaska | trace only, no attribute (NOAA has no Alaska AIS) | `partial` at best | Origin is an **ERA5 (wind-driven) result**, 81% wind share. The radar contact is **Cerulean's**, never ours (D34) |
-| Jamnagar | trace only | `not_applicable` | Say "no investigation, no named party, no enforcement", **never** "no record anywhere" (D24). Don't reproduce Cerulean's candidate MMSIs |
+| Jacksonville | scored, 2 suspects 6.2% apart, **1.30 / 1.13 km from the origin peak**, 1 exclusion | open case (D31); reads as a **miss** on attribution | Neither Cerulean candidate is in our set, and the D30 competitor never reached it either. The likely cause is timing — we rewind 16–24 h with age not estimated. Say that; don't read it as "prediction wrong" |
+| Farallones | scored 0.620 / 0.345 / 0.046; `type_prior` gated to null (D28) | reads as a **miss**; *(was: "headline blind result")* now **blind on weights, not provably on identity** (§16.1) | Ours is the 19.6 km slick, not the other Cerulean ones on the scene. Confirm the full vessel name from the slick page. Our #3 is one of Cerulean's co-candidates |
+| Huntington | **abstained** (0.730 vs 0.729), **3 exclusions with reasons** | **`partial`** — measured, not assumed | The pipeline is declared (D38) and scores **≈0.006, below the 0.25 floor**: NTSB's point lies outside the origin grid, 6.75 km from the peak. So there is **no** infrastructure finding. The abstention is still the good part |
+| Mumbai | **abstained after searching 9 vessels** (funnel 9 → 2 → 0 → 0) | likely `not_applicable` or `partial` | *(was: "no AIS searched")* **Changed by D40.** It now means "searched, and no vessel entered the origin cloud". The nearest — 5.0 km, grid probability 0.069 — was dropped by the 5-report minimum (issue F1). The natural-seep claim is **dropped**, not pending |
+| Gulf of Alaska | trace only, no attribute (NOAA has no Alaska AIS) | `partial` at best; by the pre-registered origin-to-contact test it is a **miss** (16.6 km) | Origin is an **ERA5 (wind-driven) result, wind share 0.73** *(was: 81% — an earlier field)*. The radar contact is **Cerulean's**, never ours (D34) |
+| Jamnagar | **attribute now runs**: 8 vessels searched, funnel 8 → 2 → 0 → 0, abstains | `not_applicable` | *(was: "trace only")* Searching and finding nobody in the cloud strengthens this verdict. Say "no investigation, no named party, no enforcement", **never** "no record anywhere" (D24). Don't reproduce Cerulean's candidate MMSIs |
 
 The `explanation` is human prose. **Never generated.** A `miss` with a reason ships.
 
@@ -109,8 +126,11 @@ The `explanation` is human prose. **Never generated.** A `miss` with a reason sh
 ### 1D. Claims, sources, receipts (P0 before the deck is final)
 
 - [x] **Mumbai "natural seep area"**: source it or remove it (D19 amended). It is unsourced today.
-- [ ] `receipts.md` TODOs: CPCL release date and quantity (read the NGT O.A. 180/2023 PDF), HYCOM
-  cadence per case, Ennore 2017 official reference.
+- [ ] `receipts.md` TODOs — **partly closed.** Done: the 118 m OpenDrift figure is qualified as
+  synthetic and Jacksonville's 550 m added; NTSB's 4.75 nm and casualty coordinate added; the GFW
+  section rewritten for D40. **Still open:** CPCL release date and quantity (the NGT O.A. 180/2023
+  PDF is a 95-page scan with no text layer, so it needs OCR or reading by eye), per-case HYCOM
+  cadence (the field caches are on Anushka's machine), Ennore 2017 official reference (P2).
 - [x] **Vessel IDs in pushed git history** (`ee19819` → `72b9540`). Decide: amend Master §16.1 to
   say Farallones' blindness assumes nobody read that window, or rewrite history (not advised this
   close). Case 1's name is also in `jaiveer.md` and the progress docs; case 1 is open, so it's
@@ -126,11 +146,13 @@ About ten slides; structure in `docs/_archive/akshat/01_AKSHAT_INTEGRATION.md` P
 | Adding a second polarisation took val F1 0.346 → 0.643 | "VH is the discriminator" (the feature was computed from VV) |
 | Networks transfer once channels match; live cases stay classical (median IoU vs Cerulean 0.483) | "The networks don't transfer" |
 | r50/r90 = **precision** across 50 runs | "accurate to X km" |
-| OpenDrift agrees within **550 m on Jacksonville** over a 140 km rewind | "118 m" as a real-case number. 118 m was measured on synthetic `case-000` (`STAGE2_NUMBERS.md` §8.4 vs line 145); `receipts.md` quotes it unqualified, so fix that |
+| OpenDrift agrees within **550 m on Jacksonville** over a 140 km rewind | "118 m" as a real-case number — that is synthetic `case-000`. *(`receipts.md` is fixed: it qualifies the 118 m and carries the 550 m.)* |
 | Age ships as **not estimated**, with the gate reason (no detection is `acute`) | Any age accuracy claim, including "N = 1 on Huntington" (withdrawn) |
 | Direction arrows on Jacksonville and Farallones only | Arrows on Huntington (143° reversal), Mumbai, Jamnagar |
 | Error budget as a **library average** (inverts on Alaska and Jamnagar) | Error budget as universal |
-| Galveston 987 → 897 → 17 → abstain; Huntington abstains on a real case | Attribution top-3 % (the Phase 8 curve doesn't exist yet) |
+| Galveston 987 → 897 → 17 → abstain; Huntington abstains on a real case with **3 named exclusions** | — |
+| **The Phase 8 curve now exists** (D39, `docs/STAGE3_PHASE8.md`): offshore top-1 **0.910**, **0.488** on hourly AIS, **0.653** at one r90 of origin error, **0.556** against an offender with no behavioural signature | *(was: "the Phase 8 curve doesn't exist yet")* Any of it as **accuracy on the six live cases** — it is a *ranking* number given a stated origin quality, and an upper bound |
+| Both Indian cases **search real vessels** and abstain because none entered the origin cloud (D40) | "there is no AIS in Indian waters" — that was our own error, corrected 14 Sept |
 | Zenodo DOI 10.5281/zenodo.13761290, CC-BY, **mandatory on a slide** | — |
 
 Prior-art slide first: CleanSeaNet, Cerulean, INCOIS (Master Part 11).
@@ -207,7 +229,7 @@ machine.
 
 | # | Fix | Where | Why |
 |---|---|---|---|
-| 1 | **Render Infrastructure findings in the abstain state too.** The block sits inside `gate === "clear"`. Move it (and Dark Vessels) out of that branch | `web/components/ContextPanel.tsx` ~L885–947 | Vessel abstention ≠ no infrastructure (Jaiveer's module runs regardless). Huntington abstains, so its pipeline finding would be **invisible** the moment 1B lands |
+| 1 | **Render Infrastructure findings in the abstain state too.** The block sits inside `gate === "clear"`. Move it (and Dark Vessels) out of that branch | `web/components/ContextPanel.tsx` ~L885–947 | Vessel abstention ≠ no infrastructure. **Done in the frontend pass.** Note the outcome: Huntington's pipeline scores below the floor, so `infrastructure[]` stays **empty** — the block must render nothing there and must not imply "pipeline excluded" |
 | 2 | **Signed coordinates → hemisphere.** Shows "-79.68° E" | `ContextPanel.tsx` L392–395 (Trace best estimate) | Wrong on every US case, on the centrepiece screen |
 | 3 | Delete or condition the always-on caption *"a bracket, not a single measured release time"* | `ContextPanel.tsx` L445–448 | Contradicts the "Measured estimate" label on `convergence` cases |
 | 4 | Tooltip *"The true release point is almost certainly inside this circle"* → precision wording | `ContextPanel.tsx` L419 | Accuracy claim the plan forbids (D8, Part 12) |
@@ -215,7 +237,7 @@ machine.
 | 6 | **D35 copy:** "Trace this slick back" → "Trace this spill back" (one trace per event) | `web/lib/flow.ts` L44 | UI implied a per-detection trace |
 | 7 | **Parse and show `component_notes`** under each "n/a" bar | `web/lib/suspects.ts` (not parsed at all), `ContextPanel.tsx` `ComponentBars` L601 | Jacksonville and Farallones ship notes; every n/a currently has no reason (D29) |
 | 8 | **Evidence breadth on the card (A9 BLOCKER / D37):** show `weight_live` or "scored from 5 of 7 components" next to the score. Parse the three fields in `suspects.ts` | `SuspectCard`, `ContextPanel.tsx` ~L674 | A 0.98 from 2 of 7 components must not look like certainty |
-| 9 | Confirm Farallones' `suspects.json` (has D37 keys) and Mumbai's no-AIS abstain load without a contract-error card. Mumbai must show the "nothing was searched" sentence beside the zero funnel | browser | The loader is strict; the new keys were untested |
+| 9 | **CHANGED 14 Sept (D40).** Mumbai's funnel is no longer zero — it is 9 → 2 → 0 → 0, abstaining because *no vessel entered the origin cloud*, so the "nothing was searched" sentence is **wrong there now** and must not be shown. Jamnagar has gained `attribute` with the same shape, so its Attribute screen is no longer greyed. Re-check both, plus Farallones' D37 keys, for contract-error cards | browser | The loader is strict, and two cases changed shape after the frontend pass |
 | 10 | P1: `edge_truncated` flag on the card; `age_estimators` expandable | `contracts.ts` L276 / L178 (declared, never rendered) | Minor honesty detail |
 | 11 | P1: cache bundles across case switches (`cache: "no-store"` re-downloads MBs) | `web/lib/loadCase.ts` L22, L50 | Slow switching on the demo laptop |
 | 12 | P2: hidden debug overlay on a key nobody presses by accident | new | QA speed |
@@ -239,7 +261,7 @@ QA'd on a real bundle. After `sync_web_cases.py`, run on each case and log `QA P
 | Huntington | Trace, Attribute (abstain + infrastructure), Verify |
 | Mumbai | Trace, Attribute (no-AIS abstain), Verify |
 | Gulf of Alaska | Trace, greyed Attribute tooltip, Verify |
-| Jamnagar | Trace, greyed Attribute tooltip, Verify |
+| Jamnagar | Trace, **Attribute — it now runs (searched, then abstained), so it is no longer greyed**, Verify |
 | 3 rejection cases | nothing new (Detect done) |
 
 Condensed checklist (full version: `docs/_archive/harshita/05_HARSHITA_INTEGRATION.md` Part B):
@@ -280,14 +302,18 @@ Condensed checklist (full version: `docs/_archive/harshita/05_HARSHITA_INTEGRATI
 
 ## 4. Suggested order to 17:00 on 15 Sept
 
-1. §0: pushes, commit, re-score request, sync
-2. §3A fixes 1–6: an hour of small edits, and they touch what judges see
-3. §1C blurbs, §2 D35 seed note
-4. §1B infrastructure ruling, then Jaiveer's rerun
-5. §1A verification prose, case by case in library order, with §3B QA right after each case
-6. §3A 7–9 (component notes, evidence breadth)
-7. §1E deck, §1D claims
-8. §3C demo machine + fallback video, §1F rehearsals ×2
+~~1. §0~~ · ~~2. §3A fixes 1–6~~ · ~~3. §1C blurbs, §2 D35 seed note~~ · ~~4. §1B infrastructure
+ruling and the re-score~~ · ~~6. §3A 7–9~~ — **all done 14 Sept.**
+
+What is left, in order:
+
+1. **§1A verification prose**, case by case in library order, with §3B QA right after each case.
+   Nothing ships on Screen 4 until this exists, and only you can write it.
+2. **§3A item 9 re-check** — Mumbai and Jamnagar changed shape after the frontend pass (D40).
+3. **§1E the deck itself.** Every number is in `docs/DECK_NUMBERS.md` with its receipt and its
+   "never say"; the slides still have to be built.
+4. **§3C demo machine + fallback video**, then **§1F rehearsals ×2**.
+5. If time: §1D's remaining receipts (CPCL needs OCR), §2's P2 items, issue **F1**.
 
 ---
 
