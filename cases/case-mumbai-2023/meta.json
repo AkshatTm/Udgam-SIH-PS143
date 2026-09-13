@@ -7,7 +7,8 @@
   "scene_id": "S1A_IW_GRDH_1SDV_20230903T010333_20230903T010358_050156_06095B_9215",
   "detection_time": "2023-09-03T01:03:33Z",
   "acts_available": [
-    "detect"
+    "detect",
+    "trace"
   ],
   "ais_source": "gfw_hourly",
   "gallery": {

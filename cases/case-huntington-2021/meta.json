@@ -6,7 +6,10 @@
   "satellite": "Sentinel-1A",
   "scene_id": "S1A_IW_GRDH_1SDV_20211002T015821_20211002T015850_039934_04B9C9_2BF9",
   "detection_time": "2021-10-02T01:58:21Z",
-  "acts_available": ["detect"],
+  "acts_available": [
+    "detect",
+    "trace"
+  ],
   "ais_source": "noaa_dense",
   "gallery": {
     "thumbnail": "thumb.png",

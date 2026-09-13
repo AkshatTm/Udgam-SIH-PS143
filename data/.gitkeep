@@ -4,6 +4,8 @@
 #   data/zenodo_p3/   Soum   — Zenodo Part III, ~9.9 GB
 #   data/ais/         Jaiveer — NOAA Marine Cadastre AIS + derived Parquet
 #   data/fields/      Anushka — cached HYCOM/ERA5 arrays, <case>.npz
-#   data/labels/      Soum   — features.csv (this one is small; commit it deliberately)
+#   data/labels/      Soum   — features_test.csv, the Part III holdout table (small;
+#                              committed deliberately). features_train.csv is 20 MB and
+#                              stays out; features.csv is the old contaminated split.
 #
 # Outputs move. Inputs stay put.

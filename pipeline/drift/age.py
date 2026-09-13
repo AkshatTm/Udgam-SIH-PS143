@@ -482,12 +482,19 @@ def _gate_reason(discharge_class, estimator, physics):
     if discharge_class == "chronic":
         return (f"discharge_class is 'chronic'. {estimator} {physics}, so the result would be "
                 f"meaningless. The gate is correct and nothing is missing.")
-    return (f"discharge_class is {discharge_class!r} -- NOT SET by Stage 1. {estimator} "
-            f"{physics}, so it needs to know whether the source was moving before it can run. "
-            f"This is a MISSING INPUT (Soum: detect/run.py has never emitted discharge_class, "
-            f"though it is in the contract), not a physical finding about this slick. "
-            f"A5: unset on every case in the library, so this estimator currently fires on "
-            f"nothing.")
+    return (f"discharge_class is {discharge_class!r}. {estimator} {physics}, so it needs to "
+            f"know whether the source was moving before it can run, and 'unknown' does not say. "
+            f"This is NOT a missing field -- Stage 1 emits it (detect/run.py:551 via "
+            f"ships.classify_discharge). It is computed from SHAPE ALONE: elongation < 3.0 -> "
+            f"'acute', elongation >= 5.0 AND straightness >= 0.60 -> 'chronic', everything "
+            f"between -> 'unknown'. So 'unknown' means the detector could not place this slick "
+            f"in either bucket, which is a real statement about the geometry rather than a gap "
+            f"in the contract. Two consequences worth knowing: NO oil detection in the library "
+            f"is 'acute' (0 of 13), because acute requires LOW elongation and oil slicks are "
+            f"elongated -- so this estimator fires on nothing, structurally, and A5's conclusion "
+            f"stands for a stronger reason than it was originally given. And because the gate is "
+            f"a threshold on elongation while C3.3 INVERTS elongation, the gate and the "
+            f"estimator read the same quantity -- flagged to Akshat 13 Sept as circular.")
 
 
 def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate_hours,
@@ -708,12 +715,16 @@ def fay_age(observed_area_km2, volume_m3=None, k_range=FAY_K_RANGE,
         },
         "k_citation": (
             "SHIPS UNCITED, and that is a ruling not an oversight (A4, Akshat 13 Sept 2026). "
-            "Fay's AREA goes as k^2, so closing the measured ~14x area gap would need k ~ 5.5 "
-            "against a literature range of 1.1-1.5. The REGIME VERDICT is therefore robust to k "
-            "-- no plausible k lets gravity-viscous spreading reach a SAR-scale slick -- even "
-            "though a Fay age BAND would not be. Since A3 means we never quote a Fay-derived "
-            "number, the constant never has to carry one. If a Fay age is ever quoted, the "
-            "citation becomes mandatory again."),
+            "Fay's AREA goes as k^2, so closing an area gap of factor F needs k scaled by "
+            "sqrt(F). On Huntington -- the only case with an independently published volume -- "
+            "the MEASURED gap is 3x (0.880 km2 reachable against a 2.64 km2 detection), which "
+            "would need k ~ 2.25 against a literature range of 1.1-1.5: outside it, but only by "
+            "about 50%. The REGIME VERDICT therefore still holds, and it holds with LESS room "
+            "than an earlier draft of this message claimed. That draft said 14x and k ~ 5.5, "
+            "computed against an ASSUMED 12 km2 slick before any real detection existed; the "
+            "real one is 2.64 km2. Quote the measured 3x, never the 14x. A Fay age BAND would "
+            "not survive this, which is why A3 means we quote no Fay-derived number and the "
+            "constant never has to carry a citation -- quote a Fay age and it becomes mandatory."),
     }
 
     if volume_m3 is None or float(volume_m3) <= 0:
@@ -1191,7 +1202,21 @@ def main():
           f"elongation {round_band(elong_band)}")
     if combined is None:
         print(f"  age_hours = null   age_method = {method}")
-        print("  nothing fired -- the bounded time_window stands, and it is a BRACKET")
+        # READ the window's method, do not assume it. This line used to say "the bounded
+        # time_window stands, and it is a BRACKET" unconditionally -- which on
+        # case-jacksonville-2024 is simply false: its HYCOM is 3-hourly, the ensemble spread
+        # really does converge, and the window is measured. Announcing our own strongest
+        # available claim as our weakest one is a bad way to lose an argument on stage.
+        tw_method = (origin or {}).get("time_window_method", "bounded")
+        if tw_method == "convergence":
+            print("  nothing fired -- but the time_window on this case is MEASURED "
+                  "(method=convergence),")
+            print("  not a bracket. The release window stands on the ensemble's own "
+                  "convergence, not on")
+            print("  the rewind span minus eight hours. Say 'measured', not 'bounded'.")
+        else:
+            print(f"  nothing fired -- the time_window stands (method={tw_method}), "
+                  f"and it is a BRACKET")
     else:
         print(f"  age_hours = [{combined[0]:.1f}, {combined[1]:.1f}]   age_method = {method}")
         if method == "disagreement":

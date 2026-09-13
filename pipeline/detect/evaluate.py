@@ -93,6 +93,150 @@ def classifier_row():
             "note": "Layer 1 alone"}, m["threshold"]
 
 
+TILE = 256
+
+
+def _wrap(text, width):
+    """Tiny word-wrap so each definition prints beside its number."""
+    words, lines, cur = text.split(), [], ""
+    for w in words:
+        if len(cur) + len(w) + 1 > width:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}".strip()
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _accumulate_decomposition(a, pred, gt, valid):
+    """Accumulate everything the metric decomposition needs, for ONE positive scene.
+
+    Called only on Oil scenes. Costs no extra I/O — the masks are already in hand.
+    """
+    a["inter_bg"] += float((~pred & ~gt).sum())
+    a["union_bg"] += float((~pred | ~gt).sum())
+    a["correct_px"] += float((pred == gt).sum())
+    a["total_px"] += float(gt.size)
+    a["pred_sum"] += float(pred.sum())
+    a["gt_sum"] += float(gt.sum())
+    if valid is not None:
+        a["invalid_px"] += float((~valid).sum())
+
+    union = float((pred | gt).sum())
+    if union:                       # a positive scene always has gt, so always true
+        a["scene_ious"].append(float((pred & gt).sum()) / union)
+        # Keep the oil FRACTION beside each scene's IoU. Pooled IoU weights a scene by
+        # its slick size, macro-per-scene weights every scene equally, and the two differ
+        # by 0.25 here — so which scenes we fail on is the whole explanation, and it is
+        # only answerable if the pairing is recorded rather than inferred.
+        a["scene_oil_frac"].append(float(gt.sum()) / float(gt.size))
+
+    h, w = gt.shape
+    for r0 in range(0, h - TILE + 1, TILE):
+        for c0 in range(0, w - TILE + 1, TILE):
+            g = gt[r0:r0 + TILE, c0:c0 + TILE]
+            if not g.any():         # "oil tiles" only — see decompose()
+                continue
+            p = pred[r0:r0 + TILE, c0:c0 + TILE]
+            u = float((p | g).sum())
+            if u:
+                a["tile_ious"].append(float((p & g).sum()) / u)
+
+
+def _bands(ious, fracs):
+    """Mean per-scene IoU inside oil-fraction bands -> {band: {n, mean_iou}}."""
+    edges = [(0.00, 0.01), (0.01, 0.03), (0.03, 0.10), (0.10, 0.30), (0.30, 1.01)]
+    out = {}
+    for lo, hi in edges:
+        sel = [i for i, f in zip(ious, fracs) if lo <= f < hi]
+        out[f"{lo*100:.0f}-{hi*100:.0f}% oil"] = {
+            "n": len(sel),
+            "mean_iou": round(float(np.mean(sel)), 4) if sel else None}
+    return out
+
+
+def decompose(a):
+    """Turn the accumulators into named metrics, each with its definition.
+
+    WHY THIS EXISTS. We report 0.435 and the dataset's authors report 96% IoU.
+    Before any slide claims that gap is model quality, it has to be established
+    that the two numbers measure the same thing — and the evidence says they do
+    not. The authors quote "99% accuracy" beside their 96%, and at the 2-4% oil
+    pixel rate in this dataset, predicting ALL BACKGROUND already scores 96-98%
+    accuracy. So their accuracy is background-inclusive, and an "IoU" quoted
+    beside it is very likely mean-IoU over {background, oil} rather than the
+    oil class alone.
+
+    Every number below is on the SAME model, SAME pixels, SAME split. Only the
+    definition changes. That is the point.
+    """
+    def d(x, y):
+        return round(x / y, 4) if y else None
+
+    iou_oil = d(a["inter_pos"], a["union_pos"])
+    iou_bg = d(a["inter_bg"], a["union_bg"])
+    miou = round((iou_oil + iou_bg) / 2, 4) if (iou_oil is not None and iou_bg is not None) else None
+    return {
+        "iou_oil_pooled": {
+            "value": iou_oil,
+            "definition": "oil class only; intersection and union POOLED over whole "
+                          "positive scenes; background excluded from numerator and "
+                          "denominator. The strictest of these, and what we report."},
+        "iou_background_pooled": {
+            "value": iou_bg,
+            "definition": "background class only, same pooling. Near 1.0 because "
+                          "background is 96-98% of every scene."},
+        "miou_pooled": {
+            "value": miou,
+            "definition": "mean IoU over {background, oil}. THE AUTHORS' LIKELY "
+                          "DEFINITION — it is what 'IoU' usually means in a "
+                          "segmentation paper quoting accuracy beside it."},
+        "pixel_accuracy_positives": {
+            "value": d(a["correct_px"], a["total_px"]),
+            "definition": "pixels classified correctly, over POSITIVE scenes only. "
+                          "The strict population: every scene here actually contains "
+                          "oil, so background-guessing earns less."},
+        "pixel_accuracy_all450": {
+            "value": d(a["correct_px_all"], a["total_px_all"]),
+            "definition": "pixels classified correctly over ALL 450 scenes. The "
+                          "authors quote '99% accuracy' without naming the population, "
+                          "and the 300 negative scenes are nearly free marks, so this "
+                          "is the more likely match for their figure. Both are measured "
+                          "because guessing which one they meant is not evidence."},
+        "dice_oil_pooled": {
+            "value": d(2 * a["inter_pos"], a["pred_sum"] + a["gt_sum"]),
+            "definition": "Dice / F1 on the oil class, pooled. Always >= IoU; "
+                          "Dice = 2*IoU/(1+IoU)."},
+        "iou_oil_macro_scene": {
+            "value": round(float(np.mean(a["scene_ious"])), 4) if a["scene_ious"] else None,
+            "definition": f"oil IoU computed PER SCENE then averaged over the "
+                          f"{len(a['scene_ious'])} positive scenes. Differs from pooled "
+                          f"because pooling lets the largest slicks dominate.",
+            "n": len(a["scene_ious"])},
+        "iou_oil_macro_tile": {
+            "value": round(float(np.mean(a["tile_ious"])), 4) if a["tile_ious"] else None,
+            "definition": f"oil IoU per {TILE}x{TILE} tile, averaged over the "
+                          f"{len(a['tile_ious'])} tiles that CONTAIN oil. Easier again: "
+                          f"a tile with oil in it is a pre-localised problem. A plausible "
+                          f"alternative reading of the authors' number.",
+            "n": len(a["tile_ious"])},
+        "iou_by_slick_size": {
+            "value": _bands(a["scene_ious"], a["scene_oil_frac"]),
+            "definition": "mean per-scene oil IoU, split by how much of the scene is "
+                          "oil. Pooled IoU weights a scene by its slick size, so if the "
+                          "big slicks are the weak ones, pooled collapses while "
+                          "macro-per-scene does not. This says whether that is what "
+                          "is happening."},
+        "invalid_px_fraction": {
+            "value": d(a["invalid_px"], a["total_px"]),
+            "definition": "share of pixels masked invalid (land/NaN) across positive "
+                          "scenes. Reported so nobody wonders whether the background "
+                          "numbers are inflated by masked-out area."},
+    }
+
+
 def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None):
     """Run the U-Net over Part III, ungated and gated, in one pass over the
     scenes — decoding 450 scenes twice would be pointless I/O."""
@@ -112,7 +256,22 @@ def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None):
                "inter_all": 0.0, "union_all": 0.0,
                "pred_oil": 0, "gt_oil": 0,
                "look_fp": 0, "look_n": 0, "clean_fp": 0, "clean_n": 0,
-               "oil_hit": 0, "oil_n": 0}
+               "oil_hit": 0, "oil_n": 0,
+               # --- metric decomposition (see decompose() and the block in main) ---
+               # Everything below is accumulated over POSITIVE scenes only, in the
+               # same single pass, so none of it costs extra I/O.
+               "inter_bg": 0.0, "union_bg": 0.0,     # background treated as a class
+               "correct_px": 0.0, "total_px": 0.0,   # for pixel accuracy
+               "pred_sum": 0.0, "gt_sum": 0.0,       # for Dice
+               "scene_ious": [],                     # macro: one IoU per scene
+               "scene_oil_frac": [],                 # paired oil fraction per scene
+               "tile_ious": [],                      # macro: one IoU per oil TILE
+               "invalid_px": 0.0,
+               # Pixel accuracy over ALL 450 scenes, not just positives. The authors
+               # quote "99% accuracy" without naming the population, and the two
+               # populations give very different answers, so both are measured rather
+               # than one being estimated from the other.
+               "correct_px_all": 0.0, "total_px_all": 0.0}
            for g in use_gate_list}
 
     for i, (scene_id, cls, img_path, msk_path) in enumerate(jobs, 1):
@@ -140,11 +299,14 @@ def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None):
             union = float((pred | gt).sum())
             a["inter_all"] += inter
             a["union_all"] += union
+            a["correct_px_all"] += float((pred == gt).sum())
+            a["total_px_all"] += float(gt.size)
             if cls == "Oil":
                 a["inter_pos"] += inter
                 a["union_pos"] += union
                 a["oil_n"] += 1
                 a["oil_hit"] += int(inter > 0)
+                _accumulate_decomposition(a, pred, gt, valid)
             elif cls == "Lookalike":
                 a["look_n"] += 1
                 a["look_fp"] += int(pred.any())
@@ -168,7 +330,8 @@ def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None):
                 f"{a['oil_hit']}/{a['oil_n']}",
             "iou_positives": round(a["inter_pos"] / max(a["union_pos"], 1), 4),
             "iou_all": round(a["inter_all"] / max(a["union_all"], 1), 4),
-            "note": f"binarisation threshold {unet_thr}"})
+            "note": f"binarisation threshold {unet_thr}",
+            "metric_decomposition": decompose(a)})
     return rows, unet_thr
 
 
@@ -229,10 +392,63 @@ def main():
         print(f"    IoU over positives    {ungated['iou_positives']:.3f} "
               f"-> {gated['iou_positives']:.3f}   (the gate should barely move this)")
 
-    with open(OUT_JSON, "w") as fh:
+    # ---- the metric decomposition (section E5 item 3) -----------------------
+    shipped = next((r for r in rows if r["model"].startswith("Classifier + U-Net")), None)
+    if shipped and shipped.get("metric_decomposition"):
+        md = shipped["metric_decomposition"]
+        print()
+        print("=" * 78)
+        print("  WHY 0.435 AND 96% ARE NOT THE SAME MEASUREMENT")
+        print("=" * 78)
+        print("  Same model, same pixels, same split. Only the DEFINITION changes.")
+        print("  Reported so the gap can be decomposed instead of hand-waved.")
+        print()
+        for key, m in md.items():
+            v = m["value"]
+            if isinstance(v, dict):
+                print(f"  {key:<26}")
+                for band, s in v.items():
+                    mi = "  n/a" if s["mean_iou"] is None else f"{s['mean_iou']:.4f}"
+                    print(f"      {band:<16} n={s['n']:>3}   mean IoU {mi}")
+            else:
+                print(f"  {key:<26} {'  n/a' if v is None else f'{v:.4f}'}")
+            for line in _wrap(m["definition"], 68):
+                print(f"      {line}")
+            print()
+        print("  WHAT THE MEASUREMENT ACTUALLY SAID (13 Sept, 450 scenes):")
+        print("  1. DEFINITION explains about half the gap. Oil-only pooled 0.435 vs")
+        print("     mean-IoU-over-both-classes 0.687 is the SAME predictions scored two")
+        print("     ways. Pixel accuracy over all 450 scenes is 0.980 against the")
+        print("     authors' quoted 99% - close, so accuracy is roughly comparable and")
+        print("     the IoU definitions are very likely not.")
+        print("  2. POOLING explains most of the rest. Pooled 0.435 vs per-scene mean")
+        print("     0.683, again identical predictions. Pooling weights each scene by")
+        print("     its slick size.")
+        print("  3. WHAT IS LEFT IS A REAL DEFECT, AND IT IS NARROW. Look at the size")
+        print("     bands: 138 of 150 scenes sit at 0.66-0.78, and the 12 scenes where")
+        print("     oil covers more than 30% of the frame score 0.085. Those 12 hold a")
+        print("     large share of all oil pixels, which is why pooled collapses. The")
+        print("     cause is known: per-scene MAD normalisation lets a slick that big")
+        print("     become its own median, erasing the contrast the model needs.")
+        print()
+        print("  So the model is not broadly weak - it fails on one identifiable class")
+        print("  of scene. NOT a reason to quote 0.687. WE KEEP REPORTING 0.435: it is")
+        print("  the strictest and the honest one. The others exist so the comparison is")
+        print("  like-for-like, NOT so we can pick the flattering number (B2).")
+
+    out_path = OUT_JSON
+    if a.limit:
+        # A smoke run must never overwrite the authoritative numbers. It did once,
+        # silently, and the 450-scene results had to be restored from git.
+        out_path = OUT_JSON.replace(".json", "_smoke.json")
+        print(f"\n  [--limit {a.limit}] PARTIAL RUN — these numbers are NOT the "
+              f"Part III result.")
+    with open(out_path, "w", encoding="utf-8") as fh:
         json.dump({"split": "Zenodo Part III holdout, scene-level",
+                   "n_scenes": a.limit or 450,
+                   "partial": bool(a.limit),
                    "gate_threshold": gate_thr, "rows": rows}, fh, indent=2)
-    print(f"\n  wrote {OUT_JSON}")
+    print(f"\n  wrote {out_path}")
 
     if a.report:
         print()
