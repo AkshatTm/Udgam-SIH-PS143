@@ -79,8 +79,8 @@ The dataset is titled *"Sentinel-1 SAR Oil spill image dataset for train, valida
 
 | # | Case | Where | Your job |
 |---|---|---|---|
-| 1 | **Menuett** 2024-07-30 | Atlantic, 30.4 N −79.6 W | Hero. 31 km linear slick, expect `chronic` |
-| 2 | **Panagia Thalass…** 2023-03-17 | Pacific, 37.8 N −123.9 W | 20 km linear |
+| 1 | **Jacksonville** 2024-07-30 | Atlantic, 30.4 N −79.6 W | Hero. 31 km linear slick, expect `chronic` |
+| 2 | **Farallones** 2023-03-17 | Pacific, 37.8 N −123.9 W | 20 km linear |
 | 3 | **Huntington Beach** 2021-10-02 | San Pedro Bay, 33.6 N −118.1 W | Comma-shaped, sea −20.9 dB VV, core −28 to −32 |
 | 4 | **Alaska dark vessel** 2023-05-16 | Gulf of Alaska, 59.6 N −142.7 W | 2 km, 0.3 km² — **the smallest slick in the library.** Also: **find the bright target 4.5 km away**, it is the whole case |
 | 5 | **Mumbai** 2023-09-03 | Indian EEZ, 18.5 N 72.2 E | 21 km, 7.7 km². Carries infrastructure + dark vessel + natural-seep flag |
@@ -399,7 +399,7 @@ Instead: run the detector on each real scene, look at the distribution of `contr
 ### 6.5 Per-case verification, before handover
 For every case, do all four:
 1. Plot `detections.geojson` over `sar.png` — polygons must sit on dark features
-2. Check coordinates are in the right hemisphere. **The library straddles both**: Menuett −79.6, Panagia −123.9, Huntington −118.1, Alaska −142.7, Mumbai +72.2, Jamnagar +71.9. A sign error that survives four Atlantic cases surfaces the moment you cross into the Indian Ocean
+2. Check coordinates are in the right hemisphere. **The library straddles both**: Jacksonville −79.6, Farallones −123.9, Huntington −118.1, Alaska −142.7, Mumbai +72.2, Jamnagar +71.9. A sign error that survives four Atlantic cases surfaces the moment you cross into the Indian Ocean
 3. Read the Layer 1 confidence — if the classifier says 0.51, say so rather than presenting certainty
 4. `python scripts/validate_case.py cases/<id>` -> PASS
 
@@ -493,10 +493,16 @@ python pipeline/detect/train.py            # classical baseline, updated FEATURE
 # evaluate - Part 3 only, always
 python pipeline/detect/evaluate.py --test data/labels/features_test.csv --report
 
-# inference
-python pipeline/detect/run.py --case case-ennore-2017
-python scripts/validate_case.py cases/case-ennore-2017
+# inference — the hero case; seven real scenes are on disk, `ls cases/` for the list
+python pipeline/detect/run.py --case case-jacksonville-2024
+python pipeline/export/build_case.py --case case-jacksonville-2024 --stage detect
+python scripts/validate_case.py cases/case-jacksonville-2024
+python scripts/sync_web_cases.py     # so the browser sees it
 ```
+
+> **Do not skip the `build_case.py` line.** The case folder is the hand-off medium: if your stage
+> writes to `out/` and you validate `cases/<id>/`, you are validating somebody else's file and the
+> PASS means nothing. That has already happened once on this project (TRAPS #21).
 
 ## E2. Environment
 `numpy scipy opencv-python scikit-image scikit-learn rasterio shapely matplotlib` plus PyTorch or TensorFlow with CUDA for Phases 3-4. **Any new dependency is pinned with its justification next to it and announced to the group.**
