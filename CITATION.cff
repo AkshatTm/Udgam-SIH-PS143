@@ -1,0 +1,82 @@
+# Citation File Format 1.2.0 — https://citation-file-format.github.io
+#
+# TODO before this repository is cited anywhere formal (paper, thesis, NTRO submission):
+#   fill `family-names` for all six authors and add ORCIDs where they exist. Only given
+#   names were recorded in the project documents, and per docs/receipts.md a TODO is not
+#   deleted by guessing — a wrong surname on a citation is worse than a missing one.
+cff-version: 1.2.0
+title: >-
+  Naap: satellite forensics for oil-spill source attribution from
+  Sentinel-1 SAR, ocean drift reversal and vessel AIS
+message: If you use this software or its case library, please cite it as below.
+type: software
+authors:
+  - given-names: Akshat
+    email: akshattmofficial@gmail.com
+    affiliation: Team Naap — Smart India Hackathon 2026
+    # role: contracts, case selection, GEE export, verification, exporter, validator, integration
+  - given-names: Soum
+    affiliation: Team Naap — Smart India Hackathon 2026
+    # role: Stage 1 — detection
+  - given-names: Anushka
+    affiliation: Team Naap — Smart India Hackathon 2026
+    # role: Stage 2 — drift and origin reconstruction
+  - given-names: Jaiveer
+    affiliation: Team Naap — Smart India Hackathon 2026
+    # role: Stage 3 — AIS ingest, scoring, attribution
+  - given-names: Harshita
+    affiliation: Team Naap — Smart India Hackathon 2026
+    # role: frontend, integration (consumer side)
+  - given-names: Urooz
+    affiliation: Team Naap — Smart India Hackathon 2026
+    # role: research lead
+repository-code: https://github.com/AkshatTm/SIH-PS143
+abstract: >-
+  Naap detects oil slicks in Sentinel-1 SAR imagery, separates them from
+  look-alikes, runs ocean-current and wind physics backwards in time to
+  reconstruct a probability cloud for where and when the oil entered the
+  water, and scores broadcasting vessels, dark vessels and fixed
+  infrastructure against that cloud to produce a ranked, explainable
+  shortlist with explicit exclusions and an abstain option. A fourth stage
+  compares each conclusion against the official investigation of record and
+  reports hit, partial or miss. Built for Smart India Hackathon 2026,
+  problem statement 26143 (NTRO). The system ships as a library of nine
+  reproducible case bundles; every reported figure carries its measurement
+  method, sample size and split.
+keywords:
+  - synthetic aperture radar
+  - Sentinel-1
+  - oil spill detection
+  - source attribution
+  - maritime domain awareness
+  - AIS
+  - dark vessels
+  - Lagrangian backtracking
+  - remote sensing
+license: Apache-2.0
+version: 0.4.0
+date-released: '2026-09-14'
+references:
+  - type: data
+    title: Oil spill detection dataset (Parts I-III)
+    authors:
+      - name: Trujillo-Acatitla et al.
+    doi: 10.5281/zenodo.13761290
+    notes: >-
+      CC-BY. Part III is the authors' designated test set and is the held-out
+      split behind every Stage 1 figure this project reports. Dataset paper:
+      Marine Pollution Bulletin 204:116549 (2024).
+  - type: article
+    # TODO: exact article title not recorded in this repository — fill from the DOI
+    # before formal citation. Do not guess it.
+    title: 'TODO: title not recorded'
+    authors:
+      - name: Trujillo-Acatitla et al.
+    journal: Marine Pollution Bulletin
+    volume: 204
+    pages: '116549'
+    year: 2024
+    notes: >-
+      The dataset paper for DOI 10.5281/zenodo.13761290. Recorded in
+      docs/00_MASTER_PLAN.md Part 10, where the authors report 99%
+      classification accuracy and 96% IoU on their own test set.

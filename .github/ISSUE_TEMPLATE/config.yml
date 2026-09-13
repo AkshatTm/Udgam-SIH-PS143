@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Frozen contracts and schemas
+    url: https://github.com/AkshatTm/SIH-PS143/blob/main/docs/00_MASTER_PLAN.md
+    about: Part 6 is the live schema contract. Do not extend a schema in an issue.
+  - name: The bugs that will actually happen
+    url: https://github.com/AkshatTm/SIH-PS143/blob/main/docs/TRAPS.md
+    about: Read before debugging anything geospatial.

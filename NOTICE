@@ -1,0 +1,41 @@
+Naap — satellite forensics that traces an oil spill back to the ship that caused it
+Copyright 2026 Team Naap (Smart India Hackathon 2026, PS 26143)
+
+This product includes software developed by Team Naap.
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+Documentation in docs/ and every Markdown file in this repository is licensed under
+Creative Commons Attribution 4.0 International (CC-BY-4.0), not Apache-2.0.
+
+--------------------------------------------------------------------------------
+THIRD-PARTY DATA
+--------------------------------------------------------------------------------
+
+The case bundles committed under cases/ are DERIVED from third-party data that is
+NOT covered by the Apache License above. Each upstream source keeps its own terms,
+and one of them is non-commercial. Read DATA_LICENSES.md before redistributing or
+building a product on this repository.
+
+Mandatory attributions, reproduced here as the upstream licences require:
+
+  Contains modified Copernicus Sentinel data (2021-2024), processed by Team Naap.
+  Sentinel-1 GRD scenes accessed through Google Earth Engine (COPERNICUS/S1_GRD).
+
+  Oil-spill detection dataset, Zenodo, DOI 10.5281/zenodo.13761290, licensed
+  CC-BY. Dataset paper: Trujillo-Acatitla et al., Marine Pollution Bulletin
+  204:116549 (2024). Part III is the authors' designated test set and is the
+  held-out split behind every Stage 1 number this project reports.
+  (Not to be confused with the Krestenitis 5-class benchmark, which is a
+  different dataset, is not openly available, and is not used here.)
+
+  Ocean currents: HYCOM. Surface winds: ERA5 (Copernicus Climate Change Service).
+  Both accessed through Google Earth Engine.
+
+  Vessel AIS: NOAA Marine Cadastre (United States, public domain) and Global
+  Fishing Watch API v3. GLOBAL FISHING WATCH DATA IS LICENSED FOR NON-COMMERCIAL
+  USE ONLY and that condition reaches the two bundles derived from it.
+
+  Slick polygons used as a comparison target, never as ground truth: SkyTruth
+  Cerulean public OGC Features API.
+
+  Coastline: GSHHG, via the global-land-mask package.

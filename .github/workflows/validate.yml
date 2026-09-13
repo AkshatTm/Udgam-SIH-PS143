@@ -1,0 +1,57 @@
+name: validate
+
+# The case bundles are the artefact this project ships, and the validator is what
+# certifies them. Both scripts below are pure standard library -- validate_case.py
+# imports only json, sys, math, datetime and pathlib -- so this workflow installs
+# nothing and cannot go red because of an unrelated dependency.
+#
+# It deliberately does NOT run the Stage 1/2/3 test suites: those need numpy, rasterio,
+# torch and a GEE credential. Run them locally (see CONTRIBUTING.md).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundles:
+    name: case bundles validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate every committed case bundle
+        run: python scripts/validate_case.py cases/
+
+      - name: The validator's own mutation tests
+        run: python scripts/test_validator.py
+
+  hygiene:
+    name: nothing secret committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sealed answers and credentials must never be tracked
+        run: |
+          set -e
+          bad=0
+          for f in docs/ANSWERS.md .env credentials.json; do
+            if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+              echo "::error file=$f::$f is tracked and must not be"
+              bad=1
+            fi
+          done
+          if git ls-files | grep -E '\.pem$|^HANDOFF_'; then
+            echo "::error::a credential or hand-shared handoff file is tracked"
+            bad=1
+          fi
+          exit $bad
