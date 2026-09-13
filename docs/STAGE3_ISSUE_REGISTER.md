@@ -65,6 +65,40 @@ fix required a decision that is not mine, I have written the decision up and lef
 **Four items need a decision before Monday afternoon:** A9, B6, C4, D4. The rest can wait until
 Monday evening, but not past it.
 
+## Independent agreement, 14 Sept — the cross-check nobody planned
+
+Jaiveer and Akshat implemented **D36, D37, the D28 `type_prior` gate and the exclusions fix
+separately**, on the same evening, without seeing each other's code — and against **two
+independently obtained AIS extracts** (his own parquets; a rebuild from the public NOAA archive).
+
+**The outputs agree exactly** on all three scored cases: same funnel counts, same ranking, same
+scores, same `closest_km` to the peak, same `weight_live`, same gating decision, same exclusion
+reasons for the scored vessels. Jacksonville 0.693 / 0.650 at 1.30 / 1.13 km; Farallones 0.620 /
+0.345 / 0.046 with `type_prior` gated to null; Huntington abstaining at 0.730 vs 0.729.
+
+That is a stronger statement than either of us re-running our own code, and it is worth one line
+on stage: *two implementations, two data pulls, same numbers.* It also retires any suspicion that
+the D28 gate or the peak-based `closest_km` was fitted to a case.
+
+**Two defects in the version that was merged, both found by measuring before shipping:**
+
+- **A false exclusion reason.** `score_vessel` returns `None` when a vessel never touched *non-zero*
+  origin probability — **not** when it has no report inside the window. The card text said "no AIS
+  position report inside the release window" for every such vessel. Measured: **0 of 23** on
+  Jacksonville, **1 of 65** on Huntington, and Farallones' NAVAJO has **138 reports inside the
+  window**. The corrected sentence is also the stronger evidence: present and broadcasting
+  throughout, and still never inside the cloud, closest approach 27.8 km from the peak.
+- **A non-deterministic list.** 23 and 65 candidates against `MAX_EXCLUSIONS = 3`, taken in dict
+  iteration order, so two runs of the same data named **different ships** — which is precisely why
+  his three and ours differed. Now ordered nearest-to-peak, then MMSI; verified byte-identical
+  across two runs. R10 claimed cross-platform determinism, and this was a hole in it.
+
+**Still open (display, not correctness):** only 3 of 23 (Jacksonville) and 3 of 65 (Huntington)
+exclusions are shown. The funnel carries the real counts, but a judge reading the card sees three.
+Worth a count on screen after the demo.
+
+---
+
 ## New, 14 Sept — raised by the GFW ingest, not yet ruled
 
 **F1 · `MIN_POINTS = 5` is a different filter at hourly sampling, and on Mumbai it drops the only
