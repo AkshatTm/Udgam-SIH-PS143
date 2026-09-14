@@ -1,5 +1,5 @@
 """
-features.py  -  Phase 2, Step 2.  Owner: Soum.
+features.py  -  Phase 2, Step 2.  Owner: Soumirya.
 
 add_shape_features(region, db) -> region dict with four new keys:
 

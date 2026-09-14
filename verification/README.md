@@ -10,7 +10,7 @@ the source files; `build_case.py` copies `verification/<case-id>.json` into
 1. `cp verification/TEMPLATE.json verification/<case-id>.json`
 2. Go to the **primary source** (the NTSB/USCG report itself, not a news summary). Fill
    `official_finding` — especially `caveat`, which often carries the whole case.
-3. Run the stages. Fill `naap_result` from the **actual output files**, not memory.
+3. Run the stages. Fill `udgam_result` from the **actual output files**, not memory.
 4. Write `assessment` by hand. `verdict` ∈ `hit | partial | miss | not_applicable`.
    **Never generate the `explanation`.** A `miss` with a clear "why" ships as readily as a `hit`.
 5. Add `"verify"` to `meta.json`'s `acts_available`, then
@@ -25,7 +25,7 @@ case: Jaiveer can read the answer he is supposed to be deriving (Master Part 16,
 So the sequence is not negotiable:
 
 1. The case is exported and announced. **No verification file exists yet.**
-2. Soum, Anushka and Jaiveer produce their stages **without** it.
+2. Soumirya, Anushka and Jaiveer produce their stages **without** it.
 3. The bundle validates.
 4. *Then* Akshat writes `verification/<case-id>.json`, adds `"verify"` to `acts_available`, and
    rebuilds.
@@ -40,7 +40,7 @@ was the proximate source**, so it gives away no attribution.
 ## Known-source cases (D16)
 
 When a case has no SAR-visible slick and runs `trace`/`verify` seeded from `meta.known_origin`,
-the Verify screen must state plainly that the origin was a **documented source, not a NAAP
+the Verify screen must state plainly that the origin was a **documented source, not a UDGAM
 detection**. Put that in `official_finding.caveat`, and make the `assessment.explanation` say what
 the trace actually demonstrated (a physics reconstruction / sanity-check against the known
 position and time), not an attribution result. **No case in the current library uses this path** —

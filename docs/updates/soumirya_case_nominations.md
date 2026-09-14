@@ -1,6 +1,6 @@
-# Cases 6, 7, 8 — Soum's nominations for Akshat
+# Cases 6, 7, 8 — Soumirya's nominations for Akshat
 
-*Master §14 open item "Nominate cases 6 and 7 from Zenodo Part 3 — Owner: Soum". Closed here.*
+*Master §14 open item "Nominate cases 6 and 7 from Zenodo Part 3 — Owner: Soumirya". Closed here.*
 
 These are Zenodo Part III scenes. They are **benchmark-provenance**, so `run.py --path auto`
 routes them to Layer 1 + Layer 2 — which is where the networks are strongest (look-alike

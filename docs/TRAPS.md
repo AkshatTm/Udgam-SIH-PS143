@@ -47,13 +47,13 @@ Python's `datetime.now()` and `fromisoformat("...T00:14:00")` produce timezone-n
 - **Symptom:** off by 5:30 (IST), or a `TypeError` comparing naive and aware.
 - **Rule:** always `.replace("Z","+00:00")` when parsing, always `tzinfo=timezone.utc` when constructing. Validator rejects naive timestamps.
 
-## 7. dB clamp makes the image black or white · Akshat, Soum
+## 7. dB clamp makes the image black or white · Akshat, Soumirya
 Sentinel-1 GRD in GEE is already in dB, typically −25 to 0 for sea. Scaling with the wrong range gives a flat image.
 - **Symptom:** `sar.png` is uniformly black, white, or has no visible speckle.
 - **Fix:** clamp to [−25, 0] then scale to 0–255. Sea should look like grey static; a slick is a distinctly darker patch; land is brighter.
-- **Second-order trap:** Soum reads the 8-bit PNG back and must map it to dB using **the same clamp**. If Akshat changes the clamp, Soum's features change. Put the clamp values in `bounds.json` or announce any change.
+- **Second-order trap:** Soumirya reads the 8-bit PNG back and must map it to dB using **the same clamp**. If Akshat changes the clamp, Soumirya's features change. Put the clamp values in `bounds.json` or announce any change.
 
-## 8. Pixel origin · Akshat, Soum, Harshita
+## 8. Pixel origin · Akshat, Soumirya, Harshita
 Pixel (0, 0) is **top-left = (west, north)**. Latitude decreases as row index increases.
 - **Symptom:** detections appear vertically mirrored relative to the image.
 - **Same trap in `origin.json`:** row 0 of the grid is the NORTH edge. Get this backwards and the heatmap flips.
@@ -61,11 +61,11 @@ Pixel (0, 0) is **top-left = (west, north)**. Latitude decreases as row index in
 ## 9. Row-major flattening · Anushka, Harshita
 `origin.json/values` is row-major from top-left, length = `shape[0] * shape[1]`. NumPy's default `.ravel()` is row-major (C order) — correct. If anyone reaches for `order='F'`, that's the bug.
 
-## 10. Scene-level vs row-level train split · Soum
+## 10. Scene-level vs row-level train split · Soumirya
 Regions extracted from the same 2048×2048 scene are highly correlated. A random row split gives a flattering, false accuracy number that a judge could dismantle.
 - **Rule:** split by source scene. The number you report is the one you defend in December.
 
-## 11. NaN and land pixels in SAR · Soum
+## 11. NaN and land pixels in SAR · Soumirya
 Zenodo TIFFs contain NaNs and land. `np.mean` on an array with NaNs returns NaN and every downstream feature becomes NaN.
 - **Fix:** mask explicitly, use `np.nanmean`, and assert no NaNs survive into `features.csv`.
 
@@ -110,7 +110,7 @@ Editing a JSON output to make the validator pass means the same bug returns on t
   `python pipeline/export/build_case.py --case <id> --stage <act>`.
 - **Check:** `validate_case.py` prints the directory it is reading on its first line. **Read that line.** If it is not the directory your stage just wrote to, the PASS is meaningless.
 
-## 22. GeoTIFF nodata is `-inf`, not a very low dB value · Soum, Akshat
+## 22. GeoTIFF nodata is `-inf`, not a very low dB value · Soumirya, Akshat
 `sar_vv_vh.tif` is clipped to a rectangle, but a Sentinel-1 scene footprint is a slanted parallelogram — so some exports have real nodata in the corners. **Jamnagar is 86% covered and Farallones 82%**; the rest of each raster is `-inf`, flagged as the file's nodata value.
 
 Treated as backscatter, `-inf` is the darkest thing in the scene by an infinite margin, and **a dark-spot detector will happily report the missing corner as an enormous slick.** Mask on `np.isfinite()` before any statistic — a median or a percentile over a band containing `-inf` is meaningless too.
@@ -124,7 +124,7 @@ A constant is not a score. **If a component cannot discriminate on this case, it
 
 - **Check:** `validate_case.py` now warns when a non-null component holds the identical value for every scored suspect. Take that warning seriously; it means a bar on the card is decoration.
 
-## 24. `np.nanmean` does not protect you from `-inf` · Soum, Akshat
+## 24. `np.nanmean` does not protect you from `-inf` · Soumirya, Akshat
 The obvious defensive move against nodata is to reach for the `nan`-aware reductions. **They do not help here.** `np.nanmean` ignores `NaN` and *propagates* `-inf` — so on a scene with real nodata corners (Trap 22: Farallones, Jamnagar, Huntington) it returns `-inf`, Sobel over that emits `inf`, and those flow straight into the feature dict.
 
 Then the real damage: **`json.dumps` writes bare `Infinity` / `NaN` into the file.** That is not valid JSON. Python's `json.loads` accepts it — so every Python-side check passes — and the browser's `JSON.parse` **throws**, so the bundle dies in the frontend with `Unexpected token I` and nothing upstream ever complained. This was found in `pipeline/detect/features.py` on 13 Sept before it shipped.
@@ -132,7 +132,7 @@ Then the real damage: **`json.dumps` writes bare `Infinity` / `NaN` into the fil
 - **Fix:** mask on `np.isfinite()` *before* the statistic. `nanmean` is not a substitute for a finite-mask; it solves a different problem.
 - **Check:** `validate_case.py` now passes `parse_constant=` to every `json.loads` and fails the bundle by name on a bare `Infinity`/`NaN`. The guard is permanent — but it catches this at the gate, not at the source. **Fix it in the producing code**, per the repo rule.
 
-## 25. A stray PROJ installation hijacks `rasterio` · Akshat, Soum
+## 25. A stray PROJ installation hijacks `rasterio` · Akshat, Soumirya
 `rasterio.open(..., crs='EPSG:4326')` failed on Akshat's laptop with `CRSError: The EPSG code is unknown`, pointing at `C:\Program Files\PostgreSQL\18\...\proj\proj.db` — **PostGIS's PROJ database, found ahead of rasterio's bundled one** and too old to read (`DATABASE.LAYOUT.VERSION.MINOR = 2`, needs ≥ 5). Any unrelated GIS install (PostGIS, QGIS, OSGeo4W) can do this by putting `PROJ_LIB`/`PROJ_DATA` in the environment.
 
 The failure is loud, which is the good news — but it looks like a broken GeoTIFF or a bad EPSG code, so the hour goes into the wrong file.

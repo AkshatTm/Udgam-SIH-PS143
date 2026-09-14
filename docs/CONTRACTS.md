@@ -98,7 +98,7 @@ there is no SAR-visible slick — a wreck, a pipeline right-of-way, a collision 
 `[lon, lat]` or an object with `lon`/`lat` plus optional `label` and `source_url`. When present it
 substitutes for a detection: the bundle may carry `trace` (and `attribute`, `verify`) without
 `detect`, and `detections.geojson` is not required. **The frontend must render such an origin as
-*seeded from a documented source*, never as a NAAP detection.** Allowed on a normal detection case
+*seeded from a documented source*, never as a UDGAM detection.** Allowed on a normal detection case
 too, as a ground-truth pin. **No case in the current library uses this path.**
 
 ---
@@ -388,7 +388,7 @@ looking part of the screen into the most convincing.
     "volume_reported": "588 barrels",
     "caveat": "The anchor strike preceded the release by eight months. No vessel was the proximate source at detection time."
   },
-  "naap_result": {
+  "udgam_result": {
     "origin_summary": "Origin cloud centred on the pipeline right-of-way, 2.1 km from the reported leak location.",
     "top_suspects": ["367123450"],
     "abstained": false

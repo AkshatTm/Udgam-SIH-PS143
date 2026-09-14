@@ -2,7 +2,7 @@
 
 *Written 14 Sept 2026 from a full audit: plan docs, update logs, git history, `cases/`, and a code
 read of `web/`. **Demo: 15 Sept, 17:00.** Their old docs are in `docs/_archive/` (see the README
-there). Soum and Jaiveer keep their own work, which is not listed here except where it blocks you.*
+there). Soumirya and Jaiveer keep their own work, which is not listed here except where it blocks you.*
 
 **Priority key.** **P0**: needed for the demo. **P1**: do if time allows before 17:00. **P2**:
 after the demo, before December.
@@ -57,7 +57,7 @@ after the demo, before December.
 
 ### 1A. Verification — Phase 4, pure writing, nobody else can do it (P0)
 
-**`naap_result` is now filled in all six files from the bundles** (verified: no `TODO` left in any
+**`udgam_result` is now filled in all six files from the bundles** (verified: no `TODO` left in any
 of them), and the stale wind shares in the facts-to-weigh lists were corrected. Huntington's verdict
 is pre-filled `partial` and Jamnagar's `not_applicable`; the other four are still `TODO`.
 **What is still owed is the human prose: `caveat` where marked, `verdict`, `explanation`,
@@ -68,7 +68,7 @@ Per-case fact sheets (bundle numbers, the sealed-record comparison, the traps) s
 beside the map overlays. They contain ANSWERS content and must never be committed.
 
 For each case: open `docs/ANSWERS.md` and the primary source → fill `official_finding.caveat` →
-check `naap_result` against the bundle → write `assessment` by hand → add
+check `udgam_result` against the bundle → write `assessment` by hand → add
 `"verify"` to `meta.acts_available` → **drop that file's line from `.git/info/exclude`** → build →
 validate → sync.
 
@@ -148,7 +148,7 @@ The `explanation` is human prose. **Never generated.** A `miss` with a reason sh
 ### 1F. P2
 
 `verification.json` for Ennore-2017 (SLC retry, D18) · deployment-cost figure · rename channels in
-`build_cache.py` (needs retrain) · a Python 3.11 venv check of the torch install (Soum).
+`build_cache.py` (needs retrain) · a Python 3.11 venv check of the torch install (Soumirya).
 
 ---
 
@@ -188,8 +188,8 @@ Stage 2 is **functionally complete**: all six spill cases ship `particles.json`,
 
   This overlaps the browser QA in §3B, so do both in one pass.
 - [ ] **P2 — `temporality` null on half the library** (A10). Farallones, Mumbai and Jamnagar are
-  `bounded`. The route is Soum's polygon feeding head-proximity timing, not Stage 2.
-- [ ] **P2 — Weathering flag.** It stays "unknown" until Soum emits `contrast_centre_db` /
+  `bounded`. The route is Soumirya's polygon feeding head-proximity timing, not Stage 2.
+- [ ] **P2 — Weathering flag.** It stays "unknown" until Soumirya emits `contrast_centre_db` /
   `contrast_edge_db`.
 - [ ] **P2 — Full suite on a machine with the field cache.**
   ```bash
@@ -314,12 +314,12 @@ restored with `git checkout -b <name> <sha>`:
 
 | branch | tip | what happened |
 |---|---|---|
-| `soum` | `e34509f` | merged whole — the Stage 1 accuracy programme, December work |
+| `soumirya` | `e34509f` | merged whole — the Stage 1 accuracy programme, December work |
 | `harshita-latest` | `6f5b73f` | merged whole, plus the asset she left out |
 | `jaiveer-phase2` | `7132132` | ported and reconciled, not taken wholesale |
 | `akshat-takeover` | `5e00611` | already identical to `main` |
 
-- **Soum.** Additive and off the demo path: no `cases/`, no `web/`, no `models/*.pt`. Recorded in
+- **Soumirya.** Additive and off the demo path: no `cases/`, no `web/`, no `models/*.pt`. Recorded in
   the merge message so it is not misread later: **E1's "the channel fix buys nothing" is about
   U-Net training** (tile IoU spread 0.0093 against fold noise 0.0599), *not* a contradiction of his
   Phase 6.8 finding that the networks do transfer, which is what D33 and `docs/evaluation/deck-numbers.md` rest on.
@@ -406,7 +406,7 @@ Expected: 26/26, 100 tests OK, PASS on all 9 (6 warnings, 3 of them by design on
 - **D33 reworded.** Networks do transfer once channels match; live cases stay classical on the IoU evidence.
 - **Issue register.** Resolutions table added for A1, A5/A6, A8, B3, B5, D1, D2, D3 and E1.
 - **§1D.**
-  - Natural-seep claim removed from `docs/team/soum-stage1-detection.md`, the §6.7 example and the open-items row.
+  - Natural-seep claim removed from `docs/team/soumirya-stage1-detection.md`, the §6.7 example and the open-items row.
   - Glossary "VH is the discriminator" removed.
   - §16.1 / D31: Farallones is **blind on weights, not provably on identity**, because Jaiveer's asks came from reading `ee19819`. The stage line quotes no count.
   - `receipts.md`: 118 m qualified as synthetic, 550 m Jacksonville added, NTSB 4.75 nm and coordinate added.
@@ -417,14 +417,14 @@ Expected: 26/26, 100 tests OK, PASS on all 9 (6 warnings, 3 of them by design on
   - The Mumbai "grid extent" concern is not a grid bug. The origin is correctly up-drift (NNW). The unseeded det-02 is where Cerulean's candidates sit.
   - Physics sanity on all six: t0 = detection_time, r50 ≤ r90, centroid and peak off land (GSHHG), frame-0 inside the slick 0.93–0.99.
 - **§1A prep.**
-  - `naap_result` filled from the bundles in all six `verification/*.json`. Stale wind shares corrected in the facts-to-weigh lists: Alaska 0.73, Jamnagar 0.62.
+  - `udgam_result` filled from the bundles in all six `verification/*.json`. Stale wind shares corrected in the facts-to-weigh lists: Alaska 0.73, Jamnagar 0.62.
   - `caveat`, `verdict` and `explanation` are **left for Akshat**. `verify` is not added.
   - Per-case fact sheets live outside the repo, because they contain ANSWERS content.
 - **§1E.** `docs/evaluation/deck-numbers.md`: every safe number with its receipt and its "never say".
 
 **Files touched:** `scripts/validate_case.py` · `scripts/test_validator.py` · `pipeline/drift/publish_all.py` ·
 `cases/case-*/meta.json` (6) · `docs/00_MASTER_PLAN.md` · `docs/evaluation/stage3-issue-register.md` · `docs/receipts.md` ·
-`docs/team/soum-stage1-detection.md` · `docs/evaluation/deck-numbers.md` · `verification/case-huntington-2021.json` (+5 untracked drafts)
+`docs/team/soumirya-stage1-detection.md` · `docs/evaluation/deck-numbers.md` · `verification/case-huntington-2021.json` (+5 untracked drafts)
 
 **Run command:**
 ```bash

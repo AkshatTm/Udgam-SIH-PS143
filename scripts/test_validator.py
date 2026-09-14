@@ -48,7 +48,7 @@ VALID_VERIFICATION = {
         "source_name": "Test", "source_url": "https://example.gov/report",
         "source_type": "official_investigation", "volume_reported": "1 bbl", "caveat": "none",
     },
-    "naap_result": {"origin_summary": "Test.", "top_suspects": [], "abstained": False},
+    "udgam_result": {"origin_summary": "Test.", "top_suspects": [], "abstained": False},
     "assessment": {"verdict": "not_applicable", "explanation": "Test prose.",
                    "what_would_have_helped": "n/a"},
 }

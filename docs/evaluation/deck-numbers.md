@@ -26,7 +26,7 @@ differently. Cerulean is also where cases 1, 2, 4 and 5 came from; say so.
 |---|---|---|---|
 | Scene classification on the authors' held-out test set | accuracy **0.951**, look-alike rejection **0.940**, oil recall **0.927**, all 450 Part III scenes, threshold 0.143 chosen on validation | `receipts.md` "Detection accuracy" | 0.960 / 0.987 / 0.434 (dead model) |
 | U-Net oil-class IoU, gated | **0.435** (138/150 oil scenes) | same | "23%" anything on detection (that was a `wind_share`) |
-| Adding a second polarisation | val F1 **0.346 → 0.643**, Part III precision **5.8×** at identical recall | `receipts.md` L104, `docs/updates/soum.md` §622 | "VH is the discriminator" (the top feature was computed from VV) |
+| Adding a second polarisation | val F1 **0.346 → 0.643**, Part III precision **5.8×** at identical recall | `receipts.md` L104, `docs/updates/soumirya.md` §622 | "VH is the discriminator" (the top feature was computed from VV) |
 | Agreement with Cerulean on real incidents | median IoU **0.483**, range 0.165–0.728, **n = 5**, recall 0.80–0.94 | `receipts.md` "IoU against SkyTruth Cerulean" | "accuracy" on real cases |
 | Networks and live cases | networks transfer once channels match; live cases stay classical on evidence (Layer 2 median 0.504 vs 0.483, behind on 3 of 5) | Master §6.1 / D33 amendment | "the networks don't transfer" |
 | The benchmark gap | authors report 99% / 96% IoU on their set; ~53% is Krestenitis (a different dataset). The gap measures look-alike variety | `receipts.md` "two-benchmark framing" | ~53% as our number |

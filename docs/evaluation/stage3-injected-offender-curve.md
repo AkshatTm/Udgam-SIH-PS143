@@ -96,7 +96,7 @@ where the guilty party does not go dark, it costs 0.143.
   — not because the component works but because the guilty vessel was always the class it scores
   highest. Drawing the offender's type from the background fleet's own distribution dropped it to
   −0.024. A benchmark that leaks the answer through a side channel measures the leak.
-- `parity` is structurally 0.000 here: it has never been implemented (blocked on Soum's centreline).
+- `parity` is structurally 0.000 here: it has never been implemented (blocked on Soumirya's centreline).
   It is in the table so the zero is visible rather than absent.
 
 ## What this does not settle

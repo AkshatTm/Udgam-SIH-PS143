@@ -1,7 +1,7 @@
 # Stage 1 — accuracy programme: live status
 
-*Owner: Soum. **This file is updated as each item completes** — it is the board, not a log.
-The narrative and the reasoning live in `docs/updates/soum.md`; this is the one-screen answer to
+*Owner: Soumirya. **This file is updated as each item completes** — it is the board, not a log.
+The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the one-screen answer to
 "where is it".*
 
 **Last updated: 2026-09-14 05:40** — caches rebuilt, stopped for the night before the retrain.
@@ -10,7 +10,7 @@ The narrative and the reasoning live in `docs/updates/soum.md`; this is the one-
 
 ## What this is, and what it is NOT
 
-`docs/team/soum-stage1-detection.md` — the Stage 1 task document, **7 phases and a 12-item definition of
+`docs/team/soumirya-stage1-detection.md` — the Stage 1 task document, **7 phases and a 12-item definition of
 done — is COMPLETE**. Nine cases PASS, `detections.geojson` ships for all of them, and the demo
 loads none of this work.
 

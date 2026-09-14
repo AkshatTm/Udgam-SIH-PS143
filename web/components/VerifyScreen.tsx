@@ -1,6 +1,6 @@
 "use client";
 
-// Screen 4 — Verify. Two equal columns (what NAAP concluded | what the investigation found),
+// Screen 4 — Verify. Two equal columns (what UDGAM concluded | what the investigation found),
 // a verdict badge that reads the same for HIT and MISS, the official source as a real external
 // link, and the human explanation rendered verbatim. Rendered as a full-cover layer over the
 // (still-mounted) MapView by CaseWorkspace when the stage is `verify`; the ContextPanel and the
@@ -71,7 +71,7 @@ export default function VerifyScreen() {
       <div className={cover}>
         <div className="mx-auto flex max-w-5xl gap-8">
           <div className="flex-1">
-            <ColumnHeading>What NAAP concluded</ColumnHeading>
+            <ColumnHeading>What UDGAM concluded</ColumnHeading>
           </div>
           <div className="w-px shrink-0 bg-white/[0.08]" />
           <div className="flex-1">
@@ -85,7 +85,7 @@ export default function VerifyScreen() {
     );
   }
 
-  const { officialFinding: of, naapResult: nr, assessment: a } = verification;
+  const { officialFinding: of, udgamResult: nr, assessment: a } = verification;
 
   const ko = meta?.known_origin;
   const knownOriginLabel =
@@ -97,16 +97,16 @@ export default function VerifyScreen() {
       <div className="mx-auto max-w-5xl">
         {/* ── Two equal columns ── */}
         <div className="flex gap-8">
-          {/* NAAP */}
+          {/* UDGAM */}
           <section className="flex-1">
-            <ColumnHeading>What NAAP concluded</ColumnHeading>
+            <ColumnHeading>What UDGAM concluded</ColumnHeading>
             <p className="mt-3 text-[12px] leading-relaxed text-white/80">
               {nr.originSummary}
             </p>
 
             {hasKnownOrigin && (
               <p className="mt-3 rounded border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[10px] leading-relaxed text-white/50">
-                Origin seeded from a documented source, not a NAAP detection
+                Origin seeded from a documented source, not a UDGAM detection
                 {knownOriginLabel ? ` — ${knownOriginLabel}` : ""}.
               </p>
             )}
@@ -115,7 +115,7 @@ export default function VerifyScreen() {
               <SectionLabel>Vessel shortlist</SectionLabel>
               {nr.abstained ? (
                 <p className="mt-1.5 text-[11px] text-white/70">
-                  NAAP named no vessel — attribution not possible at acceptable confidence.
+                  UDGAM named no vessel — attribution not possible at acceptable confidence.
                 </p>
               ) : nr.topSuspects.length > 0 ? (
                 <ul className="mt-1.5 space-y-0.5">
@@ -130,7 +130,7 @@ export default function VerifyScreen() {
                 </ul>
               ) : (
                 <p className="mt-1.5 text-[11px] text-white/55">
-                  NAAP named no vessel.
+                  UDGAM named no vessel.
                 </p>
               )}
             </div>

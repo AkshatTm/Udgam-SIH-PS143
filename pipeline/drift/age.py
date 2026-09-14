@@ -161,7 +161,7 @@ def polygon_major_axis_km(ring):
     """MEASURED major-axis length of a detection polygon, in km, by PCA on its vertices.
 
     The preferred input to C3.1. A1 ruled that the shear estimator matches the observed major
-    axis rather than the area; this measures that axis from the geometry Soum actually ships
+    axis rather than the area; this measures that axis from the geometry Soumirya actually ships
     instead of inferring it from two scalars under an ellipse assumption that the shape does not
     satisfy (see observed_major_axis_km for the numbers).
 
@@ -264,7 +264,7 @@ def pca_extent(pos):
     the Ennore control cloud runs 4.38:1. `area_km2` is the area of the 2-sigma ellipse,
     pi * (2*sd1) * (2*sd2), which holds about 86% of a gaussian cloud's particles.
 
-    THE COMPARABILITY CAVEAT, and it is a real source of bias: Soum's `area_km2` is the area
+    THE COMPARABILITY CAVEAT, and it is a real source of bias: Soumirya's `area_km2` is the area
     of a thresholded dark polygon -- where oil is optically thick enough to damp waves --
     while this is the area of a particle spread envelope. They are not the same quantity.
     A 2-sigma ellipse is the closest honest match, and the direction of the residual bias
@@ -473,7 +473,7 @@ def _gate_reason(discharge_class, estimator, physics):
 
       chronic          a real physical reason. The gate is doing its job and nothing is missing.
       unknown/absent   a MISSING INPUT. Stage 1 has not emitted discharge_class -- it is in the
-                       contract and assigned to Soum, but detect/run.py has never written it, so
+                       contract and assigned to Soumirya, but detect/run.py has never written it, so
                        it will not appear just because his backlog clears. Akshat's A5 audit
                        (13 Sept 2026) found it unset on EVERY case including case-000's own
                        det-01, which is why both acute-gated estimators currently fire on
@@ -529,7 +529,7 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
     one direction it thins in the other, so det F = 1 and the cloud's ellipse area is constant.
     HYCOM's surface field is close to divergence-free, and our wind term is a uniform 3% that
     adds translation rather than stretching -- so a cloud advected by this model becomes a
-    longer, thinner filament of ROUGHLY CONSTANT AREA. Matching modelled area against Soum's
+    longer, thinner filament of ROUGHLY CONSTANT AREA. Matching modelled area against Soumirya's
     observed `area_km2` therefore has no age signal to find: the curve is flat, the inversion
     is noise, and `check_monotonic` would (correctly) refuse it.
 
@@ -541,7 +541,7 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
 
     What the model does produce, robustly and monotonically, is FILAMENT LENGTH. So the
     observable becomes the major axis, derived from the contract as
-    sqrt(area_km2 * elongation / pi) * 2 -- both quantities Soum already exports. Area is still
+    sqrt(area_km2 * elongation / pi) * 2 -- both quantities Soumirya already exports. Area is still
     computed and reported per candidate, as a check that the field is behaving as expected: if
     modelled area grows or shrinks materially across the candidates, the field has real
     divergence in it and that is worth knowing.
@@ -908,7 +908,7 @@ def weathering_flag(wind_ms, contrast_centre_db=None, contrast_edge_db=None,
     So this returns `unknown` and says why, unless the real pair is passed in. Refusing rather
     than fabricating is the same instinct as the abstain flag, and a fabricated freshness call
     would be exactly the kind of plausible-looking wrong answer this stage exists to avoid.
-    ROUTE TO SOUM: two floats per detection, `contrast_centre_db` and `contrast_edge_db`,
+    ROUTE TO SOUMIRYA: two floats per detection, `contrast_centre_db` and `contrast_edge_db`,
     sampled inside the polygon and in an annulus just inside its boundary.
     """
     diag = {"wind_ms": None if wind_ms is None else float(wind_ms),
@@ -926,7 +926,7 @@ def weathering_flag(wind_ms, contrast_centre_db=None, contrast_edge_db=None,
     if contrast_centre_db is None or contrast_edge_db is None:
         diag["reason"] = ("centre-vs-edge contrast is not in the detections contract; "
                           "contrast_db and edge_gradient are not substitutes. Needs "
-                          "contrast_centre_db + contrast_edge_db from Stage 1 (Soum).")
+                          "contrast_centre_db + contrast_edge_db from Stage 1 (Soumirya).")
         return "unknown", diag
 
     gradient = float(contrast_edge_db) - float(contrast_centre_db)
@@ -1047,7 +1047,7 @@ def main():
     candidate_hours = [round(x, 6) for x in np.arange(lo, hi + 1e-9, step)]
 
     print("=" * 78)
-    print(f"NAAP Stage 2 - age estimation   case {a.case}")
+    print(f"UDGAM Stage 2 - age estimation   case {a.case}")
     print(f"origin centroid ({olon:.5f}, {olat:.5f})   t0 = "
           f"{t0.isoformat().replace('+00:00', 'Z')}")
     print("=" * 78)

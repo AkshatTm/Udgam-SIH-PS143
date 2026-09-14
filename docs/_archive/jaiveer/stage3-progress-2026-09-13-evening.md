@@ -15,8 +15,8 @@ projected.
 |---|---|---|
 | 0 · Unblock + the Menuett block | **Done** | — |
 | 1 · Core scorer | **Done** | — |
-| 2 · Parity, head-proximity, temporality | Blocked — Soum's slick polygon | Now **measured** as blocked: `parity` returns `null` on the real case |
-| 3 · Dark vessel | Blocked — Soum's `ship_detections` | — |
+| 2 · Parity, head-proximity, temporality | Blocked — Soumirya's slick polygon | Now **measured** as blocked: `parity` returns `null` on the real case |
+| 3 · Dark vessel | Blocked — Soumirya's `ship_detections` | — |
 | 4 · Infrastructure | Not started | — |
 | 5 · Traffic prior | Not started | — |
 | 6 · Repeat offenders | Structurally undemonstrable — reframe as roadmap | — |
@@ -281,7 +281,7 @@ Same two commands each. But:
 |---|---|---|
 | `case-farallones-2023` | expected `noaa_dense` | US Pacific — NOAA coverage |
 | `case-huntington-2021` | expected `noaa_dense` | Infrastructure case (D10); needs Phase 4 for full value |
-| `case-gulf-alaska-2023` | expected `noaa_dense` | **The dark-vessel case.** Per D30's fallout this is where the "went dark" story now lives. Needs Soum's `ship_detections` with `est_length_m` |
+| `case-gulf-alaska-2023` | expected `noaa_dense` | **The dark-vessel case.** Per D30's fallout this is where the "went dark" story now lives. Needs Soumirya's `ship_detections` with `est_length_m` |
 | `case-mumbai-2023` | **`gfw_hourly`** | NOAA does not cover Indian waters |
 | `case-jamnagar-2024` | **`gfw_hourly`** | Same |
 

@@ -44,7 +44,7 @@ def slick_outline(case_id):
 
     Falls back to cerulean_slick.geojson where a case carries one -- SkyTruth's reference
     polygon for the same feature. It is drawn in a DIFFERENT colour and labelled as theirs.
-    It is a comparison target, NOT ground truth and NOT a NAAP detection (docs/ANSWERS.README),
+    It is a comparison target, NOT ground truth and NOT a UDGAM detection (docs/ANSWERS.README),
     and nothing may ever seed from it.
     """
     path = REPO / "cases" / case_id / "detections.geojson"
@@ -59,7 +59,7 @@ def slick_outline(case_id):
                 ring = c[0] if geom["type"] == "Polygon" else c[0][0]
                 return (np.array(ring), "cerulean",
                         "no detections.geojson yet -- drawing SkyTruth Cerulean's REFERENCE "
-                        "polygon instead. It is not a NAAP detection and nothing seeds from it.")
+                        "polygon instead. It is not a UDGAM detection and nothing seeds from it.")
         return (None, None,
                 "no detections.geojson for this case, so NO slick outline is drawn. "
                 "Stage 1 has not delivered yet -- do not read this plot as if the slick "
@@ -78,7 +78,7 @@ def slick_outline(case_id):
     best = max(oil, key=lambda f: f.get("properties", {}).get("confidence", 0))
     geom = best["geometry"]
     ring = geom["coordinates"][0] if geom["type"] == "Polygon" else geom["coordinates"][0][0]
-    return np.array(ring), "naap", None
+    return np.array(ring), "udgam", None
 
 
 def main():
@@ -114,9 +114,9 @@ def main():
         ax.set_title(title)
         ring, ring_src, ring_note = slick_outline(a.case)
         if ring is not None:
-            colour = "crimson" if ring_src == "naap" else "deepskyblue"
-            label = ("NAAP detection" if ring_src == "naap"
-                     else "Cerulean reference (NOT a NAAP detection)")
+            colour = "crimson" if ring_src == "udgam" else "deepskyblue"
+            label = ("UDGAM detection" if ring_src == "udgam"
+                     else "Cerulean reference (NOT a UDGAM detection)")
             ax.plot(ring[:, 0], ring[:, 1], color=colour, lw=1.8, zorder=5, label=label)
             ax.legend(loc="lower left", fontsize=7.5, framealpha=0.85)
     axes[0].set_ylabel("latitude (N)")
@@ -148,7 +148,7 @@ def main():
     elif ring_src == "cerulean":
         print(f"\n  !! OUTLINE IS NOT OURS: {ring_note}")
     else:
-        print("  The crimson outline is NAAP's own highest-confidence oil detection.")
+        print("  The crimson outline is UDGAM's own highest-confidence oil detection.")
     return 0
 
 

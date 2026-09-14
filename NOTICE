@@ -1,7 +1,7 @@
-Naap — satellite forensics that traces an oil spill back to the ship that caused it
-Copyright 2026 Team Naap (Smart India Hackathon 2026, PS 26143)
+UDGAM — satellite forensics that traces an oil spill back to the ship that caused it
+Copyright 2026 Team Verdict (Smart India Hackathon 2026, PS 26143)
 
-This product includes software developed by Team Naap.
+This product includes software developed by Team Verdict.
 Licensed under the Apache License, Version 2.0. See LICENSE.
 
 Documentation in docs/ and every Markdown file in this repository is licensed under
@@ -18,7 +18,7 @@ building a product on this repository.
 
 Mandatory attributions, reproduced here as the upstream licences require:
 
-  Contains modified Copernicus Sentinel data (2021-2024), processed by Team Naap.
+  Contains modified Copernicus Sentinel data (2021-2024), processed by Team Verdict.
   Sentinel-1 GRD scenes accessed through Google Earth Engine (COPERNICUS/S1_GRD).
 
   Trujillo-Acatitla, Rubicel; Tuxpan-Vargas, Jose; Ovando-Vazquez, Cesare;

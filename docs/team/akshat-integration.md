@@ -39,7 +39,7 @@ Written any `verification.json` prose — the researched `official_finding` bloc
 | 5 | **Mumbai** — 3 Sep 2023 | `case-mumbai-2023` | ✅ full id | All four source classes at once |
 | 6 | **Jamnagar** — 23 Feb 2024 | `case-jamnagar-2024` | ✅ full id | The Indian discharge nobody acted on |
 | 7 | **Look-alike** — Ennore 30 Nov 2023 | `case-ennore-lookalike-2023` | finder script | Correct rejection |
-| 8 | **No-spill** — Zenodo Part 3 | `case-nospill-zenodo` | Soum nominates | Correct rejection |
+| 8 | **No-spill** — Zenodo Part 3 | `case-nospill-zenodo` | Soumirya nominates | Correct rejection |
 
 **How the ids got resolved, and why it matters beyond the ids.** Cerulean truncates scene ids in its
 detail panel, and v2 of this document had you clicking a copy button six times. It has a **public OGC
@@ -49,7 +49,7 @@ source ids. `scripts/fetch_cerulean.py` wraps it.
 
 That changes three things at once:
 - The **BLOCKING** scene-id item is closed.
-- Soum gets a **real-incident IoU reference** in every bundle (`cerulean_slick.geojson`) instead of benchmark-only numbers.
+- Soumirya gets a **real-incident IoU reference** in every bundle (`cerulean_slick.geojson`) instead of benchmark-only numbers.
 - The **answers arrive with the data**, which is exactly why the `--answers` output goes to stdout and `docs/ANSWERS.md`, never into `cases/`.
 
 **Golden Ray is deleted (D17, D25).** No SAR-visible slick, and Huntington makes the infrastructure point better because it has a federal investigation behind it.
@@ -80,7 +80,7 @@ saw it, even named candidates, and **nothing happened.** Never say "no record an
 | A9 | Adaptive field-box pad | Anushka | ✅ funded |
 | A10 | Tug/tow display labels on suspect cards | Jaiveer | ✅ ruled — display only |
 | A11 | `suspects.json` schema extension | Jaiveer | ✅ approved, Master §6.7 |
-| A12 | Confirm **2-band VV+VH GeoTIFF** exports | Soum | ✅ shipped (D14) |
+| A12 | Confirm **2-band VV+VH GeoTIFF** exports | Soumirya | ✅ shipped (D14) |
 | A13 | Approve `natural_seep` as a fourth `source_type` (D19) | — | ✅ ruled |
 | A14 | Approve `ais_source` on `meta.json` (D20) | — | ✅ ruled + validated |
 | A15 | Tell Jaiveer to **verify NOAA density at Jacksonville** | Jaiveer | ✅ done — 69 s interval, holds to 240 km, hero confirmed |
@@ -93,7 +93,7 @@ saw it, even named candidates, and **nothing happened.** Never say "no record an
 
 **Nobody but you can write `verification.json`.** It is the strongest new idea in the project, it is pure research and writing, and it is invisible until the last screen. The `official_finding` blocks are researched; the `assessment.explanation` for every case is still owed, by hand, after the stages run. The validator fails the bundle until it exists — that is deliberate.
 
-**VV-only exports would cripple Soum.** ~~His single strongest feature is `vh_mean_depth_db`, at twice the weight of any VV feature.~~ **Corrected 13 Sept:** that feature was computed from Zenodo band 2, which is VV, not VH — the Zenodo band order is the reverse of ours. The rank-1 feature is real but is a *co-pol* statistic. **Keep checking `bandNames()` anyway:** the measured win comes from having a *second* polarisation at all (val F1 0.346 → 0.643), so a VV-only export still costs it. Every export is a 2-band float32 GeoTIFF and the PNG is display only. Check `bandNames()` on every scene as it exports and name the case immediately if one comes back VV-only.
+**VV-only exports would cripple Soumirya.** ~~His single strongest feature is `vh_mean_depth_db`, at twice the weight of any VV feature.~~ **Corrected 13 Sept:** that feature was computed from Zenodo band 2, which is VV, not VH — the Zenodo band order is the reverse of ours. The rank-1 feature is real but is a *co-pol* statistic. **Keep checking `bandNames()` anyway:** the measured win comes from having a *second* polarisation at all (val F1 0.346 → 0.643), so a VV-only export still costs it. Every export is a 2-band float32 GeoTIFF and the PNG is display only. Check `bandNames()` on every scene as it exports and name the case immediately if one comes back VV-only.
 
 **You have now run the pipeline, once, on stubs and on one real export.** You have never run it on a case that went all the way through four stages. Jacksonville is where that happens, and it will be slower than you expect for reasons that have nothing to do with bugs.
 
@@ -107,7 +107,7 @@ B1–B10 are all ruled and live in Master Part 9 as D8, D11, D12, D14, D19, D20,
 broadcast is **D23–D26**, in one message:
 
 **D23 — Cerulean's public API is how cases get onboarded.** No key, no auth. It returns the full scene
-id, the polygon and the attributed sources. Soum gets the polygon as an IoU reference *after* his own
+id, the polygon and the attributed sources. Soumirya gets the polygon as an IoU reference *after* his own
 detector has produced one; nobody gets the sources.
 
 **D24 — Jamnagar is reframed.** Cerulean logged it. The claim is now "never investigated", not "no
@@ -138,7 +138,7 @@ re-derives any of them in one command, so nothing here depends on a browser sess
 ### 1.2 The Cerulean record for every case ✅
 `cases/<id>/cerulean_slick.geojson` in each bundle — polygon plus centerline, no attribution. Two uses:
 - Source material for `verification.json` (Phase 4)
-- **Ground truth for Soum's segmentation on a real incident.** *"On the Jacksonville scene our segmentation achieves X IoU against SkyTruth Cerulean's operational detection of the same slick"* is a much stronger claim than a benchmark figure. **Give him the polygon only after his own exists** — see Part H.
+- **Ground truth for Soumirya's segmentation on a real incident.** *"On the Jacksonville scene our segmentation achieves X IoU against SkyTruth Cerulean's operational detection of the same slick"* is a much stronger claim than a benchmark figure. **Give him the polygon only after his own exists** — see Part H.
 
 Huntington has **no** Cerulean record. Its ground truth is NTSB MIR-24-01, which is better.
 
@@ -162,10 +162,10 @@ Part I contingency below did not trigger.
 figure may be a wide-area or global count, not local to the case box. Jaiveer must filter
 client-side by position before treating it as a local gap statistic.
 
-**The correction that still stands:** the GFW report in circulation claims the AIS Vessel Presence dataset returns MMSI, name, IMO and positions. **It does not.** GFW's own documentation says it *"shows vessel presence patterns and movement corridors, but does not provide individual vessel positions"* — it is a gridded layer served through the 4Wings tile API. For tracks you want the **Vessels API** and the **Events API**; the latter includes **AIS-disabling events**, which is Jaiveer's gap analysis already productised on GFW's full-resolution underlying data. There is also a **SAR vessel detections** endpoint that flags non-broadcasting vessels — use it to *validate* Soum's ship detector, never to replace it, because building it ourselves is the differentiator.
+**The correction that still stands:** the GFW report in circulation claims the AIS Vessel Presence dataset returns MMSI, name, IMO and positions. **It does not.** GFW's own documentation says it *"shows vessel presence patterns and movement corridors, but does not provide individual vessel positions"* — it is a gridded layer served through the 4Wings tile API. For tracks you want the **Vessels API** and the **Events API**; the latter includes **AIS-disabling events**, which is Jaiveer's gap analysis already productised on GFW's full-resolution underlying data. There is also a **SAR vessel detections** endpoint that flags non-broadcasting vessels — use it to *validate* Soumirya's ship detector, never to replace it, because building it ourselves is the differentiator.
 
 ### 1.6 The no-spill scene ⬜
-Ask Soum for one clean-ocean scene from Zenodo Part 3. Case 8 is scaffolded and **held out of
+Ask Soumirya for one clean-ocean scene from Zenodo Part 3. Case 8 is scaffolded and **held out of
 `cases/index.json`** until he nominates, so the gallery never 404s. The look-alike case is settled —
 Ennore 30 Nov 2023 is better than anything from Zenodo, because it is the same coast and sensor as a
 real spill with dark patches that provably cannot be oil.
@@ -185,20 +185,20 @@ Presentation order 1 → 8 per Master §3, default `case-jacksonville-2024`.
 ### 2.1 The four artefacts per case ✅ built, runs per case
 | File | What | For |
 |---|---|---|
-| `sar_vv_vh.tif` | **2-band float32 GeoTIFF, dB, native 10 m** | Soum's classifier — the real numbers |
+| `sar_vv_vh.tif` | **2-band float32 GeoTIFF, dB, native 10 m** | Soumirya's classifier — the real numbers |
 | `sar.png` | VV, 8-bit, clamped and stretched | display only |
 | `bounds.json` | west/south/east/north + width_px/height_px + **the dB clamp used** + `vh_available` | everyone |
 | `thumb.png` | small preview | the gallery |
 
-The clamp is recorded so Soum can invert it exactly. Huntington needed **[−25, −5]**, not the [−25, 0]
+The clamp is recorded so Soumirya can invert it exactly. Huntington needed **[−25, −5]**, not the [−25, 0]
 default — a clamp is per-case, and changing one is a broadcast, not a silent edit.
 
 ### 2.2 Export mechanics
 `Export.image.toDrive` with `crs: 'EPSG:4326'`, `maxPixels: 1e10`. **`task.start()` submits it** — the
 old "press RUN in the Tasks tab" note was wrong and is fixed. Watch with `earthengine task list`, then
-move `Drive/naap_exports/<case>_sar_vv_vh.tif` into `cases/<case>/sar_vv_vh.tif`.
+move `Drive/udgam_exports/<case>_sar_vv_vh.tif` into `cases/<case>/sar_vv_vh.tif`.
 
-On size: a 0.6° × 0.6° box at 10 m across two float bands is roughly 6600 × 6600 × 2 — several hundred MB. **Tighten the box around the slick before you drop resolution**, because 10 m is what Soum's Zenodo training data uses and matching it matters more than covering extra sea. `fetch_cerulean.py` prints a padded box derived from the real polygon; start there.
+On size: a 0.6° × 0.6° box at 10 m across two float bands is roughly 6600 × 6600 × 2 — several hundred MB. **Tighten the box around the slick before you drop resolution**, because 10 m is what Soumirya's Zenodo training data uses and matching it matters more than covering extra sea. `fetch_cerulean.py` prints a padded box derived from the real polygon; start there.
 
 ### 2.3 Verify every export by eye
 Coastline where land should be, sea as grey speckle, any slick a visible dark streak. Blank or black means the clamp is wrong.
@@ -208,7 +208,7 @@ Coastline where land should be, sea as grey speckle, any slick a visible dark st
 into a case folder that already has its meta, or you will get an `EDIT ME` stub you then have to redo.
 
 ### 2.5 Deliver case by case
-> 🚩 Soum's real-scene inference is blocked per case on this. Anushka's field fetch is blocked on `meta.detection_time` being real.
+> 🚩 Soumirya's real-scene inference is blocked per case on this. Anushka's field fetch is blocked on `meta.detection_time` being real.
 
 **Deliver in library order** — Jacksonville first, since it is the hero and the one the deck is built around. Then Farallones, Huntington (done), Alaska, Mumbai, Jamnagar, and the two rejection cases last.
 
@@ -241,7 +241,7 @@ and `source_type` is `none`.
 ### 4.2 Fill `official_finding`
 Summary, responsible parties with IMO where you have it, source name and URL, source type, volume, and — importantly — `caveat`. Huntington Beach's caveat carries the whole case: **the anchor strike preceded the release by eight months, so no vessel was the proximate source at detection time.**
 
-### 4.3 Fill `naap_result` from the actual output files
+### 4.3 Fill `udgam_result` from the actual output files
 After the stages have run. Not from memory, not from an earlier draft, not from what you hoped.
 
 ### 4.4 Write `assessment` honestly
@@ -268,7 +268,7 @@ The loop, per case:
 
 ```
   1  you      select + export        → sar_vv_vh.tif, sar.png, bounds.json, thumb.png
-  2  Soum     detections.geojson
+  2  Soumirya     detections.geojson
   3  Anushka  particles.json, origin.json, particles_forward.json
   4  Jaiveer  vessels.geojson, suspects.json
   5  you      build_case.py → validate → PASS
@@ -307,7 +307,7 @@ Cases 7 and 8 are cheap once the exporter works — detect-only, and the correct
 5. Detection, **the VH finding**, and the Cerulean-polygon IoU on real incidents
 6. Trace — the ensemble, and why the answer is a cloud
 7. Attribute — the funnel, dark vessels, exclusions
-8. **The honesty slide** — Soum's held-out numbers, Jaiveer's evaluation curve with its operating limit, Anushka's age validation
+8. **The honesty slide** — Soumirya's held-out numbers, Jaiveer's evaluation curve with its operating limit, Anushka's age validation
 9. **Prior art** — CleanSeaNet, Cerulean, INCOIS, and the four things we do differently
 10. Data provenance and roadmap
 
@@ -341,7 +341,7 @@ A pull that changes what is shown means re-running 7.2 on that machine.
 ### 7.3 Two timed rehearsals with someone playing hostile judge.
 
 ### 7.4 Demo-day roles
-**You** drive the narrative and the hostile questions. **Harshita** drives the laptop so you can face the judges. **Soum, Anushka, Jaiveer** each answer on their own stage — one sentence, then hand back.
+**You** drive the narrative and the hostile questions. **Harshita** drives the laptop so you can face the judges. **Soumirya, Anushka, Jaiveer** each answer on their own stage — one sentence, then hand back.
 
 ---
 
@@ -349,7 +349,7 @@ A pull that changes what is shown means re-running 7.2 on that machine.
 
 Every case has a documented outcome — a Cerulean attribution, an NTSB finding, a dark-vessel id. **All of it lives in `docs/ANSWERS.md`, which is gitignored and nobody else sees.** `docs/ANSWERS.README.md` is committed in its place so the team knows it exists.
 
-**Why this matters more than it sounds.** If Jaiveer knows which vessel the answer names while tuning weights, he will tune until that vessel ranks first. If Soum knows where the slick is, he will lower the threshold until it appears. If Anushka knows the origin, she will read a wrong cloud as close enough. **None of that is dishonesty** — it is what anyone does when the target is visible. But it collapses "our system identified the vessel" into "we tuned it until it did", and a December panel will ask which happened.
+**Why this matters more than it sounds.** If Jaiveer knows which vessel the answer names while tuning weights, he will tune until that vessel ranks first. If Soumirya knows where the slick is, he will lower the threshold until it appears. If Anushka knows the origin, she will read a wrong cloud as close enough. **None of that is dishonesty** — it is what anyone does when the target is visible. But it collapses "our system identified the vessel" into "we tuned it until it did", and a December panel will ask which happened.
 
 **The Cerulean API makes this harder to hold, not easier.** One query returns the polygon *and* the
 attributed MMSIs together. `fetch_cerulean.py` therefore splits them by construction: the polygon is
@@ -358,8 +358,8 @@ output into the group.**
 
 | Person | Gets | Never gets |
 |---|---|---|
-| Soum | `sar_vv_vh.tif`, `sar.png`, `bounds.json`. `cerulean_slick.geojson` **only after** his detector has produced its own polygon, so the IoU comparison is honest | Where the slick is, before he finds it |
-| Anushka | Case list with `detection_time` and bounds; Soum's detections when they land | The documented origin or release time |
+| Soumirya | `sar_vv_vh.tif`, `sar.png`, `bounds.json`. `cerulean_slick.geojson` **only after** his detector has produced its own polygon, so the IoU comparison is honest | Where the slick is, before he finds it |
+| Anushka | Case list with `detection_time` and bounds; Soumirya's detections when they land | The documented origin or release time |
 | Jaiveer | Case list with dates, bounding boxes and `ais_source`; real `origin.json` when it lands | **Vessel names, MMSIs, IMOs** |
 | Harshita | Bundles as produced | The answers |
 
@@ -408,7 +408,7 @@ The bundle is the boundary.
 ## D3. Triage — who owns a symptom
 | Symptom | Owner |
 |---|---|
-| Polygons in the wrong hemisphere / mirrored | data — coordinate conversion, Soum or export |
+| Polygons in the wrong hemisphere / mirrored | data — coordinate conversion, Soumirya or export |
 | Origin renders south-west when the current runs south | data — Anushka, direction is flipped |
 | Cloud renders off-screen | **render** — Harshita's union camera. Expected, not a bug |
 | Heatmap changes shape on zoom | **render** — BitmapLayer |
@@ -437,7 +437,7 @@ A short sync every time a bundle changes state: the bundle id and its state — 
 
 **"You used Cerulean to find your cases."** → Yes, and we cite it. It is a searchable database of detections; using it for case selection is normal research practice. We also benchmark our segmentation against their polygons, which is a harder test than our own dataset. What we do not take from them is the answer — that is sealed until the bundle validates.
 
-**"How accurate is detection?"** → Soum's held-out, scene-level numbers on the dataset's own designated test set, the two-benchmark framing, and the Cerulean-polygon IoU on five real incidents.
+**"How accurate is detection?"** → Soumirya's held-out, scene-level numbers on the dataset's own designated test set, the two-benchmark framing, and the Cerulean-polygon IoU on five real incidents.
 
 **"How accurate is attribution?"** → Jaiveer's injected-offender curve, with its stated operating limit and the abstention rule above it.
 

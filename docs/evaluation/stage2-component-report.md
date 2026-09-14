@@ -1,6 +1,6 @@
 # Stage 2 — Drift Engine: Full Component Report
 
-**Project:** NAAP · SIH 2026 · PS 26143 — oil spill detection, backtracking and vessel attribution
+**Project:** UDGAM · SIH 2026 · PS 26143 — oil spill detection, backtracking and vessel attribution
 **Component:** Stage 2 (Trace) — backward particle drift, ensemble uncertainty, origin probability cloud
 **Owner:** Anushka
 **Report date:** 2026-09-08
@@ -754,7 +754,7 @@ No network is needed after the fetch — everything downstream reads `data/field
 | Rerun on the US case by freeze | ⬜ blocked on the case being picked (Master §9) |
 
 ### The three things blocking a real Ennore answer — none of them Stage 2
-1. **Soum's real `detections.geojson` is not in the repo.** The fields underneath are real HYCOM and ERA5 for the actual Ennore box and dates, so the physics is real — but the slick being rewound is not a detection. *The origin coordinates must not appear on a slide labelled Ennore until this lands.*
+1. **Soumirya's real `detections.geojson` is not in the repo.** The fields underneath are real HYCOM and ERA5 for the actual Ennore box and dates, so the physics is real — but the slick being rewound is not a detection. *The origin coordinates must not appear on a slide labelled Ennore until this lands.*
 2. **The Ennore Sentinel-1 scene is unverified.** `scene_id: "FAKE-000"`, placeholder `detection_time` — and that timestamp selects the ocean.
 3. **The US case is unpicked**, with the Oct 2014 – Sep 2024 window constraint above.
 

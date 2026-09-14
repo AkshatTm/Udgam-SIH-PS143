@@ -1,7 +1,7 @@
-# SOUM — Complete Detection Pipeline: Progress Report & Handoff
+# SOUMIRYA — Complete Detection Pipeline: Progress Report & Handoff
 
-**Author:** Soum (Stage 1 — Detection)  
-**Project:** SIH PS-143 — SAR Oil Spill Detection & Attribution (NAAP)  
+**Author:** Soumirya (Stage 1 — Detection)  
+**Project:** SIH PS-143 — SAR Oil Spill Detection & Attribution (UDGAM)  
 **Date:** 2026-09-09  
 **Report purpose:** Full technical handoff so a fresh model can understand every decision made, every failure encountered, and what remains to be done for the Ennore deliverable.
 
@@ -11,7 +11,7 @@
 
 This is a Smart India Hackathon project building an oil-spill detection and attribution pipeline for Sentinel-1 SAR imagery. The full team has four stages:
 
-1. **Soum (this doc)** — Stage 1: Detect oil-spill candidates from a SAR scene → `detections.geojson`
+1. **Soumirya (this doc)** — Stage 1: Detect oil-spill candidates from a SAR scene → `detections.geojson`
 2. **Anushka** — Stage 2: Backward-drift particle tracing using HYCOM + ERA5 → `particles.json` + `origin.json`
 3. **Jaiveer** — Stage 3: AIS vessel attribution → `vessels.geojson` + `suspects.json`
 4. **Harshita** — Stage 4: Frontend (deck.gl + MapLibre) that plays back the full case bundle
@@ -22,7 +22,7 @@ Each stage is hermetically isolated: it reads its inputs from a `cases/<case_id>
 
 ---
 
-## 1. Files Soum Owns
+## 1. Files Soumirya Owns
 
 ```
 pipeline/detect/

@@ -274,7 +274,7 @@ def test_5_ensemble_and_grid():
 
 def main():
     print("=" * 78)
-    print("NAAP Stage 2 (drift) - Phase 1 known-answer tests")
+    print("UDGAM Stage 2 (drift) - Phase 1 known-answer tests")
     print(f"seed position {ENNORE} (lon, lat)   t0 = "
           f"{T0.isoformat().replace('+00:00', 'Z')}   dt = 15 min   RK2")
     print("=" * 78)

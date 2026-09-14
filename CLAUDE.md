@@ -2,7 +2,7 @@
 *Claude Code reads this automatically. Antigravity/Codex users: paste it at the top of a new chat. Nested `CLAUDE.md` files in `pipeline/*/` and `web/` add role-specific rules on top of this one.*
 
 ## Project in five lines
-Naap: oil spill detection → backward drift to origin → vessel attribution, from Sentinel-1 SAR + ocean/wind fields + ship AIS. SIH 2026, PS 26143. Demo is ONE map screen with a time slider; three stages are layers on it. **Final demo: 15 September, 17:00** (full chain, internal round). Work is organised in PHASES, not days — finish a phase, log it, move on. Full context: `docs/00_MASTER_PLAN.md`.
+UDGAM: oil spill detection → backward drift to origin → vessel attribution, from Sentinel-1 SAR + ocean/wind fields + ship AIS. SIH 2026, PS 26143. Demo is ONE map screen with a time slider; three stages are layers on it. **Final demo: 15 September, 17:00** (full chain, internal round). Work is organised in PHASES, not days — finish a phase, log it, move on. Full context: `docs/00_MASTER_PLAN.md`.
 
 ## Architecture rule that governs everything
 **No module imports another module.** Each stage is a script that reads files from `cases/<case_id>/` and writes files back into it. The frontend fetches static JSON and never calls Python. If you are about to write `from pipeline.drift import ...` in detection code, stop — you have misunderstood the design.

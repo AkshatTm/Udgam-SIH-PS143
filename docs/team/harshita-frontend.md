@@ -236,7 +236,7 @@ Toggle the AIS layer beneath it so the judge sees the bright radar dot with **no
 **Two columns, side by side, equal weight.**
 
 ```
-┌── WHAT NAAP CONCLUDED ────────┬── WHAT THE INVESTIGATION FOUND ──┐
+┌── WHAT UDGAM CONCLUDED ────────┬── WHAT THE INVESTIGATION FOUND ──┐
 │ Origin on the pipeline        │ NTSB determined MSC Danit's      │
 │ right-of-way, 2.1 km from     │ anchor contact with the San      │
 │ the reported leak.            │ Pedro Bay Pipeline on 25 Jan     │
@@ -249,7 +249,7 @@ Toggle the AIS layer beneath it so the judge sees the bright radar dot with **no
                     │   PARTIAL    │
                     └──────────────┘
 
-  NAAP localised the origin to the pipeline corridor and correctly
+  UDGAM localised the origin to the pipeline corridor and correctly
   excluded all vessels present at detection time. It did not identify
   the anchor strike, which happened eight months earlier — outside
   any 24-hour rewind.
@@ -311,7 +311,7 @@ Ennore hits this. It must never crash and it must never look like a bug.
 
 **D4. Loading.** Bundles run to megabytes. Show a skeleton with the case title and a progress hint, never a white screen. Show the map and SAR as soon as they're available and layer the rest in progressively.
 
-> 🚩 **You need real bundles for D1 and D2.** Ask Soum for the zero-oil case and Anushka for a deliberately abstaining bundle. Both are on their task lists; chase them, because you cannot build these states against something that has never existed.
+> 🚩 **You need real bundles for D1 and D2.** Ask Soumirya for the zero-oil case and Anushka for a deliberately abstaining bundle. Both are on their task lists; chase them, because you cannot build these states against something that has never existed.
 
 ---
 

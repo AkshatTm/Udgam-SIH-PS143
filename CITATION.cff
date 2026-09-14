@@ -1,43 +1,49 @@
 # Citation File Format 1.2.0 — https://citation-file-format.github.io
 #
+# `family-names` for the six team authors were filled in on 2026-09-14, given directly by
+# Akshat rather than guessed — see docs/receipts.md on why a TODO is not deleted by guessing.
+#
 # TODO before this repository is cited anywhere formal (paper, thesis, NTRO submission):
-#   fill `family-names` for the six team authors below, and add ORCIDs where they exist.
-#   Only given names are recorded anywhere in the project documents, and per
-#   docs/receipts.md a TODO is not deleted by guessing — a wrong surname on a citation is
-#   worse than a missing one. Everything else in this file has been verified against the
-#   source: the dataset record, its authors and its licence come from Zenodo, and the
-#   dataset paper from its DOI.
+#   add ORCIDs for the six team authors where they exist. Everything else in this file has
+#   been verified against the source: the dataset record, its authors and its licence come
+#   from Zenodo, and the dataset paper from its DOI.
 #
 #   Validate after editing:  pip install cffconvert && cffconvert --validate
 cff-version: 1.2.0
 title: >-
-  Naap: satellite forensics for oil-spill source attribution from
+  UDGAM: satellite forensics for oil-spill source attribution from
   Sentinel-1 SAR, ocean drift reversal and vessel AIS
 message: If you use this software or its case library, please cite it as below.
 type: software
 authors:
   - given-names: Akshat
+    family-names: Tomar
     email: akshattmofficial@gmail.com
-    affiliation: Team Naap — Smart India Hackathon 2026
+    affiliation: Team Verdict — Smart India Hackathon 2026
     # role: contracts, case selection, GEE export, verification, exporter, validator, integration
-  - given-names: Soum
-    affiliation: Team Naap — Smart India Hackathon 2026
+  - given-names: Soumirya
+    family-names: Sarangi
+    affiliation: Team Verdict — Smart India Hackathon 2026
     # role: Stage 1 — detection
   - given-names: Anushka
-    affiliation: Team Naap — Smart India Hackathon 2026
+    family-names: Kumari
+    affiliation: Team Verdict — Smart India Hackathon 2026
     # role: Stage 2 — drift and origin reconstruction
   - given-names: Jaiveer
-    affiliation: Team Naap — Smart India Hackathon 2026
+    family-names: Singh Minhas
+    affiliation: Team Verdict — Smart India Hackathon 2026
     # role: Stage 3 — AIS ingest, scoring, attribution
   - given-names: Harshita
-    affiliation: Team Naap — Smart India Hackathon 2026
+    family-names: Mugdha
+    affiliation: Team Verdict — Smart India Hackathon 2026
     # role: frontend, integration (consumer side)
   - given-names: Urooz
-    affiliation: Team Naap — Smart India Hackathon 2026
+    family-names: Fatima
+    affiliation: Team Verdict — Smart India Hackathon 2026
     # role: research lead
 repository-code: https://github.com/AkshatTm/SIH-PS143
 abstract: >-
-  Naap detects oil slicks in Sentinel-1 SAR imagery, separates them from
+  UDGAM detects oil slicks in Sentinel-1 SAR imagery, separates them from
   look-alikes, runs ocean-current and wind physics backwards in time to
   reconstruct a probability cloud for where and when the oil entered the
   water, and scores broadcasting vessels, dark vessels and fixed

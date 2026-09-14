@@ -1,6 +1,6 @@
 # System architecture
 
-Naap answers one question: **a slick is visible in radar — which ship put it there?**
+UDGAM answers one question: **a slick is visible in radar — which ship put it there?**
 
 Existing operational systems answer the first half. CleanSeaNet and SkyTruth Cerulean detect
 slicks; INCOIS forecasts where oil is *going*. Nobody routinely runs the physics backwards to say

@@ -63,7 +63,7 @@ weights of 0.70/0.85; then `gap` and `slow` both `n/a` with `weight_live` 0.35�
   Akshat's ruling and Harshita's layout. This only guarantees neither of them waits on me.
 - **A10 is untouched.** Farallones, Mumbai and Jamnagar are still `bounded`, so temporality is still
   `null` on half the library. The code path is now proven, which is a different thing from the
-  problem being solved. Route B (Soum's polygon → head-proximity timing) would fix it without
+  problem being solved. Route B (Soumirya's polygon → head-proximity timing) would fix it without
   needing the window at all, and unlocks `parity` at the same time.
 - **`cases/case-000-*` are still unusable** — origins in the Bay of Bengal 2017 against US AIS,
   giving `funnel 987 → 0 → 0 → 0` and an abstention that looks like a pass and tests nothing. Not my
@@ -231,7 +231,7 @@ the last unverified item in the Phase 1 risk register.
   was still outside `radius_90_km`), which is the same class of change as D9. **But corrected it
   scores 1.00 for 13 of 15**, because any vessel that ended up inside the cloud was by definition
   heading toward it. Near-tautological for 15% of the weight. Parity is the component that would
-  actually discriminate, and it waits on Soum.
+  actually discriminate, and it waits on Soumirya.
 - **`type_prior` scored 1.00 for all 17 vessels.** An offshore lane is all tankers and cargo, so it
   changes no ranking. Only 5%, but it is doing nothing.
 - **A vessel on the origin peak can rank second.** EVERGLADES at grid probability 0.98, 2.3 km out,

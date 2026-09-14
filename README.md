@@ -1,6 +1,6 @@
 <div align="center">
 
-# Naap
+# UDGAM
 
 **Satellite forensics that traces an oil spill back to the ship that caused it.**
 
@@ -27,7 +27,7 @@ Oil slicks are routinely detected in Sentinel-1 radar imagery by operational sys
 in Europe, SkyTruth Cerulean globally. Detection is not the hard part, and neither is forecasting
 where a slick will drift next. **The unanswered question is where it came from.**
 
-Naap runs the transport physics backwards. From a detected slick it reconstructs a probability
+UDGAM runs the transport physics backwards. From a detected slick it reconstructs a probability
 cloud for where and when the oil entered the water, then scores every broadcasting vessel, every
 dark vessel (radar sees a ship, AIS reports nothing) and every piece of fixed infrastructure
 against that origin and time window. The output is a ranked, explainable shortlist — with at least
@@ -121,7 +121,7 @@ contract; [`docs/CONTRACTS.md`](docs/CONTRACTS.md) mirrors it. The bugs that wil
 ## Quickstart
 
 ```bash
-git clone https://github.com/AkshatTm/SIH-PS143.git naap && cd naap
+git clone https://github.com/AkshatTm/SIH-PS143.git udgam && cd udgam
 
 py -3.11 -m venv venv               # Windows;  python3.11 -m venv venv  elsewhere
 venv\Scripts\activate               # Windows;  source venv/bin/activate elsewhere
@@ -218,7 +218,7 @@ Three consequences worth stating up front, because they are visible in the repos
 | [`docs/`](docs/) | Master plan, architecture, evaluation, contracts, traps, per-person briefs | Akshat |
 | [`docs/updates/`](docs/updates/) | Per-person work logs — how a fresh AI chat resumes your work | everyone |
 | `scripts/` | `validate_case.py`, `test_validator.py`, `make_case000.py`, provenance probes | Akshat |
-| `pipeline/detect/` | Dark-spot finder → features → classifier → `detections.geojson` | Soum |
+| `pipeline/detect/` | Dark-spot finder → features → classifier → `detections.geojson` | Soumirya |
 | `pipeline/drift/` | Backward advection, 50-run ensemble → `particles.json`, `origin.json` | Anushka |
 | `pipeline/attribute/` | AIS ingest → tracks → scoring → `vessels.geojson`, `suspects.json` | Jaiveer |
 | `pipeline/export/` | GEE scene export, bundle assembler | Akshat |

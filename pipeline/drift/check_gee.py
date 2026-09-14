@@ -186,7 +186,7 @@ def main():
     a = ap.parse_args()
 
     print("=" * 78)
-    print("NAAP Stage 2 — Earth Engine preflight")
+    print("UDGAM Stage 2 — Earth Engine preflight")
     print("=" * 78)
 
     try:

@@ -214,7 +214,7 @@ This section is as valuable as section 3 — do not leave it thin.
 Any point where Gemini and Perplexity reached different conclusions, with both
 positions stated. Do not resolve these silently.
 
-## 7. IMPLICATIONS FOR NAAP
+## 7. IMPLICATIONS FOR UDGAM
 Concrete, specific, addressed to our system. Which stage does this affect, what
 should change, what should not. Name the team member whose work it touches.
 

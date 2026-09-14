@@ -60,7 +60,7 @@ Then you did the thing that actually matters: **you corroborated the fix physica
 
 **Only the `linear` seeding branch has run on real fields.** Blob, no-spill and abstain are untested paths. "Never executed" is never "known good."
 
-**~~You now have ground truth for age.~~ — CORRECTED 13 Sept 2026, and this paragraph was wrong.** It assumed the four US cases each carry a documented release time. Checked against the live library at ratification: **one** case has a documented release time (Huntington, true age ≈ 2.8 h), no live case carries it in `meta.json`, and none has a `detections.geojson` to measure an age from. So age cannot be *validated* across four incidents — at best across one, and only once Soum's detection lands. Build the estimators to be right, not to hit a validation table. See `docs/evaluation/stage2-age-decision-brief.md` §4a and §5/A5.
+**~~You now have ground truth for age.~~ — CORRECTED 13 Sept 2026, and this paragraph was wrong.** It assumed the four US cases each carry a documented release time. Checked against the live library at ratification: **one** case has a documented release time (Huntington, true age ≈ 2.8 h), no live case carries it in `meta.json`, and none has a `detections.geojson` to measure an age from. So age cannot be *validated* across four incidents — at best across one, and only once Soumirya's detection lands. Build the estimators to be right, not to hit a validation table. See `docs/evaluation/stage2-age-decision-brief.md` §4a and §5/A5.
 
 **Your coastline handling is the weakest part of the physics, and two of our cases sit in enclosed water.** Golden Ray is inside St Simons Sound; Huntington Beach is inside San Pedro Bay. HYCOM's 9 km cells there are partly land, and your land mask is derived from the velocity field's own validity rather than from a real shoreline dataset. Phase 4 fixes this cheaply.
 
@@ -131,7 +131,7 @@ So we use it as a **qualitative flag only** (C3.4), never as hours. Stating why 
 
 You have machinery nobody else has: a validated particle model driven by the *actual* current and wind field at that place and time. So instead of a generic spreading formula, ask the real ocean.
 
-**Method.** Seed a tight point cloud (200–500 particles, gaussian σ ≈ 200 m) at the origin centroid. Run **forward** for candidate ages t ∈ {2, 4, 6, … 36} h. For each t, measure the cloud's spread — use the same PCA extent you already compute, or an equivalent-area radius. Find the t whose modelled extent best matches Soum's observed `area_km2`. Repeat across ensemble members to get a **band**, not a point.
+**Method.** Seed a tight point cloud (200–500 particles, gaussian σ ≈ 200 m) at the origin centroid. Run **forward** for candidate ages t ∈ {2, 4, 6, … 36} h. For each t, measure the cloud's spread — use the same PCA extent you already compute, or an equivalent-area radius. Find the t whose modelled extent best matches Soumirya's observed `area_km2`. Repeat across ensemble members to get a **band**, not a point.
 
 **Why this beats a textbook law:** it captures the real local shear and the real wind on that day. Two spills of identical age in different current fields spread differently, and this estimator knows that.
 
@@ -161,11 +161,11 @@ A blob dropped into a shear flow stretches. For a linear shear rate S, an initia
 age ≈ observed elongation / S
 ```
 
-Compute S directly from the HYCOM velocity gradient around the origin — a finite difference on the cached grid. Soum already exports `elongation` in the contract, so the observable costs nothing.
+Compute S directly from the HYCOM velocity gradient around the origin — a finite difference on the cached grid. Soumirya already exports `elongation` in the contract, so the observable costs nothing.
 
 **Critical gate:** only valid when the slick was elongated *by the ocean*. A **`chronic`** discharge is elongated because **the ship was moving**, not because of shear — applying this there gives nonsense. So run C3.3 **only when `discharge_class == "acute"`**, and record why when you skip it.
 
-That gate is a real physics link between Soum's stage and yours, and it is the kind of detail that reads as a designed system rather than three scripts.
+That gate is a real physics link between Soumirya's stage and yours, and it is the kind of detail that reads as a designed system rather than three scripts.
 
 ### C3.4 Damping ratio — qualitative flag only
 
@@ -285,7 +285,7 @@ This is what lets us say the same pipeline serves **enforcement and response**, 
 3.2 **Negative-longitude test.** Ennore at 80°E is identical in both conventions, so a 0–360 leak stays invisible until California at −118°E. Add a constant-current test seeded at −118°, 33° that lands the expected distance east.
 3.3 **Exercise the untested branches:** a blob slick end to end on real fields; the no-spill path; and force `abstain: true` once to produce a **real abstaining bundle**. Harshita cannot build the refusal screen against a state that has never existed, and that screen is one of the better things we have to show.
 3.4 **Chronic vs acute seeding.** `chronic` → the vessel was moving and the origin is a **line segment**; seed along the principal axis and expect an elongated backward cloud. `acute` → seed from the centroid.
-> 🚩 3.4 needs Soum's `discharge_class`; his stub lands before his real values and is enough to build against.
+> 🚩 3.4 needs Soumirya's `discharge_class`; his stub lands before his real values and is enough to build against.
 
 ## PHASE 4 — Coastline upgrade *(cheap, do it early)*
 4.1 Replace the velocity-derived land mask with **GSHHG** via `global-land-mask` or cartopy.
@@ -294,7 +294,7 @@ This is what lets us say the same pipeline serves **enforcement and response**, 
 4.4 Re-run Ennore and check the origin does not move materially. If it does, that is a finding, not a bug.
 
 ## PHASE 5 — Run all five spill cases
-> 🚩 **WAIT for Akshat** (verified scene + real `detection_time`) **and Soum** (real `detections.geojson`), per case. They deliver case by case — start each as it lands.
+> 🚩 **WAIT for Akshat** (verified scene + real `detection_time`) **and Soumirya** (real `detections.geojson`), per case. They deliver case by case — start each as it lands.
 
 5.1 **Check the HYCOM window first.** The GEE archive ends **2024-09-05**. A case after that has no current field and must be rejected at selection time, not discovered here.
 5.2 `fetch_fields.py --case <id>`, then control + 50-member ensemble + age + forward.

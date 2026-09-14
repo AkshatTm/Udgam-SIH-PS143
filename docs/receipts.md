@@ -43,7 +43,7 @@ matched every scene in both corpora and therefore discriminated nothing. Replace
 **dB clamps for these two are per-scene from their own P2/P98**, like every other case, and
 neither is the default: `case-lookalike-zenodo` `[-31, -16]` · `case-nospill-zenodo` `[-28, -14]`.
 
-**Radar contacts per case — under the ship detector's genuinely active `k_sigma = 4`** (Soum,
+**Radar contacts per case — under the ship detector's genuinely active `k_sigma = 4`** (Soumirya,
 13 Sept). Commit `72064c8` claimed k=4 but `run.py` shadowed it with a literal 8.0; those earlier
 counts are dead. Current: jacksonville **2** · farallones **0** · huntington **43** · gulf-alaska
 **0** · mumbai **21** · jamnagar **3** · ennore-lookalike **72** · lookalike-zenodo **1** ·
@@ -56,20 +56,20 @@ vessel is "dark" only once an AIS cross-check at a known time finds no match —
 output, not Stage 1's. The two Zenodo cases have no acquisition time, so their darkness is `null`.
 The single Delta contact is a genuine return — peak −5.93 dB against a sea of −29.46 dB (σ 0.793), **29.7σ** — so something bright is there; *what* it is has not been established. Checking it against a public offshore-infrastructure dataset is the way to answer that, and has not been done.
 
-**No edge rule, no `edge` flag** (ruled 13 Sept, on Soum's evidence). Only 2 of 173 contacts lie within 2 px of a raster edge, and one is Ennore's +10.27 dB, 60 px target in a working port — a border-rejection rule would spend a confident true positive to remove one doubtful contact. The usual CFAR objection to edge targets (a truncated background window) does not apply: `ships._sea_level()` takes the median and MAD over every valid pixel in the scene, so an edge contact is tested against exactly the statistics a centre-of-scene one is. The remaining doubt is identity, which the "unattributed" label already carries.
+**No edge rule, no `edge` flag** (ruled 13 Sept, on Soumirya's evidence). Only 2 of 173 contacts lie within 2 px of a raster edge, and one is Ennore's +10.27 dB, 60 px target in a working port — a border-rejection rule would spend a confident true positive to remove one doubtful contact. The usual CFAR objection to edge targets (a truncated background window) does not apply: `ships._sea_level()` takes the median and MAD over every valid pixel in the scene, so an edge contact is tested against exactly the statistics a centre-of-scene one is. The remaining doubt is identity, which the "unattributed" label already carries.
 
 **On Zenodo scenes the ship threshold is set by the absolute floor alone.** `lookalike-zenodo`: floor −10.0 dB vs scene-relative −26.3 dB (sea + 4σ), so `k_sigma` is inert and `DEFAULT_MIN_DB` decides — a hull at, say, −12 dB on a −29 dB sea (≈ 22σ) would be missed. The floor was set on GEE exports (~−20 dB sea). Recorded as a known limitation, not tuned.
 
 **Case 4 (Alaska) — the dark-vessel case — gets NO contact from our detector.** Scene threshold
 −8.06 dB, brightest pixel −8.79 dB; reported, not tuned away. Its dark-vessel contact (4.5 km from
-the slick, ~40 m) is **Cerulean's detection, not NAAP's.** It may be shown as Cerulean's reference
+the slick, ~40 m) is **Cerulean's detection, not UDGAM's.** It may be shown as Cerulean's reference
 and cross-checked against, but never rendered or narrated as something our detector found.
 
 **The satellite-case rule threshold is −3.0 dB, and it is not recorded in any bundle.** It is passed
-by hand (`--rule-contrast -3.0 --rule-elongation 2.5`). Since `20594df` (Soum, 13 Sept) omitting
+by hand (`--rule-contrast -3.0 --rule-elongation 2.5`). Since `20594df` (Soumirya, 13 Sept) omitting
 either flag on the classical path is a **hard error** rather than a silent fall-through to the
 Zenodo-domain −0.5, so a *forgotten* flag can no longer reach a bundle. A *different* value still
-can, and the bundle would not say so. Verified after Soum's D34 rerun by back-solving every shipped
+can, and the bundle would not say so. Verified after Soumirya's D34 rerun by back-solving every shipped
 feature's confidence and contrast against `run.py`'s margin formula: all seven live cases resolve
 to −3.0. The frontend's "clear / marginal" bands (≤ −4.5 dB / −4.5 to −3.0 dB) pin that value.
 
@@ -78,20 +78,20 @@ to −3.0. The frontend's "clear / marginal" bands (≤ −4.5 dB / −4.5 to �
 pending the SLC retry that decision D18 requires. **Dropped entirely:** `case-golden-ray-2021` (D17).
 
 Export settings actually used (these must match what `bounds.json` records):
-- `sar_vv_vh.tif`: **2-band float32 GeoTIFF, dB, unclamped**, `--tif-scale 10` m/px on every case — Soum's real input. Band 1 = VV, band 2 = VH, labelled in the file. **Nodata is `-inf`, not a low dB value** — Jamnagar and Farallones have scene-edge nodata (86% and 82% coverage); treating it as backscatter would read as a huge false slick.
+- `sar_vv_vh.tif`: **2-band float32 GeoTIFF, dB, unclamped**, `--tif-scale 10` m/px on every case — Soumirya's real input. Band 1 = VV, band 2 = VH, labelled in the file. **Nodata is `-inf`, not a low dB value** — Jamnagar and Farallones have scene-edge nodata (86% and 82% coverage); treating it as backscatter would read as a huge false slick.
 - `sar.png` / `thumb.png`: band **VV**, dB-clamped 8-bit, `--png-scale 25` m/px — display only.
 - **The dB clamp is per case and derived, not guessed.** Each was taken from that box's own VV percentiles sampled in GEE at 60 m, then rounded: jacksonville `[-32, -19]` · farallones `[-28, -14]` · huntington `[-25, -5]` · gulf-alaska `[-29, -14]` · mumbai `[-28, -15]` · jamnagar `[-26, -13]` · ennore-lookalike `[-27, 0]` (wider because the box contains the Chennai coast, where land runs to +4 dB). Recorded per case in `bounds.json` as `db_min`/`db_max`. **Changing one is a broadcast, not a silent edit.**
 - `bounds.json` also records `vh_available` — `true` on all seven. **`vh_available` means the
   band is present, NOT that it carries signal.** See the VH note below; do not read that `true`
   as evidence the dual-pol method fired.
 
-**VH is below the sensor noise floor on all seven live cases** (Soum, 13 Sept). Measured sea VH
+**VH is below the sensor noise floor on all seven live cases** (Soumirya, 13 Sept). Measured sea VH
 runs **−27.0 to −38.5 dB** against an IW noise-equivalent sigma-zero of **≈ −24 dB** — so what is
 in band 2 on those scenes is thermal noise, not ocean backscatter. This is a property of IW mode
 over calm water at C-band, not a fault in our export: it is **universal, not per-case**, and no
 choice of scene from GEE would have avoided it.
 
-> ### ⚠ SUPERSEDED IN PART, 13 Sept (Soum) — read before building the VH slide
+> ### ⚠ SUPERSEDED IN PART, 13 Sept (Soumirya) — read before building the VH slide
 >
 > The noise-floor measurement above still stands: sea VH on the seven live cases really is
 > −27.0 to −38.5 dB against NESZ ≈ −24 dB. **What does NOT stand is the claim that our feature
@@ -136,7 +136,7 @@ committed `cerulean_slick.geojson` files stay under that licence rather than thi
 Details and the required citation format: `DATA_LICENSES.md`.
 
 Each bundle carries `cerulean_slick.geojson` — their polygon plus centerline for the same
-feature. It is a **comparison target for Stage 1, not ground truth and not a NAAP detection**,
+feature. It is a **comparison target for Stage 1, not ground truth and not a UDGAM detection**,
 and it ships with that wording inside the file. Cerulean themselves state that SAR alone cannot
 definitively identify oil slicks and that detections are *potential* slicks; we repeat that.
 
@@ -245,7 +245,7 @@ origin position on any case.
 
 ## Detection accuracy — the honesty slide
 
-Measured by Soum on a **scene-level** held-out split (the Zenodo Part III designated test set —
+Measured by Soumirya on a **scene-level** held-out split (the Zenodo Part III designated test set —
 never a row-level split, because regions from one 2048×2048 scene are correlated and a row
 split would flatter us). See Master Plan Part 12.
 
@@ -263,12 +263,12 @@ split would flatter us). See Master Plan Part 12.
 
 **Layer 2's IoU definition is the strictest available:** oil class only, background excluded from
 numerator and denominator, pooled over whole 2048×2048 scenes (`pipeline/detect/results/eval_part3.json`,
-`unet_meta.json`). **There is no "23% accuracy" figure for Layer 2** — Soum searched every eval file;
+`unet_meta.json`). **There is no "23% accuracy" figure for Layer 2** — Soumirya searched every eval file;
 it was a crossed wire with Stage 2's 23% `wind_share`. Do not put 23% on a detection slide.
 
 ## Detection on real incidents — IoU against SkyTruth Cerulean
 
-Soum, commit `0dce618`, validated in `18e986a`. Tool `pipeline/detect/iou_cerulean.py`, raw numbers
+Soumirya, commit `0dce618`, validated in `18e986a`. Tool `pipeline/detect/iou_cerulean.py`, raw numbers
 `pipeline/detect/results/iou_cerulean.json`. Computed on the **shipped classical detections**, nothing
 retuned after the Cerulean polygons were seen (Part H). Both polygon sets burned onto the scene's own
 affine grid; the method reproduces Cerulean's own stated `area` to within 0.8% on all five.
@@ -286,7 +286,7 @@ ground truth — say *"agreement with SkyTruth Cerulean's operational detection"
 Pattern worth stating: recall is high everywhere (0.80–0.94) and precision is what varies, i.e. our
 outlines run larger than theirs. Huntington and Ennore-lookalike have no Cerulean record.
 
-**Provenance of these five numbers** (Soum, 13 Sept). Trained on Parts I+II with an 85/15
+**Provenance of these five numbers** (Soumirya, 13 Sept). Trained on Parts I+II with an 85/15
 by-scene validation split; evaluated on all 450 Part III scenes. **Both the threshold and the
 architecture were chosen on validation, never on Part III** — that is what makes the row above a
 held-out number and not a tuned one. Layers 1 and 2 are evaluated on the scene cache

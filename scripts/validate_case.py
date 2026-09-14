@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-validate_case.py — integration insurance for Naap.
+validate_case.py — integration insurance for UDGAM.
 
 Run this on any case bundle BEFORE handing anything to Akshat.
     python scripts/validate_case.py cases/case-000
@@ -827,7 +827,7 @@ def check_verification(d):
     if v is None:
         err("verification.json: missing (required whenever 'verify' is available)")
         return
-    if not need_keys(v, ["official_finding", "naap_result", "assessment"], "verification.json"):
+    if not need_keys(v, ["official_finding", "udgam_result", "assessment"], "verification.json"):
         return
     of = v["official_finding"]
     if need_keys(of, ["summary", "responsible_parties", "source_name", "source_url",
@@ -840,10 +840,10 @@ def check_verification(d):
         for opt in ("volume_reported", "caveat"):
             if not of.get(opt):
                 warn(f"verification.json/official_finding: no {opt} — recommended for the Verify screen")
-    nr = v["naap_result"]
-    if need_keys(nr, ["origin_summary", "top_suspects", "abstained"], "verification.json/naap_result"):
+    nr = v["udgam_result"]
+    if need_keys(nr, ["origin_summary", "top_suspects", "abstained"], "verification.json/udgam_result"):
         if not isinstance(nr["top_suspects"], list):
-            err("verification.json/naap_result/top_suspects: must be a list (may be empty)")
+            err("verification.json/udgam_result/top_suspects: must be a list (may be empty)")
     a = v["assessment"]
     if need_keys(a, ["verdict", "explanation"], "verification.json/assessment"):
         if a["verdict"] not in ("hit", "partial", "miss", "not_applicable"):

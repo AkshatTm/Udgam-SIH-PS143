@@ -11,8 +11,8 @@
 |---|---|
 | 0 · Unblock + the Menuett block | **Done** — all items, including the blocking task |
 | 1 · The core scorer | **Done** — runs end to end, validator PASS, 0 warnings |
-| 2 · Parity, head-proximity, temporality | Blocked — needs Soum's slick polygon |
-| 3 · Dark vessel | Blocked — needs Soum's `ship_detections` |
+| 2 · Parity, head-proximity, temporality | Blocked — needs Soumirya's slick polygon |
+| 3 · Dark vessel | Blocked — needs Soumirya's `ship_detections` |
 | 4 · Infrastructure | Not started |
 | 5 · Traffic prior | Not started |
 | 6 · Repeat offenders | Not started — and structurally undemonstrable, see below |
@@ -22,7 +22,7 @@
 | 10 · Robustness | 10.3 done (R10 closed), rest pending |
 
 **I am not the long pole.** Real per-case runs are gated on Stage 2, and that was true before
-Soum's Layer 2 news.
+Soumirya's Layer 2 news.
 
 ---
 
@@ -95,7 +95,7 @@ panel in December.
 
 **6. `ship_detections` still cannot support the dark-vessel gates.** §6.3 gives `lon, lat, px_area,
 peak_db`. Phase 3.3 gates on ">30 m estimated length, high confidence" and §6.7 requires
-`est_length_m`. Neither field exists. Either Soum adds them, or I derive length from `px_area` plus
+`est_length_m`. Neither field exists. Either Soumirya adds them, or I derive length from `px_area` plus
 the pixel scale and ship with no confidence gate — which makes D5 materially worse.
 
 **7. Which decision log is current?** Your handoff cites **D27/D31**; the master plan I hold is v4
@@ -146,8 +146,8 @@ what D21 exists to prevent.
 | Need | From | Unblocks |
 |---|---|---|
 | Real `origin.json` per case | Anushka | Phase 9 — every real run |
-| `discharge_class` | Soum | Phases 2 and 7 |
-| `ship_detections` + length/confidence | Soum | Phase 3, Alaska |
+| `discharge_class` | Soumirya | Phases 2 and 7 |
+| `ship_detections` + length/confidence | Soumirya | Phase 3, Alaska |
 
 Stubs are enough for 2, 3 and 7 — `ship_detections: []` would unblock the whole dark-vessel module
 today.

@@ -160,7 +160,7 @@ export default function Gallery() {
     <div className="h-full overflow-y-auto bg-[#0b0f14] text-white">
       <div className="mx-auto max-w-3xl px-6 py-14">
         <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/90">
-          NAAP
+          UDGAM
         </div>
         <p className="mt-3 max-w-xl text-[13px] leading-relaxed text-white/55">
           {TAGLINE}

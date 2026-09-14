@@ -51,7 +51,7 @@ Chosen early (Akshat's or Harshita's). Never present from a machine the app has 
 ## 4. Division of labour during judging
 - **Akshat** drives the narrative and answers architecture, methodology, and hostile questions.
 - **Harshita** drives the laptop, so Akshat can face the judges and gesture at the screen.
-- **Soum, Anushka, Jaiveer** each answer questions about their stage — one clear sentence, then hand back.
+- **Soumirya, Anushka, Jaiveer** each answer questions about their stage — one clear sentence, then hand back.
 - **Urooz** watches the judges' faces and flags when they've lost the thread.
 - One person talks at a time. Interrupting each other reads as a team that doesn't know its own project.
 
@@ -63,7 +63,7 @@ Chosen early (Akshat's or Harshita's). Never present from a machine the app has 
 
 **"Is this precomputed?"** Yes, deliberately. The pipeline runs offline and exports a case bundle; the interface plays it back. That's why the slider is instant and why it can't break on venue wifi. Every serious demo works this way.
 
-**"How accurate is detection?"** *(Soum's real held-out numbers on the Zenodo Part III test set, scene-level split.)* Then the two-benchmark framing: on this dataset's own benchmark the authors report 96% IoU; we report our number on their designated held-out split. The ~53% figure people quote is the *Krestenitis* look-alike benchmark — a different, harder dataset. The gap between those numbers measures look-alike variety, not model quality. And it's precisely why the system doesn't rest on detection alone: drift and AIS are independent evidence streams.
+**"How accurate is detection?"** *(Soumirya's real held-out numbers on the Zenodo Part III test set, scene-level split.)* Then the two-benchmark framing: on this dataset's own benchmark the authors report 96% IoU; we report our number on their designated held-out split. The ~53% figure people quote is the *Krestenitis* look-alike benchmark — a different, harder dataset. The gap between those numbers measures look-alike variety, not model quality. And it's precisely why the system doesn't rest on detection alone: drift and AIS are independent evidence streams.
 
 **"Why is your origin a cloud and not a point?"** Because a point would be a lie. We run 50 perturbed simulations; the spread is the honest uncertainty, and it widens the further back we look. A team showing a sharp origin point is lucky or wrong.
 

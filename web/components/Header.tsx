@@ -17,7 +17,7 @@ export default function Header() {
       {/* Left: wordmark + breadcrumb */}
       <div className="flex min-w-0 items-center gap-3">
         <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/90">
-          NAAP
+          UDGAM
         </span>
 
         {meta && (

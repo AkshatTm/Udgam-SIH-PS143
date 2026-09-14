@@ -19,13 +19,13 @@ out of the web panel" chore that was BLOCKING the whole case library.
 
 >>> THE SPLIT THIS SCRIPT EXISTS TO ENFORCE (Master Part 16, blind evaluation)
 >>>
->>>   cases/<id>/cerulean_slick.geojson  <-- the POLYGON. Ships in the bundle. It is Soum's
+>>>   cases/<id>/cerulean_slick.geojson  <-- the POLYGON. Ships in the bundle. It is Soumirya's
 >>>                                          IoU reference on a real incident, and it says
 >>>                                          nothing about who did it.
 >>>   stdout, only with --answers         <-- the SOURCE IDS. The answer. Never written to
 >>>                                          disk by this script, never pasted in the group.
 >>>
->>> Hand Soum the polygon only AFTER his detector has produced its own, or the comparison is
+>>> Hand Soumirya the polygon only AFTER his detector has produced its own, or the comparison is
 >>> not a measurement, it is a lookup.
 
 Two other things worth knowing:
@@ -152,7 +152,7 @@ def do_fetch(a):
         props = {k: p.get(k) for k in KEEP}
         props["source"] = "SkyTruth Cerulean, public API (api.cerulean.skytruth.org)"
         props["note"] = ("Reference polygon from an operational detector. NOT ground truth and "
-                         "NOT a NAAP detection — Cerulean state plainly that SAR alone cannot "
+                         "NOT a UDGAM detection — Cerulean state plainly that SAR alone cannot "
                          "definitively identify oil. Source attribution deliberately omitted "
                          "(Master Plan Part 16).")
         features = [{"type": "Feature", "geometry": round_coords(geom), "properties": props}]

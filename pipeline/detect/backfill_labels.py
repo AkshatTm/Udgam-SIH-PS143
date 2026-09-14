@@ -1,5 +1,5 @@
 """
-backfill_labels.py  -  Recover scenes missing from a label CSV.  Owner: Soum.
+backfill_labels.py  -  Recover scenes missing from a label CSV.  Owner: Soumirya.
 
     python pipeline/detect/backfill_labels.py --parts 1,2 --out data/labels/features_train.csv
 

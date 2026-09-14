@@ -1,6 +1,6 @@
 """
 test_synthetic.py — proves the v1 failure mode and checks v2, on a synthetic
-scene built with the SAME statistics Soum measured on Zenodo Part III:
+scene built with the SAME statistics Soumirya measured on Zenodo Part III:
 sea mean -29.3 dB, sea std 0.9 dB, oil contrast -4.25 dB (scene 00081),
 plus every nuisance that appears in the real scenes.
 

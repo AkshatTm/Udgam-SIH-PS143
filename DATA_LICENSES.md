@@ -71,7 +71,7 @@ later CNN work and **was not used in this sprint** — do not claim it was.
 
 This dataset is **not** the Krestenitis 5-class benchmark. That is a different, non-open dataset,
 and conflating the two is how the widely-quoted ~53% IoU figure gets misattributed to this work.
-Master Plan Part 10 and `docs/team/soum-stage1-detection.md` both carry the correction.
+Master Plan Part 10 and `docs/team/soumirya-stage1-detection.md` both carry the correction.
 
 ---
 
@@ -80,7 +80,7 @@ Master Plan Part 10 and `docs/team/soum-stage1-detection.md` both carry the corr
 Copernicus data is free, full and open. The licence asks that modified data say so. The required
 form, reproduced in `NOTICE`:
 
-> Contains modified Copernicus Sentinel data (2021–2024), processed by Team Naap.
+> Contains modified Copernicus Sentinel data (2021–2024), processed by Team Verdict.
 
 Exact scene identifiers for all nine cases are tabulated in `docs/receipts.md`.
 
@@ -111,7 +111,7 @@ SkyTruth's recommended citation format is:
 
 ### It is a comparison target, not ground truth
 
-The polygon is **SkyTruth's detection, not a Naap detection**, and each file says so in its own
+The polygon is **SkyTruth's detection, not a UDGAM detection**, and each file says so in its own
 contents. Cerulean themselves state that SAR alone cannot definitively identify oil slicks and
 that their detections are *potential* slicks; this project repeats that rather than quietly
 upgrading it to truth.
@@ -149,7 +149,7 @@ is committed on purpose because it is the evidence behind the reported classical
 |---|---|
 | Source code (`pipeline/`, `scripts/`, `web/`) | Apache-2.0 — see [`LICENSE`](LICENSE) |
 | Documentation (`docs/`, `*.md`) | CC-BY-4.0 |
-| Case bundles (`cases/`) | Team Naap's contribution is CC-BY-4.0; **the upstream terms above still apply to the underlying data** |
+| Case bundles (`cases/`) | Team Verdict's contribution is CC-BY-4.0; **the upstream terms above still apply to the underlying data** |
 | `cases/*/cerulean_slick.geojson` (5 files) | **CC BY-SA 4.0** — SkyTruth's, ShareAlike, not ours to relicense |
 
 If those two sets of terms ever conflict for a particular file, the upstream licence wins. We

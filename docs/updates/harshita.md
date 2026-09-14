@@ -508,7 +508,7 @@ attribute"; D2 keeps Attribute **enabled** with the abstention card.
   tolerate `detections === null`.
 - **No real case exercises D3 yet.** `case-ennore-2017`, `case-golden-ray-2021`,
   `case-huntington-2021` are all scaffolds missing their bundle files — blocked on
-  Akshat / Anushka / Soum. D3 is verified only against the synthetic fixture (same footing as
+  Akshat / Anushka / Soumirya. D3 is verified only against the synthetic fixture (same footing as
   D1 / D2).
 - `web/public/cases/` is a gitignored copy — refresh it before running.
 
@@ -541,7 +541,7 @@ does not) — aligning the frontend with the validator without loosening it for 
 and the "nothing to trace" tooltips never appear. **No P1.3 code touched.** Attribute stays
 **available** (no greying) — the D1/D2 distinction. `MapView` already renders every vessel
 track "plain" under abstain; `TraceCard` already shows "Origin cloud too diffuse — no suspects
-can be named."; `VerifyScreen` already handles `naap_result.abstained` (P1.1). None touched.
+can be named."; `VerifyScreen` already handles `udgam_result.abstained` (P1.1). None touched.
 
 QA'd against a synthetic **`cases/case-000-abstain/`** — a full `detect+trace+attribute` case
 (`origin.abstain: true`, `radius_90_km: 45`, `suspects: []`, `abstained: true` + a synthetic
@@ -684,9 +684,9 @@ error card. Click a grey patch → its look-alike `DetectionCard`.
   - All temporary QA edits to the served fixture restored.
 
 **Open issues:**
-- **Real-data dependency (Soum):** the real no-spill case (Master §3 case 7, Zenodo Part 3) does
+- **Real-data dependency (Soumirya):** the real no-spill case (Master §3 case 7, Zenodo Part 3) does
   not exist. Final "against the real bundle" sign-off (`docs/05:139`) is deferred. The code
-  lights up unchanged when Soum's bundle lands in `cases/` + `index.json`.
+  lights up unchanged when Soumirya's bundle lands in `cases/` + `index.json`.
 - **Fixture SAR artefact:** `case-000-nospill/sar.png` is copied from `case-000`, whose raster
   has a painted elongated dark streak baked in — so the fixture shows an obvious dark feature
   with no detection polygon on it. Cosmetic only (the D1 UI is driven by the detection
@@ -788,7 +788,7 @@ loader/validator (same discipline as `origin.ts`/`suspects.ts` — descriptive t
 patches, ignores unknown keys like a scaffold's `_status`); a `verification /
 verificationStatus / verificationError` slice in `store.ts` with `loadVerification()` fetched
 in the background when `verify` is in `acts_available`. New `web/components/VerifyScreen.tsx`
-renders two equal columns (What NAAP concluded | What the investigation found), a `VerdictBadge`
+renders two equal columns (What UDGAM concluded | What the investigation found), a `VerdictBadge`
 (HIT/PARTIAL/MISS/NOT APPLICABLE — identical box, only the colour token differs, MISS is a calm
 slate not an error), responsible parties (`mmsi: null` → "MMSI —"), the `explanation` verbatim,
 and optional rows that hide when absent. `source_url` goes through a new `ExternalLink` that
@@ -797,8 +797,8 @@ only becomes a real `<a target=_blank rel="noopener noreferrer">` for `http(s)` 
 note, never an href. `CaseWorkspace` renders `VerifyScreen` as a full-cover layer over the
 still-mounted `MapView` and suppresses `ContextPanel` + the footer slider/toggles on `verify`;
 the bottom-right primary action ("Try another case →") is unchanged. D16: when
-`meta.known_origin` is present the NAAP column shows "Origin seeded from a documented source,
-not a NAAP detection" — `known_origin` already flows through `loadCase` untouched, so this
+`meta.known_origin` is present the UDGAM column shows "Origin seeded from a documented source,
+not a UDGAM detection" — `known_origin` already flows through `loadCase` untouched, so this
 needed only a `CaseMeta` type field, no new data path and no `loadCase.ts` change.
 
 QA'd against a **synthetic `case-000` fixture** (`cases/case-000/verification.json` + `verify`
@@ -836,7 +836,7 @@ Verify.
   `source_url` = `javascript:alert(1)` and a "TODO — real URL" string → plain text + note, no
   href, no dialog ✓ · corrupt bundle (missing `explanation`) → red "contract bug — tell Akshat"
   card, no crash ✓ · optional fields dropped + empty parties + `abstained:true` → rows hide,
-  "NAAP named no vessel", no throw ✓ · `meta.known_origin` present → "seeded from a documented
+  "UDGAM named no vessel", no throw ✓ · `meta.known_origin` present → "seeded from a documented
   source" line appears ✓ · Back from Verify → Attribute rebuilds cleanly, footer/panel restored
   ✓ · "Try another case →" → gallery ✓ · console clean · `verification.json` fetched once. All
   temporary QA edits to the served copy were restored.
@@ -848,7 +848,7 @@ Verify.
   on load — Verify is unreachable on the only real cases that carry the `verify` act. Fix:
   gate the `detections.geojson` fetch on `"detect" in acts_available`.
 - **All three real `verification/case-*.json` are Akshat's Phase-4 scaffolds** —
-  `assessment.explanation` and `naap_result.origin_summary` are `"TODO — HUMAN PROSE"`, and
+  `assessment.explanation` and `udgam_result.origin_summary` are `"TODO — HUMAN PROSE"`, and
   Ennore's `source_url` is a "TODO" string. `build_case.py` has not copied any of them into
   `cases/<id>/verification.json`.
 - **Contract conflict (Akshat's to reconcile):** `case-ennore-2017` and `case-golden-ray-2021`
@@ -1221,7 +1221,7 @@ T−24h; dragging pauses it.
 - **Playback (3.5 s sample):** avg 16.67 ms, max 16.8 ms, **0 jank**. Advances ~8.4 steps/s.
 - Frames at t=0 vs t=95 verified distinct; playback stops at T−24h with the button reset to
   "Play"; pause holds position; Particles-off clears the deck layer; SAR + detections unaffected.
-- **No console errors, exceptions, or network failures from Naap.** `npm run lint`,
+- **No console errors, exceptions, or network failures from UDGAM.** `npm run lint`,
   `npx tsc --noEmit`, `npm run build` all pass (`/` 6.25 kB; deck.gl is in the lazy MapView
   chunk, not first-load JS).
 - Tested with `--disable-gpu` (SwiftShader software WebGL2) — a harder case than the demo
@@ -1260,7 +1260,7 @@ the MapLibre runtime chain end to end in headless Chrome. Two independent bugs:
 2. **GeoJSON worker never started.** maplibre-gl v6 runs its GeoJSON/vector tiler in a separate
    ESM worker (`dist/maplibre-gl-worker.mjs`). Its built-in worker-URL resolver bails unless
    `import.meta.url` is an `http(s)` URL — webpack replaces it with a build-time
-   `file:///C:/Users/hp/naap/web/node_modules/...` path, so maplibre fell back to
+   `file:///C:/Users/hp/udgam/web/node_modules/...` path, so maplibre fell back to
    `new Worker("")` and the worker silently died. Image/raster layers decode on the main thread
    so **SAR still drew** — but every vector source (the detections) stayed empty and the map
    never reached `idle`. Fix: copy the worker + its shared chunk into `public/maplibre/` (new

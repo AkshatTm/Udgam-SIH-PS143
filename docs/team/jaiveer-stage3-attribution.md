@@ -104,12 +104,12 @@ Their **dark vessel** module restricts to objects over 30 m estimated length, de
 
 Their **infrastructure** module finds points along the slick perimeter far enough from the centre to be a plausible terminus, then applies a distance decay so points nearer the terminus get higher probability. That is directly reusable for Huntington Beach and Golden Ray.
 
-Also worth noting: Cerulean only evaluates **long, linear detections** for vessel association, since that is the expected shape for a transiting-vessel slick. That independently validates Soum's `discharge_class` split — a blob should not be run through the vessel scorer at all.
+Also worth noting: Cerulean only evaluates **long, linear detections** for vessel association, since that is the expected shape for a transiting-vessel slick. That independently validates Soumirya's `discharge_class` split — a blob should not be run through the vessel scorer at all.
 
 ### The four ways we differ — this is your slide
 
 1. **We run the physics backwards.** Cerulean pulls AIS from 8 hours before the image to 6 hours after — it matches a slick to a *coincident* track. That works when the satellite catches the vessel in the act. **It cannot attribute a slick found days after release.** We reconstruct an origin cloud and time window from drift physics, so our AIS search is anchored to *when the oil entered the water*, not to when the picture was taken. That is the whole reason this problem statement exists: Sentinel-1's revisit gap means we usually see slicks late.
-2. **We use VV and VH.** Cerulean's detection model runs on the VV polarisation alone. Soum's finding is that VH is the strongest single discriminator between oil and look-alikes.
+2. **We use VV and VH.** Cerulean's detection model runs on the VV polarisation alone. Soumirya's finding is that VH is the strongest single discriminator between oil and look-alikes.
 3. **Free public AIS.** Cerulean uses commercial AIS (Spire, via Global Fishing Watch). We use NOAA Marine Cadastre, which is public domain and requires no account — which matters for a system anyone should be able to run.
 4. **We publish exclusions.** We say who we ruled out and why. That converts the output from an accusation into an investigative shortlist.
 
@@ -260,7 +260,7 @@ Remember COG's 360.0 sentinel means "not available" — `null`, not due north. I
 
 **Honest limitation to carry to the slide:** even gated, this component is expected to be a weak
 discriminator on transiting-vessel cases. The component that should separate a source from a
-passer-by is **`parity`**, and `parity` is blocked on Soum's polygon — so until that lands, our
+passer-by is **`parity`**, and `parity` is blocked on Soumirya's polygon — so until that lands, our
 strongest discriminator is untested. Say that rather than let the bars imply otherwise.
 
 ### 1.6 The funnel, exclusions, abstention
@@ -280,10 +280,10 @@ Mitigation: `--from-origin` already pads to 2 × `radius_90_km`. Add a **flag** 
 
 ## PHASE 2 — Geometric scoring: parity, head-proximity, temporality
 
-> **WAIT for Soum's `discharge_class`** — his stub lands before his real values, and the stub is enough to build against.
+> **WAIT for Soumirya's `discharge_class`** — his stub lands before his real values, and the stub is enough to build against.
 
 ### 2.1 The slick centerline and its head
-From Soum's polygon: compute the principal axis, then the centerline as the skeleton or simply the line through the extreme points along that axis. **The head is the end nearest the reconstructed origin** — that is the freshest oil, released most recently. The tail is the oldest.
+From Soumirya's polygon: compute the principal axis, then the centerline as the skeleton or simply the line through the extreme points along that axis. **The head is the end nearest the reconstructed origin** — that is the freshest oil, released most recently. The tail is the oldest.
 
 This matters because a chronic slick can be tens of kilometres long. Measuring distance to the *centroid* of a 30 km streak is close to meaningless.
 
@@ -303,7 +303,7 @@ On the methods slide: *"Our geometric scoring follows the parity/proximity/tempo
 
 ## PHASE 3 — Dark vessel cross-check *(our best technical differentiator)*
 
-> **WAIT for Soum's `ship_detections`** — his Phase 5.1.
+> **WAIT for Soumirya's `ship_detections`** — his Phase 5.1.
 
 ### 3.1 The cross-check
 For each radar ship detection, ask whether any AIS track reported a vessel within a tolerance of that position at the scene timestamp. Tolerance should account for the reporting interval — a vessel at 12 knots moves ~370 m in a minute — so use roughly 500 m plus speed × time-since-last-report.
@@ -321,7 +321,7 @@ Restrict to detections above a size floor (they use ~30 m estimated length) with
 Emit as a finding with `source_type: "dark_vessel"`, `mmsi: null`, and a name like `"Unidentified radar contact"`. **Never invent an identity.**
 
 ### 3.4 Handle the false-positive direction carefully
-A false ship detection produces a false dark-vessel claim, which is worse than a miss because it is an accusation against nobody with no way to check it. Prefer a high threshold. If Soum's detections look noisy on a case, say so and drop the module for that case rather than shipping a bad claim.
+A false ship detection produces a false dark-vessel claim, which is worse than a miss because it is an accusation against nobody with no way to check it. Prefer a high threshold. If Soumirya's detections look noisy on a case, say so and drop the module for that case rather than shipping a bad claim.
 
 ### 3.5 The honest caveat
 Legitimate signal loss happens — terrestrial AIS coverage thins offshore, and small vessels are not required to carry AIS at all. **A dark vessel raises suspicion; it is never proof.** That is why it feeds a ranked score rather than a verdict. Raise this yourself before a judge does; it shows you understand the adversarial nature of the problem, which is very much NTRO's world.
@@ -375,9 +375,9 @@ With five cases you can finally do this. **One event is an accusation; a pattern
 
 ## PHASE 7 — Chronic vs acute search strategy
 
-> **WAIT for Soum's `discharge_class`.**
+> **WAIT for Soumirya's `discharge_class`.**
 
-Soum's field changes how you search, and treating every slick identically is what most teams will do.
+Soumirya's field changes how you search, and treating every slick identically is what most teams will do.
 
 **`chronic`** — the vessel was **moving**, and the origin is a **line segment**, not a point. Search AIS along that vector. Weight parity and trajectory much more heavily. Expect the culprit to be underway at cruising speed, so `slowdown` becomes less relevant and `gap` more so.
 
@@ -467,7 +467,7 @@ You measured it: 64% of gap hits are docked boats, and slowdown is inert for 66%
 13% of tracks. Padding reduces it; the flag makes it visible. Directly analogous to Anushka's field-box edge problem — the same class of bug in two different stages.
 
 ## D5. False dark-vessel claims *(MEDIUM)*
-An accusation against nobody, unverifiable. High threshold, and drop the module per case if Soum's ship detections look noisy there.
+An accusation against nobody, unverifiable. High threshold, and drop the module per case if Soumirya's ship detections look noisy there.
 
 ## D6. Non-consecutive-day merge *(MEDIUM, silent)*
 Hard check in `ingest.py`. This one would poison the `gap` component across the whole fleet and look like a genuine signal.
@@ -560,7 +560,7 @@ NOAA download route changed · incident days missing your region · `origin.json
 - [ ] At least one exclusion per case with a plain-language reason
 - [ ] Abstention path exercised and demonstrable
 - [ ] Parity, head-proximity and temporality implemented and Cerulean cited
-- [ ] Dark-vessel cross-check running against Soum's `ship_detections`
+- [ ] Dark-vessel cross-check running against Soumirya's `ship_detections`
 - [ ] Infrastructure association working on Huntington Beach and Golden Ray
 - [ ] Traffic-density prior and repeat-offender history
 - [ ] Chronic vs acute changing the search strategy

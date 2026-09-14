@@ -5,7 +5,7 @@ Full brief: `docs/team/akshat-integration.md`. Companion: `docs/team/harshita-in
 
 ## Non-negotiable
 - The exporter **copies stage outputs into `cases/<id>/` and runs the validator**. It does not compute anything and it does not repair other people's files.
-- GEE export produces FOUR artefacts: `sar_vv_vh.tif` (2-band float32 dB GeoTIFF, ~10 m, bands labelled VV/VH — Soum's real input, ruling D14), `sar.png` (VV, dB-clamped 8-bit, ~20–25 m/px — display only; the clamp is per-case and recorded in `bounds.json`), `thumb.png` (gallery), `bounds.json` (box + `db_min`/`db_max` + `vh_available`). Never hand Soum the PNG as data. Tighten the bbox around the slick before dropping resolution.
+- GEE export produces FOUR artefacts: `sar_vv_vh.tif` (2-band float32 dB GeoTIFF, ~10 m, bands labelled VV/VH — Soumirya's real input, ruling D14), `sar.png` (VV, dB-clamped 8-bit, ~20–25 m/px — display only; the clamp is per-case and recorded in `bounds.json`), `thumb.png` (gallery), `bounds.json` (box + `db_min`/`db_max` + `vh_available`). Never hand Soumirya the PNG as data. Tighten the bbox around the slick before dropping resolution.
 - `bounds.json` and the PNG must agree exactly: pixel (0,0) = top-left = (west, north).
 - When a bundle fails validation, the fix goes back to the producing owner with the validator error. Never patch a bundle by hand — the same bug will return on the next run.
 
@@ -47,7 +47,7 @@ Full brief: `docs/team/akshat-integration.md`. Companion: `docs/team/harshita-in
    `assessment.explanation` a Phase-4 TODO.
 7. Add `<id>` to `cases/index.json` (strongest first).
 8. Announce to the group: scene id · UTC · bounds · pol. Jaiveer downloads AIS, Anushka fetches
-   the ocean, Soum runs inference — all keyed off that message.
+   the ocean, Soumirya runs inference — all keyed off that message.
 
 **The `.tif` travels in git.** `cases/*/sar_vv_vh.tif` is whitelisted in `.gitignore` (the
 no-imports architecture needs Stage 1's input to reach whoever runs Stage 1). ~8-10 MB/case.

@@ -1,4 +1,4 @@
-# NAAP — MASTER PLAN v4
+# UDGAM — MASTER PLAN v4
 ## SIH 2026 · PS 26143 · Final demo: 15 September, 17:00
 
 > **This supersedes v1, v2 and v3 completely.** It is the single source of truth for architecture,
@@ -32,7 +32,7 @@ Two framings of the same system:
 ## 1.4 The four stages
 | Stage | Does | Owner |
 |---|---|---|
-| **1 Detect** | Find slicks in Sentinel-1 SAR, separate oil from look-alikes, measure geometry, find ships | Soum |
+| **1 Detect** | Find slicks in Sentinel-1 SAR, separate oil from look-alikes, measure geometry, find ships | Soumirya |
 | **2 Trace** | Run currents and wind backwards to reconstruct where and when the oil entered the water | Anushka |
 | **3 Attribute** | Score vessels, dark vessels and fixed infrastructure against that origin; rank and exclude | Jaiveer |
 | **4 Verify** | Compare our conclusion against the official investigation, cited | Akshat writes, Harshita renders |
@@ -73,7 +73,7 @@ is a much worse moment than a paragraph explaining why our product and theirs di
 
 **3 Attribute** — the funnel (412 → 63 → 12 → 3), ranked suspect cards with per-component evidence, the exclusion panel, dark-vessel markers, infrastructure findings.
 
-**4 Verify** — two columns: what NAAP concluded versus what the official investigation concluded, with the source document linked, and a verdict badge. **`MISS` is styled as confidently as `HIT`.**
+**4 Verify** — two columns: what UDGAM concluded versus what the official investigation concluded, with the source document linked, and a verdict badge. **`MISS` is styled as confidently as `HIT`.**
 
 ## 2.3 The four claims the demo proves
 1. We can tell oil from things that look like oil
@@ -135,7 +135,7 @@ Part 1.5 a `miss` ships.
 
 **Farallones** — second case and hero backup. `2023-03-17 14:24:42 UTC`, 37.807 N −123.886 W, 19.6 km, 3.85 km², US EEZ.
 Scene `S1A_IW_GRDH_1SDV_20230317T142442_20230317T142507_047685_05BA4D_AFD8`. Cerulean slick `3687325`, class *"Vessel, coincident"*.
-**Note:** the same scene carries three other, larger slicks (`3687317`, `3687321`). Ours is the 19.6 km one — the export box must be tight enough that Soum's detector is scored against the right feature.
+**Note:** the same scene carries three other, larger slicks (`3687317`, `3687321`). Ours is the 19.6 km one — the export box must be tight enough that Soumirya's detector is scored against the right feature.
 
 **Huntington Beach** — `S1A_IW_GRDH_1SDV_20211002T015821_20211002T015850_039934_04B9C9_2BF9`,
 `2021-10-02 01:58:21 UTC`, +2.8 h after the first leak alarm. **Not in Cerulean** — its ground truth is the NTSB report, which is stronger.
@@ -153,7 +153,7 @@ Cerulean attaches the same contact to five separate slicks on this scene, which 
 not a reason to drop the case; it is a reason to present it precisely. **Our claim is about the
 radar-versus-transponder cross-check, not about certainty that this is oil** — and a case where an
 expert reviewer hedged is the most honest possible place to show what our VH channel and our
-explainability bars actually add. If Soum's classifier also hedges here, that is a result, not a failure.
+explainability bars actually add. If Soumirya's classifier also hedges here, that is a result, not a failure.
 
 **Mumbai** — `S1A_IW_GRDH_1SDV_20230903T010333_20230903T010358_050156_06095B_9215`,
 `2023-09-03 01:03:33 UTC`, 18.518 N 72.198 E, 20.55 km, 7.74 km², Indian EEZ. Cerulean slick `3612640`.
@@ -200,7 +200,7 @@ Two caveats that must carry into `verification.json`:
 
 **A dark-vessel case will never have a news story.** That is definitional, not bad luck: if a journalist could write about it, the vessel was not dark. Case 4 is presented that way deliberately — see Part 12.
 
-**Download the Cerulean record for every case.** The slick polygon it contains is **ground truth for Soum's segmentation on a real incident**, which is a much stronger claim than benchmark-only IoU. It ships in the bundle as `cerulean_slick.geojson`. **The attributed source ids do not** — they are the answer, and they live only in `docs/ANSWERS.md` (Part 16).
+**Download the Cerulean record for every case.** The slick polygon it contains is **ground truth for Soumirya's segmentation on a real incident**, which is a much stronger claim than benchmark-only IoU. It ships in the bundle as `cerulean_slick.geojson`. **The attributed source ids do not** — they are the answer, and they live only in `docs/ANSWERS.md` (Part 16).
 
 ---
 
@@ -216,7 +216,7 @@ This is why four people built four working components in parallel on four machin
 cases/<case_id>/
   meta.json                 case info, which acts exist
   sar.png                   display raster
-  sar_vv_vh.tif             2-band float32 dB GeoTIFF  ← Soum's real input
+  sar_vv_vh.tif             2-band float32 dB GeoTIFF  ← Soumirya's real input
   bounds.json               geographic bounds + the dB clamp used
   thumb.png                 gallery preview
   cerulean_slick.geojson    SkyTruth's polygon — IoU reference, optional, never the answer
@@ -340,7 +340,7 @@ and routed both corpora down the same path. Routing on the *absence* of a proper
 invisible tripwire; this field is the source of truth and the CRS is not consulted.
 
 *Amended 14 Sept.* Two paths were first justified by the belief that the networks do not
-transfer to GEE exports. **That was wrong.** It was a channel swap (Soum, `docs/updates/soum.md`).
+transfer to GEE exports. **That was wrong.** It was a channel swap (Soumirya, `docs/updates/soumirya.md`).
 With channels matched, every live spill case fires and the Ennore look-alike still rejects. Live
 cases stay on the classical path **on measured evidence**: Layer 2 beats classical on median IoU
 against Cerulean by only 0.504 vs 0.483, and loses on three of five cases. That is too thin a win to
@@ -359,7 +359,7 @@ there is no SAR-visible slick — a wreck, a pipeline right-of-way, a collision 
 `[lon, lat]` or an object with `lon`/`lat` and an optional `label` and `source_url`. When present
 it substitutes for a detection: a bundle may then carry `trace` (and `attribute`, `verify`)
 without `detect`, and `detections.geojson` is not required. The frontend must render the origin
-as *seeded from a documented source*, never as a NAAP detection. Allowed (and coord-checked) on
+as *seeded from a documented source*, never as a UDGAM detection. Allowed (and coord-checked) on
 a normal detection case too, as a ground-truth pin.
 
 **`infrastructure_candidates` (optional, D38).** Fixed structures Stage 3's infrastructure module
@@ -402,7 +402,7 @@ Dependency rules the validator enforces: `trace` requires `detect` **or** `meta.
   "vh_available": true }
 ```
 Pixel (0,0) is **top-left = (west, north)**. `db_min`/`db_max` record the stretch used for `sar.png`
-so Soum can invert it exactly; `vh_available` says whether `sar_vv_vh.tif` has a second band.
+so Soumirya can invert it exactly; `vh_available` says whether `sar_vv_vh.tif` has a second band.
 **If the clamp changes that is a broadcast, not a silent edit.**
 *(v3 and earlier described this field as a `db_clamp: [min, max]` pair. The shipped shape is the
 three scalars above — what `gee_scene.py` writes and what every consumer already reads. See D26.)*
@@ -645,7 +645,7 @@ turned three PASSes into FAILs over a field, not a wrong number. Re-score to cle
     "volume_reported": "588 barrels",
     "caveat": "The anchor strike preceded the release by eight months. No vessel was the proximate source at detection time."
   },
-  "naap_result": {
+  "udgam_result": {
     "origin_summary": "Origin cloud centred on the pipeline right-of-way, 2.1 km from the reported leak location.",
     "top_suspects": ["<mmsi>"],
     "abstained": false
@@ -676,7 +676,7 @@ A case directory that is not listed here is not in the demo. `cases/_archive/` i
 | Person | Owns | Primary AI |
 |---|---|---|
 | **Akshat** | Contracts, case selection, **2-band GEE exports**, `verification.json`, the exporter, the validator, integration (producer side), deck, demo prep | Claude ×2, Codex |
-| **Soum** | Stage 1 entire: scene classifier, U-Net, classical features, ship detections, chronic/acute | Claude, Codex, Antigravity |
+| **Soumirya** | Stage 1 entire: scene classifier, U-Net, classical features, ship detections, chronic/acute | Claude, Codex, Antigravity |
 | **Anushka** | Stage 2 entire: integrator, ensemble, origin, **age estimation**, forward drift, coastline, OpenDrift comparison | Claude |
 | **Jaiveer** | Stage 3 entire: AIS, scoring, dark vessels, **infrastructure**, traffic prior, repeat offenders, evaluation curve | Claude, Codex |
 | **Harshita** | Frontend entire (5 screens, self-guiding UX), **then integration (consumer side)**, demo machine | Antigravity (most accounts), Claude |
@@ -691,7 +691,7 @@ Urooz's former design work moved to Harshita; keep it minimal, clarity over poli
 **Check this before saying you are blocked.** Most of what looks like a dependency is not one.
 
 ## 8.1 Blocked on nobody — start now
-- Soum: download Parts 1+2, tile cache, ship detector, chronic/acute
+- Soumirya: download Parts 1+2, tile cache, ship detector, chronic/acute
 - Anushka: age estimators, adaptive pad, negative-longitude test, coastline upgrade
 - Jaiveer: **verify Jacksonville's AIS density first (§14), then build a US-located fake origin and everything runs** — scorer, parity, traffic prior, evaluation curve
 - Harshita: all five screens, self-guiding UX, `BitmapLayer`, union camera
@@ -701,28 +701,28 @@ Urooz's former design work moved to Harshita; keep it minimal, clarity over poli
 ## 8.2 The real dependencies
 ```
 Akshat: case selected + 2-band export
-   ├──▶ Soum: real-scene inference          (needs sar_vv_vh.tif + bounds.json)
+   ├──▶ Soumirya: real-scene inference          (needs sar_vv_vh.tif + bounds.json)
    └──▶ Anushka: field fetch                (needs real detection_time)
 
-Soum: detections.geojson  ──▶ Anushka: seeding
-Soum: ship_detections     ──▶ Jaiveer: dark-vessel cross-check
-Soum: discharge_class     ──▶ Anushka: line-vs-point seeding
+Soumirya: detections.geojson  ──▶ Anushka: seeding
+Soumirya: ship_detections     ──▶ Jaiveer: dark-vessel cross-check
+Soumirya: discharge_class     ──▶ Anushka: line-vs-point seeding
                           ──▶ Jaiveer: search strategy
 
 Anushka: origin.json      ──▶ Jaiveer: real scoring
 Anushka: abstain bundle   ──▶ Harshita: refusal screen
-Soum: zero-oil case       ──▶ Harshita: no-spill screen
+Soumirya: zero-oil case       ──▶ Harshita: no-spill screen
 
 everyone ──▶ Akshat: build_case + validate ──▶ Harshita: browser QA ──▶ sign-off
 ```
 
 ## 8.3 Stub-first kills most of these
-**Every new field is stubbed with garbage in the right shape before the real logic exists.** Soum's `ship_detections: []` stub unblocks Jaiveer's whole dark-vessel module days before real values arrive. This is the single most effective thing anyone can do for someone else.
+**Every new field is stubbed with garbage in the right shape before the real logic exists.** Soumirya's `ship_detections: []` stub unblocks Jaiveer's whole dark-vessel module days before real values arrive. This is the single most effective thing anyone can do for someone else.
 
 ## 8.4 The integration gate
 ```
 1 Akshat    export
-2 Soum      detections.geojson
+2 Soumirya      detections.geojson
 3 Anushka   particles + origin + particles_forward
 4 Jaiveer   vessels + suspects            (US cases only)
 5 Akshat    build_case → validate → PASS
@@ -752,16 +752,16 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 | D11 | **`BitmapLayer`, not `HeatmapLayer`** | HeatmapLayer re-smooths in screen pixels and renormalises per viewport — the answer would change as a judge zooms. |
 | D12 | **`time_window_method` is in the contract** | Protects a claim we must defend; the frontend needs it to avoid rendering a bracket as a measurement. |
 | D13 | **97 steps, not 96** | `positions[n_steps−1] = t0 − (n_steps−1)×dt`; 97×15 min = exactly 24 h, matching what we say on stage. |
-| D14 | **2-band float32 GeoTIFF exports, not PNG-only** | VH is Soum's strongest feature and the signal is ~1 dB deep; 8-bit quantisation destroys it. |
+| D14 | **2-band float32 GeoTIFF exports, not PNG-only** | VH is Soumirya's strongest feature and the signal is ~1 dB deep; 8-bit quantisation destroys it. |
 | D15 | **Urooz is research lead** | Design work moves to Harshita; her research could outlive the hackathon. |
 | D16 | **`trace` may run without `detect` when `meta.known_origin` is set** | Kept for any future case with a citable known source but no SAR-visible slick. The origin is seeded from the documented coordinate, not detected — the Trace and Verify screens say so, and it stays honest because `known_origin` carries a `source_url`. `detections.geojson` is then not required. **No case in the current library uses this path**, since all six spill cases have a visible slick. |
 | D17 | **Golden Ray DROPPED** | No SAR-visible slick, and it made the same infrastructure point Huntington makes better — Huntington has a federal investigation as ground truth. Two cases proving one thing, where one of them has no visible slick, is a wasted slot. |
 | D18 | **Ennore 2017 ARCHIVED, not deleted** | Dasari, Lokam & Nadimikeri, *Mar Pollut Bull* 174(1):113182, DOI 10.1016/j.marpolbul.2021.113182, report **detecting this spill in Sentinel-1A, visible in the VV channel, using Level-1 SLC data.** Our probe used GRD via GEE and found no coherent damping. **We cannot ship a "no SAR-visible slick" claim that contradicts published literature without addressing it.** Read the paper's figure and scene id first. Possible explanations: different product (SLC vs GRD), different scene (4 passes exist in the window), or we probed the wrong part of the scene. |
 | D19 | **`natural_seep` is a fourth source type** | Without a fourth class the system cannot express "some of this may be geological", which is both a real operational distinction and a credibility asset. **Amended v4:** the original justification — *"Cerulean flags case 5 as a known seep area"* — could not be substantiated. Their API exposes four AOI layers (EEZ, IHO, MPA, user-generated) and no seep layer, and the Mumbai slick is classed `VESSEL`, not `NATURAL`. The class stays because the design argument stands on its own; **the Mumbai claim does not ship until sourced.** |
 | D20 | **`ais_source` on every case with `attribute`** | GFW is one position per vessel per hour versus NOAA's ~71 s. `gap` is structurally impossible at hourly sampling and `slowdown` is very coarse. The scorer must know which regime it is in and return `null`, not a misleading zero. |
-| D21 | **Blind evaluation: the answers live in a sealed file only Akshat holds** | If Jaiveer knows which vessel the answer names while tuning weights, he will — without meaning to — tune until that vessel ranks first. Same for Soum with the slick location and Anushka with the origin. That is not dishonesty, it is how anyone works when the target is visible, and it destroys the claim. Teammates are **told the file exists and who holds it** — so they understand why "is this right?" goes unanswered during the week — but never its contents. See Part 16. |
+| D21 | **Blind evaluation: the answers live in a sealed file only Akshat holds** | If Jaiveer knows which vessel the answer names while tuning weights, he will — without meaning to — tune until that vessel ranks first. Same for Soumirya with the slick location and Anushka with the origin. That is not dishonesty, it is how anyone works when the target is visible, and it destroys the claim. Teammates are **told the file exists and who holds it** — so they understand why "is this right?" goes unanswered during the week — but never its contents. See Part 16. |
 | D22 | **No synthetic case in the library** | Real dark-vessel cases exist (case 4), so the planned simulated ghost-ship scenario is dropped entirely. Every bundle is real data, which removes the labelling burden and the honesty exposure that came with it. |
-| D23 | **Cerulean's public OGC API is the case-onboarding tool** | `api.cerulean.skytruth.org` needs no key. `public.slick_plus` returns the **full** Sentinel-1 scene id, the slick polygon, the centerline, length/area/confidence and the attributed source ids — which killed the "truncated scene id" blocker outright. Scripted in `scripts/fetch_cerulean.py`. The polygon ships in the bundle as Soum's IoU reference; **the source ids never do** — they are the answer and go to `docs/ANSWERS.md` only. |
+| D23 | **Cerulean's public OGC API is the case-onboarding tool** | `api.cerulean.skytruth.org` needs no key. `public.slick_plus` returns the **full** Sentinel-1 scene id, the slick polygon, the centerline, length/area/confidence and the attributed source ids — which killed the "truncated scene id" blocker outright. Scripted in `scripts/fetch_cerulean.py`. The polygon ships in the bundle as Soumirya's IoU reference; **the source ids never do** — they are the answer and go to `docs/ANSWERS.md` only. |
 | D24 | **Jamnagar is "never investigated", not "no record anywhere"** | Cerulean independently logged this slick (`3477622`, confidence 0.838, 0.2 km from our GEE point) with four candidate MMSIs. The original claim was checkable and would have failed in front of a judge. The reframe is stronger: an automated detector saw it, even produced candidate vessels, and **nothing happened** — no investigation, no named party, no enforcement. Their detection also becomes independent corroboration that our slick is real, and our detector-vs-theirs comparison becomes a result. Applies the Part 1.5 corollary to ourselves. |
 | D25 | **Golden Ray deleted from the tree; Ennore 2017 archived to `cases/_archive/`** | D17 is final, so Golden Ray leaves the working tree (history keeps it). Ennore 2017 stays on disk pending the SLC retry D18 requires, but out of `cases/index.json` and out of the validator's sweep. The Ennore slot in the live library is now the **30 Nov 2023 look-alike**, which is a different case making a different point. |
 | D26 | **`bounds.json` ships `db_min` / `db_max` / `vh_available`** | v3 §6.2 described a `db_clamp: [min, max]` pair that was never written by `gee_scene.py` nor read by anybody. The contract is corrected to the shipped shape rather than four consumers being changed to match a doc. |
@@ -770,8 +770,8 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 | D29 | **`component_notes` is blessed into `suspects.json`** | Jaiveer proposed it and it earns its place: a gated component renders as "n/a", and an unexplained "n/a" on a judge-facing card is worse than no card. Optional object keyed by component name, short strings, **explanation not evidence** — it may not introduce a fact the card is not already showing. Every `null` should carry one. |
 | D30 | **The gap story moves from case 1 to case 4** | Case 1's Part 3 line — "the only case that exercises gap detection" — was **false**, and measurably so: 714 broadcasts covering 14.0 of 14 hours inside Cerulean's own window, longest silence 130 seconds. Case 4's dark vessel carries the argument better anyway, because a ship that never speaks at all is a stronger version of the same point and it is actually present in the data. Recorded at the same time, before the scoring run: on case 1 the `gap` component gives full marks to a **competing candidate** (7.4 km, 12.5 kn, 142 minutes silent) and zero to the documented vessel, so **case 1 may return `partial` or `miss`**. Writing that down in advance is worth more than explaining it afterwards. |
 | D31 | **Blindness is declared per case, never claimed globally** | Verifying AIS density at case 1 *required* identifying the vessel — the check and the answer are the same operation, so that case was never going to stay blind. Separately, Alaska's and Mumbai's source identifiers and coordinates were sitting in §3.2 of a document the whole team reads. Both are now stated openly per case (Part 16) rather than papered over with a blanket claim a panel could take apart in one question. **Case 1 is open**: its documented vessel may be used for diagnostics and worked examples, but **no weight or threshold may be chosen using it** — weights are set on injected scenarios only. Case 2 becomes the headline blind result. **Amended 14 Sept:** case 2's identity was in pushed shared docs between `ee19819` and `72b9540`, so it is blind on weights, not provably on identity (§16.1). |
-| D33 | **Detector routing moves to an explicit `meta.provenance` field; the CRS sniff is deleted** | Stage 1 has two detection paths (classical CV + RandomForest for our GEE exports, CNN scene classifier for the Zenodo corpus) and `scene_provenance()` chose between them by testing whether the GeoTIFF had a CRS. That test was **always false**: Zenodo Part III tiles carry EPSG:4326 and a real geotransform exactly like a GEE export, so the sniff matched both corpora and discriminated nothing — every Zenodo bundle would have gone down the classical path. Two rules were violated at once: routing on the *absence* of a property is an invisible tripwire, and the same false premise had been written into `benchmark_scene.py`, which was emitting a Null Island placeholder box for scenes that are georeferenced. `provenance` ∈ `satellite \| benchmark`, optional, absent means `satellite` so nothing needs backfilling. It also carries a second meaning we were going to need anyway: it is what tells the frontend whether `confidence` is a model probability or a rule margin (§6.3). Found by Soum, 13 Sept. **Amended 14 Sept:** the background belief that the networks do not transfer to GEE exports was a channel swap, not a domain gap. With channels matched they do transfer. The behaviour stands on measured evidence: Layer 2's median IoU against Cerulean is 0.504 vs classical 0.483, and it is behind on three of five cases, so live cases stay classical (§6.1). |
-| D34 | **Radar contacts move to a top-level `ship_detections` on the FeatureCollection; a contact is never called a dark vessel without an AIS check** | `ship_detections` was nested in each detection's `properties`, but it is a scene-level observation: `run.py` already copied the identical full list onto every feature, so a scene with zero detections had nowhere to put its contacts — both Zenodo bundles silently dropped them (1 on `case-lookalike-zenodo`, 31 on `case-nospill-zenodo`, measured by Soum and reproduced independently) — and the map flattened every feature's copy, drawing Ennore's 72 contacts as 2,088 stacked markers. Top-level key is canonical (absent = not recorded, `[]` = ran and found none); per-feature copy deprecated, accepted, no longer written. **Soum's framing was declined:** he called a no-oil-plus-contact scene the dark-vessel case. Darkness is an absent AIS match and needs AIS at a known time; the Zenodo cases have neither (1970 sentinel), and the Delta contact is a genuine return (29.7σ above the sea) whose identity is unestablished — a structure-or-vessel question no geometric rule can answer. The library's dark-vessel case is Alaska (case 4) — and there our detector finds **no** contact (threshold −8.06, peak −8.79 dB), so its dark-vessel contact is Cerulean's and must never be shown as a NAAP detection. Found by Soum, 13 Sept. |
+| D33 | **Detector routing moves to an explicit `meta.provenance` field; the CRS sniff is deleted** | Stage 1 has two detection paths (classical CV + RandomForest for our GEE exports, CNN scene classifier for the Zenodo corpus) and `scene_provenance()` chose between them by testing whether the GeoTIFF had a CRS. That test was **always false**: Zenodo Part III tiles carry EPSG:4326 and a real geotransform exactly like a GEE export, so the sniff matched both corpora and discriminated nothing — every Zenodo bundle would have gone down the classical path. Two rules were violated at once: routing on the *absence* of a property is an invisible tripwire, and the same false premise had been written into `benchmark_scene.py`, which was emitting a Null Island placeholder box for scenes that are georeferenced. `provenance` ∈ `satellite \| benchmark`, optional, absent means `satellite` so nothing needs backfilling. It also carries a second meaning we were going to need anyway: it is what tells the frontend whether `confidence` is a model probability or a rule margin (§6.3). Found by Soumirya, 13 Sept. **Amended 14 Sept:** the background belief that the networks do not transfer to GEE exports was a channel swap, not a domain gap. With channels matched they do transfer. The behaviour stands on measured evidence: Layer 2's median IoU against Cerulean is 0.504 vs classical 0.483, and it is behind on three of five cases, so live cases stay classical (§6.1). |
+| D34 | **Radar contacts move to a top-level `ship_detections` on the FeatureCollection; a contact is never called a dark vessel without an AIS check** | `ship_detections` was nested in each detection's `properties`, but it is a scene-level observation: `run.py` already copied the identical full list onto every feature, so a scene with zero detections had nowhere to put its contacts — both Zenodo bundles silently dropped them (1 on `case-lookalike-zenodo`, 31 on `case-nospill-zenodo`, measured by Soumirya and reproduced independently) — and the map flattened every feature's copy, drawing Ennore's 72 contacts as 2,088 stacked markers. Top-level key is canonical (absent = not recorded, `[]` = ran and found none); per-feature copy deprecated, accepted, no longer written. **Soumirya's framing was declined:** he called a no-oil-plus-contact scene the dark-vessel case. Darkness is an absent AIS match and needs AIS at a known time; the Zenodo cases have neither (1970 sentinel), and the Delta contact is a genuine return (29.7σ above the sea) whose identity is unestablished — a structure-or-vessel question no geometric rule can answer. The library's dark-vessel case is Alaska (case 4) — and there our detector finds **no** contact (threshold −8.06, peak −8.79 dB), so its dark-vessel contact is Cerulean's and must never be shown as a UDGAM detection. Found by Soumirya, 13 Sept. |
 | D35 | **Trace is per spill event, not per detection** | Mumbai and Gulf of Alaska each carry three oil detections, and `merge_oil_features()` seeds one trace per case: a merged ribbon when the ribbon gates pass (Jacksonville, where Cerulean's own polygon is an 18-part MultiPolygon of the same slick), otherwise the highest-confidence feature. That is deliberate and physically motivated (`docs/evaluation/stage2-numbers.md` §8.4b), but no contract said so. The frontend copy implied per-detection tracing ("Trace this slick back"), and nothing in the bundle recorded the seed — on Mumbai the trace uses `det-01` (1.5 km²) while `det-02` is 5× larger. Ruling: one trace per event, the pipeline chooses the seed, the UI does not promise a re-trace per click, and the seed decision (`seeded_from`, `n_oil`, merged or not) is appended to `meta.notes`. **No schema change.** Per-detection tracing was declined: it would be a schema extension two days from the demo. Raised by Harshita, 13 Sept. |
 | D36 | **`closest_km` is measured to the origin-grid peak, not the centroid** | `score.py` measured from `origin.centroid` to the vessel's highest-probability report. On Jacksonville both suspects sat on the grid peak (grid probability 0.946 and 0.943), but the peak is 10.65 km from the centroid on a 3.68:1 cloud, so the cards read "10.2 km" for vessels at the most likely origin. That is D8's argument again — the grid is the object, not a circle around its centroid. Field name and type unchanged; the meaning is fixed in §6.7, and the note text names the reference point. **Known cost:** the map's r50/r90 rings stay centred on the centroid, so the card must say "to the peak", not "closest approach". No score, component or weight is affected. Raised by Jaiveer, 13 Sept. **Ruled but not yet coded** as of 13 Sept — `score.py` still called `grid.centroid`; fixed 14 Sept to call `grid.peak_lonlat()` (already present in `geo.py`), so committed `suspects.json` bundles predating the fix (Jacksonville, Huntington, Farallones, Mumbai) still carry centroid-based `closest_km` until re-scored against real AIS. |
 | D37 | **`weight_live`, `components_available`, `components_total` are blessed into `suspects.json` (§6.7)** | Same motivation as D29: a renormalised score (D9) can read 0.98 off two live components of seven with no indication of that on the card. Jaiveer shipped the three fields ahead of the ruling, stated they would come out together if refused, and verified no identity leak (no MMSI/name ever feeds a component). Blessed as a set, required on every suspect. Card design — how evidence breadth is shown, not whether — is Harshita's, informed by these numbers. |
@@ -830,7 +830,7 @@ Their disclaimer is also our template: they state plainly that SAR alone cannot 
 
 Every number gets its metric and its split named. **Never a single unqualified percentage.**
 
-**Detection (Soum)** — scene classification accuracy, look-alike rejection rate, oil-class IoU, and the classical baseline F1, all on the Part 3 holdout with a scene-level split. Plus the two-benchmark framing:
+**Detection (Soumirya)** — scene classification accuracy, look-alike rejection rate, oil-class IoU, and the classical baseline F1, all on the Part 3 holdout with a scene-level split. Plus the two-benchmark framing:
 > *"On the dataset's own benchmark the authors achieve 96% IoU. We achieve X on their designated held-out test set. On the harder Krestenitis look-alike benchmark, published state of the art is around 53%. The gap between those numbers is a measure of how much look-alike variety a dataset contains — that gap is our result, not our excuse."*
 
 **Plus a second, harder detection number, free from D23:** IoU against SkyTruth Cerulean's
@@ -903,11 +903,11 @@ up in ten seconds. The absence we are pointing at is enforcement, not observatio
 | ~~Put the GFW token in `.env`~~ | Akshat | — | **DONE** — token loaded, 782 chars |
 | ~~Full Sentinel-1 scene ids for cases 1, 2, 4, 5~~ | Akshat | — | **DONE** — all six resolved from the Cerulean API (D23), §3.2 |
 | ~~Download the Cerulean record for every case~~ | Akshat | — | **DONE** — `scripts/fetch_cerulean.py`, polygons in each bundle |
-| Confirm VH availability per case via `bandNames()` | Akshat | Soum's best model | high — runs with each export |
+| Confirm VH availability per case via `bandNames()` | Akshat | Soumirya's best model | high — runs with each export |
 | ~~GFW Arabian Sea coverage check for cases 5 and 6~~ | Akshat | — | **DONE** — `gfw_probe.py --all`, 2026-09-12: presence, gap events and SAR-detection endpoints all answer for both `2023-09-03` (Mumbai) and `2024-02-23` (Jamnagar). Cases 5–6 keep `attribute`. ⚠️ Gap-events endpoint returns a large unfiltered count (~10–11k) — **not yet confirmed it accepts a bbox/region filter**; Jaiveer must filter client-side before using it, or the "events" figure is national, not local. |
 | ~~Source the Mumbai "natural seep area" warning, or drop it~~ (§3.2, D19) | Akshat | — | **DROPPED** 14 Sept. No source found, so no case claims `natural_seep` and no bundle carries the flag. The class ships as designed capability, "not triggered on these scenes". |
 | ~~Confirm the case-1 vessel flag~~ | Akshat | — | **DONE** — cross-checked against three independent AIS databases; the old "CHN" note was wrong, MID `563` (Singapore) is correct. Detail in `docs/ANSWERS.md`. |
-| Nominate the no-spill scene from Zenodo Part 3 | Soum | one demo screen | medium — case 8 is held out of `index.json` until it lands |
+| Nominate the no-spill scene from Zenodo Part 3 | Soumirya | one demo screen | medium — case 8 is held out of `index.json` until it lands |
 | Read Dasari et al. 2021 and resolve the Ennore contradiction (D18) | Akshat | whether Ennore 2017 returns from `cases/_archive/` | medium |
 | Project name | Urooz | deck, UI header, repo | medium |
 | Deployment cost figure for national coverage | Akshat | a Q&A answer | low |
@@ -922,14 +922,14 @@ Repeat-offender tracking at scale · polarimetric decomposition · multi-pass ag
 
 **The answers are sealed.** Every case in the library has a documented outcome — a Cerulean attribution, an NTSB finding, a dark-vessel id. Akshat holds all of them in `docs/ANSWERS.md`, which is **gitignored, not pushed, and not shared.** `docs/ANSWERS.README.md` is committed in its place so everyone knows the file exists.
 
-**Why.** If Jaiveer knows which vessel the answer names while he is tuning weights, he will tune until that vessel ranks first. If Soum knows where the slick is, he will tune the threshold until it appears. If Anushka knows the origin, she will read a wrong cloud as close enough. None of that is dishonesty — it is what anyone does when the target is visible — and it destroys the claim, because "our system identified the vessel" collapses into "we tuned it until it did." A December panel will ask which one happened.
+**Why.** If Jaiveer knows which vessel the answer names while he is tuning weights, he will tune until that vessel ranks first. If Soumirya knows where the slick is, he will tune the threshold until it appears. If Anushka knows the origin, she will read a wrong cloud as close enough. None of that is dishonesty — it is what anyone does when the target is visible — and it destroys the claim, because "our system identified the vessel" collapses into "we tuned it until it did." A December panel will ask which one happened.
 
 **What each person gets:**
 
 | Person | Gets | Does not get |
 |---|---|---|
-| Soum | `sar_vv_vh.tif`, `sar.png`, `bounds.json`, `ais_source` | Where the slick is. His detector has to find it. **`cerulean_slick.geojson` only after his own polygon exists** — then the IoU comparison is honest. |
-| Anushka | Case list with `detection_time` and bounds; Soum's detections when they land | The documented origin or release time |
+| Soumirya | `sar_vv_vh.tif`, `sar.png`, `bounds.json`, `ais_source` | Where the slick is. His detector has to find it. **`cerulean_slick.geojson` only after his own polygon exists** — then the IoU comparison is honest. |
+| Anushka | Case list with `detection_time` and bounds; Soumirya's detections when they land | The documented origin or release time |
 | Jaiveer | Case list with dates and bounding boxes; real `origin.json` when it lands | **The vessel names and MMSIs.** The box is wide enough to contain the culprit plus decoys anyway, at `2 × radius_90_km`. |
 | Harshita | Bundles as they are produced | The answers |
 | **Akshat alone** | `docs/ANSWERS.md` | — |

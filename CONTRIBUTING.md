@@ -1,4 +1,4 @@
-# Contributing to Naap
+# Contributing to UDGAM
 
 Everything below is already how this project works — this page collects it in one place so a new
 contributor does not have to reconstruct it from six documents. The authoritative sources are

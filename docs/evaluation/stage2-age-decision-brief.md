@@ -2,7 +2,7 @@
 
 *Anushka's lane, Phase 1 of `docs/team/anushka-stage2-drift.md`. Written 10 Sept 2026 after building C3.1–C3.4
 and C4. **Akshat: five decisions at the bottom, two of them gate whether an age number can go on
-a slide.** Soum: two asks. Urooz: one citation.*
+a slide.** Soumirya: two asks. Urooz: one citation.*
 
 > **RATIFIED 13 Sept 2026 — Akshat.** A1 **yes**, A2 **yes**, A3 **yes** (without the optional
 > numeric-volume contract field — the freeze holds and `--volume-m3` already carries it). A4
@@ -34,7 +34,7 @@ assertion so the departure is testable rather than a comment nobody reads.
 ### D-A  C3.1 cannot match on area. It matches on major-axis length.
 
 **The brief says:** measure the modelled cloud's spread and find the age whose extent matches
-Soum's observed `area_km2`.
+Soumirya's observed `area_km2`.
 
 **Why that cannot work:** a 2D incompressible flow preserves the area of a material patch —
 det F = 1, so it stretches in one direction exactly as much as it thins in the other. HYCOM's
@@ -51,7 +51,7 @@ deliberately excludes (F8). We cannot read an age off a growth process we do not
 2 → 36 h: cloud **area ×1.02**, while the **major axis grows ×5.7** (0.953 → 5.460 km).
 
 **What shipped:** the observable is the major axis, derived from the contract as
-`2 · sqrt(area_km2 × elongation / π)` — both fields Soum already exports, so **no contract
+`2 · sqrt(area_km2 × elongation / π)` — both fields Soumirya already exports, so **no contract
 change**. Area is still computed per candidate and reported as a diagnostic: if it moves
 materially, the field has real divergence in it and that is worth knowing.
 
@@ -206,7 +206,7 @@ for a different and correct reason**, and `age_method` comes out `"none"` with t
 standing as the bracket it is. This is `case-000 taught a wrong SHAPE` (Master Part 10) happening
 a second time.
 
-**The consequence, and the first number to check when Soum's detection lands:** whether C3.1
+**The consequence, and the first number to check when Soumirya's detection lands:** whether C3.1
 produces a band at all depends on Huntington's real slick being of order a kilometre across. Oil
 ~2.8 h old drifting at ~0.2 m/s makes that plausible — the pipeline began leaking at
 2021-10-01T23:10Z and the S1A pass is 2021-10-02T01:58:21Z — but it is unknown until the real
@@ -227,10 +227,10 @@ The third row is the one that bites. [`age.py`](../../pipeline/drift/age.py) rea
 `props.get("discharge_class", "unknown")` and C3.3 is gated on `== "acute"`, so **the estimator
 whose formula D-B corrects currently fires on no case at all.** The gate is right and stays; the
 consequence is simply that ratifying D-B changes no number today. It changes every number the
-moment Soum populates the field.
+moment Soumirya populates the field.
 
 `discharge_class` is in the frozen contract (Master §6.2, `chronic | acute | unknown`) and is
-Soum's to emit. Until it arrives, C3.3 is inert — which makes it a third ask on Soum, and a higher
+Soumirya's to emit. Until it arrives, C3.3 is inert — which makes it a third ask on Soumirya, and a higher
 priority than the two in §6, because the other two only improve an estimator that already runs.
 
 ---
@@ -256,7 +256,7 @@ cannot fire at all. The claim fails on missing inputs, not on physics.
 1. **No numeric age-accuracy claim in the deck.** `age_hours` ships as an output with its method
    and its per-estimator breakdown, and the limitations slide carries the 0.8–1.3 km reachability
    ceiling (§4) and Fay's regime refusal as the evidence that shear sets the area.
-2. **If, and only if, Soum's Huntington detection lands and C3.1 fires**, the claim becomes an
+2. **If, and only if, Soumirya's Huntington detection lands and C3.1 fires**, the claim becomes an
    explicit **N = 1**: *"On the one incident in our library with a documented release time, our
    band was [x, y] h against a true age of 2.8 h."* Stated with its weakness attached — a 2.8 h
    slick sits squarely in C3.1's documented **overestimate** regime, because gravity-viscous
@@ -273,7 +273,7 @@ cannot fire at all. The claim fails on missing inputs, not on physics.
 
 ## 6. Asks routed to owners
 
-**Soum — three, reordered 13 Sept 2026:**
+**Soumirya — three, reordered 13 Sept 2026:**
 
 1. **`discharge_class` on every detection** (`chronic | acute | unknown`, already in the frozen
    contract, Master §6.2). **Highest priority of the three.** It is unset on every case including

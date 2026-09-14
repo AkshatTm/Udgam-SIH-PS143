@@ -93,7 +93,7 @@ def fetch(bbox, start, end, token):
                                  method="POST")
     req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Content-Type", "application/json")
-    req.add_header("User-Agent", "naap-sih2026/1.0")     # Cloudflare rejects urllib's default
+    req.add_header("User-Agent", "udgam-sih2026/1.0")     # Cloudflare rejects urllib's default
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             doc = json.loads(r.read().decode())

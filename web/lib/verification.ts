@@ -10,7 +10,7 @@
 
 import type {
   RawAssessment,
-  RawNaapResult,
+  RawUdgamResult,
   RawOfficialFinding,
   RawResponsibleParty,
   RawVerification,
@@ -38,7 +38,7 @@ export interface OfficialFinding {
   caveat: string | null;
 }
 
-export interface NaapResult {
+export interface UdgamResult {
   originSummary: string;
   /** MMSI strings exactly as the file provides them — never enriched from suspects.json. */
   topSuspects: string[];
@@ -54,7 +54,7 @@ export interface Assessment {
 
 export interface VerificationBundle {
   officialFinding: OfficialFinding;
-  naapResult: NaapResult;
+  udgamResult: UdgamResult;
   assessment: Assessment;
 }
 
@@ -113,8 +113,8 @@ function validateOfficialFinding(of: RawOfficialFinding, id: string): void {
   });
 }
 
-function validateNaapResult(nr: RawNaapResult, id: string): void {
-  const where = `${id}/verification.json/naap_result`;
+function validateUdgamResult(nr: RawUdgamResult, id: string): void {
+  const where = `${id}/verification.json/udgam_result`;
   if (!nr || typeof nr !== "object") {
     throw new Error(`${where}: missing`);
   }
@@ -147,11 +147,11 @@ export async function loadVerificationBundle(id: string): Promise<VerificationBu
     throw new Error(`${where}: not an object`);
   }
   validateOfficialFinding(raw.official_finding, id);
-  validateNaapResult(raw.naap_result, id);
+  validateUdgamResult(raw.udgam_result, id);
   validateAssessment(raw.assessment, id);
 
   const of = raw.official_finding;
-  const nr = raw.naap_result;
+  const nr = raw.udgam_result;
   const a = raw.assessment;
 
   return {
@@ -169,7 +169,7 @@ export async function loadVerificationBundle(id: string): Promise<VerificationBu
       volumeReported: optionalString(of.volume_reported, `${where}/official_finding/volume_reported`),
       caveat: optionalString(of.caveat, `${where}/official_finding/caveat`),
     },
-    naapResult: {
+    udgamResult: {
       originSummary: nr.origin_summary,
       topSuspects: [...nr.top_suspects],
       abstained: nr.abstained,

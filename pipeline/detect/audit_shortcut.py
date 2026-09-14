@@ -1,5 +1,5 @@
 """
-audit_shortcut.py  -  Does Layer 1 detect OIL, or a dataset artefact?  Owner: Soum.
+audit_shortcut.py  -  Does Layer 1 detect OIL, or a dataset artefact?  Owner: Soumirya.
 
     python pipeline/detect/audit_shortcut.py
 

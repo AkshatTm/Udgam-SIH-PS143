@@ -1,5 +1,5 @@
 """
-train_unet.py  -  Layer 2, the segmenter.  Owner: Soum.
+train_unet.py  -  Layer 2, the segmenter.  Owner: Soumirya.
 
     python pipeline/detect/build_cache.py --parts 1,2
     python pipeline/detect/train_unet.py

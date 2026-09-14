@@ -37,7 +37,7 @@ async function fetchJson<T>(url: string): Promise<T> {
  * Fetch a stage output that may not exist yet.
  *
  * MISSING IS NOT BROKEN, and the difference is the whole point of this function. A bundle is
- * assembled one stage at a time: the scene lands first and detections arrive when Soum's stage
+ * assembled one stage at a time: the scene lands first and detections arrive when Soumirya's stage
  * runs. A 404 therefore means "not produced yet" and must degrade to null, so the rest of the
  * team can open a case and look at the SAR scene while Stage 1 is still being written.
  *

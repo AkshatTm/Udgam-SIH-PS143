@@ -18,7 +18,7 @@ WHAT IS MEASURED HERE AND WHAT IS DECLARED
 ------------------------------------------
 Two different kinds of input meet in this file and they must not be confused:
 
-* **The termini are measured.** They come from Soum's slick polygon and Anushka's origin grid —
+* **The termini are measured.** They come from Soumirya's slick polygon and Anushka's origin grid —
   our own pipeline, on this scene. Nothing external.
 * **The candidate list is declared.** Where a pipeline or platform actually sits is not something
   this pipeline discovers; it is looked up from the investigation and written into `meta.json` as

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-plot_detections.py — the human gate.  Owner: Soum.
+plot_detections.py — the human gate.  Owner: Soumirya.
 
     python scripts/plot_detections.py --case case-huntington-2021
 

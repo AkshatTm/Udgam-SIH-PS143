@@ -7,7 +7,7 @@ gee_scene.py — export a Sentinel-1 scene as the four case artefacts. Owner: Ak
         --bbox 80.20 13.10 80.45 13.35
 
 Writes into cases/<case_id>/:
-    sar_vv_vh.tif   2-band float32 GeoTIFF, dB, near-native resolution — Soum's REAL input
+    sar_vv_vh.tif   2-band float32 GeoTIFF, dB, near-native resolution — Soumirya's REAL input
     sar.png         VV backscatter, dB-clamped to 8-bit greyscale — display only
     thumb.png       small VV preview — the gallery card
     bounds.json     the exact geographic box + the dB clamp used + vh_available
@@ -20,16 +20,16 @@ Writes into cases/<case_id>/:
 
 Three things that decide whether this works:
 
-  1. TWO BANDS, FLOAT32. VH is Soum's single strongest feature and the signal is ~1 dB deep;
+  1. TWO BANDS, FLOAT32. VH is Soumirya's single strongest feature and the signal is ~1 dB deep;
      an 8-bit PNG quantises it to nothing (ruling D14). sar_vv_vh.tif carries the real dB
-     numbers; the PNG is display only. Never hand Soum the PNG as data.
+     numbers; the PNG is display only. Never hand Soumirya the PNG as data.
 
   2. THE dB CLAMP (PNG only). Sentinel-1 GRD in GEE is already in decibels, ~-25..0 over sea.
      Wrong range -> a uniformly black or white PNG. The clamp is written into bounds.json so
-     Soum maps the PNG back to dB with the SAME numbers; change it here and announce it, never
+     Soumirya maps the PNG back to dB with the SAME numbers; change it here and announce it, never
      silently (docs/TRAPS.md #7). The GeoTIFF is unclamped — it holds the true values.
 
-  3. SIZE. Tighten --bbox around the slick BEFORE dropping resolution — matching Soum's 10 m
+  3. SIZE. Tighten --bbox around the slick BEFORE dropping resolution — matching Soumirya's 10 m
      Zenodo training data matters more than covering extra sea. A 0.6 deg box at 10 m x 2
      float bands is several hundred MB; getDownloadURL caps at ~50 MB, so a wide box forces
      the --drive path (Export.image.toDrive, then press RUN in the Tasks tab — nothing
@@ -50,7 +50,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 DB_MIN, DB_MAX = -25, 0          # PNG clamp only; docs/CONTRACTS.md section 3
 DEFAULT_PNG_SCALE_M = 60         # metres per pixel for the display PNG
-DEFAULT_TIF_SCALE_M = 10         # metres per pixel for the GeoTIFF — Soum's training resolution
+DEFAULT_TIF_SCALE_M = 10         # metres per pixel for the GeoTIFF — Soumirya's training resolution
 # getDownloadURL's HARD server-side limit, in bytes, quoted verbatim by the API when you
 # exceed it: "Total request size (N bytes) must be less than or equal to 50331648 bytes."
 # That is 48 MiB. We budget against it in bytes rather than pixels because float32 x 2 bands
@@ -59,7 +59,7 @@ DOWNLOAD_URL_BYTE_CEILING = 50_331_648
 
 
 def _label_bands(tif_path, names):
-    """Write band names into the GeoTIFF so Soum reads 'VV'/'VH', not 'band 1'/'band 2'.
+    """Write band names into the GeoTIFF so Soumirya reads 'VV'/'VH', not 'band 1'/'band 2'.
     GEE preserves band order (select(['VV','VH'])) but not the labels."""
     try:
         import rasterio
@@ -133,7 +133,7 @@ def main():
     if not have_vh:
         print("\n" + "!" * 70)
         print(f"!!  {a.case}: scene is VV-ONLY (bands {band_names}).")
-        print("!!  TELL SOUM NOW — his vh_mean_depth_db feature is unavailable for this case,")
+        print("!!  TELL SOUMIRYA NOW — his vh_mean_depth_db feature is unavailable for this case,")
         print("!!  he has a VV-only fallback but the results slide must note the degradation.")
         print("!" * 70 + "\n")
 
@@ -211,11 +211,11 @@ def main():
             shrink = (DOWNLOAD_URL_BYTE_CEILING / est_bytes) ** 0.5
             print(f"          To keep 10 m instead of routing through Drive, shrink the box to "
                   f"~{shrink*100:.0f}% of its current span (tighten the pad around the slick "
-                  f"— matching Soum's 10 m training data matters more than extra sea).")
+                  f"— matching Soumirya's 10 m training data matters more than extra sea).")
         if a.drive or too_big:
             reason = "forced with --drive" if a.drive else "exceeds the direct-download ceiling"
             task = ee.batch.Export.image.toDrive(
-                image=raw, description=f"{a.case}_sar_vv_vh", folder="naap_exports",
+                image=raw, description=f"{a.case}_sar_vv_vh", folder="udgam_exports",
                 fileNamePrefix=f"{a.case}_sar_vv_vh", region=region,
                 scale=a.tif_scale, crs="EPSG:4326", maxPixels=int(1e10),
                 fileFormat="GeoTIFF")
@@ -224,7 +224,7 @@ def main():
             print(f"          Export task '{a.case}_sar_vv_vh' SUBMITTED and now running")
             print(f"          server-side (task.start() is the trigger — no Tasks-tab RUN needed).")
             print(f"          Watch it:  earthengine task list   (or the Tasks tab)")
-            print(f"          When COMPLETED, move Drive/naap_exports/{a.case}_sar_vv_vh.tif to")
+            print(f"          When COMPLETED, move Drive/udgam_exports/{a.case}_sar_vv_vh.tif to")
             print(f"            {case_dir / 'sar_vv_vh.tif'}")
         else:
             durl = raw.getDownloadURL({"region": region, "scale": a.tif_scale,
@@ -274,7 +274,7 @@ def main():
     else:
         print("\nNow OPEN sar.png: coastline west, sea grey static, slick a darker streak.")
         if have_vh and not a.no_geotiff:
-            print("Then check sar_vv_vh.tif has 2 bands with sane dB ranges before handing to Soum.")
+            print("Then check sar_vv_vh.tif has 2 bands with sane dB ranges before handing to Soumirya.")
     print("Record the scene id + UTC time in docs/receipts.md.")
     return 0
 

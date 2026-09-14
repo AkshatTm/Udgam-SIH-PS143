@@ -2084,7 +2084,7 @@
     "fill_factor": 0.22024182553535757,
     "linearity": 22443.463214486983,
     "source": "SkyTruth Cerulean, public API (api.cerulean.skytruth.org)",
-    "note": "Reference polygon from an operational detector. NOT ground truth and NOT a NAAP detection \u2014 Cerulean state plainly that SAR alone cannot definitively identify oil. Source attribution deliberately omitted (Master Plan Part 16)."
+    "note": "Reference polygon from an operational detector. NOT ground truth and NOT a UDGAM detection \u2014 Cerulean state plainly that SAR alone cannot definitively identify oil. Source attribution deliberately omitted (Master Plan Part 16)."
    }
   },
   {

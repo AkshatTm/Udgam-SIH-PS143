@@ -69,7 +69,7 @@ def dt(s):
 
 class TempDirCase(unittest.TestCase):
     def setUp(self):
-        self.dir = Path(tempfile.mkdtemp(prefix="naap-stage3-"))
+        self.dir = Path(tempfile.mkdtemp(prefix="udgam-stage3-"))
 
     def tearDown(self):
         shutil.rmtree(self.dir, ignore_errors=True)

@@ -1,5 +1,5 @@
 """
-darkspot.py — Phase 2 dark-spot finder, version 2. Owner: Soum.
+darkspot.py — Phase 2 dark-spot finder, version 2. Owner: Soumirya.
 
 This IS the v2 detector; it replaced the v1 file of the same name. Same public entry points
 (`load_scene`, `detect`) and the same region-dict shape, so features.py /

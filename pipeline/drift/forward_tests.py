@@ -170,7 +170,7 @@ def run(check):
         print("        (9f, 9g skipped - no coastline available)")
 
     # --- 9h/9i/9j  a broken ribbon is ONE slick, and the gates decide which -------------
-    # Soum ruled Jacksonville is one slick with genuine breaks (13 Sept): Cerulean's own
+    # Soumirya ruled Jacksonville is one slick with genuine breaks (13 Sept): Cerulean's own
     # polygon for it is an 18-part MultiPolygon, so an operational detector fragments the same
     # ribbon eighteen ways. Seeding from the highest-confidence part alone took 15 km of a
     # 34 km ribbon. These pin the decision in both directions on the REAL library geometry,
@@ -218,7 +218,7 @@ def run(check):
                 f"Alaska fall on opposite sides of all four gates, which is where the "
                 f"thresholds come from")
 
-    # A merged slick's class is TAKEN, never averaged (Soum): det-02 is chronic while det-01
+    # A merged slick's class is TAKEN, never averaged (Soumirya): det-02 is chronic while det-01
     # and det-03 are unknown, because discharge_class is computed per region from that
     # region's own elongation. And `elongation` must be None on the merged object, because
     # inverting a pixel-space fitEllipse ratio gives a ~2.2 km width against a measured 258 m.
@@ -230,7 +230,7 @@ def run(check):
                 and seed_geometry(jfeat["properties"])[0] == "line",
                 f"parts are ['unknown', 'chronic', 'unknown'] -> {dc!r} ({why}), which seeds a "
                 f"LINE authoritatively rather than falling back to shape_class. elongation is "
-                f"None so age.py must measure the axis off the polygon -- inverting Soum's "
+                f"None so age.py must measure the axis off the polygon -- inverting Soumirya's "
                 f"pixel-space fitEllipse ratio would give a 2.2 km width against 258 m measured")
 
     return ok

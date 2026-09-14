@@ -206,7 +206,7 @@ const CLEAR_CONTRAST_DB = -4.5;
  * decision boundary. Printing "87% confidence" there asserts a calibration nobody has measured.
  *
  * So on `satellite` we show the quantity the rule actually measures — dB of contrast — in two
- * bands (Soum, 13 Sept). A three-band split on the [0,1] number collapsed to 1/11/0 on the 12 live
+ * bands (Soumirya, 13 Sept). A three-band split on the [0,1] number collapsed to 1/11/0 on the 12 live
  * oil detections. A look-alike is not banded: it may have been rejected on elongation or area, not
  * contrast, so a contrast band would imply a reason we did not check.
  */

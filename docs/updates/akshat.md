@@ -9,7 +9,7 @@ Monday since Harshita and Jaiveer are both blocked on them.
 
 - **B6 (acts_available).** Added `"attribute"` to `case-jacksonville-2024` (already had it),
   `case-huntington-2021`, `case-farallones-2023`. **Not** `case-gulf-alaska-2023` — checked and it
-  has no `suspects.json`/`vessels.geojson` yet (blocked on C2, Soum's `est_length_m`); adding the
+  has no `suspects.json`/`vessels.geojson` yet (blocked on C2, Soumirya's `est_length_m`); adding the
   act there would fail validation, not just flip on a dark panel, so it stays `detect+trace` until
   scored. Also caught **`case-mumbai-2023`** carrying a real, validated abstain bundle
   (`abstained: true`, "no AIS archive we hold covers this region") under `acts_available:
@@ -83,9 +83,9 @@ stale-field issues above.
     meaning of `confidence`, the gating table, `component_notes`. §16.1 blindness went with them.
   - **Case 1 and case 2 vessel names, flags, MMSIs and IMOs went back into shared docs.**
   - Jaiveer's asks #3 and #6–#8 all came from reading that version.
-  - Restored from `7d89a76`, then re-applied `835295e` (freeze removal) and `f432a8e` (Soum's VH/VV
+  - Restored from `7d89a76`, then re-applied `835295e` (freeze removal) and `f432a8e` (Soumirya's VH/VV
     correction). Scrubbed four more name references that `7d89a76` had missed (`72b9540`).
-- **Merged** `origin/jaiveer-phase2` (`d673296`, first real Stage 3 output) and `origin/soum`
+- **Merged** `origin/jaiveer-phase2` (`d673296`, first real Stage 3 output) and `origin/soumirya`
   (`c7c750e`, E0/E2 detect code, no bundle changes).
 - **`case-jacksonville-2024` gets `attribute`** (`a96ca1f`). PASS, synced to `web/`.
 - **D35 (Harshita):** Trace is per event. Stage 2 picks the seed; the seed decision goes into
@@ -138,16 +138,16 @@ here. Merge-by-merge detail for the 02:27 and 02:44 merges is in `_INTEGRATION.m
 - **Filled `receipts.md` (`ad21697`):**
   - Layer 2 is recorded as **0.435 oil-class IoU**. There is no "23%" detection figure. That was a
     crossed wire with Stage 2's 23% `wind_share`.
-  - Soum's IoU against Cerulean on five cases: **median 0.483**, range 0.165–0.728. Worded as
+  - Soumirya's IoU against Cerulean on five cases: **median 0.483**, range 0.165–0.728. Worded as
     agreement with Cerulean, not accuracy.
   - Anushka's OpenDrift check: origins **118 m** apart. This proves the implementation, not the
     answer.
   - Recorded that HYCOM cadence varies by case (daily vs 3-hourly), so "daily" is not a rule.
   - Added verified references for Ennore 2017 and the December 2023 CPCL release. The CPCL
     date and quantity stay `TODO` until the NGT filing is read.
-- **Merged `origin/soum` and `origin/anushka` at 03:40 and 04:05** (`1956220`, `fdf5848`,
+- **Merged `origin/soumirya` and `origin/anushka` at 03:40 and 04:05** (`1956220`, `fdf5848`,
   `85b7f79`):
-  - Soum: `iou_cerulean.py` and its JSON output.
+  - Soumirya: `iou_cerulean.py` and its JSON output.
   - Anushka: `compare_opendrift.py`, forward-drift tests, the age.py rework and `STAGE2_NUMBERS.md`.
 - **Merged Anushka's Stage 2 for six cases (`509fda9`).** Jacksonville, Farallones, Huntington,
   Gulf of Alaska, Mumbai and Jamnagar now ship `particles.json`, `particles_forward.json` and
@@ -169,8 +169,8 @@ here. Merge-by-merge detail for the 02:27 and 02:44 merges is in `_INTEGRATION.m
   - He measures `trajectory` on approach from outside r90. As specified, it scored 0.00 for 16 of
     17 vessels.
   - Progress report: `docs/STAGE3_PROGRESS_2026-09-13.md`.
-- **Merged `origin/soum` (`483a2b7`) and resolved one conflict in `01_AKSHAT_INTEGRATION.md`**,
-  keeping Soum's correction:
+- **Merged `origin/soumirya` (`483a2b7`) and resolved one conflict in `01_AKSHAT_INTEGRATION.md`**,
+  keeping Soumirya's correction:
   - **Channel-order bug.** Zenodo band 1 is VH and band 2 is VV, the reverse of what
     `build_cache.py` assumed. Our GEE exports are correct.
   - **The networks do transfer after all.** Once the channels match, P(oil) is 0.84–0.9999 on the
@@ -181,7 +181,7 @@ here. Merge-by-merge detail for the 02:27 and 02:44 merges is in `_INTEGRATION.m
     "the networks don't transfer". What survives: adding a second polarisation took val F1 from
     0.346 to 0.643.
   - **`case-nospill-zenodo` was farmland, not ocean.** Tile 00091 is the Ghab plain, about 150 km
-    inland, and its 31 "contacts" were buildings. Every automated gate passed it. Soum replaced it
+    inland, and its 31 "contacts" were buildings. Every automated gate passed it. Soumirya replaced it
     with tile 00027: verified open water, 0 oil, 0 contacts. The blurb is now "Open ocean, nothing
     on it. Does the system say so?"
 
@@ -216,7 +216,7 @@ The validator self-test reports `21/21 mutations correctly caught and named`. Bo
   its weight.
 - **Deck:** Urooz must pull "VH is the discriminator" and "the networks don't transfer". Use the
   safe sentence in `receipts.md` instead.
-- **Decide the nospill blurb.** Soum set it "pending your call".
+- **Decide the nospill blurb.** Soumirya set it "pending your call".
 - **D33's stated justification is now wrong.** Provenance routing still produces correct output,
   but the reason it gives in the Master Plan was the channel swap. Reword it, but don't change the
   behaviour.
@@ -234,11 +234,11 @@ exists. In parallel, send Urooz the two deck corrections.
 ## [2026-09-13] D34 follow-up — rerun verified, edge rule declined, Zenodo indexed, sentinel date fixed
 
 **Done:**
-- **Soum's D34 rerun (`20594df`) verified.** All nine cases PASS with the D34 warnings gone. Every
+- **Soumirya's D34 rerun (`20594df`) verified.** All nine cases PASS with the D34 warnings gone. Every
   bundle carries a top-level `ship_detections`, and no feature carries its own copy. The rule
   threshold back-solves to −3.0 on all seven satellite cases. The forgotten-flag guard is a hard
   error.
-- **Edge rule and `edge` flag declined, on Soum's evidence.** Checked independently: 2 of 173
+- **Edge rule and `edge` flag declined, on Soumirya's evidence.** Checked independently: 2 of 173
   contacts sit at the edge, one of them Ennore's +10.27 dB port target. `_sea_level()` uses global
   median/MAD, so the truncated-window objection doesn't apply. The Delta contact is 29.7σ.
 - **Corrected my own unverified claim.** I had written "among charted platforms" (D34, receipts,
@@ -276,13 +276,13 @@ session scratchpad.
 
 ## [2026-09-13] D34 — scene-level ship_detections; "dark vessel" framing declined; dB confidence bands
 
-**Done:** Ruled on Soum's §6.3 gap. `ship_detections` moves to the top level of the
+**Done:** Ruled on Soumirya's §6.3 gap. `ship_detections` moves to the top level of the
 `detections.geojson` FeatureCollection. Both Zenodo bundles had silently dropped their contacts
 (1 + 31), and the map was drawing each contact once per feature (Ennore: 72 contacts → 2,088
 markers). Declined his framing that a no-oil-plus-contact scene is "the dark-vessel case":
 darkness needs AIS at a known time, and neither Zenodo case has one. The Delta contact sits in the
 raster's top pixel row beside land, and our detector finds *no* contact on Alaska, the real
-dark-vessel case. Replaced my invented 0.75/0.45 confidence bands with Soum's two dB bands.
+dark-vessel case. Replaced my invented 0.75/0.45 confidence bands with Soumirya's two dB bands.
 
 **Files touched:** `docs/00_MASTER_PLAN.md` (§6.3, D34) · `docs/CONTRACTS.md` ·
 `scripts/validate_case.py` (top-level contact checks; legacy warn-only) · `pipeline/detect/run.py`
@@ -296,39 +296,39 @@ dark-vessel case. Replaced my invented 0.75/0.45 confidence bands with Soum's tw
 python scripts/validate_case.py cases/case-nospill-zenodo
 ```
 Expected output: `PASS (2 warning(s))`. The warnings say the top-level list is not recorded yet;
-they go away when Soum reruns.
+they go away when Soumirya reruns.
 
 **Checkpoint artefact:**
 - All nine live cases PASS.
 - `ships.py` and `features.py` self-tests pass.
 - `tsc --noEmit` is clean.
-- Reproduced Soum's contact counts read-only (1 and 31).
+- Reproduced Soumirya's contact counts read-only (1 and 31).
 - Back-solved the rule threshold from every shipped feature: −3.0 on all seven live cases.
 
 **Open issues:**
 - **run.py's new output is untested here.** `run.py` imports torch at module load, even on the
-  classical path, and this venv has none. It passes `py_compile`; Soum's rerun is the real test.
+  classical path, and this venv has none. It passes `py_compile`; Soumirya's rerun is the real test.
 - **Rerun hazard.** The −3.0 dB rule is passed by hand and recorded nowhere in the bundle.
   Without `--rule-contrast -3.0 --rule-elongation 2.5`, run.py uses −0.5 and reclassifies
   everything, and the frontend bands go silently wrong.
-- **Soum's margin paragraph says "20 oil, median 0.578".** His own table and the bundles say 12,
+- **Soumirya's margin paragraph says "20 oil, median 0.578".** His own table and the bundles say 12,
   median 0.645. Nothing may quote 20.
 - **Zenodo cases are still not in `cases/index.json`.** Presentation order is undecided.
-- **Asked Soum:** should `detect_ships` reject contacts touching the raster border? That would
+- **Asked Soumirya:** should `detect_ships` reject contacts touching the raster border? That would
   remove the Delta contact.
 
-**Next:** Soum reruns all nine with the flags, then rerun the back-solve and the validator. The
+**Next:** Soumirya reruns all nine with the flags, then rerun the back-solve and the validator. The
 D34 warnings should disappear.
 
-## [2026-09-13 ~11:00] Unblocking Soum's Stage 1 push — provenance field, gitignore, three corrections
+## [2026-09-13 ~11:00] Unblocking Soumirya's Stage 1 push — provenance field, gitignore, three corrections
 
-**Done:** Soum's reply to `HANDOFF_SOUM_CASES.md` answered all four questions and returned three
+**Done:** Soumirya's reply to `HANDOFF_SOUM_CASES.md` answered all four questions and returned three
 findings I did not have, one of which invalidated a premise in my own code. Landed the schema
 change he is blocked on (`meta.provenance`, D33) through the required order — Master §6.1 →
 `CONTRACTS.md` → validator enum — so he can switch `scene_provenance()` off the CRS sniff. Fixed
 `benchmark_scene.py`, which was built on the belief that Part III tiles are ungeoreferenced and
 wrote a Null Island placeholder box for them; it now reads the real transform (verified round-trip
-against the bounds Soum reported). Ignored `models/` before it could reach GitHub — 534 MB with
+against the bounds Soumirya reported). Ignored `models/` before it could reach GitHub — 534 MB with
 three blobs over the 100 MB hard limit. Pinned torch in a **separate** `requirements-detect.txt`,
 because `--index-url` is not per-package and putting it in `requirements.txt` would repoint all
 twelve shared dependencies at the PyTorch mirror. Recorded the corrected Stage 1 metrics and
@@ -347,11 +347,11 @@ hijack) · `web/lib/contracts.ts` · `web/components/ContextPanel.tsx` ·
 python scripts/validate_case.py cases/case-nospill-zenodo
 ```
 Expected output: `FAIL — bounds.json: missing · detections.geojson: missing`. That is the
-**correct** state today: both artefacts come off Soum's machine, and `meta.json` itself validates
+**correct** state today: both artefacts come off Soumirya's machine, and `meta.json` itself validates
 clean with `provenance: "benchmark"`.
 
 **Checkpoint artefact:** fed `benchmark_scene.py` a synthetic EPSG:4326 raster stamped with the
-box Soum reported for `00134`; `bounds.json` came back `-89.6488, 29.1688 .. -89.4649, 29.3527`,
+box Soumirya reported for `00134`; `bounds.json` came back `-89.6488, 29.1688 .. -89.4649, 29.3527`,
 exact. The non-finite guard was tested by reproducing his bug directly — `np.nanmean` over an
 array containing `-inf` → `json.dumps` → `{"contrast_db": -Infinity}` → validator fails it by
 name. `npx tsc --noEmit` clean.
@@ -362,16 +362,16 @@ name. `npx tsc --noEmit` clean.
   `detections.geojson`. That is the only thing between us and a working chain.
 - `confidenceLabel()` bands the rule margin at 0.75 / 0.45 — those cutoffs are **my invention**
   and nothing has measured them. They are honest in kind (qualitative, not a percentage) but
-  arbitrary in value. Ask Soum for the real margin distribution, or drop to two bands.
+  arbitrary in value. Ask Soumirya for the real margin distribution, or drop to two bands.
 - The VH reframe is recorded in `receipts.md` but **the slide has not been changed.** Urooz has
   not seen this yet. If the deck ships claiming dual-pol discrimination on the seven live cases,
   it is claiming something we measured to be false.
-- `features.py`'s `-inf` bug is fixed **at the gate, not at the source** — Soum is fixing the
+- `features.py`'s `-inf` bug is fixed **at the gate, not at the source** — Soumirya is fixing the
   producing code. Until his push lands, the validator is the only thing catching it.
 - Retrained-RF reproducibility is asserted, not demonstrated: nobody has retrained from
   `train.py` on a clean machine and compared to `model_meta.json`.
 
-**Next:** Soum pushes Stage 1 → I merge → run the seven live cases through
+**Next:** Soumirya pushes Stage 1 → I merge → run the seven live cases through
 `build_case.py --stage detect` and get `detections.geojson` on all of them. That is the last
 structural gap in the chain.
 
@@ -416,11 +416,11 @@ python scripts/validate_case.py cases/    # fails only on detections.geojson x7
 - Noticed but did not touch: untracked `pipeline/export/benchmark_scene.py` on disk, "Owner:
   Akshat" in its header, not committed anywhere. Not part of this session's work — flagging it in
   case it's mid-edit from another session and shouldn't be lost.
-- Unchanged: Soum's `detections.geojson` on `case-jacksonville-2024` is still the critical-path
-  item; no `origin/soum` branch exists. The reordered three asks to Soum and the downgraded ask
+- Unchanged: Soumirya's `detections.geojson` on `case-jacksonville-2024` is still the critical-path
+  item; no `origin/soumirya` branch exists. The reordered three asks to Soumirya and the downgraded ask
   to Urooz (both drafted in `_INTEGRATION.md`) are still not sent.
 
-**Next:** planning account rules on the dependency → Soum delivers detections → first real
+**Next:** planning account rules on the dependency → Soumirya delivers detections → first real
 four-stage bundle.
 
 ---
@@ -477,7 +477,7 @@ Expected: `7/7 tests passed (48/48 individual assertions)`, then
 `PASS acts=['detect','trace','attribute','verify'] (0 warning(s))`. Both confirmed after the edits.
 
 **Open issues:**
-- **Soum now has three asks, reordered.** `discharge_class` per detection is now #1 and outranks
+- **Soumirya now has three asks, reordered.** `discharge_class` per detection is now #1 and outranks
   the two contrast fields — it is already in the frozen contract (§6.2) and C3.3 is inert without
   it. Not yet sent.
 - Still owed by me: the 3-snapshot HYCOM window decision, and the US case list with documented
@@ -486,7 +486,7 @@ Expected: `7/7 tests passed (48/48 individual assertions)`, then
   validator question are still open from her Phase 1 entry; neither is touched by this ratification.
 
 **Next:** send Anushka the three yes-es plus the "3.2× is not a conversion factor" warning; send
-Soum the reordered three asks; tell Urooz A4 is downgraded.
+Soumirya the reordered three asks; tell Urooz A4 is downgraded.
 
 ---
 
@@ -508,7 +508,7 @@ Two matter most: **A2** changes every elongation-based age estimate by ~3.2× ve
 brief (already shipped, needs sign-off before it's quoted anywhere), and **A5** is that the
 age-validation claim is currently "1 of 1" (only Huntington has a documented incident time),
 not the "4 cases" framing the plan assumed — worth deciding what that claim becomes before it's
-on a slide. Full list, plus the routed-not-sent asks to Soum (two new contrast fields per
+on a slide. Full list, plus the routed-not-sent asks to Soumirya (two new contrast fields per
 detection + Huntington's real major axis) and Urooz (a citation for the Fay constant), is in
 `docs/updates/_INTEGRATION.md`'s dated entry — read that before ratifying anything by memory.
 
@@ -530,11 +530,11 @@ python scripts/validate_case.py cases/    # fails only on detections.geojson x7
 **Open issues / for the planning account:**
 - Rule on A1–A5 in `docs/STAGE2_AGE_DECISION_BRIEF.md` — A2 and A5 are the ones that change what
   goes on a slide.
-- Send the routed asks to Soum and Urooz (text is in `_INTEGRATION.md`, not sent from here).
-- Everything else is unchanged from the prior entry: Soum's `detections.geojson` is still the
-  critical-path item; no `origin/soum` branch exists yet.
+- Send the routed asks to Soumirya and Urooz (text is in `_INTEGRATION.md`, not sent from here).
+- Everything else is unchanged from the prior entry: Soumirya's `detections.geojson` is still the
+  critical-path item; no `origin/soumirya` branch exists yet.
 
-**Next:** planning account rules on A1–A5 → Soum delivers `case-jacksonville-2024` detections →
+**Next:** planning account rules on A1–A5 → Soumirya delivers `case-jacksonville-2024` detections →
 first real four-stage bundle becomes possible.
 
 ---
@@ -587,11 +587,11 @@ python scripts/validate_case.py cases/                    # fails only on detect
   rebase onto `084d4c2` or later.
 - **Send Jaiveer the GFW gap-events bbox-filtering caveat** — not yet confirmed whether the
   endpoint filters server-side at all.
-- Everything else open is unchanged from the previous entry: per-case announcements, Soum's
+- Everything else open is unchanged from the previous entry: per-case announcements, Soumirya's
   no-spill nomination, Mumbai's unsourced natural-seep claim, `verification.json` for all six
   spill cases (still deliberately unwritten — see `verification/README.md`).
 
-**Next:** confirm no teammate branch is built on the bad commit → Soum's `detections.geojson` on
+**Next:** confirm no teammate branch is built on the bad commit → Soumirya's `detections.geojson` on
 Jacksonville is still the critical-path item → first real four-stage bundle.
 
 ---
@@ -600,13 +600,13 @@ Jacksonville is still the critical-path item → first real four-stage bundle.
 
 **Done:** Replaced the v3 planning docs with **Master Plan v4** and **01_AKSHAT_INTEGRATION v3**,
 then executed the case onboarding they describe. The library is now seven live cases plus one
-waiting on Soum.
+waiting on Soumirya.
 
 **The finding that unblocked everything: SkyTruth Cerulean has a public OGC API** —
 `api.cerulean.skytruth.org`, **no key, no auth**. Collection `public.slick_plus` returns the
 **full** Sentinel-1 scene id, the slick polygon, the centerline, length/area/confidence and the
 attributed source ids, filtered by `bbox` + `datetime`. That killed the BLOCKING "pull the
-truncated scene ids out of the web panel" item outright, and it hands Soum a real-incident IoU
+truncated scene ids out of the web panel" item outright, and it hands Soumirya a real-incident IoU
 reference. Wrapped as `scripts/fetch_cerulean.py` (**D23**). Note `public.slick_to_source`,
 `public.source_vessel` and `public.source_type` return 403 — names/flags/IMOs are a browser job.
 
@@ -675,7 +675,7 @@ python scripts/test_validator.py          # 18/18 caught and named
 python scripts/validate_case.py cases/    # index + 7 cases; ONLY detections.geojson missing
 python scripts/fetch_cerulean.py --case case-jacksonville-2024 --slick 3046293
 ```
-Every case now fails on **exactly one** thing — `detections.geojson`, which is Soum's stage.
+Every case now fails on **exactly one** thing — `detections.geojson`, which is Soumirya's stage.
 Zero schema errors, zero warnings.
 
 **Open issues / for you:**
@@ -689,14 +689,14 @@ Zero schema errors, zero warnings.
   so writing it now would publish the answers and end the blind evaluation. The research is
   already staged in `ANSWERS.md`; it becomes a file after each bundle validates. Reasoning is in
   `verification/README.md`.
-- **Case 8 needs Soum's no-spill nomination** — scaffolded, held out of `index.json` so the gallery
+- **Case 8 needs Soumirya's no-spill nomination** — scaffolded, held out of `index.json` so the gallery
   cannot 404.
 - ~~Confirm the case-1 vessel flag~~ — **done 2026-09-12**, see the entry above. `ANSWERS.md` had
   the old note down as CHN, which didn't match its own MID; corrected to Singapore.
 - `acts_available` is `["detect"]` on every case by design — add acts as stages land, so no bundle
   ever claims a screen it cannot render.
 
-**Next:** announcements out → Jaiveer's density check → Soum's detections on Jacksonville → the
+**Next:** announcements out → Jaiveer's density check → Soumirya's detections on Jacksonville → the
 first bundle that goes all the way through four stages.
 
 ---
@@ -790,7 +790,7 @@ trigger) · `cases/case-huntington-2021/*`, `cases/case-golden-ray-2021/*`, `cas
 **Run command:**
 ```bash
 python scripts/find_scenes.py --project quizzer-dev-487316 --bbox -118.35 33.50 -117.75 33.85 --start 2021-09-30 --end 2021-10-08 --incident 2021-10-01
-python scripts/validate_case.py cases/case-huntington-2021   # FAIL only on detections.geojson (Soum's stage) — correct
+python scripts/validate_case.py cases/case-huntington-2021   # FAIL only on detections.geojson (Soumirya's stage) — correct
 ```
 
 **Open issues / decisions for you:**
@@ -799,21 +799,21 @@ python scripts/validate_case.py cases/case-huntington-2021   # FAIL only on dete
 - **Trace-without-detect contract change** — Golden Ray (and probably Ennore) run as
   trace+attribute+verify from a known source. `validate_case.py` errors on `trace` without
   `detect`. Needs a small relax + a `meta.known_origin` field. Your call — frozen schema.
-- **Move the Huntington GeoTIFF** from Drive/naap_exports/ when the task completes.
+- **Move the Huntington GeoTIFF** from Drive/udgam_exports/ when the task completes.
 - **Send** the three drafted messages in `_INTEGRATION.md` (Huntington announcement now; Urooz
-  cases 4/5 ask; Soum cases 6/7 ask) + the Part B broadcast.
+  cases 4/5 ask; Soumirya cases 6/7 ask) + the Part B broadcast.
 - Precise Huntington rupture coordinate still `~4.5 nm offshore` — pin from MIR-24-01 for Phase 4.
 
 **Next:** your push + trace-without-detect ruling → then I can scaffold Golden Ray/Ennore as
-trace cases and wire the first real Huntington bundle once Soum + Anushka + Jaiveer deliver.
+trace cases and wire the first real Huntington bundle once Soumirya + Anushka + Jaiveer deliver.
 
 ---
 
 ## [2026-09-09] Phase 0 + 3 — merged all four branches, hardened the validator, 2-band exporter
 
-**Done:** Merged `origin/{soum,jaiveer,harshita,anushka}` onto `main` on a local `integration`
+**Done:** Merged `origin/{soumirya,jaiveer,harshita,anushka}` onto `main` on a local `integration`
 branch (was the top catastrophic risk — 2 commits on main, 4 branches holding the project).
-soum/jaiveer/harshita clean; anushka 2 trivial conflicts. Dropped Soum's two force-added
+soumirya/jaiveer/harshita clean; anushka 2 trivial conflicts. Dropped Soumirya's two force-added
 label CSVs (stay local); kept `classifier.pkl`. Anushka's ÷100→÷1000 fix (repo-wide, verified
 2026-09-07) adopted as canonical; fixed one leftover contradictory sentence.
 
@@ -907,7 +907,7 @@ builds against. Validator self-test output above.
   arithmetic are untested against the real API; expect at least one round of fixing.
 - **Contract addition, announced not yet acknowledged:** `bounds.json` now carries optional
   `db_min` / `db_max` (the dB clamp). Reason in `docs/CONTRACTS.md` §3 and `docs/TRAPS.md` #7 —
-  Soum reads the 8-bit PNG back to decibels and must use the same clamp. Additive only;
+  Soumirya reads the 8-bit PNG back to decibels and must use the same clamp. Additive only;
   consumers default to [-25, 0] when absent. Needs broadcasting to the group.
 - Environment deviates from the frozen convention in one place: **Node 24** is installed, not
   Node 20 LTS. Harshita's lane only. Worth a decision before she scaffolds `web/`.
@@ -916,4 +916,4 @@ builds against. Validator self-test output above.
   the case folder. Mention it at the sync so nobody rediscovers it.
 
 **Next:** GEE auth → `check_ennore.py` → record the scene id in `docs/receipts.md` → export
-`sar.png` + `bounds.json` for Ennore and hand to Soum (Handoff #2, due Mon evening).
+`sar.png` + `bounds.json` for Ennore and hand to Soumirya (Handoff #2, due Mon evening).

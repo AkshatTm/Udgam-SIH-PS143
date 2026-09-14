@@ -1,4 +1,4 @@
-# Naap — Stage 1 deep-learning extras. Soum only. NOT part of requirements.txt.
+# UDGAM — Stage 1 deep-learning extras. Soumirya only. NOT part of requirements.txt.
 #
 #   pip install -r requirements-detect.txt --index-url https://download.pytorch.org/whl/cu124
 #
@@ -16,7 +16,7 @@
 # Root CLAUDE.md: a new dependency is pinned with its justification next to it and announced to
 # the group. This file is that justification; pinned 13 Sept — Akshat.
 #
-# Verified by Soum on an RTX 4050, Python 3.13.5, CUDA 12.4 build. The repo standard is Python
+# Verified by Soumirya on an RTX 4050, Python 3.13.5, CUDA 12.4 build. The repo standard is Python
 # 3.11 (requirements.txt) and both packages publish cp311 wheels, so the venv everyone else has
 # will take these. If 3.11 resolves to something other than 2.6.0/0.21.0, STOP and say so in the
 # group rather than letting two laptops train against different versions.

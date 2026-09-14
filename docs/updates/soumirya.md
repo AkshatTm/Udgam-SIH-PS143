@@ -1,4 +1,4 @@
-# Soum — update log
+# Soumirya — update log
 
 *Newest entry at the TOP. Copy the block from `TEMPLATE.md`, fill four lines, commit it with
 your code in the same push. Two minutes after each phase — non-negotiable.*
@@ -102,7 +102,7 @@ rule 4 says not-applicable is null), and state the size floor as the detector's 
 which is 203 m2 (Alaska) to 390 m2 (Ennore) of radar footprint.
 
 **Files touched:** none in `pipeline/` or `cases/` — diagnostics only, run from the scratchpad.
-`docs/updates/soum.md` (this entry).
+`docs/updates/soumirya.md` (this entry).
 
 **Run command:**
 ```bash
@@ -118,7 +118,7 @@ Jaiveer 20:10.
 
 **Open issues:**
 - **Governance:** D34 already logged this exact finding on 13 Sept (threshold -8.06, peak -8.79)
-  and ruled Alaska's dark-vessel contact is Cerulean's, never a NAAP detection. Lowering k until
+  and ruled Alaska's dark-vessel contact is Cerulean's, never a UDGAM detection. Lowering k until
   Alaska yields a contact at a documented offset would be choosing a threshold against a sealed
   answer on a case already marked partially compromised (Part 16). Not done, and should not be.
 - `cases/case-gulf-alaska-2023/meta.json` says "Exported raster is 1573 x 1190 at 10 m". It is
@@ -709,7 +709,7 @@ been an easy wrong conclusion.
 Gate threshold **0.1427**, selected on a validation split of Parts I+II by PR curve under a 0.90
 recall floor — *not* on Part III. Trained on Parts I+II, tested only on Part III (D1).
 
-**⚠️ Stale number in `docs/updates/soum_case_nominations.md` line 7** — it says look-alike
+**⚠️ Stale number in `docs/updates/soumirya_case_nominations.md` line 7** — it says look-alike
 rejection **0.960**. That is the *pre-domain-augmentation* classifier. The shipped model is
 **0.940**. The augmentation traded look-alike rejection 0.960 → 0.940 for oil recall
 0.893 → 0.927 and accuracy 0.947 → 0.951. Net positive, but it is a trade and the deck must not
@@ -776,7 +776,7 @@ the precision at the same recall. The sentence I will defend:
 I have opened `cerulean_slick.geojson` for IoU and nothing else. No news, no reports, no AIS, no
 attribution. `docs/receipts.md`'s visual slick descriptions remain unread.
 
-**Files:** `docs/updates/soum.md`.
+**Files:** `docs/updates/soumirya.md`.
 
 **Next:** §E5 item 3 — decompose the 0.435-vs-96% metric gap in `evaluate.py`, no retraining.
 
@@ -908,7 +908,7 @@ the library is **9 indexed cases**. Applied both things Akshat asked for:
 2. **Contact total: 173, not 174.** His count is right and mine was arithmetic sloppiness:
    72 + 43 + 31 + 21 + 3 + 2 + 1 + 0 + 0 = 173. Corrected — the edge finding is **2 of 173**.
 
-**Files:** `docs/updates/soum.md`.
+**Files:** `docs/updates/soumirya.md`.
 
 **His correction, recorded because it changes the shared record.** Akshat withdrew the claim that
 the Delta contact sits "among charted platforms" — he had not checked any platform dataset at that
@@ -954,7 +954,7 @@ The seven satellite cases reproduce their shipped numbers exactly under
 `--rule-contrast -3.0 --rule-elongation 2.5` (oil 3/1/1/3/3/1/0, contacts 2/0/43/0/21/3/72),
 which independently confirms his back-solve that −3.0 was the value used.
 
-**Files:** `pipeline/detect/run.py`, all nine `cases/*/detections.geojson`, `docs/updates/soum.md`.
+**Files:** `pipeline/detect/run.py`, all nine `cases/*/detections.geojson`, `docs/updates/soumirya.md`.
 
 **Run:**
 ```bash
@@ -1176,7 +1176,7 @@ case-huntington-2021 still PASSES with 0 warnings.
 
 **Files touched:** `pipeline/detect/train_unet.py` (domain aug, weight decay) ·
 `train_classifier.py` (domain aug) · `backfill_labels.py` (new) ·
-`docs/updates/soum_case_nominations.md` (new) · `models/unet.pt` + `scene_classifier.pt`
+`docs/updates/soumirya_case_nominations.md` (new) · `models/unet.pt` + `scene_classifier.pt`
 (baselines preserved as `*_baseline.pt`) · `data/labels/features_train.csv`
 
 **Run command:**
@@ -1240,7 +1240,7 @@ threshold. **Domain augmentation does not fix the transfer gap.** The cause is n
 image statistics; blur/resolution/speckle/nodata are exactly what augmentation covers and they
 were not it. Provenance routing stands.
 
-**5. Cases 6/7/8 nominated** — `docs/updates/soum_case_nominations.md`, closing Master §14's
+**5. Cases 6/7/8 nominated** — `docs/updates/soumirya_case_nominations.md`, closing Master §14's
 open item. Chosen on DETECTOR evidence, never on what the classifier says about them, so they
 are the hardest available rather than staged wins. Case 6 `P3_Lookalike_00134` is a −9.05 dB,
 47.4 km², elongation-21.2 streak that reads exactly like a chronic discharge — rejected at
@@ -1531,7 +1531,7 @@ with the scene-relative features added. Label runs for all 3,020 scenes are in f
 
 ---
 
-## [08-Sep-2026] , 6:45 PM IST — Soum
+## [08-Sep-2026] , 6:45 PM IST — Soumirya
 
 DONE:
 - Fixed 4 real bugs in pipeline/detect/darkspot.py's local-threshold detector:

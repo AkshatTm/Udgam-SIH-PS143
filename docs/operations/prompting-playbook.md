@@ -12,7 +12,7 @@
 Why the split: the navigator holds long context cheaply, the driver has the files. Talking to the driver about strategy wastes its expensive context on conversation.
 
 **Opening a navigator chat** (once per phase, not per message):
-> I'm working on Naap, SIH 2026 PS 26143. Here is the master plan and my personal task document. I'm starting Phase N. Explain what this phase produces, walk me through it step by step, and tell me what to check before I move on. Don't write the full code — I'll get that from Claude Code.
+> I'm working on UDGAM, SIH 2026 PS 26143. Here is the master plan and my personal task document. I'm starting Phase N. Explain what this phase produces, walk me through it step by step, and tell me what to check before I move on. Don't write the full code — I'll get that from Claude Code.
 >
 > [paste 00_MASTER_PLAN.md §2–4 + your personal doc]
 

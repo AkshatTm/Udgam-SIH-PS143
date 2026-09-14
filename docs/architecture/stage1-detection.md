@@ -4,7 +4,7 @@
 
 **In:** `sar_vv_vh.tif` (2-band float32 dB, VV and VH), `bounds.json`, `meta.json`
 **Out:** `detections.geojson`
-**Code:** `pipeline/detect/` · **Brief:** [`../team/soum-stage1-detection.md`](../team/soum-stage1-detection.md)
+**Code:** `pipeline/detect/` · **Brief:** [`../team/soumirya-stage1-detection.md`](../team/soumirya-stage1-detection.md)
 
 ```bash
 python pipeline/detect/run.py --case <case-id>

@@ -1,4 +1,4 @@
-# `web/` — the Naap interface
+# `web/` — the UDGAM interface
 
 The judge-facing application. **Owner: Harshita.**
 

@@ -135,7 +135,7 @@ def write_cf_netcdf(path, lons, lats, times, u, v, uname, vname, ustd, vstd):
         var[:] = np.asarray(arr, dtype="f4")
 
     ds.Conventions = "CF-1.6"
-    ds.title = "NAAP Stage 2 cached field, re-expressed for OpenDrift (no regridding)"
+    ds.title = "UDGAM Stage 2 cached field, re-expressed for OpenDrift (no regridding)"
     ds.close()
     return path
 
@@ -224,7 +224,7 @@ def main(argv=None):
     if isinstance(hist, tuple):
         hist = hist[0]
     traj = np.asarray(hist)
-    print(f"NAAP RK2: {traj.shape[0]} steps x {traj.shape[1]} particles")
+    print(f"UDGAM RK2: {traj.shape[0]} steps x {traj.shape[1]} particles")
 
     o = OceanDrift(loglevel=30)
     readers = [reader_netCDF_CF_generic.Reader(str(cur_nc)),
@@ -364,7 +364,7 @@ def compare(seed, traj, olon, olat, case, version):
     co = (OL[:, -1].mean(), OA[:, -1].mean())
     centroid_sep = math.hypot((cm[0] - co[0]) * clat, cm[1] - co[1]) * KM_PER_DEG
 
-    print(f"\n  NAAP RK2 vs OpenDrift {version} RK4 -- identical field, {len(seed)} particles")
+    print(f"\n  UDGAM RK2 vs OpenDrift {version} RK4 -- identical field, {len(seed)} particles")
     print(f"  {'hours':>7}{'median m':>11}{'p95 m':>10}{'max m':>10}")
     for i in sorted({0, n // 4, n // 2, 3 * n // 4, n - 1}):
         s_m = sep(i) * 1000.0

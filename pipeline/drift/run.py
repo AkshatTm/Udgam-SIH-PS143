@@ -190,7 +190,7 @@ def is_one_ribbon(m):
 
 
 def merged_discharge_class(feats):
-    """One class for a merged slick, per Soum (13 Sept): take the defined one, never average.
+    """One class for a merged slick, per Soumirya (13 Sept): take the defined one, never average.
 
     `discharge_class` is computed PER REGION from that region's own elongation, so the parts of
     one ribbon disagree -- Jacksonville's det-02 is 'chronic' while det-01 and det-03 are
@@ -215,7 +215,7 @@ def merged_discharge_class(feats):
 def merge_oil_features(dets, mode="auto", verbose=True):
     """Pick the slick to seed from: one merged ribbon, or the single best feature.
 
-    Soum's ruling (13 Sept) on Jacksonville: "one slick, genuine breaks -- treat it as one."
+    Soumirya's ruling (13 Sept) on Jacksonville: "one slick, genuine breaks -- treat it as one."
     The breaks are intrinsic, not our artefact; Cerulean's own polygon for the same slick is an
     18-part MultiPolygon, 31.2 km long, so an operational detector fragments the same ribbon
     eighteen ways. Seeding from the highest-confidence part alone would have seeded 15 km of a
@@ -277,7 +277,7 @@ def merge_oil_features(dets, mode="auto", verbose=True):
             "shape_class": "linear" if (m["aspect"] or 0) >= 3.0 else "blob",
             "confidence": float(max(f["properties"].get("confidence", 0.0) for f in oil)),
             # ELONGATION IS DELIBERATELY None ON A MERGED SLICK, and that is load-bearing.
-            # Soum (13 Sept): `elongation` is cv2.fitEllipse major/minor in PIXEL coordinates,
+            # Soumirya (13 Sept): `elongation` is cv2.fitEllipse major/minor in PIXEL coordinates,
             # a shape descriptor feeding shape_class -- NOT a geometric aspect ratio, and not
             # invertible. On det-01 the fitted ellipse's minor axis spans the bow of the curve
             # rather than the filament width, so inverting it gives a ~2.2 km width against a
@@ -301,7 +301,7 @@ def merge_oil_features(dets, mode="auto", verbose=True):
             print(f"         {r}")
         print(f"         parts {ids}   total area {area:.3f} km2")
         print(f"         discharge_class -> {dc!r}: {dc_why}")
-        print(f"         NOTE Soum: our outline over-extends (Jacksonville IoU 0.483, "
+        print(f"         NOTE Soumirya: our outline over-extends (Jacksonville IoU 0.483, "
               f"recall 0.825, precision 0.537), so a merged")
         print(f"         area is generous -- Cerulean's polygon for the same slick is "
               f"4.55 km2 against our {area:.2f} km2.")
@@ -658,7 +658,7 @@ def main():
     ap.add_argument("--seed", type=int, default=143)
     ap.add_argument("--merge-oil", choices=["auto", "always", "never"], default="auto",
                     help="a slick broken into several oil features is ONE slick when it "
-                         "measures as one ribbon (Soum, 13 Sept: Jacksonville is one slick "
+                         "measures as one ribbon (Soumirya, 13 Sept: Jacksonville is one slick "
                          "with genuine breaks). 'auto' merges only when all four ribbon gates "
                          "pass and prints them either way; 'never' restores the old "
                          "single-highest-confidence behaviour.")

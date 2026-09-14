@@ -1,5 +1,5 @@
 """
-train_classifier.py  -  Layer 1, the scene classifier.  Owner: Soum.
+train_classifier.py  -  Layer 1, the scene classifier.  Owner: Soumirya.
 
     python pipeline/detect/build_cache.py --parts 1,2
     python pipeline/detect/build_cache.py --parts 3

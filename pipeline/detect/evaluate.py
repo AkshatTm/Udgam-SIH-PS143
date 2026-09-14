@@ -1,5 +1,5 @@
 """
-evaluate.py  -  The numbers.  Owner: Soum.   (docs/team/soum-stage1-detection.md Phase 7)
+evaluate.py  -  The numbers.  Owner: Soumirya.   (docs/team/soumirya-stage1-detection.md Phase 7)
 
     python pipeline/detect/evaluate.py --report
 

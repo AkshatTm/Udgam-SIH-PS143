@@ -13,8 +13,8 @@ The live documentation index is [`docs/README.md`](../README.md).
 |---|---|---|
 | `jaiveer/stage3-progress-2026-09-13.md` | Stage 3 progress, morning of 13 Sept | its own evening successor, below |
 | `jaiveer/stage3-progress-2026-09-13-evening.md` | Stage 3 progress, evening of 13 Sept — the first real attribution output on a real case | [`docs/evaluation/stage3-issue-register.md`](../evaluation/stage3-issue-register.md) for what is open, [`docs/team/jaiveer-stage3-attribution.md`](../team/jaiveer-stage3-attribution.md) for the stage brief |
-| `urooz/research-01-naming.md` | Research task 01, project naming | Closed. The name stayed **NAAP**. |
-| `soum/progress-report-2026-09-09.md` | Stage 1 handoff report, 9 Sept | [`docs/updates/soum.md`](../updates/soum.md), newest entry at the top |
+| `urooz/research-01-naming.md` | Research task 01, project naming | Closed. The name stayed **UDGAM**. |
+| `soumirya/progress-report-2026-09-09.md` | Stage 1 handoff report, 9 Sept | [`docs/updates/soumirya.md`](../updates/soumirya.md), newest entry at the top |
 | `anushka/HANDOFF_ANUSHKA.md` | Hand-shared brief | Gitignored (`HANDOFF_*.md`), local only — not in the repository |
 
 ---

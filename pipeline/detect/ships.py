@@ -1,5 +1,5 @@
 """
-ships.py  -  Radar ship detection.  Owner: Soum.   (docs/team/soum-stage1-detection.md 5.1)
+ships.py  -  Radar ship detection.  Owner: Soumirya.   (docs/team/soumirya-stage1-detection.md 5.1)
 
 The inverse of the dark-spot detector. Oil is DARK on SAR; a steel hull is a
 corner reflector and is BRIGHT. darkspot.prepare() already finds those pixels
@@ -203,7 +203,7 @@ def _merge_and_project(raw, transform, pixel_size_m, merge_m):
 
 
 # ---------------------------------------------------------------------------
-# Chronic vs acute  (docs/team/soum-stage1-detection.md 5.2)
+# Chronic vs acute  (docs/team/soumirya-stage1-detection.md 5.2)
 # ---------------------------------------------------------------------------
 #
 # chronic — long, thin, roughly straight, often lane-aligned. A vessel washing

@@ -23,7 +23,7 @@ export type AisSource = "noaa_dense" | "gfw_hourly";
 
 /** A documented fixed source the trace stage seeds from when there is no SAR-visible slick
  *  (D16). When present the Trace screen must say the origin was SEEDED FROM A DOCUMENTED
- *  SOURCE, never presented as a NAAP detection. No case in the current library uses it. Only
+ *  SOURCE, never presented as a UDGAM detection. No case in the current library uses it. Only
  *  the label is used on the Verify screen (P1.1). */
 export type KnownOrigin =
   | LonLat
@@ -83,7 +83,7 @@ export type Classification = "oil" | "lookalike";
 export type ShapeClass = "linear" | "blob";
 export type DischargeClass = "chronic" | "acute" | "unknown";
 
-/** Master §6.3, docs/team/harshita-frontend.md Phase 5.3 — a raw radar ship contact near a detection (Soum's output).
+/** Master §6.3, docs/team/harshita-frontend.md Phase 5.3 — a raw radar ship contact near a detection (Soumirya's output).
  *  `px_area`/`peak_db` are documented but not currently rendered by the frontend — only
  *  position is used for the map marker, same "documented, optional, not all consumed" treatment
  *  as `vessels.geojson`'s `n_points`/`max_gap_minutes`. */
@@ -103,7 +103,7 @@ export interface DetectionProperties {
   edge_gradient: number;
   contrast_db: number; // negative for a dark spot
   shape_class: ShapeClass;
-  /** Master §6.3, docs/team/harshita-frontend.md Phase 5.3 — Soum's chronic/acute/unknown classification, feeding
+  /** Master §6.3, docs/team/harshita-frontend.md Phase 5.3 — Soumirya's chronic/acute/unknown classification, feeding
    *  Anushka's line-vs-point origin seeding on the producer side. Optional; absent hides the
    *  badge — never inferred from geometry on the frontend. */
   discharge_class?: DischargeClass;
@@ -127,7 +127,7 @@ export interface DetectionCollection {
    *  recorded (unknown); `[]` = it ran and found none.
    *
    *  These are UNATTRIBUTED contacts. NOT suspects.json's `dark_vessels` — a contact is only
-   *  "dark" after an AIS cross-check at a known time, which is Jaiveer's output, not Soum's.
+   *  "dark" after an AIS cross-check at a known time, which is Jaiveer's output, not Soumirya's.
    *  Never label one a dark vessel. */
   ship_detections?: ShipDetection[];
   features: DetectionFeature[];
@@ -370,7 +370,7 @@ export interface RawOfficialFinding {
   caveat?: string;
 }
 
-export interface RawNaapResult {
+export interface RawUdgamResult {
   origin_summary: string;
   top_suspects: string[]; // MMSI strings, may be empty; rendered as provided (no cross-bundle enrichment)
   abstained: boolean;
@@ -384,7 +384,7 @@ export interface RawAssessment {
 
 export interface RawVerification {
   official_finding: RawOfficialFinding;
-  naap_result: RawNaapResult;
+  udgam_result: RawUdgamResult;
   assessment: RawAssessment;
 }
 

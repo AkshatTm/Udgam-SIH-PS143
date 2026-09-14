@@ -7,7 +7,7 @@
 
 The name appears on every slide, in the UI header, in the repo, and in every sentence anyone says about the project for the next three months. **Internals are binding — whatever we present in September we defend at the national finale in December.** Renaming later is possible but embarrassing.
 
-The current working name is **NAAP**. It is not good enough. It reads as arbitrary, it does not expand to anything, and it says nothing about what the system does.
+The current working name is **UDGAM**. It is not good enough. It reads as arbitrary, it does not expand to anything, and it says nothing about what the system does.
 
 ## What good looks like in this field
 

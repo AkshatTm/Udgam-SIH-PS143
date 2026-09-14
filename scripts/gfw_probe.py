@@ -163,7 +163,7 @@ def probe(label, date, bbox, token, window_days):
         print(f"  gap events    FAILED\n      {res}")
         verdict["gaps"] = None
 
-    # 3. SAR detections — use to VALIDATE Soum's ship detector, never to replace it
+    # 3. SAR detections — use to VALIDATE Soumirya's ship detector, never to replace it
     ok, res = call("/4wings/report", token, method="POST",
                    params={"datasets[0]": "public-global-sar-presence:latest",
                            "date-range": f"{start},{end}",

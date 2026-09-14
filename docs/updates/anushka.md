@@ -15,7 +15,7 @@ docs/updates/anushka.md. Read the top entry and tell me where I left off."*
 | 0 | Setup: repo, branch `anushka`, venv, packages, GEE signup | ✅ done (GEE auth unverified — see open issues) |
 | 1 | Fake fields + RK2 stepper + four known-answer tests | ✅ **code done — 4/4 green.** 3 human steps left, see "Phase 1 — what remains" |
 | 2 | Real HYCOM + ERA5 loaders, quiver plot | ✅ **done 2026-09-07.** Field cached, quiver posted, test-4 guards green on real fields |
-| 3 | Backward + 50-run ensemble → real `particles.json` / `origin.json` | ✅ **done 2026-09-07.** Real files written, validator PASS 0 warnings, tests 5/5. Rerun on Soum's real detections when they land |
+| 3 | Backward + 50-run ensemble → real `particles.json` / `origin.json` | ✅ **done 2026-09-07.** Real files written, validator PASS 0 warnings, tests 5/5. Rerun on Soumirya's real detections when they land |
 | 4 | Coastline upgrade (GSHHG) + stranding, decision D7 | ✅ **done 2026-09-13.** Suite 8/8, 54/54. New dependency needs Akshat's confirmation (D7) |
 
 ---
@@ -314,7 +314,7 @@ numbers exactly.
 3. **case-000's `area_km2` disagrees with its own polygon.** The `det-01` ring spans about
    21 km; `area_km2: 12.4` with `elongation: 8.2` implies a slick about 10 km long. The
    seeder follows the *geometry* (correct — the polygon is the measurement), so it seeds a
-   21 km line. Harmless in a synthetic bundle, but if Soum's real detector ever writes
+   21 km line. Harmless in a synthetic bundle, but if Soumirya's real detector ever writes
    `area_km2` from a different mask than the polygon it exports, Stage 2 silently seeds the
    wrong length of slick. Worth one assertion in Stage 1.
 4. **~~Not yet run in the Windows venv~~ — RESOLVED 2026-09-07 22:35.** Re-run inside
@@ -335,7 +335,7 @@ numbers exactly.
 run rewinding, and the cloud it lands in, with the coast for scale. Right: `origin.json`
 exactly as stored, 120x120 row-0-is-north, with the 50% and 90% circles. Post in group.
 
-**Next:** Phase 4. When Soum's real `detections.geojson` for Ennore lands, `fetch_fields.py
+**Next:** Phase 4. When Soumirya's real `detections.geojson` for Ennore lands, `fetch_fields.py
 --case <real-case>` then the same run command — nothing in the drift code needs to change,
 which is the whole point of the seam. Then the US case: re-run `check_gee.py` first, because
 HYCOM's GEE archive ends 2024-09-05 and the Gulf sits at negative longitude.
@@ -567,7 +567,7 @@ real field.
 
 ## [2026-09-06 20:20] Phase 0 — setup
 
-**Done:** Repo cloned to `Desktop/naap`, branch `anushka` checked out, `venv` created and
+**Done:** Repo cloned to `Desktop/udgam`, branch `anushka` checked out, `venv` created and
 populated (numpy, scipy, matplotlib, earthengine-api, pillow). Earth Engine signup started;
 `test_ee.py` written against project `project-c6f47846-50cd-4991-94c`.
 

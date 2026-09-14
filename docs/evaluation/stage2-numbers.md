@@ -54,7 +54,7 @@ control endpoint.
 
 **The four-case validation claim is WITHDRAWN (A5, 13 Sept) — and the reason is now stronger than
 when it was withdrawn.** A5 rested on `detections.geojson` being absent and `discharge_class` unset.
-Soum's detections have since landed for all seven live cases, and **`discharge_class` is emitted on
+Soumirya's detections have since landed for all seven live cases, and **`discharge_class` is emitted on
 every feature** — so that premise no longer holds. The conclusion does, for a structural reason:
 
 `ships.classify_discharge()` computes the class from **shape alone** — `elongation < 3.0` →
@@ -130,7 +130,7 @@ elongations in test 6e precisely so the test's own output cannot be misquoted.
 
 Our RK2 against **OpenDrift 1.14.11's RK4**, both fed the *identical* cached HYCOM + ERA5 field
 (re-expressed as CF NetCDF, nothing regridded), 3000 particles, 24 h backward, pure advection on
-both sides. Seeded from Soum's real `detections.geojson` on every real case.
+both sides. Seeded from Soumirya's real `detections.geojson` on every real case.
 
 | case | travel (median) | **origin centroid sep.** | per-particle median | worst | % of path |
 |---|---|---|---|---|---|
@@ -215,7 +215,7 @@ it is a comparison tool, not a runtime dependency). Per-case results are written
 
 ## 8.4b Jacksonville is ONE slick, and that changes the hero number
 
-Soum's ruling, 13 Sept: `case-jacksonville-2024`'s three oil features are **one slick with genuine
+Soumirya's ruling, 13 Sept: `case-jacksonville-2024`'s three oil features are **one slick with genuine
 breaks**, not over-segmentation. His evidence is not our detector's behaviour — **Cerulean's own
 polygon for the same slick is an 18-part MultiPolygon, 31.2 km long.** An operational detector
 fragments the same ribbon eighteen ways. The ribbon really breaks.
@@ -251,7 +251,7 @@ this is *not* immaterial — it is a real change to the hero case's answer, and 
 `chronic`, so the merged ribbon is `chronic`, so the origin is seeded as a **line segment** — which
 is the physically right reading of a 34 km broken ribbon left by a vessel under way.
 
-### Two things Soum's numbers tell us about which quantity to trust
+### Two things Soumirya's numbers tell us about which quantity to trust
 
 Our outline over-extends: **IoU 0.483, recall 0.825, precision 0.537.** So compare the two
 quantities C3.1 could match against, both against Cerulean's polygon for the same slick:
@@ -268,7 +268,7 @@ argument for the same decision, and it is worth one line on the slide.
 
 ### `elongation` must never be inverted, and the merged slick enforces it
 
-Soum, 13 Sept: `elongation` is `cv2.fitEllipse` major/minor computed in **pixel** coordinates — a
+Soumirya, 13 Sept: `elongation` is `cv2.fitEllipse` major/minor computed in **pixel** coordinates — a
 shape descriptor feeding `shape_class`, not a geometric aspect ratio. Two independent reasons it is
 not ours to invert: the fitted ellipse's minor axis spans **the bow of the curve**, not the filament
 width (hence solidity 0.22, a convex hull 4.5× the area); and Jacksonville's pixels are
@@ -502,7 +502,7 @@ detection in the library, agrees to 1%. On the long sinuous ones it under-reads 
 Those are exactly the cases where the axis is the quantity being matched, so it is exactly where
 inferring instead of measuring would have dated the wrong slick.
 
-This is a second, independent reason the measured path is the right one, alongside Soum's: his
+This is a second, independent reason the measured path is the right one, alongside Soumirya's: his
 `elongation` is a `cv2.fitEllipse` ratio in **pixel** coordinates, whose minor axis spans the bow of
 a curve rather than the filament width, and Jacksonville's pixels are 14% anisotropic.
 
@@ -580,6 +580,6 @@ python pipeline/drift/plot_heatmap.py --case <id>                 # the cloud, p
 ## Still outstanding before the deck is final
 
 - ~~**8.4** OpenDrift agreement~~ — **DONE**, 118 m on case-000
-- **8.2** should be restated on a real case once Soum's detections land; today's r50/r90 are
+- **8.2** should be restated on a real case once Soumirya's detections land; today's r50/r90 are
   `case-000`'s synthetic slick over a real ocean, and that must be said if it is quoted
 - **8.3** the N = 1 age line, if and only if Huntington's detection arrives and C3.1 fires

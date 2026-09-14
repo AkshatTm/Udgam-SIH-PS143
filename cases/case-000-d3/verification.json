@@ -4,8 +4,8 @@
   "official_finding": {
     "summary": "Synthetic reference finding. A hypothetical investigation attributes the fixture slick to a mid-channel transfer between a coastal tanker and a shore terminal; this text exists only to render the Verify screen and describes no real event.",
     "responsible_parties": [
-      {"name": "MV Example Carrier", "mmsi": "000000001", "imo": "0000001", "role": "synthetic: the vessel NAAP's origin cloud points at"},
-      {"name": "Example Bay Terminal", "mmsi": null, "imo": null, "role": "synthetic: a shore-side operator NAAP has no way to see"}
+      {"name": "MV Example Carrier", "mmsi": "000000001", "imo": "0000001", "role": "synthetic: the vessel UDGAM's origin cloud points at"},
+      {"name": "Example Bay Terminal", "mmsi": null, "imo": null, "role": "synthetic: a shore-side operator UDGAM has no way to see"}
     ],
     "source_name": "Synthetic reference document (no real source)",
     "source_url": "https://example.gov/reference",
@@ -14,7 +14,7 @@
     "caveat": "This is the case-000 contract fixture. The slick, the origin, the vessels and this finding are all invented to drive the Verify screen end to end."
   },
 
-  "naap_result": {
+  "udgam_result": {
     "origin_summary": "Synthetic: the fixture origin cloud sits on the fixture slick, roughly 1 km from the invented transfer point.",
     "top_suspects": ["000000001"],
     "abstained": false
@@ -22,7 +22,7 @@
 
   "assessment": {
     "verdict": "partial",
-    "explanation": "Synthetic fixture prose (never generated for a real case). NAAP localised the fixture origin to about the right area and named the one synthetic vessel its cloud overlapped; the invented official finding also names a shore-side operator that NAAP, working from SAR and AIS alone, has no way to identify. This paragraph exists solely to render the Verify screen against the frozen contract.",
+    "explanation": "Synthetic fixture prose (never generated for a real case). UDGAM localised the fixture origin to about the right area and named the one synthetic vessel its cloud overlapped; the invented official finding also names a shore-side operator that UDGAM, working from SAR and AIS alone, has no way to identify. This paragraph exists solely to render the Verify screen against the frozen contract.",
     "what_would_have_helped": "Synthetic: a real case bundle with a real official finding."
   }
 }

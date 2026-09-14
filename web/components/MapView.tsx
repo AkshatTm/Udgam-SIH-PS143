@@ -156,7 +156,7 @@ const INFRASTRUCTURE_COLOR: [number, number, number, number] = [167, 139, 250, 2
 const INFRASTRUCTURE_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
 const INFRASTRUCTURE_RADIUS_PX = 7;
 
-// docs/team/harshita-frontend.md Phase 5.3 — ship_detections (Master §6.3, D34). Soum's RAW radar contacts for the whole
+// docs/team/harshita-frontend.md Phase 5.3 — ship_detections (Master §6.3, D34). Soumirya's RAW radar contacts for the whole
 // scene, top-level on the FeatureCollection. UNATTRIBUTED — NOT the same list as suspects.json's
 // `dark_vessels` (Jaiveer's already AIS-cross-checked "no match" subset, Phase 3.5 above). A
 // contact is never "dark" until that check has run at a known time. This renders every candidate

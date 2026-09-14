@@ -14,7 +14,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Naap",
+  title: "UDGAM",
   description: "Oil spill detection, backward drift, and vessel attribution from SAR.",
 };
 

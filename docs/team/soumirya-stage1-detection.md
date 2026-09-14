@@ -1,4 +1,4 @@
-# SOUM — Stage 1: Detection
+# SOUMIRYA — Stage 1: Detection
 *v2. Read with 00_MASTER_PLAN.md. Organised in phases, not days. Finish a phase, log it, move on.*
 
 ---
@@ -24,7 +24,7 @@ That is a real diagnosis, not a guess, and most people would have tuned paramete
 **The dual-pol discovery — still the most valuable finding on the team, but it names the wrong
 channel.**
 
-> ⚠ **CORRECTED 13 Sept (Soum).** Zenodo tiles are **band 1 = VH, band 2 = VV**. Band 1 is
+> ⚠ **CORRECTED 13 Sept (Soumirya).** Zenodo tiles are **band 1 = VH, band 2 = VV**. Band 1 is
 > **8.15 dB darker** than band 2 across 297 Part III scenes and darker in **290 of 297**, and
 > cross-pol is always below co-pol over ocean. `make_labels.py` and `build_cache.py` read band 1
 > as VV, so **the channel labels in the table below are swapped**: `vh_mean_depth_db` is a
@@ -511,7 +511,7 @@ python scripts/sync_web_cases.py     # so the browser sees it
 Disk full, corrupt archive, a case delivered as PNG-only or VV-only, a real scene whose normalised statistics look nothing like the training distribution, or anything where you are about to change a contract field.
 
 ## E4. Log after every phase
-`docs/updates/soum.md`, newest first, per `docs/updates/TEMPLATE.md`. What was done, files touched, the exact run command, open issues. Post checkpoint artefacts in the group as they happen — three of your teammates finished major work the team could not see because the images never got posted.
+`docs/updates/soumirya.md`, newest first, per `docs/updates/TEMPLATE.md`. What was done, files touched, the exact run command, open issues. Post checkpoint artefacts in the group as they happen — three of your teammates finished major work the team could not see because the images never got posted.
 
 ## E5. Definition of done
 - [ ] Parts 1+2 downloaded, extracted, labelled; **Part 3 held out and never trained on**

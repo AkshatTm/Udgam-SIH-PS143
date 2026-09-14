@@ -23,7 +23,7 @@ external reality, and a generated check would be the system grading its own home
 1. cp verification/TEMPLATE.json verification/<case-id>.json
 2. Go to the PRIMARY source — the NTSB/USCG report itself, not a news summary.
    Fill official_finding, especially `caveat`, which often carries the whole case.
-3. Run the stages. Fill naap_result from the ACTUAL output files, not memory.
+3. Run the stages. Fill udgam_result from the ACTUAL output files, not memory.
 4. Write `assessment` by hand. verdict ∈ hit | partial | miss | not_applicable.
 5. Add "verify" to meta.json's acts_available, then rebuild the bundle.
 ```
@@ -44,7 +44,7 @@ The `caveat` field earns its place. On one case the anchor strike that caused th
 preceded the release by eight months, so **no vessel was the proximate source at detection time**.
 Without that caveat on screen, the system's own answer looks like a miss when it is a hit.
 
-**`naap_result`** — origin summary, top suspects, whether the system abstained. Filled from the
+**`udgam_result`** — origin summary, top suspects, whether the system abstained. Filled from the
 output files, not from recollection.
 
 **`assessment`** — the verdict and human prose explaining it, plus `what_would_have_helped`.

@@ -1,5 +1,5 @@
 """
-nets.py  -  Layer 1 + Layer 2 inference.  Owner: Soum.
+nets.py  -  Layer 1 + Layer 2 inference.  Owner: Soumirya.
 
 Shared by run.py (real scenes) and evaluate.py (Part III numbers) so the two can
 never drift apart — the number we report and the number we ship must come from

@@ -1,4 +1,4 @@
-# Naap — pinned Python dependencies.
+# UDGAM — pinned Python dependencies.
 #
 #   py -3.11 -m venv venv
 #   venv\Scripts\activate          # Windows
@@ -14,7 +14,7 @@
 #
 # Nothing in THIS file needs a GPU, and installing it is all five of you have to do.
 #
-# Stage 1's networks need torch — pinned separately in requirements-detect.txt, which only Soum
+# Stage 1's networks need torch — pinned separately in requirements-detect.txt, which only Soumirya
 # installs. It is separate because torch ships from its own index and --index-url would repoint
 # every package above it; the reasoning is written out in that file. Do not merge the two.
 
@@ -22,22 +22,22 @@
 numpy==2.4.6
 scipy==1.17.1
 
-# --- imagery (Akshat: scene export · Soum: detection)
+# --- imagery (Akshat: scene export · Soumirya: detection)
 pillow==12.3.0
 rasterio==1.4.4
 opencv-python==5.0.0.93
 scikit-image==0.26.0
 
-# --- geometry (Soum: polygons · Jaiveer: AIS spatial filtering)
+# --- geometry (Soumirya: polygons · Jaiveer: AIS spatial filtering)
 shapely==2.1.2
 geopandas==1.1.4
 
-# --- classifier (Soum, Stage 1). The classical path: RandomForest over the ten features.
+# --- classifier (Soumirya, Stage 1). The classical path: RandomForest over the ten features.
 #     The CNN/U-Net path is real and shipping too — see requirements-detect.txt.
 scikit-learn==1.9.0
 
 # --- Google Earth Engine: SAR scenes, HYCOM currents, ERA5 winds
-#     (Akshat, Anushka, Soum). Run `earthengine authenticate` once.
+#     (Akshat, Anushka, Soumirya). Run `earthengine authenticate` once.
 earthengine-api==1.7.42
 requests==2.34.2
 

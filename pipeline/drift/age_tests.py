@@ -106,7 +106,7 @@ def run(check):
                 abs(area_ratio - 1.0) < 0.15,
                 f"area {areas[0]:.4f} -> {areas[-1]:.4f} km2 over 34 h = x{area_ratio:.3f}. "
                 f"An incompressible flow has det F = 1: it stretches and thins, it does not "
-                f"inflate. Matching Soum's area_km2 against this would be fitting noise -- "
+                f"inflate. Matching Soumirya's area_km2 against this would be fitting noise -- "
                 f"hence C3.1 matches the major axis instead (departure from the brief)")
 
     # --- 6d  the elongation estimator recovers a known age ------------------------------
@@ -246,7 +246,7 @@ def run(check):
     #
     # THIS ASSERTION CHANGED ON 13 SEPT, AND THE REASON MATTERS. It used to require the word
     # "MISSING INPUT" in the 'unknown' message, because A5 had found discharge_class unset on
-    # every case and absent from every detections.geojson. Soum's detections then landed for all
+    # every case and absent from every detections.geojson. Soumirya's detections then landed for all
     # seven live cases and discharge_class IS emitted on every feature -- so the old wording was
     # asserting something factually false, and a test that pins a false claim is worse than no
     # test. The claim it replaces is stronger, not weaker: classify_discharge() reads SHAPE

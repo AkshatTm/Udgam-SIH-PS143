@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-normalise.py  —  THE single per-scene normalisation.  Owner: Soum.   (plan E2)
+normalise.py  —  THE single per-scene normalisation.  Owner: Soumirya.   (plan E2)
 
     python pipeline/detect/normalise.py          # self-test
     python pipeline/detect/normalise.py --audit  # idempotence check over Parts I+II

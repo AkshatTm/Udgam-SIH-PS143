@@ -13,7 +13,7 @@
     "caveat": "The single most important qualifier. e.g. the anchor strike preceded the release by eight months, so no vessel was the proximate source at detection time."
   },
 
-  "naap_result": {
+  "udgam_result": {
     "origin_summary": "Filled from the actual output files AFTER the stages run. Where the origin cloud landed, distance to the reported leak location, key radii.",
     "top_suspects": ["mmsi or source name, as it appears in suspects.json"],
     "abstained": false

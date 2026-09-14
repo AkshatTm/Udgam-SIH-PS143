@@ -100,9 +100,9 @@ Your first diagnostic question, always. Getting this wrong wastes two people's t
 
 | Symptom | Verdict | Route to |
 |---|---|---|
-| Polygons mirrored or in the wrong hemisphere | **data** | Soum / export |
+| Polygons mirrored or in the wrong hemisphere | **data** | Soumirya / export |
 | Origin downstream of the slick | **data** | Anushka |
-| Particles don't overlap the slick at frame 0 | **data** | Anushka (seeding) or Soum (polygon) |
+| Particles don't overlap the slick at frame 0 | **data** | Anushka (seeding) or Soumirya (polygon) |
 | Origin heatmap upside down | **data** | Anushka — row 0 must be north |
 | Cloud renders off-screen | **render** | you — union camera |
 | Heatmap changes shape on zoom | **render** | you — BitmapLayer |
@@ -141,7 +141,7 @@ Your first diagnostic question, always. Getting this wrong wastes two people's t
 3.3 Golden Ray: expect the origin on the wreck. Salvage vessels should appear as exclusions, not suspects.
 
 ## PHASE 4 — The designed states
-> 🚩 WAIT for Soum's zero-oil case and Anushka's forced-abstain bundle. **Chase both** — you cannot build these against a state that has never existed, and both are strong demo moments.
+> 🚩 WAIT for Soumirya's zero-oil case and Anushka's forced-abstain bundle. **Chase both** — you cannot build these against a state that has never existed, and both are strong demo moments.
 
 4.1 No-spill screen, against the real bundle.
 4.2 Abstain screen, against the real bundle.

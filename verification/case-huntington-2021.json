@@ -1,5 +1,5 @@
 {
-  "_status": "SCAFFOLD — official_finding is researched and citable. naap_result and assessment.explanation are TODO for Phase 4 (Akshat, by hand, after the stages run). Do not add 'verify' to meta.acts_available until assessment.explanation is real human prose.",
+  "_status": "SCAFFOLD — official_finding is researched and citable. udgam_result and assessment.explanation are TODO for Phase 4 (Akshat, by hand, after the stages run). Do not add 'verify' to meta.acts_available until assessment.explanation is real human prose.",
 
   "official_finding": {
     "summary": "The NTSB determined the probable cause of the San Pedro Bay Pipeline rupture was the proximity of established anchorage positions to the pipeline: on 25 January 2021 a strong cold front drove the containerships MSC DANIT and Beijing to drag anchor, and their anchors struck, displaced (~105 ft) and damaged the pipeline. Undetected, fatigue cracks grew until the pipeline leaked ~9 months later, on 1 October 2021. The volume released was worsened by Beta Offshore's insufficient controller training and failure to shut in the line promptly.",
@@ -15,7 +15,7 @@
     "caveat": "The anchor strikes preceded the oil release by ~8-9 months. No vessel was transiting or the proximate source at detection time (2 Oct 2021). The source at detection time is fixed infrastructure — the pipeline itself. MIR-24-01's casualty fact table gives the location as 33°34.20' N, 118°7.26' W, 4.75 nm off Huntington Beach. The ~33.66 N figure that circulated earlier was not the NTSB coordinate."
   },
 
-  "naap_result": {
+  "udgam_result": {
     "origin_summary": "Trace seeded from det-01 (2.64 km², the only oil feature). Origin cloud centred at 33.59454 N, 118.05190 W after a ~6.2 km median rewind, peak 0.2 km from the centroid. r50 1.35 km, r90 2.46 km (ensemble precision). Release window measured by convergence: 2021-10-01 17:41Z to 19:58Z. Wind share 0.38. The origin peak is 6.75 km from NTSB's casualty location (33°34.20' N, 118°7.26' W), which lies outside the origin grid. Stage 3: 106 in region → 75 in window → 5 plausible, abstained on vessels (top two 0.730 vs 0.729, inseparable). Three vessels were excluded with stated reasons: one never entered the high-probability region (peak grid probability 0.02), two were heading away from the origin throughout the window. The declared San Pedro Bay Pipeline scored below the 0.25 infrastructure floor, so no infrastructure finding.",
     "top_suspects": [],
     "abstained": true

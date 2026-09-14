@@ -12,5 +12,5 @@
     "blurb": "Two dark patches, and neither is oil — can the system say so?",
     "difficulty": "easy"
   },
-  "notes": "SYNTHETIC frontend fixture for the D1 no-spill screen (docs/04 Part D). NOT listed in cases/index.json and never shown to a judge. Contains two look-alike detections and zero oil features. The real no-spill case (Master §3 case 7, Zenodo Part 3) is Soum's to produce; this fixture is a QA aid only. SAR raster copied from case-000."
+  "notes": "SYNTHETIC frontend fixture for the D1 no-spill screen (docs/04 Part D). NOT listed in cases/index.json and never shown to a judge. Contains two look-alike detections and zero oil features. The real no-spill case (Master §3 case 7, Zenodo Part 3) is Soumirya's to produce; this fixture is a QA aid only. SAR raster copied from case-000."
 }

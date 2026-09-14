@@ -84,7 +84,7 @@ Akshat additionally keeps one file recording every seam event, so the history of
 ```markdown
 ## [2026-09-08 19:20] First wiring attempt — Ennore
 
-**Received:** detections.geojson (Soum, 18:40) · particles.json + origin.json (Anushka, 19:05)
+**Received:** detections.geojson (Soumirya, 18:40) · particles.json + origin.json (Anushka, 19:05)
 
 **Validator:** FAIL — 2 errors.
 - `particles.json/t0` was 2017-01-29T00:14:00 (naive). Anushka fixed 19:15, re-ran, PASS.
@@ -96,5 +96,5 @@ offshore, 11 km NE of the slick. Plausible.
 **State:** cases/case-ennore-2017 PASSES with acts ["detect","trace"]. Loaded in Harshita's UI at
 19:45, scrubs cleanly.
 
-**Next:** no-spill bundle from Soum tomorrow; US case still waiting on the AIS file.
+**Next:** no-spill bundle from Soumirya tomorrow; US case still waiting on the AIS file.
 ```

@@ -68,7 +68,7 @@ def main():
                          f"These come from the GEE export, not from a stage.")
     for f in SCENE_OPTIONAL:
         if not (case_dir / f).exists():
-            print(f"  note   {f} not present — {'Soum needs the 2-band GeoTIFF' if 'tif' in f else 'gallery preview'} for a real case")
+            print(f"  note   {f} not present — {'Soumirya needs the 2-band GeoTIFF' if 'tif' in f else 'gallery preview'} for a real case")
 
     meta = json.loads((case_dir / "meta.json").read_text(encoding="utf-8"))
     acts = meta.get("acts_available", [])

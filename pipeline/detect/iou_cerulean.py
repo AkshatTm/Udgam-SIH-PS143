@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Stage 1 - IoU against Cerulean's reference polygons.  Owner: Soum.
+Stage 1 - IoU against Cerulean's reference polygons.  Owner: Soumirya.
 
     python pipeline/detect/iou_cerulean.py --all
 

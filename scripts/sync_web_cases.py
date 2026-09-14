@@ -14,7 +14,7 @@ That folder is gitignored — it is build output, a copy of `cases/` which is th
 build output and touches nothing in `web/` that anyone owns. Run it after any stage publishes
 into a bundle, then reload the browser.
 
-WHAT IT DOES NOT COPY: `sar_vv_vh.tif`. That file is Soum's 2-band float32 input and it is
+WHAT IT DOES NOT COPY: `sar_vv_vh.tif`. That file is Soumirya's 2-band float32 input and it is
 ~95% of the bytes in the repo (roughly 123 MB across the library). The browser never reads it —
 the display raster is `sar.png`. Copying it would quadruple the dev server's static folder for
 no pixels on screen.

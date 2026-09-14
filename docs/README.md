@@ -1,6 +1,6 @@
 # Documentation index
 
-Naap detects oil slicks in Sentinel-1 SAR, runs ocean physics backwards to reconstruct where the
+UDGAM detects oil slicks in Sentinel-1 SAR, runs ocean physics backwards to reconstruct where the
 oil entered the water, and scores vessels and infrastructure against that origin. This directory
 holds the plan, the contracts, the method, the evidence and the history.
 
@@ -85,7 +85,7 @@ unilaterally.
 [`team/README.md`](team/README.md) maps each person to their brief, their work log and their
 archive. Briefs: [`akshat-remaining.md`](team/akshat-remaining.md) (the live task list),
 [`akshat-integration.md`](team/akshat-integration.md),
-[`soum-stage1-detection.md`](team/soum-stage1-detection.md),
+[`soumirya-stage1-detection.md`](team/soumirya-stage1-detection.md),
 [`anushka-stage2-drift.md`](team/anushka-stage2-drift.md),
 [`jaiveer-stage3-attribution.md`](team/jaiveer-stage3-attribution.md),
 [`harshita-frontend.md`](team/harshita-frontend.md),
@@ -121,7 +121,7 @@ it. Read it before you wonder why nobody will tell you if your output is right.
 
 | Old path | New path |
 |---|---|
-| `docs/02_SOUM_DETECTION.md` | [`docs/team/soum-stage1-detection.md`](team/soum-stage1-detection.md) |
+| `docs/02_SOUM_DETECTION.md` | [`docs/team/soumirya-stage1-detection.md`](team/soumirya-stage1-detection.md) |
 | `docs/06_JAIVEER_AIS.md` | [`docs/team/jaiveer-stage3-attribution.md`](team/jaiveer-stage3-attribution.md) |
 | `docs/07_UROOZ_RESEARCH.md` | [`docs/team/urooz-research-lead.md`](team/urooz-research-lead.md) |
 | `docs/07_UROOZ_RESEARCH_01_NAMING.md` | [`docs/_archive/urooz/research-01-naming.md`](_archive/urooz/research-01-naming.md) |
@@ -139,7 +139,7 @@ it. Read it before you wonder why nobody will tell you if your output is right.
 | `docs/RUNBOOK.md` | [`docs/operations/runbook.md`](operations/runbook.md) |
 | `docs/PROMPTING_PLAYBOOK.md` | [`docs/operations/prompting-playbook.md`](operations/prompting-playbook.md) |
 | `web/DEMO_RUNBOOK.md` | [`docs/operations/demo-runbook.md`](operations/demo-runbook.md) |
-| `docs/updates/soum_progress_report.md` | [`docs/_archive/soum/progress-report-2026-09-09.md`](_archive/soum/progress-report-2026-09-09.md) |
+| `docs/updates/soumirya_progress_report.md` | [`docs/_archive/soumirya/progress-report-2026-09-09.md`](_archive/soumirya/progress-report-2026-09-09.md) |
 | `docs/01_AKSHAT_INTEGRATION.md` | [`docs/team/akshat-integration.md`](team/akshat-integration.md) |
 | `docs/03_ANUSHKA_DRIFT.md` | [`docs/team/anushka-stage2-drift.md`](team/anushka-stage2-drift.md) |
 | `docs/04_HARSHITA_FRONTEND.md` | [`docs/team/harshita-frontend.md`](team/harshita-frontend.md) |
@@ -150,5 +150,5 @@ it. Read it before you wonder why nobody will tell you if your output is right.
 **Unchanged, deliberately:** `00_MASTER_PLAN.md`, `CONTRACTS.md`, `TRAPS.md`, `receipts.md`,
 `ANSWERS.README.md`, and everything in `updates/`.
 
-`updates/soum_case_nominations.md` also stays put — it is cited by name inside
+`updates/soumirya_case_nominations.md` also stays put — it is cited by name inside
 `cases/case-nospill-zenodo/meta.json`, and a bundle is never hand-edited.

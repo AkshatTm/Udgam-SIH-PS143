@@ -10,7 +10,7 @@ benchmark_scene.py — build the case artefacts from a LOCAL benchmark GeoTIFF. 
 
 The Zenodo counterpart to gee_scene.py. Same four artefacts into cases/<case_id>/:
 
-    sar_vv_vh.tif   the scene itself, band-labelled VV/VH — Soum's REAL input
+    sar_vv_vh.tif   the scene itself, band-labelled VV/VH — Soumirya's REAL input
     sar.png         VV backscatter, dB-clamped to 8-bit greyscale — display only
     thumb.png       small VV preview — the gallery card
     bounds.json     the placeholder box + the dB clamp actually used + vh_available
@@ -18,14 +18,14 @@ The Zenodo counterpart to gee_scene.py. Same four artefacts into cases/<case_id>
 
 Why this exists: gee_scene.py can only reach Google Earth Engine, and build_case.py refuses to
 run until meta.json + bounds.json + sar.png already exist. A Zenodo Part III scene is a local
-file on Soum's laptop, so nothing in the repo could turn one into a bundle. This closes that gap.
+file on Soumirya's laptop, so nothing in the repo could turn one into a bundle. This closes that gap.
 
 THREE THINGS THAT DECIDE WHETHER THIS WORKS
 -------------------------------------------
 
   1. THE dB CLAMP IS COMPUTED, NEVER DEFAULTED. Zenodo scenes sit at ~-29 dB over open ocean;
      GEE exports sit at ~-20 dB. The repo-wide default clamp of [-25, 0] is a GEE number, and
-     applying it to a Zenodo scene produces a black PNG and — far worse — makes Soum's PNG->dB
+     applying it to a Zenodo scene produces a black PNG and — far worse — makes Soumirya's PNG->dB
      inversion silently wrong. We take percentiles off the scene's own valid pixels and write
      those into bounds.json (docs/TRAPS.md #7: change the clamp and you announce it).
 
@@ -36,7 +36,7 @@ THREE THINGS THAT DECIDE WHETHER THIS WORKS
 
   3. THESE SCENES ARE GEOREFERENCED. READ THE BOX, DO NOT INVENT ONE. An earlier draft of this
      file asserted the opposite — that Part III tiles carry no CRS — and wrote a placeholder box
-     anchored at 0,0 for every scene. That was wrong. Soum checked the actual files on 13 Sept:
+     anchored at 0,0 for every scene. That was wrong. Soumirya checked the actual files on 13 Sept:
      they carry EPSG:4326 and real geotransforms, and the two we are shipping sit in the
      Mississippi Delta and the Gulf of İskenderun. So we take the real bounds off the transform
      and there is no honesty problem to solve — the map shows where the scene is.
@@ -147,7 +147,7 @@ def to_png(vv, lo, hi, out_path, thumb_path):
 
 
 def label_bands(tif_path, have_vh):
-    """Same courtesy gee_scene.py does — Soum reads 'VV'/'VH', not 'band 1'/'band 2'."""
+    """Same courtesy gee_scene.py does — Soumirya reads 'VV'/'VH', not 'band 1'/'band 2'."""
     try:
         import rasterio
         with rasterio.open(tif_path, "r+") as ds:
@@ -179,7 +179,7 @@ def main():
 
     tif = Path(a.tif)
     if not tif.exists():
-        sys.exit(f"{tif}: not found. The Zenodo corpus is gitignored and lives only on Soum's "
+        sys.exit(f"{tif}: not found. The Zenodo corpus is gitignored and lives only on Soumirya's "
                  f"machine — run this there.")
 
     case_dir = Path(a.cases_root) / a.case

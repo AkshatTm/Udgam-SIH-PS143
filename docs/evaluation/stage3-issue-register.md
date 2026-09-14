@@ -39,7 +39,7 @@ fix required a decision that is not mine, I have written the decision up and lef
 | A7 | A vessel on the origin peak can rank second | Akshat | MEDIUM | Related to B2 |
 | A8 | Repeat offenders is structurally undemonstrable | Akshat | MEDIUM | Yes — reframe |
 | A9 | Renormalised scores overstate confidence | Akshat + Harshita | **BLOCKER** | Yes — card design (data now shipped) |
-| A10 | `temporality` is `null` on half the library | Anushka / Soum | HIGH | Yes — route |
+| A10 | `temporality` is `null` on half the library | Anushka / Soumirya | HIGH | Yes — route |
 | **B · Data and contract** ||||
 | B1 | `age_method: none` on all six cases | Anushka | HIGH | Yes |
 | B2 | `closest_km` does not mean what §6.7 implies | Akshat | HIGH | Yes — schema |
@@ -48,9 +48,9 @@ fix required a decision that is not mine, I have written the decision up and lef
 | B5 | 149 validator warnings on the hero case | Akshat + Anushka | HIGH | Yes — validator |
 | B6 | `acts_available` excludes `attribute` on all six | Akshat | **BLOCKER** | Yes — edit |
 | **C · Blocked on teammates** ||||
-| C1 | `parity` returns `null` everywhere | Soum | **BLOCKER** | No — needs delivery |
-| C2 | `ship_detections` cannot support the dark-vessel gates | Soum | HIGH | Yes — field or fallback |
-| C3 | `discharge_class` disagreement | Soum / Anushka | MEDIUM | Yes |
+| C1 | `parity` returns `null` everywhere | Soumirya | **BLOCKER** | No — needs delivery |
+| C2 | `ship_detections` cannot support the dark-vessel gates | Soumirya | HIGH | Yes — field or fallback |
+| C3 | `discharge_class` disagreement | Soumirya / Anushka | MEDIUM | Yes |
 | C4 | GFW acquisition path is unscoped | Akshat | HIGH | Yes |
 | **D · Documentation and process** ||||
 | D1 | Blind evaluation does not hold for four of six cases | Akshat | HIGH | Yes — wording |
@@ -503,7 +503,7 @@ The data is in the file waiting for her either way.
 
 ## A10 — `temporality` is `null` on half the case library
 
-**Owner:** Anushka (route A) / Soum (route B) · **Severity:** HIGH
+**Owner:** Anushka (route A) / Soumirya (route B) · **Severity:** HIGH
 
 ### What
 
@@ -549,14 +549,14 @@ would be writing down a number nobody measured.
 names it:
 
 > *"Phase 2 replaces this with Cerulean's version: the timestamp of the broadcast spatially nearest
-> the **head** of the slick. That needs Soum's polygon."*
+> the **head** of the slick. That needs Soumirya's polygon."*
 
 A slick has a head and a tail; the head is the freshest oil and therefore the most recent discharge.
 Asking *"which vessel was nearest the head, and when"* uses the slick's geometry instead of the
 clock, and works on a `bounded` case.
 
 **Route B is strictly better**, because the same polygon also unlocks `parity` (C1). **One delivery
-from Soum fixes two of seven components across the whole library.** That makes it the highest-value
+from Soumirya fixes two of seven components across the whole library.** That makes it the highest-value
 outstanding dependency in Stage 3 by a wide margin.
 
 ### What I have already done — 13 Sept, 22:00
@@ -574,7 +574,7 @@ A `convergence` fixture now produces live temporality values for the first time 
 0.00 to 0.96 across 17 vessels, with live weights of 0.70 and 0.85 instead of a flat 0.50.
 
 This does not resolve A10 — the three real cases are still `bounded` and that is Anushka's and
-Soum's to change. It means the code path is proven, so when either route lands we are not debugging
+Soumirya's to change. It means the code path is proven, so when either route lands we are not debugging
 it under time pressure.
 
 ---
@@ -812,7 +812,7 @@ Gulf of Alaska and Farallones as each lands Monday morning.
 
 ## C1 — `parity` returns `null` everywhere  ⚠ BLOCKER
 
-**Owner:** Soum · **Severity:** BLOCKER
+**Owner:** Soumirya · **Severity:** BLOCKER
 
 ### Evidence
 
@@ -851,7 +851,7 @@ works, which is worth having before freeze even if the numbers are not real.
 
 ## C2 — `ship_detections` cannot support the dark-vessel gates
 
-**Owner:** Soum · **Severity:** HIGH
+**Owner:** Soumirya · **Severity:** HIGH
 
 ### What
 
@@ -870,7 +870,7 @@ every radar contact — including buoys, platforms, and speckle — as a candida
 
 ### Options
 
-1. **Soum adds `est_length_m` and a confidence score** to `ship_detections`. Cleanest.
+1. **Soumirya adds `est_length_m` and a confidence score** to `ship_detections`. Cleanest.
 2. **I derive length from `px_area` plus the pixel scale** and ship with no confidence gate. Possible
    — `bounds.json` carries `width_px` / `height_px` so the ground sample distance is recoverable —
    but it makes **D5 materially worse**, because an underived confidence gate means we cannot say
@@ -886,7 +886,7 @@ you should rule on it knowingly rather than have it happen by default.
 
 ## C3 — `discharge_class` disagreement
 
-**Owner:** Soum / Anushka · **Severity:** MEDIUM
+**Owner:** Soumirya / Anushka · **Severity:** MEDIUM
 
 ### What
 
@@ -1097,7 +1097,7 @@ With 31 hours to freeze, these will not land:
 | 4 · Infrastructure source association | Not started; Huntington needs it for full value (D10) | Me — time |
 | 5 · Traffic prior | Not started, lowest value of the four | Me — time |
 | 6 · Repeat offenders | Structurally undemonstrable (A8) | Nothing — the library has no overlap |
-| 7 · Chronic vs acute | `discharge_class` unknown (C3), `age_method: none` everywhere (B1) | Soum, Anushka |
+| 7 · Chronic vs acute | `discharge_class` unknown (C3), `age_method: none` everywhere (B1) | Soumirya, Anushka |
 
 **Three of the four are blocked on someone other than me**, and A8 is blocked on the case library
 rather than on anyone.
@@ -1121,7 +1121,7 @@ dropped on Sunday is a plan; a phase quietly missing on Tuesday morning is a pro
 | **Tonight / Monday 09:00** | **B6** (`acts_available`), **C4** (GFW path), **D4** (`component_notes`) | Harshita is building now; C4 determines whether Monday evening has work in it |
 | **Monday afternoon** | **A9** (confidence display), **B2** (`closest_km`) | Both are card-layout changes and both need frontend time |
 | **Monday evening** | **A1**, **A5**, **A8**, **B3**, **B5**, **D1**, **D2**, **D3** | Documentation and narrative; no code depends on them |
-| **Whenever** | **C1**, **C2**, **C3**, **B1** | Not yours — they need Soum and Anushka; I need visibility, not a decision |
+| **Whenever** | **C1**, **C2**, **C3**, **B1** | Not yours — they need Soumirya and Anushka; I need visibility, not a decision |
 
 **Reproduction for everything in this document:** see §9 of
 `docs/_archive/jaiveer/stage3-progress-2026-09-13-evening.md`. Every figure here is measured, deterministic, and

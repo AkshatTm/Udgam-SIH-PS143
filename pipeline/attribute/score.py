@@ -185,7 +185,7 @@ def component_trajectory(track, grid, when, pos):
     tautological on a transiting-vessel case and carries little information for 15% of
     the weight. The component that actually separates a source from a passer-by is
     **parity** — did the track run *along* the slick or *across* it — which is Phase 2
-    and waits on Soum's polygon. Raised with Akshat; the weight is his call and Phase 8's
+    and waits on Soumirya's polygon. Raised with Akshat; the weight is his call and Phase 8's
     measurement, never a silent edit here.
 
     COG 360.0 is AIS for 'not available'. `ingest.py` nulls it; here that null means
@@ -302,7 +302,7 @@ def component_temporality(track, when, grid):
     non-measurement is worse than declining to score, so `bounded` returns `null`.
 
     Phase 2 replaces this with Cerulean's version: the timestamp of the broadcast
-    spatially nearest the *head* of the slick. That needs Soum's polygon.
+    spatially nearest the *head* of the slick. That needs Soumirya's polygon.
     """
     if grid.time_window_method != "convergence":
         return Component.not_applicable(
@@ -320,7 +320,7 @@ def component_temporality(track, when, grid):
 def component_parity(discharge_class):
     """Track/slick parallelism — Cerulean's strongest idea, and Phase 2 work.
 
-    Chronic only: a blob has no meaningful centerline to be parallel to. Needs Soum's
+    Chronic only: a blob has no meaningful centerline to be parallel to. Needs Soumirya's
     slick polygon, so until Phase 2 lands this is honestly not applicable rather than
     quietly zero.
     """

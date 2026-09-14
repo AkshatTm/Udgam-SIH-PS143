@@ -12,7 +12,7 @@ finding, a dark-vessel id. All of it is written down, in one file, on one laptop
 Not because anyone distrusts you. Because of what knowing does to tuning.
 
 If Jaiveer knows which vessel the answer names while he is weighting components, he will tune until
-that vessel ranks first. If Soum knows where the slick is, he will lower the threshold until it
+that vessel ranks first. If Soumirya knows where the slick is, he will lower the threshold until it
 appears. If Anushka knows the origin, she will read a wrong cloud as close enough. **None of that is
 dishonesty** — it is what anyone does when the target is visible. But it collapses *"our system
 identified the vessel"* into *"we tuned it until it did"*, and an NTRO panel in December will ask
@@ -29,8 +29,8 @@ bundle validates, and not before.
 
 | You | Get | Do not get |
 |---|---|---|
-| **Soum** | `sar_vv_vh.tif`, `sar.png`, `bounds.json`, `ais_source`. `cerulean_slick.geojson` **after** your detector has produced its own polygon — then the IoU comparison is a measurement | Where the slick is, before you find it |
-| **Anushka** | Case list with `detection_time` and bounds; Soum's detections when they land | The documented origin or release time |
+| **Soumirya** | `sar_vv_vh.tif`, `sar.png`, `bounds.json`, `ais_source`. `cerulean_slick.geojson` **after** your detector has produced its own polygon — then the IoU comparison is a measurement | Where the slick is, before you find it |
+| **Anushka** | Case list with `detection_time` and bounds; Soumirya's detections when they land | The documented origin or release time |
 | **Jaiveer** | Case list with dates, boxes and `ais_source`; real `origin.json` when it lands | Vessel names, MMSIs, IMOs. Your search box at `2 × radius_90_km` contains the culprit and plenty of decoys anyway |
 | **Harshita** | Bundles as they are produced | The answers |
 
