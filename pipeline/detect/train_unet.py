@@ -280,7 +280,7 @@ def main():
     ap.add_argument("--xpol-channel", type=int, default=1, choices=(0, 1),
                     help="which channel the cross-pol dropout corrupts. DEFAULT 1 IS THE "
                          "BUG: cache channel 1 is read(2), the CO-POL channel, verified "
-                         "from the manifest where channel 0 runs 12.7 dB darker in 99.9% "
+                         "from the manifest where channel 0 runs 12.7 dB darker in 99.9%% "
                          "of 2565 scenes. Channel 0 is the real cross-pol. Kept as the "
                          "default so a plain run still reproduces the shipped model.")
     ap.add_argument("--xpol-p", type=float, default=0.25,
@@ -289,10 +289,14 @@ def main():
                          "the only informative channel replaced by noise.")
     ap.add_argument("--split", choices=("legacy", "stratified"), default="legacy",
                     help="legacy = train_test_split(uniq, 0.15, seed 42), which put 8 of "
-                         "the 9 >=30%-coverage scenes into TRAINING. stratified = "
+                         "the 9 >=30%%-coverage scenes into TRAINING. stratified = "
                          "split.py, coverage-stratified with a 3-fold rotation on that "
                          "band. Comparisons across runs must use the same one.")
     ap.add_argument("--fold", type=int, default=0, help="stratified split fold")
+    ap.add_argument("--cache", default="P12",
+                    help="tile-cache prefix: P12 (median, baseline) or P12sea (E2, "
+                         "sea-referenced). Both carry the corrected channel order; a "
+                         "checkpoint from one is NOT loadable against the other.")
     ap.add_argument("--tag", default="", help="suffix for the output files, so ablation "
                                               "runs do not overwrite each other")
     ap.add_argument("--no-domain-aug", action="store_true",
@@ -308,7 +312,13 @@ def main():
     print(f"  LAYER 2 — U-Net   device={DEVICE}  depth={a.depth}  amp={amp}")
     print("=" * 72)
 
-    store = TileStore("P12")
+    # The cache prefix decides which NORMALISATION the model is trained on:
+    #   P12     median-referenced, the baseline
+    #   P12sea  sea-referenced (plan E2)
+    # This was hardcoded, so an E2 run would have silently trained on the baseline
+    # cache and produced a meaningless null. Comparisons must differ ONLY in this.
+    store = TileStore(a.cache)
+    print(f"  cache : {a.cache}")
     scenes = np.array([m["scene_id"] for m in store.meta[:store.n]])
     oilfrac = np.array([m["oil_frac"] for m in store.meta[:store.n]])
     kinds = np.array([m["kind"] for m in store.meta[:store.n]])
