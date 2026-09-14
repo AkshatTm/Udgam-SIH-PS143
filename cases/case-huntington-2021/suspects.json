@@ -11,22 +11,22 @@
   "infrastructure": [],
   "excluded": [
     {
-      "mmsi": "538005806",
-      "name": "MARLIN APATITE",
-      "closest_km": 2.87,
-      "reason": "never entered the high-probability region of the origin (peak grid probability 0.02)"
+      "mmsi": "368117160",
+      "name": "GOOD JU JU",
+      "closest_km": 1.28,
+      "reason": "plausible candidate \u2014 score 0.73 on 5 of 7 components, peak grid probability 0.64 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
     },
     {
-      "mmsi": "319147800",
-      "name": "DALI",
-      "closest_km": 2.86,
-      "reason": "heading away from the origin throughout the window"
+      "mmsi": "636018276",
+      "name": "MSC GAYANE",
+      "closest_km": 1.19,
+      "reason": "plausible candidate \u2014 score 0.73 on 3 of 7 components, peak grid probability 0.57 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
     },
     {
-      "mmsi": "370320000",
-      "name": "COSCO NAGOYA",
-      "closest_km": 3.11,
-      "reason": "heading away from the origin throughout the window"
+      "mmsi": "338120738",
+      "name": "PER AMORE",
+      "closest_km": 0.63,
+      "reason": "plausible candidate \u2014 score 0.62 on 6 of 7 components, peak grid probability 0.87 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
     }
   ],
   "abstained": true,

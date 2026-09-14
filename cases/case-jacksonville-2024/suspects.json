@@ -84,7 +84,38 @@
       ]
     }
   ],
-  "dark_vessels": [],
+  "dark_vessels": [
+    {
+      "source_type": "dark_vessel",
+      "mmsi": null,
+      "name": "Unidentified radar contact",
+      "lon": -79.6346,
+      "lat": 30.35297,
+      "est_length_m": 90,
+      "score": 0.99,
+      "angular_deviation_deg": 2.5,
+      "reasons": [
+        "radar return with no AIS broadcast within 1 km at acquisition time",
+        "0.3 km from the edge of an oil detection",
+        "single satellite pass: not persistence-checked, so it may be a fixed structure or a transponder outside the archive's receiver coverage"
+      ]
+    },
+    {
+      "source_type": "dark_vessel",
+      "mmsi": null,
+      "name": "Unidentified radar contact",
+      "lon": -79.59244,
+      "lat": 30.3918,
+      "est_length_m": 50,
+      "score": 0.882,
+      "angular_deviation_deg": 80.9,
+      "reasons": [
+        "radar return with no AIS broadcast within 1 km at acquisition time",
+        "3.7 km from the edge of an oil detection",
+        "single satellite pass: not persistence-checked, so it may be a fixed structure or a transponder outside the archive's receiver coverage"
+      ]
+    }
+  ],
   "infrastructure": [],
   "excluded": [
     {

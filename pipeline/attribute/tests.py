@@ -39,7 +39,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import dark                                    # noqa: E402
 import geo                                     # noqa: E402
+import tracks                                  # noqa: E402
 import ingest                                  # noqa: E402
 import infrastructure                          # noqa: E402
 import score                                   # noqa: E402
@@ -1124,6 +1126,95 @@ class TestInfrastructure(unittest.TestCase):
         self.assertEqual(found[0]["declared_source"], "unit test")
         self.assertTrue(any("declared case input" in r for r in found[0]["reasons"]),
                         "the card has to say the position was looked up, not detected")
+
+
+# ------------------------------------------------------------ D41 sampling regime
+
+class TestSamplingRegime(unittest.TestCase):
+    """Hourly AIS gets hourly thresholds; dense AIS keeps exactly the old ones."""
+
+    def test_noaa_thresholds_are_unchanged(self):
+        r = tracks.regime("noaa_dense")
+        self.assertEqual((r["min_points"], r["max_interp_gap_min"]), (5, 30))
+
+    def test_hourly_joins_consecutive_hourly_fixes(self):
+        t = make_track([0, 60])
+        when = dt("2023-01-25T00:30:00")
+        self.assertIsNone(t.position_at(when))                         # dense ceiling refuses
+        lon, _ = t.position_at(when, tracks.regime("gfw_hourly")["max_interp_gap_min"])
+        self.assertAlmostEqual(lon, -94.995, places=6)                 # midpoint of 0.01 deg
+
+    def test_hourly_still_refuses_to_bridge_a_missing_hour(self):
+        t = make_track([0, 120])
+        self.assertIsNone(t.position_at(dt("2023-01-25T01:00:00"),
+                                        tracks.regime("gfw_hourly")["max_interp_gap_min"]))
+
+
+# --------------------------------------------------------------- D42 dark vessels
+
+def moving_track(fixes, mmsi="9"):
+    """fixes: [(minute_offset, lon, lat)] from 2023-01-25T00:00Z, sog/cog unknown (GFW-like)."""
+    base = dt("2023-01-25T00:00:00")
+    ts = [base + timedelta(minutes=m) for m, _, _ in fixes]
+    n = len(fixes)
+    return Track(mmsi, "SYNTH", "cargo", None, ts, [f[1] for f in fixes], [f[2] for f in fixes],
+                 [None] * n, [None] * n)
+
+
+class TestDarkVesselCrossCheck(unittest.TestCase):
+    T0 = dt("2023-01-25T00:30:00")
+
+    def grid(self):
+        # 3x3 over -95..-94, 29..30; only the centre cell is non-zero.
+        return geo.OriginGrid(grid_doc([0, 0, 0, 0, 1.0, 0, 0, 0, 0]))
+
+    def test_dense_vessel_placed_within_1_km_matches(self):
+        t = make_track([0, 20, 40, 60], lon0=-94.52, lat0=29.5)     # at t0 (30 min): -94.505
+        ok, _ = dark.match_contact({"lon": -94.50, "lat": 29.5}, [t], self.T0, "noaa_dense")
+        self.assertTrue(ok)                                          # ~0.49 km away
+
+    def test_dense_vessel_placed_far_away_does_not_match(self):
+        t = make_track([0, 20, 40, 60], lon0=-94.52, lat0=29.5)
+        ok, _ = dark.match_contact({"lon": -94.50, "lat": 29.6}, [t], self.T0, "noaa_dense")
+        self.assertFalse(ok)                                         # ~11 km north of it
+
+    def test_hourly_prism_contains_a_contact_on_the_path(self):
+        # 0.1 deg east in one hour at 29 N: 9.73 km, 5.25 kn -> bound max(6, 7.9) = 7.9 kn,
+        # budget 7.9 * 1.852 * 1 h + 2 km = 16.6 km. Midpoint contact: path 9.73 km. Inside.
+        t = moving_track([(0, -95.0, 29.0), (60, -94.9, 29.0)])
+        ok, _ = dark.match_contact({"lon": -94.95, "lat": 29.0}, [t], self.T0, "gfw_hourly")
+        self.assertTrue(ok)
+
+    def test_hourly_prism_excludes_a_contact_the_vessel_could_not_reach(self):
+        # 20 km north of the midpoint: path 2 * hypot(4.87, 20.0) = 41 km > 16.6 km budget.
+        t = moving_track([(0, -95.0, 29.0), (60, -94.9, 29.0)])
+        ok, _ = dark.match_contact({"lon": -94.95, "lat": 29.18}, [t], self.T0, "gfw_hourly")
+        self.assertFalse(ok)
+
+    def test_no_scene_time_ais_means_darkness_is_not_assessed(self):
+        contacts = [{"lon": -94.5, "lat": 29.5, "est_length_m": 80, "external": None}]
+        listed, summary = dark.cross_check(contacts, [], self.T0, "noaa_dense", self.grid(),
+                                           {"features": []}, have_scene_ais=False)
+        self.assertEqual(listed, [])
+        self.assertFalse(summary["ais_searched_at_scene_time"])
+
+    def test_unmatched_contact_in_the_origin_is_listed_and_one_far_away_is_not(self):
+        contacts = [{"lon": -94.5, "lat": 29.5, "est_length_m": 80, "external": None},
+                    {"lon": -90.0, "lat": 25.0, "est_length_m": 80, "external": None}]
+        listed, summary = dark.cross_check(contacts, [], self.T0, "noaa_dense", self.grid(),
+                                           {"features": []}, have_scene_ais=True)
+        self.assertEqual(summary["unmatched"], 2)
+        self.assertEqual(len(listed), 1)
+        self.assertIsNone(listed[0]["mmsi"])
+        self.assertEqual(listed[0]["source_type"], "dark_vessel")
+        self.assertEqual(listed[0]["score"], 1.0)
+
+    def test_external_contacts_say_whose_they_are(self):
+        contacts = [{"lon": -94.5, "lat": 29.5, "est_length_m": None, "external": "GFW SAR"}]
+        listed, _ = dark.cross_check(contacts, [], self.T0, "gfw_hourly", self.grid(),
+                                     {"features": []}, have_scene_ais=True)
+        self.assertIn("GFW SAR", listed[0]["name"])
+        self.assertIn("not produced by UDGAM", listed[0]["reasons"][0])
 
 
 if __name__ == "__main__":

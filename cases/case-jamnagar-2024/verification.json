@@ -1,0 +1,29 @@
+{
+  "_status": "PUBLISHED \u2014 this file is on the Verify screen. official_finding is researched prose; udgam_result is regenerated from the bundle by scripts/scaffold_verification.py (never by hand); assessment is the verdict on our own result \u2014 for the six live cases it was drafted 14 Sept under Master D43 and is Akshat's to edit and own. Re-run --publish after any edit.",
+  "official_finding": {
+    "summary": "No investigation was opened, no party was named, and no enforcement followed. The slick is independently corroborated: SkyTruth Cerulean's detector logged it on the same scene (slick 3477622, 7.97 km, 1.58 km\u00b2, model confidence 0.838), 0.2 km from the point we found in Google Earth Engine. Cerulean's scorer listed candidate vessels, infrastructure and a dark vessel but rated every source below zero (best collated score \u22120.909), and no human reviewed it.",
+    "responsible_parties": [],
+    "source_name": "SkyTruth Cerulean, slick 3477622 (corroboration of the slick; no attribution)",
+    "source_url": "https://cerulean.skytruth.org/slicks/3477622",
+    "source_type": "none",
+    "volume_reported": null,
+    "caveat": "The finding is the absence of any investigation, named party or enforcement \u2014 not the absence of a record. Cerulean's automated candidates were all scored below zero and never reviewed by a human; naming any of them would accuse a real vessel on evidence its own source rejected, so they are not reproduced here. Indian waters publish no dense AIS: only hourly Global Fishing Watch positions are available, so the gap and slowdown components are structurally unmeasurable and are null, never zero (D20)."
+  },
+  "naap_result": {
+    "origin_summary": "Trace seeded from det-01 (3.12 km\u00b2, the only oil feature). Origin cloud centred at 20.26295 N, 71.78749 E after a ~16.7 km median rewind to the NW, r50 2.33 km, r90 3.71 km (ensemble precision). Release window is a 16 h search bracket (bounded), 2024-02-22 01:11Z to 17:11Z, not a measured time. Wind-driven: wind share 0.62. No direction claim (49\u00b0 instantaneous-vs-window direction disagreement). Attribution ran on 14 Sept against real GFW hourly AIS: 8 vessels in the box, 2 in the window, 0 plausible, so the system abstains because no vessel entered the reconstructed origin cloud. gap and slowdown are null throughout (D20). No vessel is named \u2014 which is also what the record shows: Cerulean's four candidates were each scored below zero by their own scorer and never reviewed.",
+    "top_suspects": [],
+    "abstained": false
+  },
+  "assessment": {
+    "verdict": "not_applicable",
+    "explanation": "Not applicable: with no investigation and no named party there is nothing here for us to be right or wrong about, and saying so is more honest than claiming a hit by default. What the case does test is whether we produce a result at all on hourly AIS, and we do \u2014 38 vessels in the box, 22 in the window, 1 plausible, 1 scored: MMSI 357467000, 1.3 km from the origin peak, 0.61 on 2 of the 7 components, the other five inapplicable or unmeasurable at one position per vessel per hour. That is a lead to hand an investigator, not a finding, and nobody corroborates it: Cerulean listed candidates on this same slick and rated every one below zero. The slick itself is corroborated \u2014 Cerulean's detector logged it 0.2 km from the point we found independently in Earth Engine.",
+    "what_would_have_helped": "Denser AIS. A score built on 2 of 7 components carries far less than the same number does at Jacksonville, which is why the live-component count sits next to every score (D37). AIS at NOAA's ~70-second cadence would make gap and slowdown measurable and would let the trajectory component see a real path across the cloud instead of a line interpolated between two hourly fixes. Failing that, a second image: one Sentinel-1 pass cannot separate a vessel that discharged from a vessel that happened to pass."
+  },
+  "udgam_result": {
+    "origin_summary": "Origin cloud centred at 20.2630\u00b0 N, 71.7875\u00b0 E; half the ensemble lands within 2.33 km and nine in ten within 3.71 km. Release window 2024-02-22T01:11:14Z to 2024-02-22T17:11:14Z (bounded). Stage 3 funnel 38 \u2192 22 \u2192 1 \u2192 1.",
+    "top_suspects": [
+      "357467000"
+    ],
+    "abstained": false
+  }
+}

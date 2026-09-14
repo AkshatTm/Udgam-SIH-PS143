@@ -24,9 +24,9 @@ export default function ExternalLink({
 
   if (!safe) {
     return (
-      <span className="text-white/55">
+      <span className="text-ink-2">
         {href}
-        <span className="ml-1.5 text-[10px] text-[#ffb0b0]/70">
+        <span className="ml-1.5 text-[12px] text-ink-3">
           (source link unavailable — malformed URL)
         </span>
       </span>
@@ -38,7 +38,7 @@ export default function ExternalLink({
       href={safe}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-[#7dd3fc] underline decoration-white/25 underline-offset-2 transition-colors hover:decoration-[#7dd3fc]"
+      className="text-contact underline decoration-contact/35 underline-offset-2 transition-colors hover:decoration-contact"
     >
       {children}
       <span aria-hidden className="ml-1">

@@ -53,29 +53,32 @@ export function sceneAndVesselExtent(scene: GeoBounds, vessels: VesselBundle | n
   return ve ? unionBounds(scene, ve) : scene;
 }
 
-/** The bounding box of every [lon, lat] point across every frame and particle. Returns null if empty. */
+/** The 2nd–98th percentile box of particle positions across the run. Returns null if empty.
+ *
+ *  15 Sept: this used the full min/max of every particle in every frame, so a handful of
+ *  outliers set the camera and the scene shrank to a sliver on a mostly empty frame. The
+ *  percentile box frames where the cloud actually is; the origin grid's own bounds are still
+ *  unioned in by the caller, so the answer is never cropped. Every 4th frame is enough to find
+ *  the envelope. */
 function particleExtent(particles: ParticleBundle | null): GeoBounds | null {
   if (!particles) return null;
-  let west = Infinity;
-  let south = Infinity;
-  let east = -Infinity;
-  let north = -Infinity;
-  let any = false;
-
-  for (const frame of particles.frames) {
+  const lons: number[] = [];
+  const lats: number[] = [];
+  for (let f = 0; f < particles.frames.length; f += 4) {
+    const frame = particles.frames[f];
     for (let i = 0; i < frame.length; i += 2) {
       const lon = frame[i];
       const lat = frame[i + 1];
       if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
-      any = true;
-      if (lon < west) west = lon;
-      if (lon > east) east = lon;
-      if (lat < south) south = lat;
-      if (lat > north) north = lat;
+      lons.push(lon);
+      lats.push(lat);
     }
   }
-
-  return any ? { west, south, east, north } : null;
+  if (lons.length === 0) return null;
+  lons.sort((a, b) => a - b);
+  lats.sort((a, b) => a - b);
+  const q = (arr: number[], p: number) => arr[Math.min(arr.length - 1, Math.floor(p * arr.length))];
+  return { west: q(lons, 0.02), east: q(lons, 0.98), south: q(lats, 0.02), north: q(lats, 0.98) };
 }
 
 /**

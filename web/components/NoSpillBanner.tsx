@@ -23,11 +23,11 @@ export default function NoSpillBanner() {
 
   return (
     <div className="pointer-events-none absolute left-1/2 top-4 z-10 w-[min(92%,30rem)] -translate-x-1/2">
-      <div className="rounded border border-white/15 bg-[#0b0f14]/90 px-4 py-3 text-center shadow-lg backdrop-blur-sm">
-        <div className="text-[13px] font-semibold text-white/90">
+      <div className="anim-rise rounded-xl border border-line-strong bg-overlay/95 px-5 py-4 text-center shadow-[0_18px_50px_rgba(0,0,0,0.6)] backdrop-blur-md">
+        <div className="t-subtitle text-ink">
           No spill detected in this scene.
         </div>
-        <p className="mt-1 text-[11px] leading-relaxed text-white/55">{sub}</p>
+        <p className="mt-1.5 t-small text-pretty text-ink-2">{sub}</p>
       </div>
     </div>
   );

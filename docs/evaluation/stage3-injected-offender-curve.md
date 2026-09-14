@@ -44,7 +44,7 @@ with a 95% Wilson interval.
 | traffic × 0.25 | 0.979 | 0.989 | 19 | 1 |
 | traffic × 1.0 | 0.910 | 0.964 | 23 | 3 |
 | no gap injected | 0.681 [0.62–0.73] | 0.938 | 40 | 3 |
-| hourly AIS (GFW regime) | **0.488** [0.42–0.56] | 0.662 | 93 | 2 |
+| hourly AIS (GFW regime) — **re-measured after D41** | **0.486** [0.42–0.55] | 0.793 | 92 | 2 |
 | **offender with no behavioural signature** | **0.556** [0.49–0.62] | 0.923 | 52 | 3 |
 
 **Crowded port (`huntington.parquet`, 100 real vessels, 150 trials, baseline r90 3 km).**
@@ -54,13 +54,45 @@ with a 95% Wilson interval.
 | baseline | 0.782 [0.70–0.85] | 0.960 | 26/150 | 9.5 |
 | cloud r90 10 km | 0.765 | 0.857 | 52 | 29 |
 | cloud r90 25 km | 0.718 | 0.769 | 111 | 50 |
-| hourly AIS | 0.296 [0.22–0.39] | 0.461 | 35 | 5 |
+| hourly AIS — **re-measured after D41** | **0.398** [0.32–0.49] | 0.561 | 27 | 8 |
+
+### The hourly rows were re-measured on 15 Sept (D41)
+
+The two hourly rows above are **not** the figures this document first carried, and the difference is
+a fixed defect rather than a tuning gain. Stage 3 was applying NOAA-tuned thresholds to hourly data:
+a 30-minute interpolation ceiling shorter than the sampling interval itself, so no position between
+two hourly fixes was ever tested against the origin grid. Both conditions were re-run under the old
+and the new code, same seed, same trial count, so the pair is comparable:
+
+| condition | measure | before D41 | after D41 |
+|---|---|---|---|
+| offshore hourly (300 trials) | top-1 | 0.535 [0.47–0.60] | **0.486** [0.42–0.55] |
+| | top-3 | 0.695 | **0.793** |
+| | offender never plausible | 137/300 | **83/300** |
+| | abstained | 100 | 92 |
+| crowded-port hourly (150 trials) | top-1 | 0.289 [0.21–0.38] | **0.398** [0.32–0.49] |
+| | top-3 | 0.518 | **0.561** |
+| | offender never plausible | 67/150 | **45/150** |
+| | abstained | 36 | 27 |
+
+**Read the offshore top-1 honestly.** It moved *down* by 0.049 with overlapping intervals, while
+top-3 rose 0.098 and the number of trials where the guilty vessel never even reached the plausible
+set fell by 39%. Recovering vessels that the old code discarded puts more genuine competitors on
+the list, which is harder to win outright and is the correct behaviour. In port, where the fix
+matters most, top-1 rose by 0.109. The offshore *dense* rows are untouched: `noaa_dense` thresholds
+did not change, and the six live NOAA-scored bundles re-scored byte-identical.
+
+*(The first version of this file quoted 0.488 offshore and 0.296 in port. Re-running the old code
+today reproduces 0.535 and 0.289 — the small drift is other Stage 3 work landed since, notably D36.
+The before/after pair above is the honest comparison; the original numbers are kept in the history,
+not silently overwritten.)*
 
 Three things fall out of that pair, and all three are worth saying on stage:
 
-1. **Sampling density is the single biggest lever.** Dense → hourly takes 0.910 to 0.488 offshore
-   and 0.782 to 0.296 in port. This is the measurement behind D20, and it is why `ais_source` is in
-   the contract.
+1. **Sampling density is the single biggest lever.** Dense → hourly takes 0.910 to 0.486 offshore
+   and 0.782 to 0.398 in port. This is the measurement behind D20, and it is why `ais_source` is in
+   the contract. It is also **bounded by the fix in D41**: quoting the pre-fix hourly numbers would
+   overstate the gap by blaming the data for a defect in our own thresholds.
 2. **The system refuses rather than guesses as water gets crowded.** In port with a 25 km cloud, 111
    of 150 trials abstained. Top-3 stays high among the ones it does answer.
 3. **Origin quality dominates the rest.** A perfect cloud is 1.000; an error of one r90 is 0.653.

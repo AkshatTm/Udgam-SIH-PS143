@@ -1,0 +1,34 @@
+{
+  "funnel": {
+    "in_region": 13,
+    "in_window": 9,
+    "plausible": 0,
+    "scored": 0,
+    "dropped_short_track": 3
+  },
+  "suspects": [],
+  "dark_vessels": [],
+  "infrastructure": [],
+  "excluded": [
+    {
+      "mmsi": "941201607",
+      "name": "941201607      11.7V",
+      "closest_km": 9.37,
+      "reason": "2 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 9.4 km from the peak, at zero grid probability throughout"
+    },
+    {
+      "mmsi": "100011759",
+      "name": "TRA.8-81%",
+      "closest_km": 10.39,
+      "reason": "2 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 10.4 km from the peak, at zero grid probability throughout"
+    },
+    {
+      "mmsi": "941214805",
+      "name": "941214805",
+      "closest_km": 10.75,
+      "reason": "2 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 10.7 km from the peak, at zero grid probability throughout"
+    }
+  ],
+  "abstained": true,
+  "abstain_reason": "no vessel entered the reconstructed origin during the window"
+}

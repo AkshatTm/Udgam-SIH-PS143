@@ -2,18 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #0b0f14;
-  --foreground: #e2e8f0;
+/* ===========================================================================
+   UDGAM design tokens
 
-  /* Forensic colour tokens — used in components and slider CSS */
-  --amber:   #f97316;          /* particles + active accent */
-  --amber-50: rgba(249,115,22,0.50);
-  --amber-20: rgba(249,115,22,0.20);
-  --border:  rgba(255,255,255,0.08);
-  --border-strong: rgba(255,255,255,0.14);
-  --label:   rgba(255,255,255,0.38);
-  --value:   rgba(255,255,255,0.90);
+   One rule governs the palette: an interface colour is a map colour, and it
+   means the same thing in both places. Orange is drift, rose is oil, teal is a
+   radar contact, violet is fixed infrastructure, slate is a rejected look-alike
+   — on the map, in the panel, in the legend, in a badge. There is no separate
+   "brand" colour, so a judge never has to learn two vocabularies. MapView.tsx
+   carries the same hexes as deck.gl colour arrays.
+   =========================================================================== */
+
+:root {
+  /* Every colour is declared twice: once as raw "R G B" channels, and once as the ready-made
+     colour. Tailwind needs the channel form to build `bg-overlay/90` — it cannot inject an
+     alpha into a var() that already holds a finished colour, and quietly emits nothing when it
+     tries, which is how a translucent card ends up with no background at all. Plain CSS reads
+     the finished form. Keep the two in step. */
+
+  /* -- Ground: night sea, from surface down ------------------------------- */
+  --abyss-rgb:   4 7 11;       /* page base, deepest */
+  --deep-rgb:    8 13 19;      /* app chrome, rails, footer */
+  --hull-rgb:    11 17 25;     /* panel surface */
+  --raised-rgb:  16 25 34;     /* card / inset / raised block */
+  --overlay-rgb: 10 20 29;     /* floating over the map */
+
+  --abyss:   rgb(var(--abyss-rgb));
+  --deep:    rgb(var(--deep-rgb));
+  --hull:    rgb(var(--hull-rgb));
+  --raised:  rgb(var(--raised-rgb));
+  --overlay: rgb(var(--overlay-rgb));
+
+  /* -- Structure ---------------------------------------------------------- */
+  --line:        rgba(148, 180, 205, 0.10);
+  --line-strong: rgba(148, 180, 205, 0.20);
+
+  /* -- Ink ---------------------------------------------------------------- */
+  --ink-rgb:   230 237 243;    /* primary text */
+  --ink-2-rgb: 147 165 180;    /* secondary prose */
+  --ink-3-rgb: 94 110 125;     /* field labels, captions */
+  --ink-4-rgb: 60 72 85;       /* disabled */
+
+  --ink:   rgb(var(--ink-rgb));
+  --ink-2: rgb(var(--ink-2-rgb));
+  --ink-3: rgb(var(--ink-3-rgb));
+  --ink-4: rgb(var(--ink-4-rgb));
+
+  /* -- Meaning (identical to the deck.gl layer colours) -------------------- */
+  --drift-rgb:   249 115 22;   /* particles, a stage that is running, the active step */
+  --oil-rgb:     255 77 109;   /* a detection classified oil */
+  --contact-rgb: 45 212 191;   /* radar ship contact, a confirmed match */
+  --infra-rgb:   167 139 250;  /* fixed infrastructure (platform, pipeline) */
+  --reject-rgb:  122 136 153;  /* look-alike, excluded vessel */
+  --alert-rgb:   255 77 77;    /* a genuine failure: data that did not load */
+
+  --drift:   rgb(var(--drift-rgb));
+  --oil:     rgb(var(--oil-rgb));
+  --contact: rgb(var(--contact-rgb));
+  --infra:   rgb(var(--infra-rgb));
+  --reject:  rgb(var(--reject-rgb));
+  --alert:   rgb(var(--alert-rgb));
+
+  --drift-dim:   rgba(249, 115, 22, 0.14);
+  --contact-dim: rgba(45, 212, 191, 0.13);
+  --oil-dim:     rgba(255, 77, 109, 0.13);
+
+  /* Legacy aliases so a component not yet migrated still resolves. */
+  --background: var(--abyss);
+  --foreground: var(--ink);
+  --amber: var(--drift);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --label: var(--ink-3);
+  --value: var(--ink);
+
+  /* -- Type --------------------------------------------------------------- */
+  /* SF Pro when the machine has it (see app/fonts/README.md); Inter, self-hosted,
+     everywhere else. Never name a family directly in a component. */
+  --font-ui: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont,
+    var(--font-inter), system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-data: "SF Mono", ui-monospace, SFMono-Regular, var(--font-geist-mono),
+    "Cascadia Code", Menlo, Consolas, monospace;
+
+  /* -- Motion ------------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 html,
@@ -22,120 +95,259 @@ body {
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  /* Geist Sans is already loaded as --font-geist-sans via layout.tsx */
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--abyss);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.5;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "kern" 1, "liga" 1;
+  letter-spacing: -0.011em;
 }
 
-/* ── Monospace: Geist Mono for all technical values ──────────────────────── */
+/* The home page is the one scrolling surface in the app; the case shell owns
+   the viewport exactly and must never scroll. */
+body:has(.udgam-scroll) {
+  overflow: auto;
+  height: auto;
+  min-height: 100%;
+  scroll-behavior: smooth;
+}
+
+/* -- Data face ------------------------------------------------------------ */
 .font-mono,
 [class*="font-mono"] {
-  font-family: var(--font-geist-mono), ui-monospace, "Cascadia Code",
-    "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-data);
+  font-feature-settings: "kern" 1, "tnum" 1;
+  letter-spacing: 0;
 }
 
-/* ── Custom scrollbar for ContextPanel ───────────────────────────────────── */
+/* -- Type scale -------------------------------------------------------------
+   Display sizes carry negative tracking that tightens as they grow, which is
+   what lets Inter sit like SF Pro at headline size. */
+.t-display {
+  font-size: clamp(2.75rem, 6.4vw, 5rem);
+  line-height: 0.98;
+  font-weight: 600;
+  letter-spacing: -0.038em;
+}
+.t-headline {
+  font-size: clamp(1.75rem, 3.2vw, 2.5rem);
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.028em;
+}
+.t-title {
+  font-size: 1.3125rem;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.t-subtitle {
+  font-size: 1.0625rem;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: -0.014em;
+}
+.t-body {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  letter-spacing: -0.008em;
+}
+.t-small {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  letter-spacing: -0.004em;
+}
+/* A field label inside a data panel: a column header, not a decorative eyebrow. */
+.t-label {
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* -- Focus: visible on a dark ground, without the browser-blue halo -------- */
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--drift);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* -- Scrollbars ----------------------------------------------------------- */
 ::-webkit-scrollbar {
-  width: 3px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 2px;
+  background: rgba(148, 180, 205, 0.14);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(148, 180, 205, 0.28);
+  background-clip: content-box;
 }
 
-/* ── Forensic timeline scrubber ──────────────────────────────────────────── */
+/* ===========================================================================
+   The rewind scrubber: the one control a judge is invited to touch.
+   =========================================================================== */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
-  cursor: pointer;
-  height: 16px;         /* click area */
+  cursor: grab;
+  height: 20px;
+}
+input[type="range"]:active {
+  cursor: grabbing;
 }
 
-/* Track */
 input[type="range"]::-webkit-slider-runnable-track {
-  height: 2px;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 1px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(148, 180, 205, 0.14);
 }
 input[type="range"]::-moz-range-track {
-  height: 2px;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 1px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(148, 180, 205, 0.14);
 }
 
-/* Thumb — precision dot */
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 10px;
-  height: 10px;
-  margin-top: -4px;
+  width: 14px;
+  height: 14px;
+  margin-top: -5.5px;
   border-radius: 50%;
-  background: var(--amber);
-  border: none;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.25);
-  transition: box-shadow 0.15s ease;
+  background: var(--drift);
+  border: 2px solid var(--deep);
+  box-shadow: 0 0 0 1px var(--drift), 0 0 12px rgba(249, 115, 22, 0.45);
+  transition: box-shadow 0.18s var(--ease-out), transform 0.18s var(--ease-out);
 }
 input[type="range"]::-webkit-slider-thumb:hover {
-  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.20);
+  transform: scale(1.12);
+  box-shadow: 0 0 0 1px var(--drift), 0 0 18px rgba(249, 115, 22, 0.6);
 }
 input[type="range"]::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: var(--amber);
-  border: none;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.25);
+  background: var(--drift);
+  border: 2px solid var(--deep);
+  box-shadow: 0 0 0 1px var(--drift), 0 0 12px rgba(249, 115, 22, 0.45);
 }
 
-/* Disabled state */
+input[type="range"]:disabled {
+  cursor: not-allowed;
+}
 input[type="range"]:disabled::-webkit-slider-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--ink-4);
   box-shadow: none;
 }
 input[type="range"]:disabled::-moz-range-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--ink-4);
   box-shadow: none;
 }
 input[type="range"]:disabled::-webkit-slider-runnable-track {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(148, 180, 205, 0.07);
 }
 
-/* Resting pulse — a slow breathing halo on the thumb while the Trace rewind sits stopped
-   at T−24h, hinting the slider is interactive. Applied via .slider-resting from TimeSlider. */
+/* Resting pulse: a slow breathing halo while the rewind sits stopped at T-24h,
+   the one hint that the slider is the thing to touch next. */
 @keyframes thumb-resting-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.28);
+    box-shadow: 0 0 0 1px var(--drift), 0 0 10px rgba(249, 115, 22, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 7px rgba(249, 115, 22, 0.08);
+    box-shadow: 0 0 0 1px var(--drift), 0 0 0 9px rgba(249, 115, 22, 0.07),
+      0 0 22px rgba(249, 115, 22, 0.55);
   }
 }
 input[type="range"].slider-resting:not(:disabled)::-webkit-slider-thumb {
-  animation: thumb-resting-pulse 2.4s ease-in-out infinite;
+  animation: thumb-resting-pulse 2.6s var(--ease-in-out) infinite;
 }
 input[type="range"].slider-resting:not(:disabled)::-moz-range-thumb {
-  animation: thumb-resting-pulse 2.4s ease-in-out infinite;
+  animation: thumb-resting-pulse 2.6s var(--ease-in-out) infinite;
+}
+
+/* ===========================================================================
+   Motion primitives. Used only where the pipeline itself moves: a stage
+   arriving, a step completing, the drift running. Never as page decoration.
+   =========================================================================== */
+@keyframes udgam-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes udgam-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.anim-rise {
+  animation: udgam-rise 0.55s var(--ease-out) both;
+}
+.anim-fade {
+  animation: udgam-fade 0.5s var(--ease-out) both;
+}
+
+/* The sweep crossing a "running" progress bar, so the wait reads as work. */
+@keyframes udgam-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+.anim-sweep {
+  animation: udgam-sweep 1.5s var(--ease-in-out) infinite;
+}
+
+/* A sonar breath on the live-stage marker in the step spine. */
+@keyframes udgam-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.anim-ping {
+  animation: udgam-ping 1.9s var(--ease-out) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  input[type="range"].slider-resting:not(:disabled)::-webkit-slider-thumb {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
+  input[type="range"].slider-resting:not(:disabled)::-webkit-slider-thumb,
   input[type="range"].slider-resting:not(:disabled)::-moz-range-thumb {
     animation: none;
   }
@@ -145,4 +357,73 @@ input[type="range"].slider-resting:not(:disabled)::-moz-range-thumb {
   .text-balance {
     text-wrap: balance;
   }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+}
+
+/* ===========================================================================
+   MapLibre chrome. Its stylesheet ships a light-theme control kit; these rules
+   bring the zoom buttons and the attribution into the same night as the rest
+   of the app. Appearance only — no control is hidden, and the Esri/GEBCO/NOAA
+   attribution stays legible and expandable, which is a licence condition.
+   =========================================================================== */
+.maplibregl-ctrl-group {
+  background: rgba(10, 20, 29, 0.88) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45) !important;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+}
+.maplibregl-ctrl-group button {
+  background: transparent !important;
+  width: 30px !important;
+  height: 30px !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--line) !important;
+}
+.maplibregl-ctrl-group button:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+/* The control icons are black SVGs baked into maplibre's stylesheet — invert them
+   rather than shipping replacements. */
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1) opacity(0.72);
+}
+.maplibregl-ctrl-group button:hover .maplibregl-ctrl-icon {
+  filter: invert(1) opacity(1);
+}
+
+.maplibregl-ctrl-attrib {
+  background: rgba(10, 20, 29, 0.82) !important;
+  border-radius: 6px !important;
+  color: var(--ink-3) !important;
+  font-family: var(--font-ui) !important;
+  font-size: 10px !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--ink-2) !important;
+}
+.maplibregl-ctrl-attrib-button {
+  filter: invert(1) opacity(0.65);
+}
+.maplibregl-popup-content {
+  background: var(--overlay) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55) !important;
+  font-family: var(--font-ui) !important;
+}
+.maplibregl-popup-tip {
+  border-top-color: var(--overlay) !important;
+  border-bottom-color: var(--overlay) !important;
+  border-left-color: var(--overlay) !important;
+  border-right-color: var(--overlay) !important;
+}
+.maplibregl-popup-close-button {
+  color: var(--ink-3) !important;
+  font-size: 16px !important;
 }

@@ -1,0 +1,40 @@
+{
+  "_status": "PUBLISHED \u2014 this file is on the Verify screen. official_finding is researched prose; udgam_result is regenerated from the bundle by scripts/scaffold_verification.py (never by hand); assessment is the verdict on our own result \u2014 for the six live cases it was drafted 14 Sept under Master D43 and is Akshat's to edit and own. Re-run --publish after any edit.",
+  "official_finding": {
+    "summary": "SkyTruth Cerulean's detector logged a 20.55 km, 7.74 km\u00b2 slick on this scene (model confidence 0.928, model class 'vessel'), never human-reviewed. Cerulean's source scorer associated it with fixed infrastructure (five candidate structures) and one dark vessel, with no AIS vessel candidates; its best collated source score, 1.4031, is the highest in our library.",
+    "responsible_parties": [
+      {
+        "name": "Offshore structure 121229",
+        "mmsi": null,
+        "imo": null,
+        "role": "infrastructure candidate Cerulean associated with the slick, \u2248 18.577 N, 72.241 E; first listed of five (list order not documented as a ranking)"
+      },
+      {
+        "name": "Dark vessel D244.865585 (unidentified, no AIS match in Cerulean's data)",
+        "mmsi": null,
+        "imo": null,
+        "role": "radar-detected vessel candidate Cerulean associated with the slick, \u2248 18.583 N, 72.240 E"
+      }
+    ],
+    "source_name": "SkyTruth Cerulean, slick 3612640",
+    "source_url": "https://cerulean.skytruth.org/slicks/3612640",
+    "source_type": "algorithmic_attribution",
+    "volume_reported": null,
+    "caveat": "No human ever reviewed this record: it is a model class plus an automated score. The source is contested even within that record \u2014 five infrastructure candidates, one dark vessel, zero AIS vessel candidates, and yet a model class of 'vessel'. The 'known natural seep area' claim that circulates for this coast could not be substantiated and is not made here; Cerulean has no seep layer and classes this slick as a vessel. No volume was reported and no investigation is on record in our sources. The case is declared partially compromised for blind evaluation (Master Part 16): candidate positions were once in a shared document, though no identity was."
+  },
+  "naap_result": {
+    "origin_summary": "Trace seeded from det-01 alone (1.48 of 9.55 km\u00b2 of oil; det-04, det-01 and det-02 did not pass the ribbon gates, so the larger det-02 is not in the seed). Origin cloud centred at 18.60535 N, 72.10489 E after a ~16.7 km median rewind to the NNW, r50 2.00 km, r90 3.71 km (ensemble precision). Release window is a 16 h search bracket (bounded), 2023-09-02 01:03Z to 17:03Z, not a measured time. Wind share 0.37. Stage 3, re-run 14 Sept against real GFW hourly AIS: 9 vessels found in the box, 2 in the window, 0 plausible, so the system abstains because **no vessel entered the reconstructed origin cloud** \u2014 a searched negative, not an unsearched one. The nearest approach was a vessel at 5.0 km from the origin peak with grid probability 0.069, and it was dropped by the 5-report minimum before scoring (issue F1: that threshold means 5 hours of presence at hourly sampling). gap and slowdown are null throughout, as hourly sampling requires (D20). No infrastructure candidate was declared, because Mumbai's candidates come from the sealed record.",
+    "top_suspects": [],
+    "abstained": true
+  },
+  "assessment": {
+    "verdict": "partial",
+    "explanation": "Partial, and the agreement is on the negative. Cerulean found no AIS vessel candidate here at all. We searched 42 vessels on hourly AIS, 29 of them inside the release window, found none that entered the reconstructed origin \u2014 the nearest passed 8.3 km from the peak at zero grid probability throughout \u2014 and abstained. Two systems, different data, the same answer: no broadcasting vessel explains this slick. We did not reproduce the other half of Cerulean's record. Our ship detector found 21 radar contacts on this scene and the cross-check tied all 21 to an AIS track, so we surfaced no dark vessel where Cerulean names one; on hourly AIS that check is a reachability test, which can rule a vessel out but cannot confirm one, so '21 matched' is the weaker of the two things it could say. And meta.json declares no infrastructure candidate for this case \u2014 deliberately, because the only candidates we hold are Cerulean's attribution, which is the answer (D38) \u2014 so the infrastructure module had nothing to score and named nothing.",
+    "what_would_have_helped": "Infrastructure candidates from a primary source. The module is built and contracted; what it lacks here is a public platform-and-pipeline layer for the Mumbai High field that does not come from the record we are being scored against. Second, dense AIS: a reachability test is only as strong as its sampling interval, and at one position per vessel per hour a contact 1 km from an hourly fix is not evidence that a transponder was on. Third, more than one pass \u2014 a contact seen on a single image is not persistence-checked, which is why none is listed as a finding."
+  },
+  "udgam_result": {
+    "origin_summary": "Origin cloud centred at 18.6054\u00b0 N, 72.1049\u00b0 E; half the ensemble lands within 2.0 km and nine in ten within 3.71 km. Release window 2023-09-02T01:03:33Z to 2023-09-02T17:03:33Z (bounded). Stage 3 funnel 42 \u2192 29 \u2192 0 \u2192 0. Abstained: no vessel entered the reconstructed origin during the window",
+    "top_suspects": [],
+    "abstained": true
+  }
+}

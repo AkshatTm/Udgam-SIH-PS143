@@ -176,6 +176,31 @@ downstream changed. `case-jamnagar-2024` gains `attribute`.
 That is a different and much stronger statement than the one these cases carried this morning,
 which was "nothing was searched".
 
+**15 Sept — superseded by D41. Do not quote the funnels above.** Those extracts were padded by
+`2 × r90` (~7 km) and then filtered by a track-length rule written for 69-second NOAA data, so
+most vessels were dropped before they were scored. With the pad floored at 30 km and the
+thresholds keyed to the sampling regime, the same three cases look like this:
+
+| Case | Vessels | Vessel-hours | Funnel | Outcome |
+|---|---|---|---|---|
+| case-mumbai-2023 | 42 | 386 | 42 → 29 → 0 → 0 | abstains — nearest candidate 8.3 km from the origin peak, at zero grid probability |
+| case-jamnagar-2024 | 38 | 255 | 38 → 22 → 1 → 1 | **one suspect**, scored on 2 of 7 components (hourly sampling nulls the rest) |
+| case-gulf-alaska-2023 | 13 | 45 | 13 → 9 → 0 → 0 | abstains — nearest candidate 9.4 km from the peak. NOAA has no data at 59.5 N; GFW is global |
+
+Scene-time extracts for the dark-vessel check (`*_scene.parquet`, scene box + 30 km, acquisition
+± 2 h): Mumbai 74 vessel-hours / 21 MMSI, Jamnagar 49 / 16, Gulf of Alaska 16 / 8.
+
+### GFW Sentinel-1 vessel detections — used on one case, labelled on screen
+
+`public-global-sar-presence` via the same 4wings report endpoint
+(`pipeline/attribute/ingest_gfw_sar.py`). Used **only** on `case-gulf-alaska-2023`, where our own
+ship detector finds no contact (threshold −8.06 dB against a brightest water pixel of −8.79 dB;
+Soumirya refused to lower it to manufacture one). It returns **2 detections on that pass**, both
+within 15 s of the scene time; our own AIS cross-check matched both. Three rules hold here:
+GFW's own AIS identity match is **discarded** and ours is run instead; every card built from these
+says the contact is GFW's and **not UDGAM's detector**; and **Cerulean's dark-vessel contact is
+never used** — it is the answer (D34, D42).
+
 ⚠️ **A claim of ours that was wrong, corrected.** This section and `gfw_probe.py` both said GFW
 "does not provide individual vessel positions". That is what GFW's documentation says about the
 **map layer**, and we generalised it to the whole API. The 4wings **report** endpoint, at
@@ -196,6 +221,22 @@ default `Python-urllib/3.11` user-agent. A transport failure, saying nothing abo
 the data. Sending a normal user-agent returned all three endpoints. **Two demo cases were one
 unexamined error message away from being dropped for no reason.** `gfw_probe.py` now names that
 error explicitly rather than folding it into a coverage verdict.
+
+## Rebuilding every AIS extract from scratch
+
+`data/` is gitignored and never moves between laptops, so the extracts above are reproducible
+rather than shipped. On a machine with the NOAA daily **zips** in `data/ais/` and `GFW_API_TOKEN`
+in `.env`:
+
+```bash
+python scripts/run_attribute_all.py --refresh     # unzips, ingests, scores, validates all six
+```
+
+It expands each NOAA zip once into `data/ais/_csv/` (about 1 GB per day), writes both extracts per
+case, fetches the GFW hourly extracts and the Alaska SAR contacts, runs `score.py` into each
+bundle and then the validator. Without `--refresh` it reuses whatever is already in `data/ais/`.
+The NOAA zips come from `coast.noaa.gov/htdata/CMSP/AISDataHandler/<year>/` and are the only
+manual download.
 
 ## Ocean and atmosphere (Google Earth Engine)
 
@@ -327,10 +368,24 @@ drift and AIS are independent evidence streams.
 
 Source: `coast.noaa.gov/htdata/CMSP/AISDataHandler/` — no registration required.
 
-| Case | Files used | Date range | Rows after bbox+time filter |
-|---|---|---|---|
-| case-jacksonville-2024 | `AIS_2024_07_30`, `AIS_2024_07_31` | 30–31 Jul 2024 | 52 vessels in the scoring window |
-| others | `TODO` | `TODO` | `TODO` |
+Two extracts per case, both rebuilt by `scripts/run_attribute_all.py` (15 Sept):
+
+| Case | Daily files | Extract | Box / window | Kept |
+|---|---|---|---|---|
+| case-jacksonville-2024 | `AIS_2024_07_29`, `AIS_2024_07_30` | `jacksonville.parquet` | origin box + 2 × r90, window ± 6 h | 11,689 rows · 48 MMSI |
+| | `AIS_2024_07_30` | `jacksonville_scene.parquet` | scene box + 10 km, acquisition ± 90 min | 170 rows · 3 MMSI |
+| case-farallones-2023 | `AIS_2023_03_16`, `AIS_2023_03_17` | `farallones.parquet` | as above | 815 rows · 6 MMSI |
+| | `AIS_2023_03_17` | `farallones_scene.parquet` | as above | 108 rows · 1 MMSI |
+| case-huntington-2021 | `AIS_2021_10_01`, `AIS_2021_10_02` | `huntington.parquet` | as above | 13,626 rows · 106 MMSI |
+| | `AIS_2021_10_02` | `huntington_scene.parquet` | as above | 14,066 rows · 280 MMSI |
+
+The `_scene` extracts are what makes the dark-vessel cross-check possible (D42): they cover the
+**scene footprint at the acquisition time**, which the origin-window extract does not — on Mumbai
+the release window ends eight hours before the satellite passed. Without one, a contact's darkness
+is `null` and nothing is listed (D34).
+
+**NOAA has no Alaska data.** Every daily file stops near 50 N (measured, commit `8ec1e11`), so
+`case-gulf-alaska-2023` is `gfw_hourly`, not `noaa_dense` — see the GFW section below (D41).
 
 ### AIS sampling density — measured, not assumed (2026-09-12)
 

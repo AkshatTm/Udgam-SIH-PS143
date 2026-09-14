@@ -60,11 +60,20 @@ GFW_TYPE = {
 }
 
 
+# D41. `ingest.py`'s 2 x r90 pad is right for 69 s NOAA reports, where any vessel crossing the
+# box leaves dozens of fixes. At one fix per hour it is not: on the Indian cases 2 x r90 is ~7 km,
+# a ship at 12 kn is inside that for well under an hour, and the extract held one or two hourly
+# fixes per vessel. The pad is floored at one hour of travel at ~16 kn so a transiting vessel
+# leaves at least two fixes in the box. Derived from the sampling interval, not from any case.
+HOURLY_MIN_PAD_KM = 30.0
+
+
 def window_from_origin(origin_path, pad_hours):
-    """Bbox + window from an origin cloud, padded, same convention as ingest.py --from-origin."""
+    """Bbox + window from an origin cloud, padded. Same convention as ingest.py --from-origin,
+    except that the spatial pad is floored for hourly sampling (D41)."""
     o = json.loads(Path(origin_path).read_text(encoding="utf-8"))
     b = o["bounds"]
-    pad_km = 2.0 * float(o["radius_90_km"])
+    pad_km = max(2.0 * float(o["radius_90_km"]), HOURLY_MIN_PAD_KM)
     lat_pad = pad_km / 111.32
     mid_lat = (b["south"] + b["north"]) / 2
     import math
@@ -146,10 +155,11 @@ def write_parquet(records, out_path):
                           sog DOUBLE, cog DOUBLE, heading DOUBLE, name VARCHAR,
                           type_code INTEGER, vessel_type VARCHAR)
     """)
-    con.executemany(
-        "INSERT INTO ais VALUES (?,?,?,?,?,?,?,?,?,?)",
-        [(r["mmsi"], r["ts"], r["lon"], r["lat"], r["sog"], r["cog"], r["heading"],
-          r["name"], r["type_code"], r["vessel_type"]) for r in records])
+    if records:
+        con.executemany(
+            "INSERT INTO ais VALUES (?,?,?,?,?,?,?,?,?,?)",
+            [(r["mmsi"], r["ts"], r["lon"], r["lat"], r["sog"], r["cog"], r["heading"],
+              r["name"], r["type_code"], r["vessel_type"]) for r in records])
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     con.execute("COPY ais TO ? (FORMAT PARQUET)", [str(out_path)])
     con.close()
@@ -163,6 +173,10 @@ def main():
     ap.add_argument("--end", help="UTC ISO 8601 with trailing Z")
     ap.add_argument("--pad-hours", type=float, default=6.0)
     ap.add_argument("--out", required=True, help="output .parquet path")
+    ap.add_argument("--allow-empty", action="store_true",
+                    help="write an empty parquet when GFW returns nothing, so score.py records a "
+                         "searched negative ('queried, found empty') instead of the case staying "
+                         "on --no-ais ('nothing searched')")
     a = ap.parse_args()
 
     if bool(a.case) == bool(a.bbox):
@@ -183,10 +197,15 @@ def main():
     print(f"window    {start:%Y-%m-%dT%H:%M:%SZ} .. {end:%Y-%m-%dT%H:%M:%SZ}")
     rows = fetch(bbox, start, end, token)
     records = to_records(rows, start, end)
-    if not records:
+    if not records and not a.allow_empty:
         raise SystemExit("GFW returned no vessel-hours in that box and window. That is a result, "
-                         "not a crash — record it and leave the case on --no-ais.")
+                         "not a crash — rerun with --allow-empty to record it as a searched "
+                         "negative.")
     write_parquet(records, a.out)
+    if not records:
+        print(f"\nrows      0 — GFW returned no vessel-hours; wrote an EMPTY extract to {a.out}")
+        print("score.py will record this as a searched negative, not as 'nothing searched'.")
+        return 0
 
     vessels = {r["mmsi"] for r in records}
     types = {}

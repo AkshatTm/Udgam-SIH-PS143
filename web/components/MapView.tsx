@@ -1,8 +1,8 @@
 "use client";
 
-// The one map. MapLibre GL JS, no token, no external tiles — the SAR raster is the backdrop,
-// a bundled coastline gives faint geographic context, and a plain dark ocean background keeps
-// the demo offline-safe (docs/team/harshita-frontend.md allows this).
+// The one map. MapLibre GL JS, no token. The SAR raster sits on a light ocean basemap: Esri
+// ocean tiles when online, over a bundled offline land/sea base that keeps the demo safe when
+// the network is not (see OCEAN_STYLE below).
 //
 // The map object is created once. Store changes (case, layer visibility, selection) are pushed
 // in via imperative map calls in effects — the map container never re-renders on those.
@@ -17,6 +17,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AttributionControl,
   Map as MlMap,
   NavigationControl,
   setWorkerUrl,
@@ -28,12 +29,12 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { BitmapLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
-import { useAppStore } from "@/lib/store";
+import { BitmapLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { RUN_DURATION_MS, useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
 import { buildOriginImage, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
 import { sceneAndVesselExtent, sceneParticleOriginExtent } from "@/lib/extent";
-import type { Bounds, LonLat } from "@/lib/contracts";
+import type { Bounds, GeoBounds, LonLat } from "@/lib/contracts";
 
 // maplibre-gl v6 loads its GeoJSON/vector tiler in a separate ESM worker. Its built-in worker
 // resolver needs an http(s) `import.meta.url`, which webpack replaces with a build-time
@@ -53,34 +54,80 @@ setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 // raster/detections layers added in `load` below, and under every deck.gl overlay, which always
 // paints above the MapLibre canvas) and stays deliberately low-contrast against the `#0b0f14`
 // ocean background — a shape to read as "Earth," never a layer competing with the evidence.
-const DARK_STYLE: StyleSpecification = {
+//
+// 15 Sept: the dark style made the zoomed-out Trace view read as a black screen, so the map now
+// uses a light ocean basemap in the manner of SkyTruth Cerulean. It is layered, not switched:
+//   1. an OFFLINE base — light-blue sea + Natural Earth 1:50m land (public domain, committed at
+//      web/public/basemap/ne_50m_land.geojson) — always renders, no network;
+//   2. Esri World Ocean Base raster tiles on top, when the network allows. If the venue wifi
+//      drops, the tiles simply fail to load and layer 1 shows through. No fallback logic to break.
+// Esri's ocean basemap needs attribution, shown compact in the top-right.
+const ESRI_ATTRIBUTION = "© Esri, GEBCO, NOAA, Garmin · Natural Earth";
+const OCEAN_STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    land: { type: "geojson", data: "/basemap/ne_110m_land.geojson" },
+    land: { type: "geojson", data: "/basemap/ne_50m_land.geojson" },
+    ocean: {
+      type: "raster",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      // Open-ocean tiles above z10 are "data not yet available" placeholders; overzoom instead.
+      maxzoom: 10,
+      attribution: ESRI_ATTRIBUTION,
+    },
   },
   layers: [
-    { id: "bg", type: "background", paint: { "background-color": "#0b0f14" } },
+    { id: "bg", type: "background", paint: { "background-color": "#050a10" } },
     {
       id: "land-fill",
       type: "fill",
       source: "land",
-      paint: { "fill-color": "#141b24", "fill-opacity": 1 },
+      paint: { "fill-color": "#141c25", "fill-opacity": 1 },
     },
     {
       id: "land-outline",
       type: "line",
       source: "land",
-      paint: { "line-color": "#232e3a", "line-width": 0.6, "line-opacity": 0.7 },
+      paint: { "line-color": "#3a5364", "line-width": 0.8 },
+    },
+    {
+      id: "ocean-tiles",
+      type: "raster",
+      source: "ocean",
+      // Same source, same offline-first behaviour — only re-tinted. Esri ships one ocean
+      // basemap and it is a pale daylight one; desaturating and crushing its highlights here
+      // is what puts the map in the same night as the rest of the app. Doing it in the raster
+      // paint (rather than swapping in a dark tile service) keeps the "wifi drops and the
+      // offline land layer shows through" property exactly as it was, and adds no new
+      // network dependency.
+      paint: {
+        "raster-opacity": 0.42,
+        "raster-saturation": -0.72,
+        "raster-brightness-max": 0.26,
+        "raster-contrast": 0.18,
+        "raster-hue-rotate": 15,
+        "raster-fade-duration": 150,
+      },
     },
   ],
 };
 
-const OIL_COLOR = "#ff4d4d";
-const LOOKALIKE_COLOR = "#9aa4b2";
+// Tuned for the dark basemap, and identical to the --oil / --reject tokens in globals.css so
+// the panel and the map name the same thing in the same colour.
+const OIL_COLOR = "#ff4d6d";
+const LOOKALIKE_COLOR = "#7a8899";
+const SCENE_OUTLINE_COLOR = "#2f5f7d";
 
-// Particle dots — warm amber on the dark SAR backdrop. Reads clearly against the grayscale SAR
-// image and distinguishes particles from the vessel layer (cool blue, future). V3 palette.
-const PARTICLE_FILL: [number, number, number, number] = [251, 146, 60, 210];
+// Particle dots — warm amber with a thin dark rim, so they read over dark sea, dark land and the
+// grey SAR raster alike.
+const PARTICLE_FILL: [number, number, number, number] = [249, 115, 22, 220];
+const PARTICLE_LINE: [number, number, number, number] = [67, 20, 7, 160];
+
+// The Run-detection scan line: a translucent band sweeping west→east across the SAR footprint.
+const SCAN_FILL: [number, number, number, number] = [249, 115, 22, 70];
+const SCAN_EDGE: [number, number, number, number] = [249, 115, 22, 255];
 
 // Origin cloud fade. Rewind fraction (0 at T−0, 1 at T−24h) is run through a smoothstep so the
 // cloud is fully hidden near the detection time and eases in only as the slider approaches
@@ -90,12 +137,16 @@ const PARTICLE_FILL: [number, number, number, number] = [251, 146, 60, 210];
 // alpha-proportional mapping live in lib/origin.ts (buildOriginImage); Urooz owns the palette.
 const ORIGIN_FADE_IN_START = 0.2; // rewind fraction at which the cloud starts to appear
 const ORIGIN_FADE_IN_FULL = 0.9; // rewind fraction at which it reaches full opacity
+// 15 Sept: the cloud is never fully invisible on Trace — a floor keeps "where the oil came from"
+// on screen from the first frame, and the fade still carries the "knowable further back" story.
+const ORIGIN_OPACITY_FLOOR = 0.25;
 
 // 50 % / 90 % origin-probability rings — warm amber-yellow outlines over the origin cloud. The
 // inner (50 %) ring is brighter; the outer (90 %) ring is softer but still readable. Both
 // complement the warm origin-cloud colour ramp rather than clashing with a white outline. V3 palette.
-const ORIGIN_RING_50: [number, number, number, number] = [251, 191, 36, 230];
-const ORIGIN_RING_90: [number, number, number, number] = [251, 191, 36, 140];
+// Deepened to burnt amber on 15 Sept so both rings read against the light basemap.
+const ORIGIN_RING_50: [number, number, number, number] = [180, 83, 9, 240];
+const ORIGIN_RING_90: [number, number, number, number] = [180, 83, 9, 150];
 const ORIGIN_RING_WIDTH_PX = 1.5;
 
 // Hoisted so their identity is stable across renders — the ring geometry is static, so these
@@ -116,17 +167,21 @@ type VesselRole = "top" | "suspect" | "excluded" | "plain";
 
 interface VesselMapItem {
   mmsi: string;
+  name: string;
   path: LonLat[];
   role: VesselRole;
 }
 
-const VESSEL_COLOR_PLAIN: [number, number, number, number] = [96, 165, 250, 140];
-const VESSEL_COLOR_SUSPECT: [number, number, number, number] = [56, 189, 248, 200];
-const VESSEL_COLOR_TOP_SUSPECT: [number, number, number, number] = [56, 189, 248, 255];
+// Darkened for the light basemap (15 Sept): the old sky-blues vanished against blue sea.
+// Lifted off the old light basemap: a navy track was invisible on a night sea. Plain traffic is
+// a cool slate, a suspect steps up in teal, and the top suspect is full --contact.
+const VESSEL_COLOR_PLAIN: [number, number, number, number] = [110, 133, 158, 150];
+const VESSEL_COLOR_SUSPECT: [number, number, number, number] = [45, 180, 180, 215];
+const VESSEL_COLOR_TOP_SUSPECT: [number, number, number, number] = [45, 212, 191, 255];
 // Excluded — muted, per docs/team/jaiveer-stage3-attribution.md ("visually ruled out"). The strikethrough motif itself is
 // applied on the exclusion card in ContextPanel; a dashed line isn't a deck.gl PathLayer
 // primitive, so the map conveys "ruled out" via reduced opacity + thin width instead.
-const VESSEL_COLOR_EXCLUDED: [number, number, number, number] = [148, 163, 184, 120];
+const VESSEL_COLOR_EXCLUDED: [number, number, number, number] = [90, 105, 122, 120];
 
 const VESSEL_WIDTH_PLAIN = 1.2;
 const VESSEL_WIDTH_SUSPECT = 1.8;
@@ -139,10 +194,12 @@ const VESSEL_WIDTH_EXCLUDED = 1;
 // grey = look-alike/excluded) — an alert marker must not read as any of those.
 interface DarkVesselMapItem {
   position: LonLat;
+  name: string;
+  reasons: string[];
 }
 const DARK_VESSEL_COLOR: [number, number, number, number] = [244, 63, 94, 235];
-const DARK_VESSEL_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
-const DARK_VESSEL_RADIUS_PX = 7;
+const DARK_VESSEL_LINE_COLOR: [number, number, number, number] = [76, 5, 25, 255];
+const DARK_VESSEL_RADIUS_PX = 8;
 
 // docs/team/harshita-frontend.md Phase 3.6 — infrastructure findings (Master §6.7). Also a stationary point with no
 // AIS identity, but a distinct category from a dark vessel (a named, known facility being
@@ -167,7 +224,7 @@ interface ShipDetectionMapItem {
   position: LonLat;
 }
 const SHIP_DETECTION_COLOR: [number, number, number, number] = [45, 212, 191, 235];
-const SHIP_DETECTION_LINE_COLOR: [number, number, number, number] = [255, 255, 255, 200];
+const SHIP_DETECTION_LINE_COLOR: [number, number, number, number] = [4, 47, 46, 230];
 const SHIP_DETECTION_RADIUS_PX = 6;
 
 const vesselTrackPath = (d: VesselMapItem): LonLat[] => d.path;
@@ -201,6 +258,44 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
   return u * u * (3 - 2 * u);
 }
 
+function unionGeo(a: GeoBounds, b: GeoBounds): GeoBounds {
+  return {
+    west: Math.min(a.west, b.west),
+    south: Math.min(a.south, b.south),
+    east: Math.max(a.east, b.east),
+    north: Math.max(a.north, b.north),
+  };
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
+  );
+}
+
+function footprintGeoJSON(b: Bounds | null): GeoJSON.FeatureCollection {
+  if (!b) return { type: "FeatureCollection", features: [] };
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [b.west, b.north],
+            [b.east, b.north],
+            [b.east, b.south],
+            [b.west, b.south],
+            [b.west, b.north],
+          ],
+        },
+      },
+    ],
+  };
+}
+
 function imageCoordinates(b: Bounds): [
   [number, number],
   [number, number],
@@ -231,6 +326,10 @@ export default function MapView() {
   const detections = useAppStore((s) => s.detections);
   const layers = useAppStore((s) => s.layers);
   const selectedDetectionId = useAppStore((s) => s.selectedDetectionId);
+  // Guided flow: each stage's overlays stay hidden until its Run button has been pressed.
+  const detectRevealed = useAppStore((s) => s.revealed.detect);
+  const attributeRevealed = useAppStore((s) => s.revealed.attribute);
+  const running = useAppStore((s) => s.running);
 
   // Phase 2 particle playback. `t` is the integer timestep the slider currently points at;
   // it only changes ~8×/s during playback, so the deck layer effect below stays cheap.
@@ -273,7 +372,12 @@ export default function MapView() {
   const vesselItems = useMemo(() => {
     if (!vessels) return [] as VesselMapItem[];
     if (!abstainConfirmedFalse || !suspects) {
-      return vessels.tracks.map((t) => ({ mmsi: t.mmsi, path: t.path, role: "plain" as const }));
+      return vessels.tracks.map((t) => ({
+        mmsi: t.mmsi,
+        name: t.name,
+        path: t.path,
+        role: "plain" as const,
+      }));
     }
     const topMmsi = suspects.suspects[0]?.mmsi;
     const suspectMmsi = new Set(suspects.suspects.map((s) => s.mmsi));
@@ -283,12 +387,12 @@ export default function MapView() {
       if (t.mmsi === topMmsi) role = "top";
       else if (suspectMmsi.has(t.mmsi)) role = "suspect";
       else if (excludedMmsi.has(t.mmsi)) role = "excluded";
-      return { mmsi: t.mmsi, path: t.path, role };
+      return { mmsi: t.mmsi, name: t.name, path: t.path, role };
     });
   }, [vessels, suspects, abstainConfirmedFalse]);
 
   const vesselLayer = useMemo(() => {
-    if (!vesselsVisible || vesselItems.length === 0) return null;
+    if (!attributeRevealed || !vesselsVisible || vesselItems.length === 0) return null;
     // Edge case: a hovered mmsi with no matching track (shouldn't happen — Master §6.7 requires
     // every suspect mmsi to have a track — but defended anyway) falls back to plain role styling
     // for every track, rather than dimming everything with nothing highlighted.
@@ -314,10 +418,10 @@ export default function MapView() {
       widthMinPixels: 1,
       capRounded: true,
       jointRounded: true,
-      pickable: false,
+      pickable: true,
       updateTriggers: { getColor: [hoveredMmsi], getWidth: [hoveredMmsi] },
     });
-  }, [vesselItems, vesselsVisible, hoveredMmsi]);
+  }, [vesselItems, vesselsVisible, hoveredMmsi, attributeRevealed]);
 
   // docs/team/harshita-frontend.md Phase 3.5 — dark-vessel markers. Independent of `vesselsVisible` on purpose: the
   // whole point of the AIS-off reveal (docs/team/harshita-integration.md §3.3) is that toggling the AIS track layer off
@@ -325,11 +429,15 @@ export default function MapView() {
   // highlight (Phase 3.3) or the vessel PathLayer, so the two features cannot collide.
   const darkVesselItems = useMemo(() => {
     if (!suspects) return [] as DarkVesselMapItem[];
-    return suspects.darkVessels.map((dv) => ({ position: [dv.lon, dv.lat] as LonLat }));
+    return suspects.darkVessels.map((dv) => ({
+      position: [dv.lon, dv.lat] as LonLat,
+      name: dv.name ?? "Unidentified radar contact",
+      reasons: dv.reasons,
+    }));
   }, [suspects]);
 
   const darkVesselLayer = useMemo(() => {
-    if (darkVesselItems.length === 0) return null;
+    if (!attributeRevealed || darkVesselItems.length === 0) return null;
     return new ScatterplotLayer<DarkVesselMapItem>({
       id: "dark-vessels",
       data: darkVesselItems,
@@ -339,11 +447,11 @@ export default function MapView() {
       getRadius: DARK_VESSEL_RADIUS_PX,
       radiusUnits: "pixels",
       lineWidthUnits: "pixels",
-      getLineWidth: 1.5,
+      getLineWidth: 2.5,
       stroked: true,
-      pickable: false,
+      pickable: true,
     });
-  }, [darkVesselItems]);
+  }, [darkVesselItems, attributeRevealed]);
 
   // docs/team/harshita-frontend.md Phase 3.6 — infrastructure markers. Same independent-of-`vesselsVisible` reasoning
   // as dark vessels doesn't apply here (no toggle-driven reveal is described for infrastructure
@@ -354,7 +462,7 @@ export default function MapView() {
   }, [suspects]);
 
   const infrastructureLayer = useMemo(() => {
-    if (infrastructureItems.length === 0) return null;
+    if (!attributeRevealed || infrastructureItems.length === 0) return null;
     return new ScatterplotLayer<InfrastructureMapItem>({
       id: "infrastructure",
       data: infrastructureItems,
@@ -368,7 +476,7 @@ export default function MapView() {
       stroked: true,
       pickable: false,
     });
-  }, [infrastructureItems]);
+  }, [infrastructureItems, attributeRevealed]);
 
   // docs/team/harshita-frontend.md Phase 5.3 — ship_detections (Master §6.3, D34). Read the top-level scene list. Only a
   // bundle written before D34 lacks it; those carry the SAME full scene list on every feature, so
@@ -396,7 +504,7 @@ export default function MapView() {
   }, [detections]);
 
   const shipDetectionLayer = useMemo(() => {
-    if (shipDetectionItems.length === 0) return null;
+    if (!detectRevealed || shipDetectionItems.length === 0) return null;
     return new ScatterplotLayer<ShipDetectionMapItem>({
       id: "ship-detections",
       data: shipDetectionItems,
@@ -408,9 +516,67 @@ export default function MapView() {
       lineWidthUnits: "pixels",
       getLineWidth: 1.5,
       stroked: true,
-      pickable: false,
+      pickable: true,
     });
-  }, [shipDetectionItems]);
+  }, [shipDetectionItems, detectRevealed]);
+
+  // The Run-detection scan line. Driven by requestAnimationFrame only while `running` is
+  // "detect"; at every other moment `scanFrac` is null and no layer exists.
+  const [scanFrac, setScanFrac] = useState<number | null>(null);
+  useEffect(() => {
+    if (running !== "detect") {
+      setScanFrac(null);
+      return;
+    }
+    const start = performance.now();
+    const total = RUN_DURATION_MS.detect;
+    let raf = 0;
+    const tick = (now: number) => {
+      const f = Math.min(1, (now - start) / total);
+      setScanFrac(f);
+      if (f < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [running]);
+
+  const scanLayers = useMemo(() => {
+    if (scanFrac === null || !bounds) return [] as (PolygonLayer | PathLayer<LonLat[]>)[];
+    const w = bounds.east - bounds.west;
+    const x = bounds.west + w * scanFrac;
+    const x0 = Math.max(bounds.west, x - w * 0.12);
+    return [
+      new PolygonLayer<LonLat[]>({
+        id: "scan-band",
+        data: [
+          [
+            [x0, bounds.south],
+            [x, bounds.south],
+            [x, bounds.north],
+            [x0, bounds.north],
+          ],
+        ],
+        getPolygon: (d) => d,
+        getFillColor: SCAN_FILL,
+        stroked: false,
+        pickable: false,
+      }),
+      new PathLayer<LonLat[]>({
+        id: "scan-edge",
+        data: [
+          [
+            [x, bounds.south],
+            [x, bounds.north],
+          ],
+        ],
+        getPath: (d) => d,
+        getColor: SCAN_EDGE,
+        getWidth: 3,
+        widthUnits: "pixels",
+        pickable: false,
+      }),
+    ];
+  }, [scanFrac, bounds]);
 
   // Create the map exactly once.
   useEffect(() => {
@@ -419,23 +585,69 @@ export default function MapView() {
 
     const map = new MlMap({
       container: containerRef.current,
-      style: DARK_STYLE,
+      style: OCEAN_STYLE,
       center: b ? [(b.west + b.east) / 2, (b.south + b.north) / 2] : [80.4, 13.25],
       zoom: 8,
       attributionControl: false,
     });
     map.addControl(new NavigationControl({ showCompass: false }), "top-left");
+    // Bottom-LEFT: the bottom-right corner is where the primary action lives on every stage,
+    // and the compact attribution button was sitting underneath it.
+    map.addControl(new AttributionControl({ compact: true }), "bottom-left");
     mapRef.current = map;
 
     // deck.gl particle layer rides on top of the map through a single MapboxOverlay control.
     // Overlaid (not interleaved) mode keeps it independent of the map's style/GL state — it
     // just tracks the camera. Layers are pushed in via overlay.setProps() from the effect
     // below; the map itself never re-renders when the timestep changes.
-    const overlay = new MapboxOverlay({ interleaved: false, layers: [] });
+    // Hover tooltips carry the producer's own words — a dark-vessel marker shows its name (which
+    // names an external contact source when there is one) and its reasons, verbatim.
+    const overlay = new MapboxOverlay({
+      interleaved: false,
+      layers: [],
+      getTooltip: ({ object, layer }) => {
+        if (!object || !layer) return null;
+        const style = {
+          background: "#0b1624",
+          color: "#e2e8f0",
+          fontSize: "11px",
+          maxWidth: "280px",
+          padding: "8px 10px",
+          borderRadius: "6px",
+          lineHeight: "1.4",
+        };
+        if (layer.id === "dark-vessels") {
+          const d = object as DarkVesselMapItem;
+          return {
+            html: `<b>${escapeHtml(d.name)}</b><br/>${d.reasons.map((r) => `– ${escapeHtml(r)}`).join("<br/>")}`,
+            style,
+          };
+        }
+        if (layer.id === "vessels") {
+          const d = object as VesselMapItem;
+          const role =
+            d.role === "top" ? "top suspect" : d.role === "suspect" ? "suspect" :
+            d.role === "excluded" ? "excluded" : "considered";
+          return { html: `<b>${escapeHtml(d.name || d.mmsi)}</b><br/>MMSI ${escapeHtml(d.mmsi)} · ${role}`, style };
+        }
+        if (layer.id === "ship-detections") {
+          return {
+            html: "<b>Radar contact</b><br/>A bright point target found by UDGAM's ship detector. Whether it carried AIS is checked in Attribute.",
+            style,
+          };
+        }
+        return null;
+      },
+    });
     map.addControl(overlay as unknown as IControl);
     overlayRef.current = overlay;
 
-    map.on("load", () => {
+    // "style.load", not "load": "load" waits for every initial tile, and when the Esri tiles
+    // cannot be fetched (venue wifi down) it never fires — the SAR, detections and camera then
+    // never initialise and the demo shows an empty basemap. Measured with the tile host blocked.
+    // The style is inline, so "style.load" fires as soon as it is parsed, online or not.
+    map.once("style.load", () => {
+      if (styleReadyRef.current) return;
       styleReadyRef.current = true;
       setMapReady(true);
       const state = useAppStore.getState();
@@ -460,6 +672,19 @@ export default function MapView() {
           { padding: 40, animate: false },
         );
       }
+
+      // The SAR footprint as a thin outline, so the scene stays findable when Trace or
+      // Attribute zooms out to an origin far off the image.
+      map.addSource("scene-footprint", {
+        type: "geojson",
+        data: footprintGeoJSON(bb),
+      });
+      map.addLayer({
+        id: "scene-footprint-line",
+        type: "line",
+        source: "scene-footprint",
+        paint: { "line-color": SCENE_OUTLINE_COLOR, "line-width": 1.5, "line-dasharray": [3, 2] },
+      });
 
       map.addSource("detections", {
         type: "geojson",
@@ -505,7 +730,16 @@ export default function MapView() {
         type: "line",
         source: "detections",
         filter: ["==", ["get", "id"], "__none__"],
-        paint: { "line-color": "#ffffff", "line-width": 3 },
+        // A selection GLOW, not a replacement outline. A solid white 3 px line sat on top of
+        // the classification colour and hid it, so the selected feature stopped saying whether
+        // it was oil — the one thing this layer exists to communicate. A wide, soft, low-alpha
+        // white reads as "this is the one you picked" while the red/slate line shows through.
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": 6,
+          "line-opacity": 0.28,
+          "line-blur": 2,
+        },
       });
 
       // Apply current visibility + selection immediately.
@@ -554,7 +788,10 @@ export default function MapView() {
     if (activeStage !== "trace") return 1;
     const nSteps = particles?.nSteps ?? 0;
     const rewind = nSteps > 1 ? t / (nSteps - 1) : 0;
-    return smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind);
+    return (
+      ORIGIN_OPACITY_FLOOR +
+      (1 - ORIGIN_OPACITY_FLOOR) * smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind)
+    );
   }, [originVisible, activeStage, t, particles]);
 
   // Origin cloud + 50/90 % rings — the backdrop the particles rewind into, drawn UNDERNEATH
@@ -620,11 +857,14 @@ export default function MapView() {
         attributes: { getPosition: { value: frame, size: 2 } },
       },
       getFillColor: PARTICLE_FILL,
-      getRadius: 2,
+      getLineColor: PARTICLE_LINE,
+      getRadius: 2.2,
       radiusUnits: "pixels",
       radiusMinPixels: 1,
       radiusMaxPixels: 4,
-      stroked: false,
+      stroked: true,
+      lineWidthUnits: "pixels",
+      getLineWidth: 0.5,
       pickable: false,
     });
   }, [particles, particlesVisible, t]);
@@ -640,9 +880,12 @@ export default function MapView() {
         ...originLayerList,
         vesselLayer,
         particleLayer,
-        darkVesselLayer,
         infrastructureLayer,
         shipDetectionLayer,
+        // Last among the markers: a dark vessel is one of the ship detections, cross-checked, so
+        // it sits exactly on a teal contact marker and must be drawn over it.
+        darkVesselLayer,
+        ...scanLayers,
       ],
     });
   }, [
@@ -652,6 +895,7 @@ export default function MapView() {
     darkVesselLayer,
     infrastructureLayer,
     shipDetectionLayer,
+    scanLayers,
   ]);
 
   // SAR source follows the active case / bounds.
@@ -665,6 +909,9 @@ export default function MapView() {
         coordinates: imageCoordinates(bounds),
       });
     }
+    (map.getSource("scene-footprint") as GeoJSONSource | undefined)?.setData(
+      footprintGeoJSON(bounds),
+    );
   }, [activeCaseId, bounds]);
 
   // Camera. Detect and Trace fit exactly to the scene raster — byte-identical to this file
@@ -684,7 +931,8 @@ export default function MapView() {
     if (!map || !styleReadyRef.current || !bounds) return;
     const target =
       activeStage === "attribute"
-        ? sceneAndVesselExtent(bounds, vessels)
+        ? // The origin cloud is what the vessels are scored against, so keep it in frame.
+          sceneAndVesselExtent(origin ? unionGeo(bounds, origin.bounds) : bounds, vessels)
         : activeStage === "trace"
           ? sceneParticleOriginExtent(bounds, particles, origin)
           : bounds;
@@ -693,7 +941,7 @@ export default function MapView() {
         [target.west, target.south],
         [target.east, target.north],
       ],
-      { padding: 40, animate: false },
+      { padding: activeStage === "detect" ? 40 : 60, animate: false },
     );
   }, [activeStage, bounds, vessels, particles, origin, mapReady]);
 
@@ -710,7 +958,7 @@ export default function MapView() {
     const map = mapRef.current;
     if (!map || !styleReadyRef.current) return;
     syncVisibility(map);
-  }, [layers.sar, layers.detections]);
+  }, [layers.sar, layers.detections, detectRevealed]);
 
   // Selection highlight.
   useEffect(() => {
@@ -726,17 +974,18 @@ export default function MapView() {
 }
 
 function syncVisibility(map: MlMap) {
-  const { layers } = useAppStore.getState();
+  const { layers, revealed } = useAppStore.getState();
+  const showDetections = layers.detections && revealed.detect;
   const set = (id: string, visible: boolean) => {
     if (map.getLayer(id)) {
       map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
     }
   };
   set("sar-layer", layers.sar);
-  set("det-fill", layers.detections);
-  set("det-outline-oil", layers.detections);
-  set("det-outline-lookalike", layers.detections);
-  set("det-selected", layers.detections);
+  set("det-fill", showDetections);
+  set("det-outline-oil", showDetections);
+  set("det-outline-lookalike", showDetections);
+  set("det-selected", showDetections);
 }
 
 function syncSelection(map: MlMap) {

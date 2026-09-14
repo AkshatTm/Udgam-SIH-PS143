@@ -1,6 +1,6 @@
 {
   "case_id": "case-huntington-2021",
-  "title": "Huntington Beach — San Pedro Bay Pipeline",
+  "title": "Huntington Beach \u2014 San Pedro Bay Pipeline",
   "short_location": "San Pedro Bay, Orange County, California",
   "case_type": "spill",
   "satellite": "Sentinel-1A",
@@ -9,7 +9,8 @@
   "acts_available": [
     "detect",
     "trace",
-    "attribute"
+    "attribute",
+    "verify"
   ],
   "ais_source": "noaa_dense",
   "infrastructure_candidates": [
@@ -18,7 +19,7 @@
       "kind": "pipeline",
       "lon": -118.121,
       "lat": 33.57,
-      "source": "NTSB MIR-24-01, casualty fact table: location 33°34.20' N, 118°7.26' W (https://www.ntsb.gov/investigations/AccidentReports/Reports/MIR2401.pdf)"
+      "source": "NTSB MIR-24-01, casualty fact table: location 33\u00b034.20' N, 118\u00b07.26' W (https://www.ntsb.gov/investigations/AccidentReports/Reports/MIR2401.pdf)"
     }
   ],
   "gallery": {
@@ -26,5 +27,5 @@
     "blurb": "588 barrels of crude reached the Orange County coast. What released it?",
     "difficulty": "hard"
   },
-  "notes": "Infrastructure + exoneration case. The San Pedro Bay Pipeline (operator Amplify Energy / Beta Offshore) began leaking the evening of 1 Oct 2021, 4.75 nm off Huntington Beach (NTSB casualty location 33°34.20' N, 118°7.26' W); first leak alarm 1 Oct 16:10 PDT (23:10Z), final shutdown 2 Oct 06:04 PDT. This S1A pass is ~2.8 h after the first alarm, oil still leaking. NTSB MIR-24-01 attributes the cause to the containerships MSC DANIT and Beijing dragging anchor and striking the pipeline on 25 Jan 2021 — 8 months before the release. The pre-run expectation was an origin on the pipeline right-of-way. Measured 14 Sept: the origin-grid peak sits ~6.7 km from NTSB's casualty location, which lies outside the grid, so the declared pipeline scores below the infrastructure floor (D38).Stage 3 abstains on vessels here (top two cannot be separated on this evidence); verify is added only once the infrastructure finding and the hand-written assessment land. D35 seed: trace seeded from det-01 (merged: no, the only oil feature); n_oil=1; seed area 2.64 of 2.64 km2 of oil on the scene. One trace per spill event; selecting another detection does not re-trace."
+  "notes": "Infrastructure + exoneration case. The San Pedro Bay Pipeline (operator Amplify Energy / Beta Offshore) began leaking the evening of 1 Oct 2021, 4.75 nm off Huntington Beach (NTSB casualty location 33\u00b034.20' N, 118\u00b07.26' W); first leak alarm 1 Oct 16:10 PDT (23:10Z), final shutdown 2 Oct 06:04 PDT. This S1A pass is ~2.8 h after the first alarm, oil still leaking. NTSB MIR-24-01 attributes the cause to the containerships MSC DANIT and Beijing dragging anchor and striking the pipeline on 25 Jan 2021 \u2014 8 months before the release. The pre-run expectation was an origin on the pipeline right-of-way. Measured 14 Sept: the origin-grid peak sits ~6.7 km from NTSB's casualty location, which lies outside the grid, so the declared pipeline scores below the infrastructure floor (D38).Stage 3 abstains on vessels here (top two cannot be separated on this evidence); verify is added only once the infrastructure finding and the hand-written assessment land. D35 seed: trace seeded from det-01 (merged: no, the only oil feature); n_oil=1; seed area 2.64 of 2.64 km2 of oil on the scene. One trace per spill event; selecting another detection does not re-trace."
 }

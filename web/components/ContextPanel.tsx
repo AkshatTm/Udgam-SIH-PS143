@@ -11,6 +11,8 @@ import {
 import { useAppStore } from "@/lib/store";
 import type {
   AisSource,
+  Bounds,
+  CaseMeta,
   DetectionProperties,
   DischargeClass,
   Provenance,
@@ -28,9 +30,12 @@ import type {
 } from "@/lib/suspects";
 import InfoDot from "@/components/InfoDot";
 
-// Classification colours — same hex as the map detection polygons.
-const OIL_COLOR = "#ff4d4d";
-const LOOKALIKE_COLOR = "#9aa4b2";
+// Classification colours. The comment always claimed these matched the map; they did not — the
+// panel was a hair redder and a shade lighter than the polygons beside it. Both now read the
+// --oil / --reject tokens, which MapView's OIL_COLOR / LOOKALIKE_COLOR also carry, so a slick
+// called red in this panel is the same red on the map.
+const OIL_COLOR = "var(--oil)";
+const LOOKALIKE_COLOR = "var(--reject)";
 
 const fmt = (x: number | undefined, digits: number): string =>
   typeof x === "number" && Number.isFinite(x)
@@ -105,7 +110,7 @@ function featureRows(
 /** Dimmed uppercase section label */
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-5 text-[9px] font-semibold uppercase tracking-[0.16em] text-white/35 first:mt-0">
+    <div className="mt-5 t-label first:mt-0">
       {children}
     </div>
   );
@@ -113,15 +118,15 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 /** Hairline divider */
 function Divider() {
-  return <div className="my-4 border-t border-white/[0.07]" />;
+  return <div className="my-4 border-t border-line" />;
 }
 
 /** One row: label left, monospace value right */
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-[3px]">
-      <span className="text-[11px] text-white/45">{label}</span>
-      <span className="font-mono text-[11px] text-white/85 tabular-nums">
+      <span className="t-small text-ink-2">{label}</span>
+      <span className="font-mono text-[13px] text-ink tabular-nums">
         {value}
       </span>
     </div>
@@ -148,15 +153,15 @@ function MetricRow({
     // button itself, so it stays inside the panel regardless of how long `primary` is.
     <div className="relative flex items-start justify-between gap-3 py-[3px]">
       <span className="flex flex-col gap-0">
-        <span className="flex items-center gap-1 text-[11px] text-white/80">
+        <span className="flex items-center gap-1 t-small text-ink">
           {primary}
           <InfoDot tip={tip} />
         </span>
         {technical && (
-          <span className="text-[9px] text-white/35">{technical}</span>
+          <span className="text-[11px] text-ink-3">{technical}</span>
         )}
       </span>
-      <span className="font-mono text-[11px] text-white/85 tabular-nums shrink-0">
+      <span className="font-mono text-[13px] text-ink tabular-nums shrink-0">
         {value}
       </span>
     </div>
@@ -174,11 +179,11 @@ const DISCHARGE_CLASS_PLAIN: Record<DischargeClass, string> = {
 
 function DischargeBadge({ value }: { value: DischargeClass }) {
   return (
-    <div className="mt-1.5 inline-flex items-baseline gap-1.5 rounded border border-white/15 bg-white/[0.05] px-2 py-1">
-      <span className="text-[10px] font-semibold text-white/80">
+    <div className="mt-1.5 inline-flex items-baseline gap-1.5 rounded border border-line-strong bg-white/[0.05] px-2 py-1">
+      <span className="text-[12px] font-semibold text-ink">
         {DISCHARGE_CLASS_PLAIN[value]}
       </span>
-      <span className="font-mono text-[9px] text-white/35">{value}</span>
+      <span className="font-mono text-[11px] text-ink-3">{value}</span>
     </div>
   );
 }
@@ -242,16 +247,16 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
     <div className="flex flex-col">
       {/* ── Header ── */}
       <div className="border-l-2 pl-3" style={{ borderColor: accentColor }}>
-        <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+        <div className="t-label">
           Object {objNum}
         </div>
         <div
-          className="mt-0.5 text-[22px] font-semibold leading-tight tracking-tight"
+          className="mt-0.5 t-title"
           style={{ color: isOil ? OIL_COLOR : LOOKALIKE_COLOR }}
         >
-          {isOil ? "Oil Slick" : "Look-alike"}
+          {isOil ? "Oil slick" : "Look-alike"}
         </div>
-        <div className="mt-0.5 font-mono text-[11px] text-white/50">
+        <div className="mt-0.5 font-mono text-[13px] text-ink-2">
           {confidenceLabel(p, provenance)}
         </div>
         {p.discharge_class && <DischargeBadge value={p.discharge_class} />}
@@ -299,10 +304,10 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
       {/* ── Centroid ── */}
       <SectionLabel>Centroid</SectionLabel>
       <div className="mt-1.5">
-        <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
+        <div className="font-mono text-[13px] leading-snug text-ink tabular-nums">
           {fmtLat(p.centroid?.[1], 5)}
         </div>
-        <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
+        <div className="font-mono text-[13px] leading-snug text-ink tabular-nums">
           {fmtLon(p.centroid?.[0], 5)}
         </div>
       </div>
@@ -345,7 +350,7 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-        <p className="mt-1 text-[10px] leading-snug text-white/28">
+        <p className="mt-1 text-[13px] leading-snug text-ink-3">
           Geometric features from slick outline — not model probabilities.
         </p>
       </div>
@@ -354,7 +359,7 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
 
       {/* ── Detection ID ── */}
       <SectionLabel>Detection ID</SectionLabel>
-      <div className="mt-1.5 font-mono text-[11px] text-white/60">{p.id}</div>
+      <div className="mt-1.5 font-mono text-[13px] text-ink-2">{p.id}</div>
     </div>
   );
 }
@@ -379,13 +384,13 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
     <div className="flex flex-col">
       {/* ── Header ── */}
       <div>
-        <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+        <div className="t-label">
           Stage 02 — Trace
         </div>
-        <div className="mt-1 text-[22px] font-semibold leading-tight tracking-tight text-white">
-          Where the Oil Came From
+        <div className="mt-1 t-title text-ink">
+          Where the oil came from
         </div>
-        <div className="mt-0.5 font-mono text-[11px] text-white/40">
+        <div className="mt-0.5 font-mono text-[11px] text-ink-3">
           {origin.ensembleRuns} simulations
         </div>
       </div>
@@ -397,10 +402,10 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
       {/* `relative` — see InfoDot.tsx: the tooltip anchors to this row, not the button. */}
       <div className="relative mt-1.5 flex items-start gap-1">
         <div className="flex-1">
-          <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
+          <div className="font-mono text-[13px] leading-snug text-ink tabular-nums">
             {fmtLat(origin.centroid[1], 5)}
           </div>
-          <div className="font-mono text-[12px] leading-snug text-white/85 tabular-nums">
+          <div className="font-mono text-[13px] leading-snug text-ink tabular-nums">
             {fmtLon(origin.centroid[0], 5)}
           </div>
         </div>
@@ -436,10 +441,10 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
       {/* `relative` — see InfoDot.tsx: the tooltip anchors to this row, not the button. */}
       <div className="relative mt-1.5 flex items-start gap-1">
         <div className="flex-1">
-          <div className="font-mono text-[13px] font-semibold text-white/90">
+          <div className="font-mono text-[15px] font-semibold text-ink">
             {fmtDay(start)}
           </div>
-          <div className="font-mono text-[11px] text-white/70">
+          <div className="font-mono text-[13px] text-ink-2">
             {fmtTime(start)} – {fmtTime(end)} UTC
           </div>
         </div>
@@ -452,12 +457,12 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
       {/* D12 — the method line below says whether this window is a search bracket or a
           measured estimate. No always-on caption: it contradicted "Measured estimate". */}
       {origin.timeWindowMethod === "bounded" && (
-        <p className="mt-2 text-[10px] leading-relaxed text-white/45">
+        <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
           Search bracket (not a measured release time)
         </p>
       )}
       {origin.timeWindowMethod === "convergence" && (
-        <p className="mt-2 text-[10px] leading-relaxed text-white/45">
+        <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
           Measured estimate
         </p>
       )}
@@ -473,12 +478,12 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
           <div className="relative mt-1.5 flex items-start gap-1">
             <div className="flex-1">
               {origin.ageHours && (
-                <div className="font-mono text-[13px] font-semibold text-white/90">
+                <div className="font-mono text-[15px] font-semibold text-ink">
                   {fmt(origin.ageHours[0], 0)} – {fmt(origin.ageHours[1], 0)} hours
                 </div>
               )}
               {origin.ageMethod && (
-                <div className="mt-0.5 text-[10px] text-white/45">
+                <div className="mt-0.5 text-[13px] text-ink-2">
                   {AGE_METHOD_LABEL[origin.ageMethod]}
                 </div>
               )}
@@ -490,8 +495,8 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
           </div>
           {/* Per-estimator bands, collapsed. A null band is "not applicable" — never a zero. */}
           {origin.ageEstimators && Object.keys(origin.ageEstimators).length > 0 && (
-            <details className="mt-2 text-[10px] text-white/45">
-              <summary className="cursor-pointer select-none text-white/40 hover:text-white/60">
+            <details className="mt-2 text-[13px] text-ink-2">
+              <summary className="cursor-pointer select-none text-ink-3 hover:text-ink-2">
                 Per-estimator bands
               </summary>
               <div className="mt-1 space-y-0.5">
@@ -513,18 +518,18 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
                               and Stage 3 names no suspects (docs/CONTRACTS.md §6);
           abstain === false → the origin is tight enough for attribution to run. */}
       {origin.abstain ? (
-        <div className="mt-3 rounded border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] leading-relaxed text-white/55">
+        <div className="mt-3 rounded border border-line bg-raised px-2.5 py-1.5 text-[13px] leading-relaxed text-ink-2">
           Origin cloud too diffuse — no suspects can be named.
         </div>
       ) : (
-        <div className="mt-3 rounded border border-white/[0.08] px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-white/30">
+        <div className="mt-3 rounded border border-line px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-ink-3">
           Origin within attribution confidence
         </div>
       )}
 
       {/* The drifting points are ONE control trajectory (particles.json); the
           uncertainty lives in the origin field and the 50 / 90 % regions above. */}
-      <p className="mt-4 text-[10px] leading-relaxed text-white/28">
+      <p className="mt-4 text-[13px] leading-relaxed text-ink-3">
         The drifting points trace one representative path, not a spread. The
         uncertainty is the origin probability field and the 50 / 90 % regions
         above, stacked from {origin.ensembleRuns} perturbed runs.
@@ -554,17 +559,17 @@ const AIS_SAMPLING_LABEL: Record<AisSource, string> = {
 function NaturalSeepNotice({ seep }: { seep: NaturalSeep }) {
   return (
     <div className="rounded border border-[#fbbf24]/30 bg-[#fbbf24]/[0.08] p-3">
-      <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#fcd34d]/80">
+      <div className="t-label text-[#fcd34d]/80">
         Documented natural seepage in this area
       </div>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-[#fde68a]/80">
+      <p className="mt-1.5 text-[13px] leading-relaxed text-[#fde68a]/80">
         Some or all of this feature may be geological rather than a discharge.
       </p>
       {seep.note && (
-        <p className="mt-1.5 text-[10px] leading-relaxed text-[#fde68a]/55">{seep.note}</p>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-[#fde68a]/55">{seep.note}</p>
       )}
       {seep.source && (
-        <p className="mt-1 text-[9px] text-[#fde68a]/40">Source: {seep.source}</p>
+        <p className="mt-1 text-[13px] text-[#fde68a]/40">Source: {seep.source}</p>
       )}
     </div>
   );
@@ -588,12 +593,12 @@ function FunnelBar({ funnel }: { funnel: Funnel }) {
         return (
           <div key={s.label}>
             <div className="flex items-baseline justify-between">
-              <span className="text-[10px] text-white/45">{s.label}</span>
-              <span className="font-mono text-[11px] text-white/85 tabular-nums">
+              <span className="text-[13px] text-ink-2">{s.label}</span>
+              <span className="font-mono text-[13px] text-ink tabular-nums">
                 {s.value}
               </span>
             </div>
-            <div className="mt-1 h-1 rounded-full bg-white/[0.06]">
+            <div className="mt-1 h-1 rounded-full bg-white/[0.07]">
               <div
                 className="h-1 rounded-full bg-[#f97316]"
                 style={{ width: `${pct}%` }}
@@ -641,13 +646,13 @@ function ComponentBars({
         return (
           <div key={key} title={v !== null ? note : undefined}>
             <div className="flex items-baseline justify-between">
-              <span className="text-[10px] text-white/45">{label}</span>
-              <span className="font-mono text-[10px] text-white/70 tabular-nums">
+              <span className="text-[13px] text-ink-2">{label}</span>
+              <span className="font-mono text-[13px] text-ink-2 tabular-nums">
                 {v === null ? "n/a" : v.toFixed(2)}
               </span>
             </div>
             {v !== null && (
-              <div className="mt-0.5 h-1 rounded-full bg-white/[0.06]">
+              <div className="mt-0.5 h-1 rounded-full bg-white/[0.07]">
                 <div
                   className="h-1 rounded-full bg-[#f97316]"
                   style={{ width: `${Math.max(2, Math.min(100, v * 100))}%` }}
@@ -655,7 +660,7 @@ function ComponentBars({
               </div>
             )}
             {v === null && note && (
-              <p className="mt-0.5 text-[9px] leading-snug text-white/35">{note}</p>
+              <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{note}</p>
             )}
           </div>
         );
@@ -686,47 +691,47 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
   return (
     <div
       className={`rounded border p-3 transition-colors ${
-        isHovered ? "border-[#f97316]/60 bg-[#f97316]/[0.04]" : "border-white/[0.08]"
+        isHovered ? "border-[#f97316]/60 bg-[#f97316]/[0.04]" : "border-line"
       }`}
       onMouseEnter={() => setHoveredSuspect(s.mmsi)}
       onMouseLeave={() => setHoveredSuspect(null)}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+          <div className="t-label">
             Suspect {String(rank).padStart(2, "0")}
           </div>
           <div className="mt-0.5 flex items-center gap-1.5">
-            <span className="text-[14px] font-semibold leading-tight text-white/90">
+            <span className="text-[13px] font-semibold leading-tight text-ink">
               {s.name}
             </span>
             {/* docs/team/harshita-frontend.md Phase 3.7 — badge near identity, per the roadmap's own placement ask.
                 Only ever rendered from a real repeat_offender record — never inferred from
                 score, mmsi recurrence, or anything computed here. */}
             {s.repeatOffender && (
-              <span className="inline-flex shrink-0 items-center rounded-full border border-[#f97316]/40 bg-[#f97316]/10 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-[#f97316]">
+              <span className="inline-flex shrink-0 items-center rounded-full border border-drift/40 bg-drift/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-drift">
                 Repeat
               </span>
             )}
           </div>
-          <div className="mt-0.5 font-mono text-[10px] text-white/40">
+          <div className="mt-0.5 font-mono text-[11px] text-ink-3">
             MMSI {s.mmsi}
             {s.vesselType ? ` · ${s.vesselType}` : ""}
           </div>
           {s.repeatOffender && (
-            <p className="mt-1 text-[10px] leading-relaxed text-[#f97316]/70">
+            <p className="mt-1 text-[13px] leading-relaxed text-drift/70">
               Also scored in {s.repeatOffender.cases.length} other case
               {s.repeatOffender.cases.length === 1 ? "" : "s"} — best rank #
               {s.repeatOffender.bestRank}
             </p>
           )}
         </div>
-        <div className="shrink-0 font-mono text-[15px] font-semibold text-[#f97316]">
+        <div className="shrink-0 font-mono text-[15px] font-semibold text-drift">
           {fmt(s.score * 100, 0)}%
         </div>
       </div>
       {breadth && (
-        <div className="mt-1 text-right font-mono text-[9px] text-white/45 tabular-nums">
+        <div className="mt-1 text-right font-mono text-[13px] text-ink-2 tabular-nums">
           scored from {breadth.available} of {breadth.total} components
         </div>
       )}
@@ -734,16 +739,16 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
       <div className="mt-2 space-y-0.5">
         {/* D36 — closest_km is measured to the origin-grid peak, not the ring centre. */}
         <div className="relative flex items-baseline justify-between gap-3 py-[3px]">
-          <span className="flex items-center gap-1 text-[11px] text-white/45">
+          <span className="flex items-center gap-1 text-[13px] text-ink-2">
             Distance to origin peak
             <InfoDot tip="Measured from the highest-probability cell of the origin grid to this vessel's report there — not from the centre of the rings." />
           </span>
-          <span className="font-mono text-[11px] text-white/85 tabular-nums">
+          <span className="font-mono text-[13px] text-ink tabular-nums">
             {fmt(s.closestKm, 1)} km
           </span>
         </div>
         {s.edgeTruncated && (
-          <p className="text-[10px] leading-snug text-[#fcd34d]/75">
+          <p className="text-[13px] leading-snug text-[#fcd34d]/75">
             Track is cut off at the search-box edge — this distance may be understated.
           </p>
         )}
@@ -771,7 +776,7 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
           fabricated breakdown. Present-but-per-field-null is handled inside ComponentBars. */}
       {s.components && (
         <>
-          <div className="relative mt-2.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-white/30">
+          <div className="relative mt-2.5 flex items-center gap-1 t-label">
             Score Breakdown
             <InfoDot
               tip={`The score is renormalised over the components that could be measured for this vessel${
@@ -785,8 +790,8 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
 
       <ul className="mt-2 space-y-1">
         {s.reasons.map((r, i) => (
-          <li key={i} className="flex gap-1.5 text-[10px] leading-snug text-white/50">
-            <span className="shrink-0 text-white/25">–</span>
+          <li key={i} className="flex gap-1.5 text-[13px] leading-snug text-ink-2">
+            <span className="shrink-0 text-ink-4">–</span>
             <span>{r}</span>
           </li>
         ))}
@@ -800,11 +805,11 @@ function SuspectCard({ s, rank }: { s: Suspect; rank: number }) {
  * half of that motif. */
 function ExcludedCard({ e }: { e: ExcludedVessel }) {
   return (
-    <div className="rounded border border-white/[0.06] bg-white/[0.02] p-3">
-      <div className="text-[13px] font-medium text-white/45 line-through decoration-white/25">
+    <div className="rounded border border-line bg-raised/60 p-3">
+      <div className="text-[13px] font-medium text-ink-2 line-through decoration-white/25">
         {e.name ?? e.mmsi}
       </div>
-      <div className="mt-0.5 font-mono text-[10px] text-white/30">
+      <div className="mt-0.5 font-mono text-[11px] text-ink-3">
         MMSI {e.mmsi}
         {/* `!= null` on purpose, so it catches an explicit null as well as an absent field: a
             vessel excluded for having no report inside the window has no closest approach to
@@ -812,7 +817,7 @@ function ExcludedCard({ e }: { e: ExcludedVessel }) {
             missing measurement as a dash where no measurement exists. */}
         {e.closestKm != null ? ` · ${fmt(e.closestKm, 1)} km` : ""}
       </div>
-      <p className="mt-1.5 text-[10px] leading-relaxed text-white/40">{e.reason}</p>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">{e.reason}</p>
     </div>
   );
 }
@@ -827,20 +832,25 @@ function DarkVesselCard({ v }: { v: DarkVessel }) {
         <div className="text-[13px] font-medium text-[#fda4af]">
           {v.name ?? `Radar contact ${fmt(v.lat, 3)}°, ${fmt(v.lon, 3)}°`}
         </div>
-        <div className="shrink-0 font-mono text-[13px] font-semibold text-[#fda4af]">
-          {fmt(v.score * 100, 0)}%
+        <div className="shrink-0 text-right">
+          <div className="font-mono text-[15px] font-semibold text-[#fda4af]">
+            {fmt(v.score, 2)}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-[#fda4af]/50">relevance</div>
         </div>
       </div>
       <div className="mt-1 space-y-0.5">
-        {v.estLengthM !== null && <Row label="Estimated length" value={`${fmt(v.estLengthM, 0)} m`} />}
+        {v.estLengthM !== null && (
+          <Row label="Size (coarse)" value={`~${fmt(v.estLengthM, 0)} m`} />
+        )}
         {v.angularDeviationDeg !== null && (
-          <Row label="Bearing deviation" value={`${fmt(v.angularDeviationDeg, 0)}°`} />
+          <Row label="Off the slick's axis" value={`${fmt(v.angularDeviationDeg, 0)}°`} />
         )}
       </div>
       {v.reasons.length > 0 && (
         <ul className="mt-1.5 space-y-1">
           {v.reasons.map((r, i) => (
-            <li key={i} className="flex gap-1.5 text-[10px] leading-snug text-[#fda4af]/70">
+            <li key={i} className="flex gap-1.5 text-[13px] leading-snug text-[#fda4af]/70">
               <span className="shrink-0 text-[#fda4af]/40">–</span>
               <span>{r}</span>
             </li>
@@ -861,14 +871,14 @@ function InfrastructureCard({ f }: { f: Infrastructure }) {
     <div className="rounded border border-[#a78bfa]/25 bg-[#a78bfa]/[0.05] p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="text-[13px] font-medium text-[#c4b5fd]">{f.name}</div>
-        <div className="shrink-0 font-mono text-[13px] font-semibold text-[#c4b5fd]">
+        <div className="shrink-0 font-mono text-[15px] font-semibold text-[#c4b5fd]">
           {fmt(f.score * 100, 0)}%
         </div>
       </div>
       {f.reasons.length > 0 && (
         <ul className="mt-1.5 space-y-1">
           {f.reasons.map((r, i) => (
-            <li key={i} className="flex gap-1.5 text-[10px] leading-snug text-[#c4b5fd]/70">
+            <li key={i} className="flex gap-1.5 text-[13px] leading-snug text-[#c4b5fd]/70">
               <span className="shrink-0 text-[#c4b5fd]/40">–</span>
               <span>{r}</span>
             </li>
@@ -895,38 +905,42 @@ function AttributeCard({
   suspects,
   gate,
   aisSource,
+  shipContacts,
 }: {
   suspects: SuspectsBundle;
   gate: "loading" | "unknown" | "abstain" | "clear";
   aisSource?: AisSource;
+  /** Length of detections.ship_detections, or null when the ship detector was not recorded. */
+  shipContacts: number | null;
 }) {
   return (
     <div className="flex flex-col">
       <div>
-        <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+        <div className="t-label">
           Stage 03 — Attribute
         </div>
-        <div className="mt-1 text-[22px] font-semibold leading-tight tracking-tight text-white">
-          Vessel Attribution
+        <div className="mt-1 t-title text-ink">
+          Who was there
         </div>
         {/* Absent only when the bundle predates this field or the case has no attribution act
             yet — no guessed regime is ever shown in its place. */}
         {aisSource && (
-          <div className="mt-1 text-[10px] text-white/40">{AIS_SAMPLING_LABEL[aisSource]}</div>
+          <div className="mt-1 text-[13px] text-ink-3">{AIS_SAMPLING_LABEL[aisSource]}</div>
         )}
       </div>
 
       <Divider />
 
-      <SectionLabel>Attribution Funnel</SectionLabel>
+      <SectionLabel>Attribution funnel</SectionLabel>
       <div className="mt-2">
         <FunnelBar funnel={suspects.funnel} />
         {/* A side count, not a fifth narrowing stage — kept out of FunnelBar's bars so it can
             never be misread as part of the in_region→scored sequence. null (field absent) ≠ 0
             (field present and zero) — see Funnel.droppedShortTrack. */}
         {suspects.funnel.droppedShortTrack !== null && (
-          <p className="mt-2 text-[10px] leading-relaxed text-white/45">
-            {suspects.funnel.droppedShortTrack} dropped — fewer than 5 AIS reports
+          <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
+            {suspects.funnel.droppedShortTrack} dropped — fewer than{" "}
+            {aisSource === "gfw_hourly" ? "2 hourly AIS positions" : "5 AIS reports"}
           </p>
         )}
       </div>
@@ -934,11 +948,11 @@ function AttributeCard({
       <Divider />
 
       {gate === "loading" && (
-        <p className="text-[11px] text-white/35">Confirming attribution status…</p>
+        <p className="text-[13px] text-ink-3">Confirming attribution status…</p>
       )}
 
       {gate === "unknown" && (
-        <div className="rounded border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-relaxed text-white/50">
+        <div className="rounded border border-line bg-raised p-3 text-[13px] leading-relaxed text-ink-2">
           Origin estimate unavailable — the suspect list is withheld until abstain status can be
           confirmed.
         </div>
@@ -946,19 +960,34 @@ function AttributeCard({
 
       {gate === "abstain" && (
         // docs/team/harshita-frontend.md D2 — style as a deliberate decision, never a failure. No red, no ✗.
-        <div className="rounded border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+        <div className="rounded border border-line bg-raised p-3">
+          <div className="t-label">
             Deliberate abstention
           </div>
-          <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-white/75">
+          <p className="mt-1.5 text-[13px] font-medium leading-relaxed text-ink-2">
             {ABSTAIN_MESSAGE}
           </p>
           {suspects.abstainReason && (
-            <p className="mt-2 text-[10px] leading-relaxed text-white/45">
+            <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
               {suspects.abstainReason}
             </p>
           )}
         </div>
+      )}
+
+      {/* An abstention is a result, not a blank: show who was considered and why nobody is
+          named. On an abstain, score.py lists the plausible candidates first, each with its
+          measured score and the abstain reason, then the nearest vessels the funnel dropped. */}
+      {gate === "abstain" && suspects.excluded.length > 0 && (
+        <>
+          <Divider />
+          <SectionLabel>Nearest candidates — and why none is named</SectionLabel>
+          <div className="mt-2 space-y-2">
+            {suspects.excluded.map((e) => (
+              <ExcludedCard key={e.mmsi} e={e} />
+            ))}
+          </div>
+        </>
       )}
 
       {/* D19 — contextual evidence about the scene, rendered ABOVE the ranked list and never
@@ -975,7 +1004,7 @@ function AttributeCard({
           <SectionLabel>Suspects</SectionLabel>
           <div className="mt-2 space-y-2">
             {suspects.suspects.length === 0 ? (
-              <p className="text-[11px] text-white/35">No suspects scored.</p>
+              <p className="text-[13px] text-ink-3">No suspects scored.</p>
             ) : (
               suspects.suspects.map((s, i) => (
                 <SuspectCard key={s.mmsi} s={s} rank={i + 1} />
@@ -988,7 +1017,7 @@ function AttributeCard({
           <SectionLabel>Excluded</SectionLabel>
           <div className="mt-2 space-y-2">
             {suspects.excluded.length === 0 ? (
-              <p className="text-[11px] text-white/35">No vessels excluded.</p>
+              <p className="text-[13px] text-ink-3">No vessels excluded.</p>
             ) : (
               suspects.excluded.map((e) => <ExcludedCard key={e.mmsi} e={e} />)
             )}
@@ -1004,16 +1033,24 @@ function AttributeCard({
           {/* docs/team/harshita-frontend.md Phase 3.5 — hidden entirely when empty, same convention as Score
               Breakdown: a rare/exceptional category should not clutter the panel with a
               "none" message the way Suspects/Excluded (always-expected sections) do. */}
-          {suspects.darkVessels.length > 0 && (
-            <>
-              <Divider />
-              <SectionLabel>Dark Vessels</SectionLabel>
-              <div className="mt-2 space-y-2">
-                {suspects.darkVessels.map((v, i) => (
-                  <DarkVesselCard key={i} v={v} />
-                ))}
-              </div>
-            </>
+          <Divider />
+          <SectionLabel>Dark vessels — radar vs transponder</SectionLabel>
+          {suspects.darkVessels.length > 0 ? (
+            <div className="mt-2 space-y-2">
+              {suspects.darkVessels.map((v, i) => (
+                <DarkVesselCard key={i} v={v} />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
+              {shipContacts === null
+                ? "No radar-contact list was recorded for this scene, so darkness was not assessed."
+                : shipContacts === 0
+                  ? "UDGAM's ship detector found no radar contact on this scene, and no listed radar contact is unexplained by AIS."
+                  : `UDGAM's ship detector found ${shipContacts} radar contact${
+                      shipContacts === 1 ? "" : "s"
+                    } on this scene. None is both unexplained by AIS at acquisition time and near the slick or origin.`}
+            </p>
           )}
 
           {/* docs/team/harshita-frontend.md Phase 3.6 — same hidden-when-empty convention as Dark Vessels/Score
@@ -1036,6 +1073,107 @@ function AttributeCard({
   );
 }
 
+// ─── Guided flow: before a stage has been run ────────────────────────────────
+
+/** The "Scene" step: the raw radar image, before the detector has been run on it. Everything
+ *  here is scene metadata the export recorded — nothing about what the detector found. */
+function SceneCard({ meta, bounds }: { meta: CaseMeta; bounds: Bounds | null }) {
+  const midLat = bounds ? (bounds.south + bounds.north) / 2 : 0;
+  const widthKm = bounds
+    ? (bounds.east - bounds.west) * 111.32 * Math.cos((midLat * Math.PI) / 180)
+    : null;
+  const heightKm = bounds ? (bounds.north - bounds.south) * 111.32 : null;
+  const benchmark = meta.provenance === "benchmark";
+  return (
+    <div className="flex flex-col">
+      <div className="t-label">
+        The scene
+      </div>
+      <div className="mt-1 t-title text-ink">
+        {meta.title}
+      </div>
+      {meta.short_location && (
+        <div className="mt-0.5 text-[13px] text-ink-2">{meta.short_location}</div>
+      )}
+      <Divider />
+      <SectionLabel>What you are looking at</SectionLabel>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
+        A synthetic-aperture radar image. The satellite sends microwaves down and measures what
+        bounces back. Wind-roughened sea scatters it back and looks bright; oil smooths the
+        surface, so a slick looks <span className="font-semibold text-ink">dark</span>.
+      </p>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
+        Calm water, rain cells and algae look dark too. Telling them apart is the detector&apos;s
+        job.
+      </p>
+      <Divider />
+      <SectionLabel>Acquisition</SectionLabel>
+      <div className="mt-2 space-y-0.5">
+        <Row label="Satellite" value={meta.satellite} />
+        {!benchmark && (
+          <Row
+            label="Time (UTC)"
+            value={`${fmtDay(meta.detection_time)} ${fmtTime(meta.detection_time)}`}
+          />
+        )}
+        {bounds && <Row label="Polarisation" value={bounds.vh_available ? "VV + VH" : "VV"} />}
+        {widthKm !== null && heightKm !== null && (
+          <Row label="Footprint" value={`${fmt(widthKm, 1)} × ${fmt(heightKm, 1)} km`} />
+        )}
+        {bounds && bounds.db_min !== undefined && bounds.db_max !== undefined && (
+          <Row
+            label="Display stretch"
+            value={`${fmt(bounds.db_min, 0)} to ${fmt(bounds.db_max, 0)} dB`}
+          />
+        )}
+      </div>
+      {!benchmark && (
+        <p className="mt-2 break-all font-mono text-[11px] leading-snug text-ink-3">
+          {meta.scene_id}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const STAGE_HEADER: Record<"trace" | "attribute", { n: string; title: string; body: string }> = {
+  trace: {
+    n: "02",
+    title: "Backward drift",
+    body:
+      "The slick has been moving since it was spilled, carried by surface currents plus about 3% " +
+      "of the wind. Running that physics backwards, 50 times with perturbed inputs, shows where " +
+      "the oil most likely entered the water and how unsure we are.",
+  },
+  attribute: {
+    n: "03",
+    title: "Attribution",
+    body:
+      "Every AIS-broadcasting vessel near the reconstructed origin is scored on evidence: was it " +
+      "inside the origin cloud during the release window, how did it move, did its transponder " +
+      "go silent. Radar contacts with no AIS broadcast are cross-checked separately.",
+  },
+};
+
+function PendingStageCard({ stage, running }: { stage: "trace" | "attribute"; running: boolean }) {
+  const h = STAGE_HEADER[stage];
+  return (
+    <div className="flex flex-col">
+      <div className="t-label">
+        Stage {h.n}
+      </div>
+      <div className="mt-1 t-title text-ink">
+        {h.title}
+      </div>
+      <Divider />
+      <p className="text-[13px] leading-relaxed text-ink-2">{h.body}</p>
+      <p className="mt-3 text-[13px] font-medium text-[#fb923c]">
+        {running ? "Running…" : "Not run yet — press the button at the bottom right."}
+      </p>
+    </div>
+  );
+}
+
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
 export default function ContextPanel() {
@@ -1050,6 +1188,9 @@ export default function ContextPanel() {
   const suspects = useAppStore((s) => s.suspects);
   const suspectsStatus = useAppStore((s) => s.suspectsStatus);
   const suspectsError = useAppStore((s) => s.suspectsError);
+  const bounds = useAppStore((s) => s.bounds);
+  const revealed = useAppStore((s) => s.revealed);
+  const running = useAppStore((s) => s.running);
 
   const oilCount =
     detections?.features.filter((f) => f.properties.classification === "oil")
@@ -1063,22 +1204,32 @@ export default function ContextPanel() {
   );
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col overflow-y-auto border-l border-white/[0.08] bg-[#0b0f14] px-5 py-5">
-      {activeStage === "detect" &&
+    <aside className="flex w-[22rem] shrink-0 flex-col overflow-y-auto border-l border-line bg-hull px-6 py-6">
+      {activeStage === "detect" && !revealed.detect && meta && (
+        <SceneCard meta={meta} bounds={bounds} />
+      )}
+      {activeStage === "trace" && !revealed.trace && (
+        <PendingStageCard stage="trace" running={running === "trace"} />
+      )}
+      {activeStage === "attribute" && !revealed.attribute && (
+        <PendingStageCard stage="attribute" running={running === "attribute"} />
+      )}
+
+      {activeStage === "detect" && revealed.detect &&
         (detectionsPending ? (
           // Stage 1 genuinely hasn't run for this case yet (loadCase.ts: a 404 on
           // detections.geojson degrades to `detections: null` + `detectionsPending: true`,
           // never a crash). `null` here means "not measured", never "measured as zero" — the
           // D1 zero-oil branch below must not fire for this case, or it would claim a
           // completed detection pass that never happened (the honesty rule, Master §5.7).
-          <div className="rounded border border-white/[0.08] bg-white/[0.03] p-3">
-            <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+          <div className="rounded border border-line bg-raised p-3">
+            <div className="t-label">
               Stage 01 — Detect
             </div>
-            <div className="mt-1 text-[15px] font-semibold leading-tight text-white/90">
+            <div className="mt-1 text-[13px] font-semibold leading-tight text-ink">
               Detection stage pending
             </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-white/55">
+            <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
               The scene is loaded, the detector hasn&apos;t run.
             </p>
           </div>
@@ -1086,14 +1237,14 @@ export default function ContextPanel() {
           // D1 — a designed result, not an error (docs/team/harshita-frontend.md Part D). Guide the judge to the
           // rejected look-alikes; their DetectionCard carries the "why not oil" evidence.
           <>
-            <div className="mb-4 rounded border border-white/[0.08] bg-white/[0.03] p-3">
-              <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+            <div className="mb-4 rounded border border-line bg-raised p-3">
+              <div className="t-label">
                 Stage 01 — Detect
               </div>
-              <div className="mt-1 text-[15px] font-semibold leading-tight text-white/90">
+              <div className="mt-1 text-[13px] font-semibold leading-tight text-ink">
                 No oil in this scene
               </div>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-white/55">
+              <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
                 {lookalikeCount === 0
                   ? "The scene is clear — no dark features to assess."
                   : `We checked ${lookalikeCount} dark patch${
@@ -1108,7 +1259,7 @@ export default function ContextPanel() {
             {/* Screen-1 oil-detection headline (docs/team/harshita-frontend.md Screen 1).
                 Shown only when oilCount > 0 — D1 (oilCount === 0) has its own messaging above. */}
             <div className="mb-4">
-              <p className="text-[13px] font-semibold leading-snug text-white/85">
+              <p className="text-[13px] font-semibold leading-snug text-ink">
                 We found{" "}
                 {(oilCount + lookalikeCount) === 1
                   ? "1 dark patch"
@@ -1122,7 +1273,7 @@ export default function ContextPanel() {
             {selected ? (
               <DetectionCard p={selected.properties} />
             ) : (
-              <p className="text-[11px] text-white/35">
+              <p className="text-[13px] text-ink-3">
                 Select a detection on the map.
               </p>
             )}
@@ -1131,16 +1282,16 @@ export default function ContextPanel() {
 
 
       {/* ── Trace ── */}
-      {activeStage === "trace" &&
+      {activeStage === "trace" && revealed.trace &&
         (originStatus === "error" ? (
-          <div className="rounded border border-[#ff4d4d]/30 bg-[#ff4d4d]/[0.08] p-3">
-            <div className="text-[11px] font-semibold text-[#ff8a8a]">
+          <div className="rounded border border-alert/30 bg-alert/[0.07] p-3">
+            <div className="text-[13px] font-semibold text-alert">
               Origin bundle failed to load
             </div>
-            <p className="mt-1 whitespace-pre-wrap text-[10px] text-[#ffb0b0]/70">
+            <p className="mt-1 whitespace-pre-wrap text-[13px] text-ink-2">
               {originError}
             </p>
-            <p className="mt-2 text-[10px] text-[#ffb0b0]/50">
+            <p className="mt-2 text-[13px] text-ink-3">
               This is a contract bug — tell Akshat. The frontend does not patch
               bundle data.
             </p>
@@ -1148,20 +1299,20 @@ export default function ContextPanel() {
         ) : origin ? (
           <TraceCard origin={origin} />
         ) : (
-          <p className="text-[11px] text-white/35">Loading origin estimate…</p>
+          <p className="text-[13px] text-ink-3">Loading origin estimate…</p>
         ))}
 
       {/* ── Attribute ── */}
-      {activeStage === "attribute" &&
+      {activeStage === "attribute" && revealed.attribute &&
         (suspectsStatus === "error" ? (
-          <div className="rounded border border-[#ff4d4d]/30 bg-[#ff4d4d]/[0.08] p-3">
-            <div className="text-[11px] font-semibold text-[#ff8a8a]">
+          <div className="rounded border border-alert/30 bg-alert/[0.07] p-3">
+            <div className="text-[13px] font-semibold text-alert">
               Suspects bundle failed to load
             </div>
-            <p className="mt-1 whitespace-pre-wrap text-[10px] text-[#ffb0b0]/70">
+            <p className="mt-1 whitespace-pre-wrap text-[13px] text-ink-2">
               {suspectsError}
             </p>
-            <p className="mt-2 text-[10px] text-[#ffb0b0]/50">
+            <p className="mt-2 text-[13px] text-ink-3">
               This is a contract bug — tell Akshat. The frontend does not patch
               bundle data.
             </p>
@@ -1170,6 +1321,7 @@ export default function ContextPanel() {
           <AttributeCard
             suspects={suspects}
             aisSource={meta?.ais_source}
+            shipContacts={detections?.ship_detections?.length ?? null}
             gate={
               origin === null
                 ? originStatus === "error"
@@ -1181,7 +1333,7 @@ export default function ContextPanel() {
             }
           />
         ) : (
-          <p className="text-[11px] text-white/35">Loading attribution…</p>
+          <p className="text-[13px] text-ink-3">Loading attribution…</p>
         ))}
 
       {/* Verify has its own full-screen view (VerifyScreen), rendered by CaseWorkspace in

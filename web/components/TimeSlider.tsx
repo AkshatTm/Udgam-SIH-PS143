@@ -1,15 +1,19 @@
 "use client";
 
-// The centrepiece control. The slider writes `tNorm` (0..1); lib/timestep.ts maps that onto
-// an integer particle timestep that MapView renders. Play/pause runs the auto-scrub in
+// The centrepiece control. The slider writes `tNorm` (0..1); lib/timestep.ts maps that onto an
+// integer particle timestep that MapView renders. Play/pause runs the auto-scrub in
 // lib/usePlayback.ts. Nothing here re-fetches or re-parses particles.json.
+//
+// The readout is deliberately the largest data on the screen: "how far back in time am I" is
+// the question the whole Trace stage exists to answer, and a judge dragging this should be able
+// to read the answer from across a room.
 
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { usePlayback } from "@/lib/usePlayback";
 import { tFromNorm } from "@/lib/timestep";
 
-// Format a UTC ISO timestamp as "DD MMM YYYY · HH:MM UTC" — used in the readout.
+/** Format a UTC ISO timestamp as "DD MMM YYYY · HH:MM UTC" — used in the readout. */
 function fmtTimestamp(iso: string, offsetMinutes: number): string {
   const d = new Date(new Date(iso).getTime() - offsetMinutes * 60_000);
   if (Number.isNaN(d.getTime())) return "";
@@ -44,8 +48,8 @@ export default function TimeSlider() {
   const t = tFromNorm(tNorm, nSteps);
   const minutesBack = canPlay ? t * particles!.timestepMinutes : 0;
 
-  // Onboarding hint: shown once per case on the first Trace visit with particles ready,
-  // fades after ~5.5 s, and dismisses immediately on any scrub / play-pause interaction.
+  // Onboarding hint: shown once per case on the first Trace visit with particles ready, fades
+  // after ~5.5 s, and dismisses immediately on any scrub / play-pause interaction.
   const [showHint, setShowHint] = useState(false);
   const hintedCaseRef = useRef<string | null>(null);
   useEffect(() => {
@@ -77,7 +81,7 @@ export default function TimeSlider() {
   const totalMinutesBack = Math.round(minutesBack);
   const hoursBack = Math.floor(totalMinutesBack / 60);
   const minsBack = totalMinutesBack % 60;
-  const relativeReadout = canPlay ? `T − ${hoursBack}h ${minsBack}m` : "";
+  const relativeReadout = canPlay ? `T−${hoursBack}h ${minsBack}m` : "—";
   const timestampReadout = canPlay
     ? fmtTimestamp(particles!.t0, minutesBack)
     : particlesStatus === "loading"
@@ -87,70 +91,64 @@ export default function TimeSlider() {
         : "";
 
   // Resting thumb pulse — only when the Trace rewind is stopped fully rewound at T−24h.
-  const isResting =
-    canPlay && !playing && activeStage === "trace" && t === nSteps - 1;
+  const isResting = canPlay && !playing && activeStage === "trace" && t === nSteps - 1;
 
   return (
-    <div className="border-t border-white/[0.08] bg-[#0b0f14] px-4 pt-2.5 pb-2">
-      {/* Top row: label left, onboarding hint right */}
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-white/30">
-          Trace History
-        </span>
-        <span
-          aria-hidden={!showHint}
-          className={`font-mono text-[10px] text-white/40 transition-opacity duration-700 ${
-            showHint ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          ← drag to rewind time
-        </span>
-      </div>
-
-      {/* Controls row */}
-      <div className="flex items-center gap-3">
-        {/* Play/pause button */}
+    <div className="border-t border-line bg-deep px-4 py-3">
+      <div className="flex items-center gap-4">
         <button
           type="button"
           onClick={onPlayPause}
           disabled={!canPlay}
-          aria-label={playing ? "Pause playback" : "Play rewind"}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-white/[0.14] text-[9px] text-white/70 transition-colors enabled:hover:border-white/30 enabled:hover:text-white disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:text-white/20"
+          aria-label={playing ? "Pause the rewind" : "Play the rewind"}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line-strong text-ink transition-colors enabled:hover:border-drift enabled:hover:bg-drift/10 enabled:hover:text-drift disabled:border-line disabled:text-ink-4"
         >
-          {playing ? "❚❚" : "▶"}
+          {playing ? (
+            <svg width="11" height="12" viewBox="0 0 11 12" aria-hidden fill="currentColor">
+              <rect x="0" y="0" width="3.5" height="12" rx="1" />
+              <rect x="7.5" y="0" width="3.5" height="12" rx="1" />
+            </svg>
+          ) : (
+            <svg width="11" height="12" viewBox="0 0 11 12" aria-hidden fill="currentColor">
+              <path d="M1 0.9a.8.8 0 0 1 1.2-.7l8 5.1a.8.8 0 0 1 0 1.4l-8 5.1A.8.8 0 0 1 1 11.1z" />
+            </svg>
+          )}
         </button>
 
-        {/* Left label */}
-        <span className="shrink-0 font-mono text-[9px] text-white/28">
-          T−24h
-        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="t-label">Rewind</span>
+            <span
+              aria-hidden={!showHint || activeStage !== "trace"}
+              className={`shrink-0 t-small text-drift transition-opacity duration-700 ${
+                showHint && activeStage === "trace" ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              Drag to rewind
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 font-mono text-[11px] text-ink-3">T−24h</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.005}
+              value={tNorm}
+              onChange={(e) => onScrub(Number(e.target.value))}
+              className={`w-full${isResting ? " slider-resting" : ""}`}
+              aria-label="Rewind through the drift reconstruction"
+              disabled={!canPlay}
+            />
+            <span className="shrink-0 font-mono text-[11px] text-ink-3">T−0</span>
+          </div>
+        </div>
 
-        {/* Scrubber — styled via globals.css */}
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.005}
-          value={tNorm}
-          onChange={(e) => onScrub(Number(e.target.value))}
-          className={`w-full${isResting ? " slider-resting" : ""}`}
-          aria-label="Trace time"
-          disabled={!canPlay}
-        />
-
-        {/* Right label */}
-        <span className="shrink-0 font-mono text-[9px] text-white/28">
-          T−0
-        </span>
-
-        {/* Readout — relative time with the exact UTC timestamp stacked underneath */}
-        <div className="flex w-36 shrink-0 flex-col items-end leading-tight">
-          <span className="font-mono text-[10px] text-white/45">
+        <div className="flex w-44 shrink-0 flex-col items-end leading-none">
+          <span className="font-mono text-[19px] font-medium tabular-nums text-ink">
             {relativeReadout}
           </span>
-          <span className="font-mono text-[9px] text-[#f97316]/70">
-            {timestampReadout}
-          </span>
+          <span className="mt-1 font-mono text-[11px] text-drift/80">{timestampReadout}</span>
         </div>
       </div>
     </div>

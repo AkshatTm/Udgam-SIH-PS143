@@ -14,7 +14,7 @@ import { useState, useRef, useCallback } from "react";
  *   when not shown, visible when shown) to satisfy the reference.
  * - Keyboard: Tab reaches the button; focus opens the tooltip; Escape / blur closes it.
  * - No external UI library. No layout shifts (tooltip is absolute, out of flow).
- * - Matches the dark UI type scale (globals.css / StageRail idiom).
+ * - Matches the dark UI type scale (globals.css type scale).
  *
  * Positioning: the tooltip is anchored to the nearest positioned ANCESTOR, not
  * to the tiny "i" button itself — the caller's row (e.g. `MetricRow`'s root
@@ -74,8 +74,8 @@ export default function InfoDot({
           "transition-colors duration-100 select-none",
           "focus:outline-none focus-visible:ring-1 focus-visible:ring-white/40",
           visible
-            ? "border-white/30 bg-white/[0.12] text-white/70"
-            : "border-white/20 bg-transparent text-white/35 hover:border-white/30 hover:text-white/55",
+            ? "border-drift/50 bg-drift/15 text-drift"
+            : "border-line-strong bg-transparent text-ink-3 hover:border-drift/40 hover:text-drift",
         ].join(" ")}
       >
         i
@@ -85,7 +85,7 @@ export default function InfoDot({
         Tooltip span is ALWAYS in the DOM so aria-describedby is never a dangling ref.
         aria-hidden="true" when closed keeps it silent for screen-readers in that state.
         pointer-events-none prevents it from intercepting mouse events beneath.
-        w-48 (192 px) fits safely inside the 288 px ContextPanel — anchored from the
+        w-52 (208 px) fits safely inside the ContextPanel — anchored from the
         button's left edge normally, or its right edge when `align="right"` so a
         trailing dot near the panel's right edge doesn't push the tooltip off-panel.
       */}
@@ -96,10 +96,10 @@ export default function InfoDot({
         className={[
           "absolute bottom-full z-50 mb-1.5",
           align === "right" ? "right-0" : "left-0",
-          "w-48 rounded border border-white/[0.10]",
-          "bg-[#131820] px-2.5 py-2",
-          "text-[10px] leading-relaxed text-white/65",
-          "shadow-lg pointer-events-none",
+          "w-52 rounded-lg border border-line-strong",
+          "bg-overlay px-3 py-2.5",
+          "text-[12px] leading-relaxed text-ink-2",
+          "shadow-[0_10px_28px_rgba(0,0,0,0.55)] pointer-events-none",
           "transition-opacity duration-100",
           visible ? "opacity-100" : "opacity-0 pointer-events-none",
         ].join(" ")}

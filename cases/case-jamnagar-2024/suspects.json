@@ -1,15 +1,72 @@
 {
   "funnel": {
-    "in_region": 8,
-    "in_window": 2,
-    "plausible": 0,
-    "scored": 0,
-    "dropped_short_track": 6
+    "in_region": 38,
+    "in_window": 22,
+    "plausible": 1,
+    "scored": 1,
+    "dropped_short_track": 4
   },
-  "suspects": [],
+  "suspects": [
+    {
+      "source_type": "vessel",
+      "mmsi": "357467000",
+      "name": "MELODY 5",
+      "vessel_type": "cargo",
+      "score": 0.606,
+      "components": {
+        "proximity": 0.54,
+        "parity": null,
+        "temporality": null,
+        "trajectory": null,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach \u2014 position between two hourly fixes, linearly interpolated; the vessel's actual path between fixes is not observed",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
+        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
+        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "type_prior": "vessel type cargo"
+      },
+      "weight_live": 0.35,
+      "components_available": 2,
+      "components_total": 7,
+      "closest_km": 1.3,
+      "closest_time": "2024-02-22T07:49:00Z",
+      "grid_probability": 0.54,
+      "heading_consistent": false,
+      "ais_gap_minutes": 120.0,
+      "edge_truncated": false,
+      "reasons": [
+        "on the edge of the reconstructed origin during the release window"
+      ]
+    }
+  ],
   "dark_vessels": [],
   "infrastructure": [],
-  "excluded": [],
-  "abstained": true,
-  "abstain_reason": "no vessel entered the reconstructed origin during the window"
+  "excluded": [
+    {
+      "mmsi": "419956966",
+      "name": "M.V.GAUTAM KRISHAV",
+      "closest_km": 7.55,
+      "reason": "never entered the high-probability region of the origin (peak grid probability 0.01)"
+    },
+    {
+      "mmsi": "419475000",
+      "name": "AMBUJA KEERTI",
+      "closest_km": 5.46,
+      "reason": "never entered the high-probability region of the origin (peak grid probability 0.00)"
+    },
+    {
+      "mmsi": "419001735",
+      "name": "TRITON HARMONY",
+      "closest_km": 8.42,
+      "reason": "16 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 8.4 km from the peak, at zero grid probability throughout"
+    }
+  ],
+  "abstained": false,
+  "abstain_reason": null
 }

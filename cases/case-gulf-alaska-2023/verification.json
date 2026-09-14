@@ -1,0 +1,34 @@
+{
+  "_status": "PUBLISHED \u2014 this file is on the Verify screen. official_finding is researched prose; udgam_result is regenerated from the bundle by scripts/scaffold_verification.py (never by hand); assessment is the verdict on our own result \u2014 for the six live cases it was drafted 14 Sept under Master D43 and is Akshat's to edit and own. Re-run --publish after any edit.",
+  "official_finding": {
+    "summary": "SkyTruth Cerulean's detector logged a small slick on this scene, 2.48 km and 0.27 km\u00b2 (model confidence 0.761), and associated it with a vessel detected by radar with no matching AIS broadcast: dark vessel D38.5238724, about 40 m long, roughly 4.5 km from the slick (best collated source score 0.3475). Cerulean's human reviewer classed the slick 'Ambiguous'.",
+    "responsible_parties": [
+      {
+        "name": "Dark vessel D38.5238724 (unidentified, no AIS match in Cerulean's data)",
+        "mmsi": null,
+        "imo": null,
+        "role": "radar-detected vessel SkyTruth Cerulean associated with the slick; \u2248 59.546 N, \u2212142.639 W, estimated length 40 m \u00b1 20%"
+      }
+    ],
+    "source_name": "SkyTruth Cerulean, slick 3630124",
+    "source_url": "https://cerulean.skytruth.org/slicks/3630124",
+    "source_type": "algorithmic_attribution",
+    "volume_reported": null,
+    "caveat": "Cerulean's own reviewer classed this slick 'Ambiguous' \u2014 a trained human could not tell it was oil. The dark-vessel claim deserves the same care: a vessel dark to a commercial AIS feed is a strong statement, while absence from a free archive alone could be a coverage hole, and two independent absences are evidence where one is not. The same dark vessel is attached to five slicks on this scene (3630122, 3630124, 3630127, 3630128, 3630133), which is corroboration of one association rather than five findings. Three AIS vessel candidates were also scored. Our own ship detector finds no radar contact on this scene at all: the contacts shown are Global Fishing Watch's independent SAR detections, labelled as such, and never Cerulean's. The origin here is wind-driven (wind share 0.73), so it is an ERA5 result rather than a HYCOM one. The case is declared partially compromised for blind evaluation (Master Part 16): the contact position was once exposed, the identity never was."
+  },
+  "naap_result": {
+    "origin_summary": "Trace seeded from det-01 (0.37 of 1.15 km\u00b2 of oil; three oil features not merged). Origin cloud centred at 59.54285 N, 142.93402 W after a ~12 km median rewind toward the west, r50 1.36 km, r90 2.64 km (ensemble precision). Release window measured by convergence: 2023-05-15 20:57Z to 22:57Z. Wind-driven: wind share 0.73, so this origin rests on ERA5 wind, not HYCOM current. The origin centroid is 16.6 km from Cerulean's radar-contact position. Our own ship detector found no contact on this scene. No attribution: NOAA has no Alaska AIS.",
+    "top_suspects": [],
+    "abstained": false
+  },
+  "assessment": {
+    "verdict": "partial",
+    "explanation": "Partial. NOAA Marine Cadastre publishes no Alaska AIS \u2014 every daily file stops near 50\u00b0 N \u2014 so this case carried no attribution stage at all until the D41 re-score moved it onto hourly Global Fishing Watch data. It now runs, and it abstains: 13 vessels in the box, 9 inside the release window, none entering the reconstructed origin, the nearest 9.4 km from the peak. Cerulean likewise named no AIS vessel, so both systems agree that no transponder-carrying vessel explains this slick. What we did not do is find the dark vessel Cerulean's record rests on. Our detector produces zero radar contacts here, so there was nothing of our own to cross-check; the two contacts on screen are Global Fishing Watch's own SAR detections, and both were reachable by an AIS track under the hourly test, so neither is listed as dark. A system that names nobody where the documented source is an unidentified vessel is not wrong, but it has not recovered the finding either.",
+    "what_would_have_helped": "A ship detector that fires on this scene. The slick is 0.27 km\u00b2 and the contact Cerulean reports is about 40 m long, near the limit of what our detector will call a target, so 0 contacts is a sensitivity result and not an empty ocean. Running Soumirya's trained detector on this tile is the direct test of that. Second, AIS at the acquisition minute rather than the hour: with hourly positions the cross-check can only ask whether a vessel could have been at the contact, and inside a 30 km box the answer is usually yes, which is why we say 'matched' and never 'not dark'. Third, a second pass \u2014 persistence is what separates a dark vessel from a fixed structure, and we have one image."
+  },
+  "udgam_result": {
+    "origin_summary": "Origin cloud centred at 59.5429\u00b0 N, 142.9340\u00b0 W; half the ensemble lands within 1.36 km and nine in ten within 2.64 km. Release window 2023-05-15T20:57:08Z to 2023-05-15T22:57:08Z (convergence). Stage 3 funnel 13 \u2192 9 \u2192 0 \u2192 0. Abstained: no vessel entered the reconstructed origin during the window",
+    "top_suspects": [],
+    "abstained": true
+  }
+}

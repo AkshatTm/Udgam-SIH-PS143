@@ -1,7 +1,7 @@
 // In-memory app state. NO persistence, NO localStorage/sessionStorage — Zustand only.
 
 import { create } from "zustand";
-import type { Act, Bounds, CaseMeta, DetectionCollection } from "./contracts";
+import { ALL_ACTS, type Act, type Bounds, type CaseMeta, type DetectionCollection } from "./contracts";
 import { DEFAULT_CASE_ID } from "./cases";
 import { cached } from "./bundleCache";
 import { loadCase } from "./loadCase";
@@ -81,6 +81,15 @@ export interface AppState {
   layers: Record<LayerId, boolean>;
   tNorm: number; // 0..1, 1 = "T-0 detect". Bound to an integer timestep via lib/timestep.ts.
 
+  /** Guided flow. A stage's results are hidden until the judge presses its Run button, so the
+   *  Detect screen first shows the raw SAR scene on its own ("Scene"), and each later stage
+   *  is revealed by an explicit action. This is a staged REPLAY of the precomputed bundle —
+   *  nothing is computed in the browser (CLAUDE.md: the frontend never calls Python), and the
+   *  screen says so. Per case; reset on case load and on return to the gallery. */
+  revealed: Record<Act, boolean>;
+  /** The stage whose Run animation is playing, or null. */
+  running: Act | null;
+
   setActiveCase: (id: string) => void;
   loadActiveCase: () => Promise<void>;
   loadParticles: () => Promise<void>;
@@ -99,6 +108,9 @@ export interface AppState {
    *  rewind from T−0. No-ops unless particles + origin are both `ready` and this case has not
    *  been initialised yet, so it is safe to call on every render. */
   initTrace: () => void;
+  /** Play the Run animation for `stage`, then reveal its results. No-op if already revealed or
+   *  another run is in flight. Attribute turns the vessel-track layer on when it lands. */
+  runStage: (stage: Act) => void;
   /** Return to a clean Gallery state (docs/team/harshita-frontend.md C8, Master §2.1). Clears only the transient
    *  session state the next judge must not inherit — slider, selection, stage, layers,
    *  playback, the Trace-arrival guard — and re-seeds the best-oil detection. When the case is
@@ -110,6 +122,22 @@ export interface AppState {
 
 /** The `id` of the highest-confidence `"oil"` detection (first in file order on a tie), or
  *  `null` when the scene has no oil features. Reads the collection only — never mutates it. */
+const UNREVEALED: Record<Act, boolean> = {
+  detect: false,
+  trace: false,
+  attribute: false,
+  // Verify is a human-written comparison, not a computation — there is nothing to "run".
+  verify: true,
+};
+
+/** How long each Run animation plays before the results appear, ms. */
+export const RUN_DURATION_MS: Record<Act, number> = {
+  detect: 2600,
+  trace: 2200,
+  attribute: 2200,
+  verify: 0,
+};
+
 function bestOilDetectionId(d: DetectionCollection | null): string | null {
   if (d === null) return null;
   let bestId: string | null = null;
@@ -172,6 +200,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   tNorm: 1,
 
+  revealed: { ...UNREVEALED },
+  running: null,
+
   setActiveCase: (id) => {
     if (id === get().activeCaseId) return;
     set({ activeCaseId: id });
@@ -197,6 +228,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       autoPlaying: false,
       traceInitFor: null,
       tNorm: 1,
+      revealed: { ...UNREVEALED },
+      running: null,
       // Reset the origin cloud for the incoming case.
       origin: null,
       originStatus: "idle",
@@ -379,10 +412,37 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 
+  runStage: (stage) => {
+    const s = get();
+    if (s.revealed[stage] || s.running !== null) return;
+    const caseId = s.activeCaseId;
+    set({ running: stage });
+    window.setTimeout(() => {
+      const now = get();
+      // The judge left for another case (or the gallery reset) mid-run — drop it.
+      if (now.activeCaseId !== caseId || now.running !== stage) return;
+      // Revealing a stage reveals every stage before it too: a judge who jumps straight to
+      // Attribute from the rail should not see vessel tracks over a scene with its detections
+      // still hidden.
+      const upTo = ALL_ACTS.slice(0, ALL_ACTS.indexOf(stage) + 1);
+      set((st) => ({
+        running: null,
+        revealed: {
+          ...st.revealed,
+          ...Object.fromEntries(upTo.map((a) => [a, true])),
+        } as Record<Act, boolean>,
+        layers:
+          stage === "attribute" ? { ...st.layers, vessels: true } : st.layers,
+      }));
+    }, RUN_DURATION_MS[stage]);
+  },
+
   resetToGallery: () => {
     const s = get();
     // The transient session state Judge B must never inherit (docs/team/harshita-frontend.md C8, Master §2.1).
     const transient = {
+      revealed: { ...UNREVEALED },
+      running: null,
       tNorm: 1,
       activeStage: "detect" as Act,
       layers: {

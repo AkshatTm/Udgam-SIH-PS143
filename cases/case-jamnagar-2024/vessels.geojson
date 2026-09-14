@@ -1,1 +1,1 @@
-{"type": "FeatureCollection", "features": []}
+{"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[71.44, 20.3], [71.53, 20.3], [71.74, 20.29], [71.81, 20.29], [71.91, 20.29], [71.93, 20.29], [72.02, 20.29], [72.1, 20.29]]}, "properties": {"mmsi": "357467000", "name": "MELODY 5", "vessel_type": "cargo", "n_points": 8, "n_points_full": 8, "max_gap_minutes": 120.0}}]}

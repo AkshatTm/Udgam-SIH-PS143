@@ -33,9 +33,24 @@ So the sequence is not negotiable:
 The research does not have to wait — it is already done and staged in the sealed
 `docs/ANSWERS.md`. What waits is writing it into a file the team can read.
 
-**Currently present:** `case-huntington-2021.json` only, and that one is safe to hold early
-because its finding is an NTSB report about *infrastructure* — its conclusion is that **no vessel
-was the proximate source**, so it gives away no attribution.
+**Currently present:** all six traced cases, and all six are **published** — every stage had
+already run and been frozen, so step 3 above is satisfied and the blind period is over for them by
+design, not by accident. Five of the six source files are in `.git/info/exclude`; their published
+copies (`cases/<id>/verification.json`) are in tracked paths, because that is what putting the
+Verify screen on air means.
+
+**Their `assessment` prose (and five `caveat` fields) was drafted by Claude on 15 Sept at Akshat's
+instruction — D43**, the one recorded exception to "never generated" above, because the demo was
+the next day and `verify` was otherwise off every case. Each verdict cites a measurement taken
+first; `docs/ANSWERS.md` was not read. It is a draft under Akshat's name: edit anything, then
+re-run `python scripts/scaffold_verification.py --publish <case>`. The rule is unchanged for
+everything after this — the helper script still writes `udgam_result` and nothing else.
+
+## Before publishing: `--check` is the gate
+
+`python scripts/scaffold_verification.py --check` lists what is unwritten; `--publish <case>`
+refuses while **any** string in the file still says TODO — including `official_finding.caveat`,
+which the Verify screen renders and which an earlier field-by-field check missed.
 
 ## Known-source cases (D16)
 

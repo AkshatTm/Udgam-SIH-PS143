@@ -2,6 +2,174 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-14 21:15] UI/UX QA sweep — all nine cases green, one DATA bug found
+
+**Done:** Finished the verification pass the UI/UX work needed. All nine cases walk their full
+flow with no console errors and no blank states; the null-vs-zero honesty rule is intact
+(Jamnagar's `gap`/`slowdown` render "n/a" with reasons, Jacksonville's render a real `0.00`);
+interactions, the 90 s idle reset, reduced motion, and keyboard focus all pass; framerate measured
+on the actual demo laptop's GPU. Sentence-cased four panel headings that were shouting in Title
+Case ("Where the Oil Came From" -> "Where the oil came from", "Vessel Attribution" -> "Who was
+there"), which also makes the panel heading answer the question the run overlay asks. **One real
+defect found, and it is data, not UI — see Open issues.**
+
+**Files touched:** `web/components/ContextPanel.tsx` (modified — heading casing only) ·
+`docs/updates/akshat.md`
+
+**Run command:**
+```bash
+cd web && npm run dev
+```
+Expected output: `Ready` on http://localhost:3000; every case in `cases/index.json` reaches its
+terminal stage on the primary button alone.
+
+**Checkpoint artefact:** framerate on this machine with a real GPU — home page WebGL current field
+**127 fps**, Trace playback with the full 3000 particles x 97 steps **71 fps**, Attribute with
+vessel tracks + particles **44 fps**. (Headless Chromium reports 3/30/24 fps because it falls back
+to SwiftShader — ignore any software-GL number.) `npm run build` succeeds, `tsc --noEmit` and
+`next lint` clean.
+
+**Open issues:**
+- **`case-lookalike-zenodo` contradicts itself, and the validator passes it.** `meta.case_type` is
+  `"lookalike"`, the blurb promises "47 km2 of dark water, 9 dB below the sea around it", and
+  `notes` says *"This case exists to be REJECTED, and it pays for the whole detection stage"* — but
+  `cases/case-lookalike-zenodo/detections.geojson` has **zero features of any class**. So the app
+  correctly renders the designed no-spill state and tells a judge "The scene is clear — no dark
+  features to assess", which is the opposite of the case's entire purpose, and makes it
+  indistinguishable from `case-nospill-zenodo` on screen. The detector needs to emit that
+  look-alike polygon into the bundle. **I did not patch this in the frontend** (web/CLAUDE.md:
+  never patch bundle data client-side) and did not touch the validator, because adding the check
+  would flip this bundle from PASS to FAIL the day before the demo — your call, not mine.
+  `python scripts/validate_case.py cases/case-lookalike-zenodo` currently prints PASS with one
+  warning about zero oil features; it has no check for "case_type lookalike but no look-alike
+  feature". Every other case cross-checks clean (script in the session; trivial to re-run).
+- Demo consequence if it is not fixed: the look-alike story — the thing that justifies the whole
+  detection stage — is only tellable from `case-ennore-lookalike-2023`, which does have its 29
+  look-alike features. Lead with Ennore for that beat, or drop the Zenodo look-alike from the
+  running order.
+- The in-case shell is laid out for >=1024 px (verified no overflow at 1024/1280/1512). Not a phone
+  layout, never was.
+- SF Pro is still not committed; the app renders in self-hosted Inter on this machine, which is
+  what the demo laptop will do. `web/app/fonts/README.md` has the block if you want to self-host.
+
+**Next:** decide the `case-lookalike-zenodo` question — either rerun the detector on that tile so
+it emits the look-alike, or pull it from the presentation order in `cases/index.json`.
+
+## [2026-09-14 18:30] UI/UX pass — one design system, a home page that tells the story, one nav spine
+
+**Done:** The judge-facing app was reskinned end to end without touching the pipeline, the store,
+the bundle contracts, or any reveal/gating logic. Three things changed shape. (1) A token system
+in `globals.css` on one rule — **an interface colour is a map colour and means the same thing in
+both places** (orange = drift, rose = oil, teal = radar contact, slate = rejected look-alike), so
+the layer toggles now double as the map legend and `ContextPanel`'s classification hexes match
+`MapView`'s polygons for the first time (they never actually did). (2) The home page is a scroll:
+a hero over an animated WebGL ocean-current field, three SVG diagrams of the method, then the nine
+cases as full-bleed SAR plates. (3) `Header` + `FlowBar` + `StageRail` — three controls all showing
+the same stage position — are one `StageSpine`, which frees the whole left edge for the map; the
+navigation rules moved into `lib/flow.ts` as `stepTarget()` so they are pure and testable. The
+basemap is dark (same Esri source, re-tinted in raster paint, so the offline-first fallback is
+unchanged). Typeface is SF Pro Display where installed, self-hosted Inter otherwise.
+
+**Files touched:** `web/components/StageSpine.tsx` (new) · `web/components/FlowField.tsx` (new) ·
+`web/components/home/StageDiagrams.tsx` (new) · `web/components/Gallery.tsx` (rewritten) ·
+`web/components/VerifyScreen.tsx` (rewritten) · `web/app/globals.css` (rewritten) ·
+`web/tailwind.config.ts` · `web/app/layout.tsx` · `web/app/fonts/InterVariable.woff2` (new) ·
+`web/app/fonts/README.md` (new) · `web/lib/flow.ts` · `web/components/{CaseWorkspace,ContextPanel,
+RunOverlay,PrimaryAction,TimeSlider,LayerToggles,NoSpillBanner,VerdictBadge,InfoDot,ExternalLink,
+MapView}.tsx` · `web/components/{Header,FlowBar,StageRail}.tsx` (deleted)
+
+**Run command:**
+```bash
+cd web && npm run dev
+```
+Expected output: `Ready` on http://localhost:3000 — the home page scrolls hero → method → nine
+cases; `/case/case-jacksonville-2024/detect` walks Scene → Detect → Trace → Find → Verify on the
+primary button alone.
+
+**Checkpoint artefact:** screenshots of all five screens plus the no-spill and Ennore cases taken
+with Playwright at 1512/1280/1024 px. `npm run build` succeeds; `tsc --noEmit` and `next lint`
+clean; no console errors on `/`, four case routes, or a garbage stage segment.
+
+**Open issues:**
+- Three real bugs were found and fixed during the pass, all pre-existing in kind and worth knowing
+  about because the same trap will bite again: (a) Tailwind silently emits **nothing** for an
+  opacity modifier on a colour token holding a finished `var(--x)` — every token is now declared
+  as `R G B` channels *and* as a finished colour, and the two must be kept in step; (b) the
+  `anim-rise` keyframes set `transform`, which overrides Tailwind's `-translate-x-1/2`, so any
+  element using both is off-centre — centre with `inset-x-0 mx-auto` instead; (c) the selected
+  detection was outlined in solid white *on top of* its classification colour, so the one feature
+  a judge clicks stopped saying whether it was oil. It is a soft halo now.
+- **A `tailwind.config.ts` edit needs a dev-server restart** — Next does not pick it up on HMR, and
+  the failure mode is silent (classes just do not exist). Cost me two debugging rounds; restart
+  before concluding a class is wrong.
+- `StageRail` allowed jumping to any available act, bypassing the guided reveal; `FlowBar` allowed
+  only revealed steps. The spine keeps both: a revealed step navigates, the *next* unrun step
+  navigates **and** runs it, anything further is inert with a reason. Worth a look to confirm that
+  is the behaviour you want before the 15th.
+- The in-case shell is laid out for ≥1024 px. It no longer overflows at 1024 (it did — the spine's
+  min-content was forcing a 1117 px floor and pushing the evidence panel off-screen), but it is not
+  a phone layout and was never meant to be.
+- SF Pro is **not** committed. On a machine without it the app renders in Inter, which is what the
+  demo laptop will do today. `web/app/fonts/README.md` has the paste-in block if you want to
+  self-host it — check Apple's licence first.
+
+**Next:** run the full five-screen flow once on the actual demo machine and watch the Trace
+framerate — the WebGL current field is home-page-only and pauses off-screen, but 3000 particles ×
+97 steps has still only been measured on this laptop.
+
+## [2026-09-15 12:00] Verify is live on all six traced cases; the flow bar navigates
+
+**Done:** Every case ended at "Try another case" because `verify` was in no `acts_available` — the Verify screen was built and wired, the prose was not. The six `assessment` blocks and five missing `official_finding.caveat` fields are now written (drafted by Claude at my instruction, one-time exception recorded as **D43**; mine to edit), every verdict backed by a measurement taken first. All six published: `verify` added, bundles rebuilt, nine cases PASS. Two defects found on the way: `--publish` never checked `caveat` although the screen renders it (a publish would have shown "TODO, HUMAN PROSE" to judges), and the right-hand column called Cerulean "the investigation" on four cases. Flow-bar steps are now real navigation — a revealed step is clickable, nothing beyond the last revealed one is.
+
+**Verdicts:** Jacksonville **miss** · Farallones **miss** · Huntington **partial** (as D38 predicted) · Mumbai **partial** · Gulf of Alaska **partial** · Jamnagar **not_applicable**. Both misses have the same root cause and it is on the screen: the rewind is bounded by ensemble convergence, not by slick age (`age_method: "none"` on every case), so the origin can travel 149 km from a vessel a human reviewer called coincident.
+
+**Files touched:** `verification/*.json` (six) · `scripts/scaffold_verification.py` (`placeholders()`, `_status` stamp) · `web/components/{VerifyScreen,FlowBar}.tsx` · `web/lib/flow.ts` (`navigableStages`) · `cases/*/meta.json`, `cases/*/verification.json` (published) · `docs/00_MASTER_PLAN.md` (D43)
+
+**Run command:**
+```bash
+python scripts/scaffold_verification.py --check          # all six: published
+python scripts/scaffold_verification.py --publish case-jacksonville-2024   # after editing any prose
+cd web && npm run build
+```
+Expected output: six `published` lines; `PASS acts=['detect', 'trace', 'attribute', 'verify']`.
+
+**Checkpoint artefact:** Playwright walk of all six cases, Gallery → Scene → Detect → Trace → Find → **Check our answer** → Verify: right verdict badge, real caveat, live source link, no "TODO" on screen, 0 page errors; flow-bar jump back to Trace and forward to Verify works; Ennore's later steps stay inert.
+
+**Open issues:**
+- The prose is a draft under my name — read the six `explanation` / `what_would_have_helped` blocks before the demo and change anything you disagree with, then re-run `--publish`. Huntington's verdict in particular: I kept `partial`, but the origin is 6.74 km from NTSB's coordinate with an r90 of 2.46 km, which is also arguable as a `miss`.
+- Publishing puts the findings into tracked paths (`cases/<id>/verification.json`), while five of the six source files stay in `.git/info/exclude`. Nothing is committed yet — decide at commit time.
+- `volume_reported` is null on the five Cerulean cases (a real absence), so the validator warns once per case. Correct, not a bug.
+
+## [2026-09-15 08:00] All attribute cases run end to end; guided flow and ocean basemap
+
+**Done:** Stage 3 fixed for hourly AIS (D41) and the dark-vessel cross-check built (D42); Gulf of Alaska gains `attribute` via GFW; all six spill cases re-scored and all nine indexed cases PASS. Frontend: a Scene step (raw SAR before detection) and Run buttons that replay each stage; light Esri ocean basemap over an offline Natural Earth base; map init moved to `style.load` (with tiles unreachable, `load` never fired and the map stayed empty); abstentions now show nearest candidates; dark-vessel section always states its result.
+
+**Files touched:** `pipeline/attribute/{tracks,score,ingest_gfw,tests}.py` · `pipeline/attribute/{dark,ingest_gfw_sar}.py` (new) · `scripts/{run_attribute_all,scaffold_verification}.py` (new) · `cases/case-gulf-alaska-2023/meta.json` · `cases/*/suspects.json`, `vessels.geojson` (outputs) · `web/lib/{store,flow,extent}.ts` · `web/components/{MapView,ContextPanel,CaseWorkspace,FlowBar,LayerToggles,PrimaryAction,RunOverlay}.tsx` · `web/public/basemap/ne_50m_land.geojson` (new) · `docs/00_MASTER_PLAN.md` (D41, D42)
+
+**Run command:**
+```bash
+python pipeline/attribute/tests.py
+python scripts/run_attribute_all.py      # reuses data/ais/*; --refresh --csv-dir <NOAA CSVs> to rebuild
+python scripts/sync_web_cases.py && cd web && npm run build
+```
+Expected output: `Ran 115 tests ... OK`; six `PASS` lines; build succeeds.
+
+**Checkpoint artefact:** Playwright walk of all 7 satellite cases (Scene → Detect → Trace → Attribute), 0 page errors; offline run with Esri tiles blocked renders.
+
+**Also closed in the same session:**
+- **Verify tooling.** `scripts/scaffold_verification.py` gained `--update` (refreshes `udgam_result` in place from the re-scored bundle, touches nothing else), `--check` (what is still unwritten, per case) and `--publish <case>` (refuses a TODO, else adds `verify`, runs build_case → validator → sync). All six files refreshed. It still **never** writes `official_finding` or `assessment` — §6.8 says that prose is human-written, and it never reads `ANSWERS.md`. Publish path tested end to end on the `case-000-d3` fixture and reverted.
+- **Stale figures.** The hourly rows were re-measured under old and new code, same seed: offshore 300 trials, port 150. `stage3-injected-offender-curve.md` now carries the before/after table and says why top-1 fell while top-3 and recall rose; `deck-numbers.md` and D39's inline 0.488 are corrected.
+- **Laptop-only extracts.** `run_attribute_all.py --refresh` now unzips the NOAA dailies itself into `data/ais/_csv/`, so the only manual step is downloading the zips. GFW extracts renamed off the `_v2` suffix to plain `<case>.parquet`. `docs/receipts.md` lists every extract with its box, window and row count, plus the one-command rebuild. Verified: a full `--refresh` of Farallones reproduced its bundle byte-identically.
+
+**Open issues:**
+- **Verdicts are still unwritten** — the six `assessment` blocks (and Huntington's two prose fields). `python scripts/scaffold_verification.py --check` lists them. Verify is off every case until then, by design.
+- Mumbai and Alaska abstain; Jamnagar names one vessel on 2 of 7 components. These are the scorer's results — do not tune toward `ANSWERS.md` (D21).
+- `verification/case-huntington-2021.json` is tracked in git and its `udgam_result` changed with the re-score; the other five are locally excluded.
+- `data/ais/_csv/` holds 1.6 GB of expanded NOAA CSVs. Safe to delete; `--refresh` re-extracts.
+- Panels are still dark; only the map moved to the light basemap.
+
+**Next:** write the six verdicts, `--publish` each, rehearse on the demo machine.
+
 ## [2026-09-14 00:00] Rulings on Jaiveer's issue register: B6, C4, D4/D37, B2/D36
 
 **Done:** Four decisions from `STAGE3_ISSUE_REGISTER_1.md`, all closing tonight rather than

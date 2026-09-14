@@ -1,0 +1,40 @@
+{
+  "_status": "PUBLISHED \u2014 this file is on the Verify screen. official_finding is researched prose; udgam_result is regenerated from the bundle by scripts/scaffold_verification.py (never by hand); assessment is the verdict on our own result \u2014 for the six live cases it was drafted 14 Sept under Master D43 and is Akshat's to edit and own. Re-run --publish after any edit.",
+  "official_finding": {
+    "summary": "SkyTruth Cerulean's detector logged a 31.17 km, 4.55 km\u00b2 slick on this scene (model confidence 0.795). A Cerulean human reviewer classed it 'Vessel, coincident', their strongest class, and Cerulean attributed it to the tanker Menuett (MMSI 563082600), one of four vessels its scorer considered (best collated source score 0.2598).",
+    "responsible_parties": [
+      {
+        "name": "Menuett",
+        "mmsi": "563082600",
+        "imo": "9790634",
+        "role": "vessel SkyTruth Cerulean attributed the slick to; Singapore-flagged chemical/oil products tanker (identity cross-checked against VesselTracker, VesselFinder and MarineTraffic, 2026-09-12)"
+      }
+    ],
+    "source_name": "SkyTruth Cerulean, slick 3046293",
+    "source_url": "https://cerulean.skytruth.org/slicks/3046293",
+    "source_type": "algorithmic_attribution",
+    "volume_reported": null,
+    "caveat": "This is another algorithm's output with analyst review, not an investigation or a court finding: Cerulean attributed the slick to this vessel, and nothing here establishes that the vessel was responsible. Cerulean's scorer also considered three other vessels (368053000, 210145000, 352980797), and the order of that array is not documented as a ranking. No volume was reported. Two things were recorded before we scored the case (D30): a competing vessel about 7.4 km from the origin at 12.5 kn that went silent for 142 minutes, which our gap component favours, so a partial or a miss was pre-registered as a likely outcome; and the vessel Cerulean names broadcast continuously through its \u22128 h/+6 h window (714 broadcasts over 14.0 of 14 h), so this is not a gap case."
+  },
+  "naap_result": {
+    "origin_summary": "Trace seeded from the merged ribbon (det-01+det-02+det-03, 7.12 km\u00b2). Origin cloud centred at 29.03215 N, 79.73175 W after a ~149 km median rewind, with the probability peak at 29.11723 N, 79.68236 W (10.6 km from the centroid). r50 13.1 km, r90 31.11 km (ensemble precision, not accuracy). Release window measured by convergence: 2024-07-29 23:21Z to 2024-07-30 07:39Z. Current-driven (wind share 0.04). Stage 3: 48 vessels in region \u2192 26 in window \u2192 2 plausible \u2192 2 scored, no abstention. Both scored vessels passed within about 1.2 km of the origin peak (1.30 km and 1.13 km) at grid probability 0.95 and 0.94, scoring 0.693 and 0.650 from 6 of 7 components (live weight 0.85). One vessel was excluded for heading away from the origin throughout the window.",
+    "top_suspects": [
+      "636093219",
+      "367337960"
+    ],
+    "abstained": false
+  },
+  "assessment": {
+    "verdict": "miss",
+    "explanation": "A miss on identity, and the cause is measurable rather than mysterious. Menuett is in our own scene-time AIS extract: 76 positions, southbound at about 11 kn, crossing the export box for an hour that ended 31 minutes before acquisition. But attribution asks a different question \u2014 who was at the reconstructed release point during the release window. Our backward drift put that point a median 148.7 km from the slick, and Menuett's closest approach to the origin grid peak during the pass was 112.3 km, at a grid probability of 0.0000. It held no position inside the searched box (80.53\u00b0 W to 78.90\u00b0 W, 28.00\u00b0 N to 30.18\u00b0 N) at any point in the 2024-07-29T23:21Z\u20132024-07-30T07:39Z window, so the funnel 48 \u2192 26 \u2192 2 \u2192 2 could not have contained it. We named NAGOYA EXPRESS (0.69) and GALVESTON (0.65), both of which did cross the cloud. Cerulean's 'Vessel, coincident' class rests on the opposite premise: the vessel lying along a fresh slick at acquisition. On a 31 km slick one of the two premises has to be wrong, and here ours moved the search 149 km away from the vessel a human reviewer picked.",
+    "what_would_have_helped": "An age estimate. origin.json records age_method 'none' and age_hours null on every case in the library: the rewind is bounded by an ensemble convergence test, not by how old the oil is, so nothing stops it from rewinding a young slick 149 km. Fay spreading or a shear-based age \u2014 on the roadmap, not built \u2014 would have capped the window and kept the origin near the slick, where Menuett was. Second: carry the coincident-vessel hypothesis alongside the drifted-origin one and show both, instead of committing to the rewind. The scene-time AIS that comparison needs is already read for the dark-vessel cross-check; the scorer simply never sees it."
+  },
+  "udgam_result": {
+    "origin_summary": "Origin cloud centred at 29.0322\u00b0 N, 79.7318\u00b0 W; half the ensemble lands within 13.1 km and nine in ten within 31.11 km. Release window 2024-07-29T23:21:29Z to 2024-07-30T07:39:29Z (convergence). Stage 3 funnel 48 \u2192 26 \u2192 2 \u2192 2. 2 radar contact(s) near the slick or origin carried no matching AIS broadcast at acquisition time.",
+    "top_suspects": [
+      "636093219",
+      "367337960"
+    ],
+    "abstained": false
+  }
+}

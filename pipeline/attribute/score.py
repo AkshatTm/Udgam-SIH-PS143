@@ -45,9 +45,10 @@ import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import dark
 import geo
 from infrastructure import INFRA_SCORE_FLOOR, find_infrastructure
-from tracks import MIN_POINTS, load_tracks
+from tracks import load_tracks, regime
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -126,7 +127,7 @@ class Component:
 
 # ---------------------------------------------------------------------- the components
 
-def component_proximity(track, grid, t0, t1):
+def component_proximity(track, grid, t0, t1, ais_source="noaa_dense"):
     """Highest origin-grid probability the vessel touched during the window.
 
     The grid is normalised to peak 1.0, so the sample IS the score — no scaling.
@@ -137,29 +138,37 @@ def component_proximity(track, grid, t0, t1):
     a `gfw_hourly` case the reports are an hour apart. `position_at` refuses to
     interpolate across a silence longer than 30 minutes, so this never invents a
     position — it just fills in where the transponder was actually talking.
+
+    The ceiling is per sampling regime (D41, `tracks.REGIME`): on `gfw_hourly` it joins
+    consecutive hourly fixes, and the note says so when the peak came from between two.
     """
-    best = (0.0, None, None)
+    max_gap = regime(ais_source)["max_interp_gap_min"]
+    best = (0.0, None, None, False)
     for i, ts in enumerate(track.ts):
         if t0 <= ts <= t1:
             p = grid.sample(track.lon[i], track.lat[i])
             if p > best[0]:
-                best = (p, ts, (track.lon[i], track.lat[i]))
+                best = (p, ts, (track.lon[i], track.lat[i]), False)
 
     walk_from = max(t0, track.start)
     span = (min(t1, track.end) - walk_from).total_seconds()
     for k in range(1, int(span // SAMPLE_SECONDS) + 1):
         when = walk_from + timedelta(seconds=k * SAMPLE_SECONDS)
-        pos = track.position_at(when)
+        pos = track.position_at(when, max_gap)
         if pos is None:          # a silence longer than the interpolation ceiling
             continue
         p = grid.sample(pos[0], pos[1])
         if p > best[0]:
-            best = (p, when, pos)
+            best = (p, when, pos, True)
 
-    value, when, pos = best
+    value, when, pos, interpolated = best
     if when is None:
         return Component.not_applicable("no AIS reports inside the origin time window"), None
-    return Component(value, note="origin-grid probability at closest approach"), (when, pos)
+    note = "origin-grid probability at closest approach"
+    if interpolated and ais_source == "gfw_hourly":
+        note += (" — position between two hourly fixes, linearly interpolated; the vessel's "
+                 "actual path between fixes is not observed")
+    return Component(value, note=note), (when, pos)
 
 
 def component_trajectory(track, grid, when, pos):
@@ -419,7 +428,7 @@ def gate_constant_components(scored, names=("type_prior",)):
 
 def score_vessel(track, grid, t0, t1, ais_source, discharge_class, box):
     """All seven components for one vessel, then the renormalised weighted sum."""
-    prox, approach = component_proximity(track, grid, t0, t1)
+    prox, approach = component_proximity(track, grid, t0, t1, ais_source)
     if approach is None:
         return None
     when, pos = approach
@@ -601,6 +610,14 @@ def main():
                          "deliberately — it is never inferred from a missing --parquet, "
                          "because a forgotten argument would otherwise silently produce a "
                          "bundle that had considered no vessels.")
+    ap.add_argument("--scene-parquet",
+                    help="AIS extract over the scene footprint at acquisition time; enables the "
+                         "radar-versus-AIS dark-vessel cross-check (dark.py)")
+    ap.add_argument("--sar-contacts",
+                    help="external radar contacts (ingest_gfw_sar.py output), cross-checked "
+                         "like our own and labelled external on every card")
+    ap.add_argument("--sar-label", default="GFW SAR vessel detections",
+                    help="source named on cards for --sar-contacts")
     ap.add_argument("--out-dir", help="where to write (default: the case bundle itself)")
     ap.add_argument("--top", type=int, default=TOP_N)
     ap.add_argument("--ranking", action="store_true",
@@ -661,11 +678,11 @@ def main():
         tracks, in_window, plausible, near_miss, silent = {}, [], [], [], []
         in_region = dropped_short = 0
         box = None
+        searched_empty = False
     else:
         in_window, plausible, near_miss, silent = [], [], [], []
-        tracks = load_tracks(a.parquet)
-        if not tracks:
-            raise SystemExit("no usable tracks in the parquet")
+        rg = regime(ais_source)
+        tracks = load_tracks(a.parquet, rg["min_points"])
 
         import duckdb
         con = duckdb.connect()
@@ -673,7 +690,11 @@ def main():
             "SELECT count(DISTINCT mmsi), min(lon), max(lon), min(lat), max(lat) "
             "FROM read_parquet(?)", [str(a.parquet)]).fetchone()
         con.close()
-        box = SearchBox(west, south, east, north)
+        # An empty extract is a searched negative (`ingest_gfw.py --allow-empty`): the query
+        # ran and the water held no broadcasting vessel. That is a different sentence from
+        # --no-ais, and the abstention below says which one it is.
+        searched_empty = n_all == 0
+        box = SearchBox(west, south, east, north) if not searched_empty else None
 
         in_region = n_all
         dropped_short = n_all - len(tracks)
@@ -718,6 +739,12 @@ def main():
             f"empty. meta.json declares ais_source {ais_source!r}; that data was not "
             f"obtainable for this case. Fixed-source association is unaffected and is "
             f"reported below.")
+    elif searched_empty:
+        abstained, why = True, (
+            f"the AIS archive ({ais_source}) was queried for the padded origin box and window "
+            f"and returned no broadcasting vessel at all — the area was searched and found "
+            f"empty, which is a result, not a missing input. Any vessel present was not "
+            f"transmitting AIS.")
     elif grid.abstain:
         abstained, why = True, ("Stage 2 flagged the origin cloud as too diffuse to "
                                 "attribute at acceptable confidence")
@@ -767,6 +794,15 @@ def main():
     pool = (plausible[len(top):] if not abstained else list(plausible)) + near_miss
     for s in pool:
         r = exclusion_reason(s)
+        if not r and abstained and s in plausible:
+            # On an abstention the plausible vessels are not excluded for anything about
+            # themselves: they are the nearest candidates, and they are not named because the
+            # evidence cannot separate them. Say exactly that, with the measured numbers, so an
+            # abstention shows who was considered rather than a blank.
+            r = (f"plausible candidate — score {s['score']:.2f} on "
+                 f"{sum(1 for c in s['components'].values() if c.applicable)} of {len(WEIGHTS)} "
+                 f"components, peak grid probability {s['grid_probability']:.2f} — not named "
+                 f"because {why}")
         if r:
             doc["excluded"].append({
                 "mmsi": s["track"].mmsi,
@@ -832,6 +868,25 @@ def main():
     # shows nor inside the scene bounds, and the validator rightly warns about every
     # point of it.
     features = [clipped_feature(s["track"], t0, t1) for s in plausible]
+
+    # --------------------------------------------------------------- dark vessels (D42)
+    # The radar-versus-transponder cross-check. It needs AIS searched at the SCENE's place and
+    # time, which the origin-window extract above does not cover, so it runs on its own extract.
+    # Without one, darkness is null (D34) and nothing is listed.
+    bounds_path = case_dir / "bounds.json"
+    bounds = json.loads(bounds_path.read_text(encoding="utf-8")) if bounds_path.exists() else None
+    contacts = dark.contacts_from_detections(detections_doc, bounds)
+    if a.sar_contacts:
+        ext = dark.contacts_from_external(dark.load_external(a.sar_contacts), a.sar_label)
+        contacts = (contacts or []) + ext
+    scene_tracks = []
+    if a.scene_parquet:
+        scene_tracks = list(load_tracks(a.scene_parquet, 1).values())
+    dark_list, dark_summary = dark.cross_check(
+        contacts, scene_tracks, dark.scene_time(meta), ais_source, grid, detections_doc,
+        have_scene_ais=bool(a.scene_parquet))
+    doc["dark_vessels"] = dark_list
+
     (out_dir / "vessels.geojson").write_text(
         json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
     (out_dir / "suspects.json").write_text(json.dumps(doc, indent=2), encoding="utf-8")
@@ -839,7 +894,12 @@ def main():
     # ------------------------------------------------------------------------ report
     print(f"\nfunnel        {funnel['in_region']} -> {funnel['in_window']} -> "
           f"{funnel['plausible']} -> {funnel['scored']}"
-          f"   ({dropped_short} dropped for < {MIN_POINTS} reports)")
+          f"   ({dropped_short} dropped for < {regime(ais_source)['min_points']} reports)")
+    print(f"dark check    {dark_summary['contacts']} radar contacts, "
+          f"{dark_summary['matched']} matched to AIS, {dark_summary['unmatched']} unmatched, "
+          f"{dark_summary['relevant']} near the slick/origin, {dark_summary['listed']} listed"
+          + ("" if dark_summary["ais_searched_at_scene_time"] else
+             "   (no scene-time AIS: darkness not assessed)"))
     if a.ranking:
         print(f"\n{'#':>2} {'score':>6} {'live':>5}  {'vessel':24} " +
               "  ".join(f"{k[:4]:>5}" for k in WEIGHTS))

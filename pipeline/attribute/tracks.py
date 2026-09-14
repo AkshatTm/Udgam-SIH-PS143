@@ -41,6 +41,26 @@ MIN_POINTS = 5          # below this a "track" is noise, not a path
 MAX_INTERP_GAP_MIN = 30  # never draw a position across a longer silence
 MAX_TRACK_POINTS = 500   # contract §7: decimate so the map stays fast
 
+# D41 — the two thresholds above were set for NOAA's ~69 s reporting and were being applied
+# unchanged to GFW's one-fix-per-hour data, where they mean something else entirely:
+#   * 5 points is 5 *hours* of presence. A ship crossing a search box at 12 kn is inside it
+#     for one or two hours, so every transiting vessel was dropped before it was looked at
+#     (Mumbai 7 of 9, Jamnagar 6 of 8).
+#   * a 30-minute interpolation ceiling is shorter than the sampling interval itself, so no
+#     position between two hourly fixes was ever considered, and a vessel crossing a 3.7 km
+#     origin cloud between fixes could never be "in" it.
+# Derived from the sampling interval, not tuned on any case: two fixes make a path, and a
+# 75-minute ceiling joins consecutive hourly fixes while still refusing to bridge a missing
+# hour. `noaa_dense` keeps the original values, so the US cases are unchanged.
+REGIME = {
+    "noaa_dense": {"min_points": MIN_POINTS, "max_interp_gap_min": MAX_INTERP_GAP_MIN},
+    "gfw_hourly": {"min_points": 2, "max_interp_gap_min": 75},
+}
+
+
+def regime(ais_source):
+    return REGIME.get(ais_source, REGIME["noaa_dense"])
+
 
 class Track:
     """One vessel's time-ordered path. Timestamps are tz-aware UTC."""
@@ -91,7 +111,7 @@ class Track:
                 best = max(best, mins)
         return round(best, 1)
 
-    def position_at(self, when):
+    def position_at(self, when, max_gap_min=MAX_INTERP_GAP_MIN):
         """Linear interpolation to `when`. None outside the track, None across a long gap."""
         if when < self.ts[0] or when > self.ts[-1]:
             return None
@@ -103,7 +123,7 @@ class Track:
         if span_s <= 0:
             return (self.lon[a], self.lat[a])   # duplicate timestamps: no interval to divide by
         span = span_s / 60.0
-        if span > MAX_INTERP_GAP_MIN:
+        if span > max_gap_min:
             return None          # deliberately refuse to invent a position
         f = (when - self.ts[a]).total_seconds() / span_s
         return (self.lon[a] + f * (self.lon[b] - self.lon[a]),
