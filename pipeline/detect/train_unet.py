@@ -440,7 +440,16 @@ def main():
                    "val_iou_at_threshold": round(best_t_iou, 4),
                    "val_iou_at_0.5": round(best_iou, 4),
                    "n_train_tiles": int(len(tr_idx)), "n_val_tiles": int(len(va_idx)),
-                   "trained_on": "Zenodo Parts I+II tiles, split by scene"}, fh, indent=2)
+                   "trained_on": "Zenodo Parts I+II tiles, split by scene",
+                   # PROVENANCE. A checkpoint that does not say which convention it
+                   # needs is how the channels got transposed at inference and both
+                   # E2 models scored ~0.000 at scene level while training fine on
+                   # tiles. nets.py reads these to build the input correctly.
+                   "cache": a.cache,
+                   "channel_order": ("vv_first" if a.cache != "P12legacy" else "band_order"),
+                   "norm_mode": ("sea" if a.cache.endswith("sea") else "median"),
+                   "split": a.split, "fold": a.fold,
+                   "xpol_channel": a.xpol_channel, "xpol_p": a.xpol_p}, fh, indent=2)
     print(f"\n  saved {CKPT}\n  saved {META}")
     print(f"  best validation IoU {best_t_iou:.4f} at threshold {best_t}")
     print("\n  Part III IoU — gated and ungated — is evaluate_unet.py, not this file.")

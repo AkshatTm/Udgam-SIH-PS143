@@ -4,7 +4,7 @@
 The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the one-screen answer to
 "where is it".*
 
-**Last updated: 2026-09-14 05:40** — caches rebuilt, stopped for the night before the retrain.
+**Last updated: 2026-09-15 11:20** — **E2 measured. The fix works; it is also a trade.**
 
 ---
 
@@ -44,6 +44,54 @@ Two bands hold **74.7%** of the metric and are the only two we lose.
 
 ---
 
+## E2 RESULT — the first item in this programme to move a number
+
+**Ungated U-Net, held-out val scenes, fold 0. Same budget, same fold, differing only in the cache.**
+
+| band | baseline (median) | **E2 (sea)** | change | oracle | share of metric |
+|---|---|---|---|---|---|
+| 0-1% | 0.6121 | 0.5943 | -0.018 | 0.4387 | 0.7% |
+| 1-3% | 0.7503 | 0.7133 | -0.037 | 0.6601 | 5.1% |
+| 3-10% | 0.8377 | 0.7438 | -0.094 | 0.7429 | 19.5% |
+| 10-30% | 0.8962 | 0.7357 | **-0.161** | 0.8123 | 36.4% |
+| **>=30%** | **0.2820** | **0.8386** | **+0.557** | 0.9590 | 38.3% |
+| | | | | | |
+| **pooled** | **0.6894** | **0.7316** | **+0.042** | | |
+| 95% CI | [0.584, 0.781] | [0.695, 0.764] | | | |
+| mean IoU | 0.8386 | 0.8608 | +0.022 | | |
+| macro/scene | 0.7287 | 0.6890 | -0.040 | | |
+
+**The mechanism is confirmed.** The >=30% band goes **0.282 -> 0.839**, a 3x improvement landing
+near the oracle's 0.959. That band is the entire reason this programme exists.
+
+**But read the significance honestly.** Pooled +0.042 is *inside* the 0.0599 fold spread, so on
+pooled alone this is **not yet a significant win**. What is well outside noise is the >=30%
+change: +0.557 against an across-fold band range of 0.257.
+
+**And four of five bands regressed**, worst at 10-30% (-0.161), which carries 36% of the metric.
+`macro/scene` falling while `pooled` rises is the signature: most scenes slightly worse, a few
+heavy ones much better.
+
+**Best-of-both would be 0.8534** band-weighted - the target - *if* the regressions turn out to be
+an artefact rather than intrinsic.
+
+### The confound, flagged before the run and now load-bearing
+
+The two caches differ in **three** ways, all from the coastline mask:
+1. normalisation - median vs sea-referenced
+2. **489 fewer tiles** (6,373 hard negatives vs 6,850)
+3. **175 fewer source scenes** (2,395 vs 2,570) - the entirely-land scenes, dropped
+
+The E2 audit measured normalisation as **identical** on the bands that regressed (0.000 shift,
+1.000 scale up to 3-10%). So normalisation probably did **not** cause those regressions; less
+training data and fewer hard negatives probably did.
+
+**NEXT EXPERIMENT, now necessary rather than optional:** a third cache, sea-referenced
+normalisation with **no land exclusion**. That separates "the fix" from "we trained on less".
+~1 h rebuild + one training run.
+
+---
+
 ## Status
 
 | item | state | result |
@@ -51,7 +99,8 @@ Two bands hold **74.7%** of the metric and are the only two we lose.
 | **E0** validation protocol | ✅ **done** | `split.py` + `evaluate_val.py`. Old split had **1** scene ≥30% in validation; now **3**, rotated over 3 folds. Proxy verified faithful (≥30% collapses to 0.17 vs 0.88 below it). **Fold spread 0.0599 — nothing smaller is measurable.** ⚠️ `train_unet` still selects on tile IoU, not val-scene |
 | **E8a** oracle ceiling | ✅ **done** | **0.8446** verified independently (agent said 0.838). Boundary decomposition: at ≥30%, **81% of oracle error is within 5 px of the annotator's line** — that band is annotation-limited |
 | **E1** channel fix + ablation | ✅ **done — NULL** | Four measurements agree it buys nothing: tile IoU 0.6997/0.6911/0.6994, pooled 0.6606/0.6513/0.6549 (spread 0.0093 vs fold noise 0.0599), ≥30% band 0.26–0.28 in all three. **Hypothesis retired.** Kept the rename for hygiene |
-| **E2** sea-referenced normalisation | 🔄 **caches built — retrain is the next step** | Estimator built, safety gate **PASSES** on 2,570 scenes. Scale was **1.8×–4.2× too wide** on the ≥30% band; bands up to 3–10% untouched (0.000 shift, 1.000 scale). Both caches now on disk, channel order corrected (`vv_med` −20.20 dB, was −32.87). **Retrain not started — deliberately stopped here** |
+| **E2** sea-referenced normalisation | ✅ **MEASURED — works, with a trade** | **>=30% band 0.282 -> 0.839** (oracle 0.959). Pooled 0.6894 -> 0.7316, inside the fold spread. Four bands regressed, worst -0.161 at 10-30%. Confounded by 175 fewer scenes / 477 fewer hard negatives — isolation run needed. See the result block above |
+| **E2b** isolation: sea norm, NO land exclusion | 🔜 **next** | Separates the normalisation fix from the data reduction. Without it we cannot say which half produced +0.557, or which caused the regressions |
 | **E4** loss — Focal+Dice / Tversky | ⬆️ **promoted, not started** | E1 points here: **zero of 200 easy tiles exceed 0.99** in any config, and focal γ=2 de-weights confident pixels by construction |
 | **E3** high-coverage regime | ❌ not started | Only **9** training scenes ≥30%, covering 38% of the holdout's oil mass |
 | **E5** TTA + seed ensemble | ❌ not started | Deliberately last — running it early inflates every intermediate comparison |
@@ -63,6 +112,7 @@ Two bands hold **74.7%** of the metric and are the only two we lose.
 
 | item | state |
 |---|---|
+| **Layer 1 is stale against the new caches** | ⚠️ **NEW, and it blocks the gated metric.** The shipped classifier returns P(oil) **0.001-0.010** on new-convention input against a 0.143 threshold, so the gate closes on every scene. All E2 numbers above are therefore **ungated**. Layer 1 must be retrained on the new cache before any gated or end-to-end number means anything |
 | Python **3.13.5** vs the pinned **3.11** | ❓ open — Akshat's call. Only item that could break Stage 1 on another machine |
 | `contrast_centre_db` / `contrast_edge_db` | ❓ dropped for demo; Anushka needs it for the weathering flag. ~10 lines, works on 11 of 12 oil features |
 | **170 of 1,370 non-oil scenes are entirely land** | ⚠️ unreported to Akshat — "look-alike rejection 0.940" is partly measured on farmland |
@@ -77,6 +127,7 @@ Two bands hold **74.7%** of the metric and are the only two we lose.
 | E2 safety gate | **~15 min** | **~1 day** | **5 audit iterations.** Four of the five failures were my measurement, not the fix |
 | E8a | ~1 day | ~1 h | faster than planned |
 | E1 | ~1 h + 3 runs | ~6 h | 3 training runs + 3 scene evals |
+| E2 rebuild + retrain | ~5 h | ~8 h | 2 cache builds, 2 trainings, 3 evaluation attempts |
 
 **Price the remaining items on the E2 experience, not the plan's estimates.**
 
@@ -88,8 +139,18 @@ Two bands hold **74.7%** of the metric and are the only two we lose.
   existed precisely to make a bad rebuild recoverable. Cost: the A/B against the original cache.
   E1's numbers predate it and are unaffected. Both caches now rebuilding with the **same**
   corrected channel order, which isolates normalisation as the only variable.
-- **Channel order in the new caches is transposed** relative to every existing checkpoint —
+- **Channel order in the new caches is transposed** relative to every existing checkpoint -
   channel 0 is now VV. Old models are incompatible. Retrains write to **tagged** files only.
+- **2026-09-15 - the E2 evaluation read 0.0000 and the model was fine.** Both retrained models
+  scored ~0.000 at scene level while training to tile IoU 0.62. Cause: the **Layer 1 classifier**
+  is trained on the old convention, returns P(oil) 0.001-0.010 on the new one, and the gate closed
+  on every scene. The U-Net was producing 15,591 px over threshold the whole time. Unchecked, the
+  conclusion would have been "E2 produces nothing, normalisation is not the problem" - and the
+  programme would have been abandoned on a measurement artefact.
+  **Fixes:** checkpoints now record `channel_order` / `norm_mode`, `nets.unet_convention()` reads
+  it, and `evaluate_val --ungated` takes Layer 1 out of a Layer 2 comparison.
+- **A merge reverted the checkpoint-provenance meta block**, which is *why* the transposition went
+  unnoticed - a checkpoint that cannot state its own convention is how this happens. Restored.
 
 ## Caches on disk, ready to train from
 

@@ -270,6 +270,9 @@ def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None, jobs=None
     scenes — decoding 450 scenes twice would be pointless I/O."""
     clf, clf_thr = nets.load_classifier()
     unet, unet_thr = nets.load_unet(ckpt)
+    _conv = nets.unet_convention(ckpt)
+    print(f"  checkpoint convention: channels={_conv['channel_order']} "
+          f"norm={_conv['norm_mode']}")
     if unet is None:
         return [], None
     if clf is None and True in use_gate_list:
@@ -310,7 +313,18 @@ def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None, jobs=None
         with rasterio.open(img_path) as src:
             vv = src.read(1).astype(np.float32)
             vh = src.read(2).astype(np.float32) if src.count >= 2 else None
-        norm, valid, _ = nets.normalise_scene(vv, vh)
+            _tr = src.transform
+        # Build the input in the convention THIS checkpoint was trained on. Reading
+        # band 1 as VV is right for a GEE export and wrong for a Zenodo tile, and the
+        # models trained after the 2026-09-14 rebuild expect [VV, VH] on both. Getting
+        # this wrong is silent: it cost a full train+eval cycle that scored ~0.000 at
+        # scene level while the same models were at tile IoU 0.62.
+        if _conv["channel_order"] == "vv_first" and vh is not None                 and nets._looks_like_zenodo(vv, vh):
+            first, second = vh, vv           # band 2 is the co-pol channel here
+        else:
+            first, second = vv, vh
+        norm, valid, _ = nets.normalise_scene(first, second,
+                                              mode=_conv["norm_mode"], transform=_tr)
 
         gt = np.zeros(vv.shape, bool)
         if cls == "Oil" and os.path.exists(msk_path):

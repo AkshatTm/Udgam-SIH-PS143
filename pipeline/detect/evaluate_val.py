@@ -80,6 +80,13 @@ def main():
     ap.add_argument("--all-folds", action="store_true",
                     help="rotate the >=30% band through all 3 folds and report the spread")
     ap.add_argument("--limit", type=int, default=None, help="smoke test")
+    ap.add_argument("--ungated", action="store_true",
+                    help="report the U-Net-only row instead of the gated one. REQUIRED "
+                         "when comparing U-Net changes across a cache rebuild: the "
+                         "Layer 1 classifier is trained on the OLD convention, and on "
+                         "the new one it returns P(oil) 0.001-0.010 against a 0.143 "
+                         "threshold, so the gate closes on every scene and the gated "
+                         "row reads 0.0000 no matter how good Layer 2 is.")
     ap.add_argument("--ckpt", default=None,
                     help="explicit U-Net checkpoint; default is models/unet.pt")
     ap.add_argument("--json", default=None)
@@ -93,7 +100,8 @@ def main():
     out = {}
     for f in folds:
         rows = run_fold(f, gate_thr, a.limit, a.ckpt)
-        shipped = next((r for r in rows if r["model"].startswith("Classifier + U-Net")), None)
+        want = "U-Net only" if a.ungated else "Classifier + U-Net"
+        shipped = next((r for r in rows if r["model"].startswith(want)), None)
         if shipped:
             out[f] = shipped
 
