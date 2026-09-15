@@ -219,6 +219,37 @@ configuration that could actually ship, and neither E2 nor E2b is.
 
 **Price the remaining items on the E2 experience, not the plan's estimates.**
 
+## ⚠ The 0.0599 "fold spread" is not what it has been used as
+
+Found 2026-09-15 while about to run `--all-folds` as a check on the n=6 / n=3 bands. It would have
+been worse than useless, and the reason matters for every significance claim on this board.
+
+**`split.py` rotates ONLY the `Oil/>=30%` stratum.** Every other stratum draws with the same seed
+regardless of `--fold`, so folds 0, 1 and 2 have **byte-identical validation sets** outside that one
+band — measured: 0 scenes differ. So:
+
+- `--all-folds` cannot say anything about the **10-30% band (n=6)**. It scores the same six scenes
+  three times.
+- For the **>=30% band it leaks.** All 3 of fold 1's held-out scenes and all 3 of fold 2's are in
+  fold 0's *training* set. Evaluating a fold-0 checkpoint across folds measures memorisation.
+
+**What 0.0599 actually measures:** one fixed gated checkpoint, scored on three evaluation subsets
+differing only in which 3 of 9 heavy scenes are included. That is *evaluation-set sensitivity* — a
+real and useful quantity, but **not training-seed variance**.
+
+**Why that matters here:** every comparison on this board (baseline vs E2 vs E2b) holds fold 0
+fixed, so the evaluation set is identical and that sensitivity largely cancels. The noise floor
+those comparisons actually need is **seed variance, which has never been measured.** 0.0599 is being
+used as a conservative stand-in. It is not the matching quantity, and "+0.0609 clears 0.0599" should
+not be read as a significance test.
+
+**To measure it properly**, one of:
+- **seed variance** — retrain one config with 2-3 seeds, same cache, same fold (~1.3 h per seed);
+- **a true fold spread** — train one model *per fold* and score each on its own holdout (3 x ~1.3 h).
+
+Until then, quote the **>=30% band change** (+0.55, far outside anything noise can explain) and treat
+pooled movements under ~0.06 as unresolved.
+
 ## Incidents
 
 - **2026-09-14 — tile cache overwritten.** `--suffix`/`--normalise` were added to
@@ -246,6 +277,7 @@ configuration that could actually ship, and neither E2 nor E2b is.
 |---|---|---|---|---|
 | `P12` | 2,570 | 28,129 | median | the baseline |
 | `P12sea` | 2,570 | 27,640 | sea-referenced (E2) | 489 fewer tiles, mostly hard negatives |
+| `P12seac` | *building* | *expect 28,129* | sea-referenced, land excluded from the **reference only** (E2c) | ✅ verified: same sea reference as `P12sea` on every scene that has sea, data mask never smaller, entirely-land scenes recovered rather than deleted |
 | `P12seanl` | 2,570 | 28,129 | sea-referenced, land exclusion **OFF** (E2b) | ✅ verified single-variable vs `P12`: identical positives, 13 of 28,129 tiles differ. Measurement only — **never ship a model trained on this**; land in the sea sample is what failed the first two E2 audits |
 
 Both carry the corrected channel order: `vv_med` median **−20.20 dB** against `vh_med` **−32.87**,
