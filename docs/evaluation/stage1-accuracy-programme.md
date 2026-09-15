@@ -4,7 +4,7 @@
 The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the one-screen answer to
 "where is it".*
 
-**Last updated: 2026-09-16 00:55** — **E2c MEASURED and the normalisation work is DONE.** E2c is the shippable configuration. The "band regressions" turn out to be training variance, not normalisation — see *What the normalisation actually touches*.
+**Last updated: 2026-09-16 04:15** — **noise floor MEASURED at 3 seeds.** Pooled sd **0.0267**. Only the ≥30% result survives it. Previously — — **E2c MEASURED and the normalisation work is DONE.** E2c is the shippable configuration. The "band regressions" turn out to be training variance, not normalisation — see *What the normalisation actually touches*.
 
 ---
 
@@ -260,6 +260,71 @@ where the remaining accuracy is.**
 
 ---
 
+## 🚨 THE NOISE FLOOR — measured, and it retires most of this board
+
+**E2c trained three times. Identical cache, identical fold, identical budget, byte-identical data.
+The only difference is `--seed`.**
+
+| band | n | seed 42 | seed 1 | seed 2 | spread | **sd** |
+|---|---|---|---|---|---|---|
+| 0-1% | 53 | 0.6181 | 0.6243 | 0.6376 | 0.0195 | 0.0100 |
+| 1-3% | 75 | 0.7497 | 0.7302 | 0.7507 | 0.0205 | 0.0116 |
+| 3-10% | 45 | 0.8330 | 0.7853 | 0.8119 | 0.0477 | 0.0239 |
+| 10-30% | 6 | 0.7007 | 0.5836 | 0.6796 | 0.1171 | **0.0624** |
+| ≥30% | 3 | 0.8238 | 0.7577 | 0.8671 | 0.1094 | **0.0551** |
+| | | | | | | |
+| **pooled** | | 0.7567 | 0.7140 | 0.7630 | **0.0490** | **0.0267** |
+| mean IoU | | 0.8736 | 0.8517 | 0.8770 | 0.0253 | 0.0137 |
+| macro/scene | | 0.7316 | 0.7086 | 0.7325 | 0.0239 | 0.0135 |
+
+### What survives
+
+| claim | effect | vs seed noise | verdict |
+|---|---|---|---|
+| **≥30% band: baseline → E2c** | **+0.5342** | **9.7 sd** | ✅ **REAL** |
+| pooled: baseline → E2c | +0.0552 | 2.1 sd | ❌ **not established** |
+| mean IoU: baseline → E2c | +0.0288 | 2.1 sd | ❌ not established |
+| macro/scene: baseline → E2c | **−0.0045** | −0.3 sd | ❌ no effect |
+| 10-30% "regression" | −0.1955 | 3.1x the band sd | ⚠ marginal |
+| 3-10% "recovery" | −0.0047 | 0.2x | ❌ noise |
+
+**And the comparison is kinder than it should be**: the baseline is itself a SINGLE draw, carrying
+its own ±0.027. A proper test needs replicates on both sides, which would widen the interval
+further. The ≥30% effect is large enough that none of this matters; nothing else is.
+
+### What this means, stated plainly
+
+1. **The programme has exactly one defensible result: the ≥30% band, 0.2820 → 0.8162 (mean of 3
+   seeds), at 9.7 sd.** That is the failure that produced the 0.4349 headline, and it is fixed.
+2. **The pooled improvement is not established.** +0.0552 against sd 0.0267 is 2.1 sd, and every
+   narrative on this board about bands "recovering" or "regressing" across E2/E2b/E2c was reading
+   seed noise as signal. The per-band commentary in the E2 and E2b result blocks should be read with
+   that correction applied.
+3. **E2c's benefit is concentrated entirely in large slicks** — which is exactly what it was built
+   for. `macro/scene` weights every scene equally and shows **no effect at all** (−0.3 sd), while
+   pooled weights by pixel and moves. Three huge scenes out of 182 cannot shift a per-scene average.
+   **This is coherent, not contradictory**, and it is why the Part III projection is still favourable:
+   that holdout's ≥30% band carries **38.3% of its oil mass** while scoring **0.0848**.
+4. **A single-run experiment is no longer a measurement.** Anything moving pooled by less than
+   **~0.08** (3 sd) is invisible. **This applies to E4, E3 and E5 before they are run.**
+
+### The cost this imposes on everything that follows
+
+Every future comparison needs **3 seeds** (~4.5 h per configuration) or it cannot be believed.
+Options, in order of how much they actually buy:
+
+- **Stop optimising pooled.** Target the ≥30% regime, where effects are 10x the noise. This is where
+  the metric's mass is anyway.
+- **Tune on a quieter metric.** `macro/scene` (sd 0.0135) and `mean IoU` (sd 0.0137) are **half as
+  noisy as pooled**. Select on those, report pooled. Legitimate, and free.
+- **Pay for 3 seeds per experiment.** Correct but expensive, and it triples the remaining programme.
+- **Reduce the variance itself** — seed ensembling (E5) is the direct instrument, and its “run it
+  last” rationale was that it inflates intermediate comparisons. That reasoning is now weaker: if
+  variance is the binding constraint, averaging it away may be the most valuable single change
+  rather than the last one.
+
+---
+
 ## Status
 
 | item | state | result |
@@ -395,29 +460,32 @@ The reasoning lives in docstrings, not in anyone's head. Read these five in this
 - A swap happens only when the **gated, end-to-end** val-scene number beats the shipped pair by
   **more than the 0.0599 fold spread** — and then on Soum's call, never silently.
 
-## Resume here — seed variance FIRST, then Layer 1
+## Resume here — Layer 1, for the first END-TO-END number
 
-The normalisation work is done (E2c ships). The next measurement is not an accuracy idea, it is the
-**noise floor**, because without it nothing further can be called an improvement.
+Seed variance is measured (above). The normalisation work is complete and E2c is the configuration
+to carry. **The open question is no longer "which normalisation" — it is "what does the real,
+gated pipeline actually score", and nothing on this board answers that.**
 
 ```bash
-# 1. SEED VARIANCE - same cache, same fold, same budget, different seed.
-#    train_unet.py currently hardcodes torch.manual_seed(42); needs --seed.
-python pipeline/detect/train_unet.py --epochs 12 --patience 12 --split stratified --fold 0 --cache P12seac --tag e2c_seed1 --seed 1
-python pipeline/detect/evaluate_val.py --fold 0 --ungated --ckpt pipeline/detect/models/unet_e2c_seed1.pt --json pipeline/detect/results/eval_val_e2c_seed1.json
-#    Two or three seeds gives the spread. Expect it to be LARGE: one scene moved
-#    0.82 -> 0.00 between runs on identical input.
-
-# 2. E2c is undertrained - best val IoU landed on epoch 12 of 12, while every
-#    other run peaked at 6-8. A longer run may be worth more than a new idea.
-python pipeline/detect/train_unet.py --epochs 30 --patience 10 --split stratified --fold 0 --cache P12seac --tag e2c_long
-
-# 3. Then Layer 1, which unblocks every GATED number (see below).
+# 1. the P3 holdout cache is STALE (12 Sept, transposed channels). Rebuilding it
+#    re-derives holdout INPUTS under the corrected convention - it is not tuning.
 python pipeline/detect/build_cache.py --parts 3 --normalise sea --land-mode reference
+
+# 2. Layer 1 on the winning cache. --tag is mandatory; the shipped pair is untouched.
 python pipeline/detect/train_classifier.py --cache P12seac --test-cache P3 --tag l1_e2c
+
+# 3. the GATED number on validation scenes - drop --ungated, pass BOTH new models
+python pipeline/detect/evaluate_val.py --fold 0 --ckpt pipeline/detect/models/unet_e2c_sea_refonly.pt
 ```
 
-**Read the ≥30% band and the seed spread. Nothing else on this board is currently resolvable.**
+**Part III stays sealed** until a final configuration is chosen. Note that step 2 prints Part III
+figures for the classifier: selection there is on validation loss and a validation PR curve, and the
+Part III row is disclosure, not tuning — but do not let it steer a choice.
+
+**Deferred, deliberately:** the longer E2c run (it peaked at epoch 12 of 12, so it is undertrained)
+is no longer obviously worth 3 seeds x 3 h. Revisit once there is a gated number to improve against.
+
+**Read the ≥30% band and the seed sd. Nothing smaller than ~0.08 pooled is a result.**
 
 ---
 
