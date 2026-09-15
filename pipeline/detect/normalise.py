@@ -351,6 +351,47 @@ def sea_reference(band, valid=None, exclude_land=True, transform=None, bins=SEA_
     return ref, scale, info
 
 
+def sea_normalise(band, transform=None, land_mode="full", clip_sigma=6.0):
+    """THE sea-referenced normalisation -> (norm, valid, ref, scale).
+
+    ONE implementation, called by both producers. build_cache.py and nets.py each
+    used to hold their own copy of this rule; the copies drifted, and a checkpoint
+    trained under one was evaluated under the other. That is not a hypothetical -
+    it is how E2's first evaluation came back 0.0000 with a working model.
+
+    TWO MASKS, TWO QUESTIONS (plan E2c):
+
+      v_ref   the sample the sea reference is estimated FROM. Land here is what
+              failed the first two E2 audits: the estimator picked a coastline as
+              "sea" and moved the reference by up to 21 dB, at which point the
+              entire ocean reads as oil.
+      v_data  which pixels are real data. Land is real data; it is simply not sea.
+              Conflating this with v_ref marked every land pixel as missing, and
+              MAX_INVALID_FRAC then deleted 175 whole scenes from the cache.
+
+    land_mode:
+      "full"       v_ref land-excluded, v_data = v_ref     (E2,  P12sea)
+      "reference"  v_ref land-excluded, v_data finite-only (E2c, P12seac)
+      "none"       neither excludes land                   (E2b, P12seanl)
+    """
+    v_data = valid_mask(band, exclude_land=False)
+    if land_mode == "none":
+        v_ref = v_data
+    else:
+        v_ref = valid_mask(band, exclude_land=True, transform=transform)
+    if land_mode == "full":
+        v_data = v_ref
+    # An entirely-land scene has no sea to reference. Falling back keeps the scene
+    # as a hard negative instead of letting it vanish from the cache.
+    if not v_ref.any():
+        v_ref = v_data
+    if not v_data.any():
+        return np.zeros_like(band, np.float32), v_data, 0.0, 1.0
+    ref, scale, _ = sea_reference(band, v_ref, transform=transform)
+    out = np.clip((band - ref) / scale, -clip_sigma, clip_sigma) / clip_sigma
+    return np.where(v_data, out, 0.0).astype(np.float32), v_data, ref, scale
+
+
 def normalise_band(band, mode="median"):
     """dB -> [-1, +1]. -> (norm float32, valid bool, ref, scale).
 

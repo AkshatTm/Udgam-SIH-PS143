@@ -44,23 +44,19 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Normalisation — must stay byte-identical in meaning to build_cache.normalise
 # ---------------------------------------------------------------------------
 
-def _norm_one(band, mode="median", transform=None, exclude_land=True):
+def _norm_one(band, mode="median", transform=None, land_mode="full"):
     """One band, through the single implementation in normalise.py.
 
-    `exclude_land` MUST match the cache the checkpoint was trained on. It was
-    hardcoded True here, which silently mismatched any model trained with the
-    coastline mask off (plan E2b) - the reference would be computed from a
-    different pixel population at inference than in training.
+    `land_mode` MUST match the cache the checkpoint was trained on, and it is a
+    STRING because there are three states, not two. It was briefly a boolean, and
+    E2c - whose reference excludes land while its tile mask does not - serialised
+    as False, which would have estimated the reference from a different pixel
+    population at inference than in training. Nothing would have errored.
     """
-    from pipeline.detect.normalise import (normalise_band as _nb, sea_reference,
-                                           valid_mask)
+    from pipeline.detect.normalise import normalise_band as _nb, sea_normalise
     if mode == "sea":
-        v = valid_mask(band, exclude_land=exclude_land, transform=transform)
-        if not v.any():
-            return np.zeros_like(band, np.float32), v, 0.0, 1.0
-        ref, scale, _ = sea_reference(band, v, transform=transform)
-        out = np.clip((band - ref) / scale, -CLIP_SIGMA, CLIP_SIGMA) / CLIP_SIGMA
-        return np.where(v, out, 0.0).astype(np.float32), v, ref, scale
+        return sea_normalise(band, transform=transform, land_mode=land_mode,
+                             clip_sigma=CLIP_SIGMA)
     return _nb(band, "median")
 
 
@@ -76,7 +72,7 @@ def normalise_band(band):
     return np.where(valid, norm, 0.0).astype(np.float32), valid, med, mad
 
 
-def scene_input(img_path, order="band_order", mode="median", exclude_land=True):
+def scene_input(img_path, order="band_order", mode="median", land_mode="full"):
     """Read a 2-band scene into the channel order and normalisation a checkpoint needs.
 
     THIS EXISTS BECAUSE GETTING IT WRONG IS SILENT. Both E2 models trained to tile IoU
@@ -104,7 +100,7 @@ def scene_input(img_path, order="band_order", mode="median", exclude_land=True):
     else:
         first, second = b1, b2
     return normalise_scene(first, second, mode=mode, transform=transform,
-                           exclude_land=exclude_land)
+                           land_mode=land_mode)
 
 
 def _looks_like_zenodo(b1, b2):
@@ -130,21 +126,27 @@ def unet_convention(path=None):
     meta_p = path.replace(".pt", ".json").replace("unet_", "unet_meta_")
     if not os.path.exists(meta_p):
         meta_p = os.path.join(MODELS, "unet_meta.json")
-    conv = {"channel_order": "band_order", "norm_mode": "median", "land_mask": True}
+    conv = {"channel_order": "band_order", "norm_mode": "median", "land_mode": "full"}
     if os.path.exists(meta_p):
         try:
             m = json.loads(open(meta_p, encoding="utf-8").read())
             conv["channel_order"] = m.get("channel_order", conv["channel_order"])
             conv["norm_mode"] = m.get("norm_mode", conv["norm_mode"])
-            lm = m.get("land_mask")
-            if lm is not None:
-                conv["land_mask"] = bool(lm)
+            # land_mode (string, 3 states) supersedes land_mask (bool, 2 states).
+            # Fall back to the boolean only for checkpoints written before E2c.
+            lmode = m.get("land_mode")
+            if lmode:
+                conv["land_mode"] = lmode
+            else:
+                lm = m.get("land_mask")
+                if lm is not None:
+                    conv["land_mode"] = "full" if lm else "none"
         except Exception:
             pass
     return conv
 
 
-def normalise_scene(vv, vh=None, mode="median", transform=None, exclude_land=True):
+def normalise_scene(vv, vh=None, mode="median", transform=None, land_mode="full"):
     """-> (norm (H,W,2) float32, valid (H,W) bool, stats dict).
 
     stats carries med/mad per band so Layer 3 can invert back to real decibels;
@@ -152,11 +154,11 @@ def normalise_scene(vv, vh=None, mode="median", transform=None, exclude_land=Tru
     a dB label, which is exactly the kind of quiet dishonesty the contract's
     'contrast_db must be negative' check cannot catch.
     """
-    n_vv, val_vv, med_vv, mad_vv = _norm_one(vv, mode, transform, exclude_land)
+    n_vv, val_vv, med_vv, mad_vv = _norm_one(vv, mode, transform, land_mode)
     if vh is None:
         n_vh, val_vh, med_vh, mad_vh = n_vv.copy(), val_vv, med_vv, mad_vv
     else:
-        n_vh, val_vh, med_vh, mad_vh = _norm_one(vh, mode, transform, exclude_land)
+        n_vh, val_vh, med_vh, mad_vh = _norm_one(vh, mode, transform, land_mode)
     return (np.stack([n_vv, n_vh], axis=-1), val_vv & val_vh,
             {"vv_med": med_vv, "vv_mad": mad_vv, "vh_med": med_vh, "vh_mad": mad_vh,
              "vh_available": vh is not None})

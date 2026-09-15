@@ -21,5 +21,6 @@
   "channel_order": "vv_first",
   "norm_mode": "sea",
   "provenance_note": "convention backfilled from the training log; the meta block that records it was reverted by a merge and restored afterwards",
-  "land_mask": true
+  "land_mask": true,
+  "land_mode": "full"
 }

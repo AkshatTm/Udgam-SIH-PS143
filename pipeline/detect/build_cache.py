@@ -121,26 +121,10 @@ def _norm(band, mode, transform=None, land_mode="full"):
       "reference"  v_ref land-excluded, v_data finite-only (E2c, P12seac)
       "none"       neither excludes land                   (E2b, P12seanl)
     """
-    from pipeline.detect.normalise import normalise_band as _nb, sea_reference, valid_mask
+    from pipeline.detect.normalise import normalise_band as _nb, sea_normalise
     if mode == "sea":
-        v_data = valid_mask(band, exclude_land=False)
-        if land_mode == "none":
-            v_ref = v_data
-        else:
-            v_ref = valid_mask(band, exclude_land=True, transform=transform)
-        if land_mode == "full":
-            v_data = v_ref
-        # An entirely-land scene leaves nothing to estimate sea level FROM. Falling
-        # back to the full frame is right: the reference is then meaningless either
-        # way, but the scene keeps its tiles and stays a hard negative instead of
-        # silently vanishing from the cache.
-        if not v_ref.any():
-            v_ref = v_data
-        if not v_data.any():
-            return np.zeros_like(band, np.float32), v_data, 0.0, 1.0
-        ref, scale, _ = sea_reference(band, v_ref, transform=transform)
-        out = np.clip((band - ref) / scale, -CLIP_SIGMA, CLIP_SIGMA) / CLIP_SIGMA
-        return np.where(v_data, out, 0.0).astype(np.float32), v_data, ref, scale
+        return sea_normalise(band, transform=transform, land_mode=land_mode,
+                             clip_sigma=CLIP_SIGMA)
     out, v, ref, scale = _nb(band, "median")
     return out, v, ref, scale
 

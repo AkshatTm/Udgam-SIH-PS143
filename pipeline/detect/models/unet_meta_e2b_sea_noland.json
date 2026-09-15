@@ -25,5 +25,6 @@
   "xpol_channel": 1,
   "xpol_p": 0.25,
   "land_mask": false,
-  "meta_repaired": "norm_mode was stamped 'median' by a filename heuristic (cache.endswith('sea')); P12seanl is sea-normalised with exclude_land=False. Weights unaffected - only this record was wrong."
+  "meta_repaired": "norm_mode was stamped 'median' by a filename heuristic (cache.endswith('sea')); P12seanl is sea-normalised with exclude_land=False. Weights unaffected - only this record was wrong.",
+  "land_mode": "none"
 }

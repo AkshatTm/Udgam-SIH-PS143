@@ -79,12 +79,16 @@ def _cache_convention(prefix):
     that already cost a full train+eval cycle.
     """
     f = os.path.join(_ROOT, "data", "cache", "manifest_%s.json" % prefix)
-    conv = {"norm_mode": "median", "land_mask": True}
+    conv = {"norm_mode": "median", "land_mode": "full"}
     try:
         m = json.loads(open(f, encoding="utf-8").read())
         conv["norm_mode"] = m.get("norm_mode") or "median"
-        lm = m.get("land_mask")
-        conv["land_mask"] = True if lm is None else bool(lm)
+        lmode = m.get("land_mode")
+        if lmode:
+            conv["land_mode"] = lmode
+        else:
+            lm = m.get("land_mask")
+            conv["land_mode"] = "full" if (lm is None or lm) else "none"
     except Exception as exc:
         print("  [WARN] cannot read %s (%s) - assuming %s" % (f, exc, conv))
     return conv
