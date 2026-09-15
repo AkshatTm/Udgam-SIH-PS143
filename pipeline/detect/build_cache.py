@@ -87,13 +87,13 @@ MAX_NEG_PER_SCENE = 12
 NORMALISE_MODE = "sea"      # "median" reproduces the original cache exactly
 
 
-def _norm(band, mode, transform=None):
+def _norm(band, mode, transform=None, exclude_land=True):
     """THE normalisation, from pipeline/detect/normalise.py. This file used to hold a
     second copy of the same rule, which is the shape of bug that made the k_sigma fix
     inert for a day; there is now one implementation and both producers call it."""
     from pipeline.detect.normalise import normalise_band as _nb, sea_reference, valid_mask
     if mode == "sea":
-        v = valid_mask(band, exclude_land=True, transform=transform)
+        v = valid_mask(band, exclude_land=exclude_land, transform=transform)
         if not v.any():
             return np.zeros_like(band, np.float32), v, 0.0, 1.0
         ref, scale, _ = sea_reference(band, v, transform=transform)
@@ -125,7 +125,7 @@ def normalise(band):
     return norm, valid, med, mad
 
 
-def scene_arrays(img_path, mode=None):
+def scene_arrays(img_path, mode=None, exclude_land=True):
     """-> (norm (H,W,2) float32, valid (H,W) bool, stats dict).
 
     CHANNEL ORDER IS NOW CORRECT, and this is a breaking change to the cache.
@@ -162,8 +162,10 @@ def scene_arrays(img_path, mode=None):
         vh_raw = src.read(1).astype(np.float32)                 # band 1 IS cross-pol
         vv_raw = src.read(2).astype(np.float32) if src.count >= 2 else vh_raw.copy()
         transform = src.transform
-    n_vv, val_vv, ref_vv, sc_vv = _norm(vv_raw, mode=mode, transform=transform)
-    n_vh, val_vh, ref_vh, sc_vh = _norm(vh_raw, mode=mode, transform=transform)
+    n_vv, val_vv, ref_vv, sc_vv = _norm(vv_raw, mode=mode, transform=transform,
+                                        exclude_land=exclude_land)
+    n_vh, val_vh, ref_vh, sc_vh = _norm(vh_raw, mode=mode, transform=transform,
+                                        exclude_land=exclude_land)
     norm = np.stack([n_vv, n_vh], axis=-1)                      # channel 0 = VV
     valid = val_vv & val_vh
     # Both references are stored. Layer 3 inverts contrast_db through the MEDIAN pair, so
@@ -174,7 +176,7 @@ def scene_arrays(img_path, mode=None):
              "vh_med": round(med_vh, 4), "vh_mad": round(mad_vh, 4),
              "vv_ref": round(ref_vv, 4), "vv_scale": round(sc_vv, 4),
              "vh_ref": round(ref_vh, 4), "vh_scale": round(sc_vh, 4),
-             "norm_mode": mode}
+             "norm_mode": mode, "land_mask": bool(exclude_land)}
     return norm, valid, stats
 
 
@@ -229,7 +231,7 @@ class ShardWriter:
                        "meta": self.meta}, fh)
 
 
-def run(parts_key, limit=None, suffix="", mode=None):
+def run(parts_key, limit=None, suffix="", mode=None, exclude_land=True):
     os.makedirs(CACHE, exist_ok=True)
     prefix = PARTS[parts_key]["prefix"] + (suffix or "")
     # The old cache is NOT overwritten. A rebuild that turns out worse has to be
@@ -253,7 +255,8 @@ def run(parts_key, limit=None, suffix="", mode=None):
 
     for i, (scene_id, cls, img_path, msk_path) in enumerate(jobs, 1):
         try:
-            norm, valid, stats = scene_arrays(img_path, mode=mode)
+            norm, valid, stats = scene_arrays(img_path, mode=mode,
+                                              exclude_land=exclude_land)
             h, w = valid.shape
             gt = load_mask(msk_path, (h, w)) if cls == "Oil" else np.zeros((h, w), np.uint8)
 
@@ -324,6 +327,7 @@ def run(parts_key, limit=None, suffix="", mode=None):
     with open(os.path.join(CACHE, f"manifest_{prefix}.json"), "w") as fh:
         json.dump({"prefix": prefix, "parts": parts_key,
                    "norm_mode": mode or NORMALISE_MODE,
+                   "land_mask": bool(exclude_land),
                    "channel_order": "0=VV(co-pol, read band 2), 1=VH(cross-pol, read band 1)",
                    "scene_ids": scene_ids, "scene_labels": scene_labels,
                    "scene_px": SCENE_SIZE, "tile_px": TILE,
@@ -357,6 +361,16 @@ if __name__ == "__main__":
                     help="median = the original whole-scene median+MAD. sea = plan E2, "
                          "sea-referenced, which un-compresses large-slick scenes where the "
                          "old scale was 1.8x-4.2x too wide.")
+    ap.add_argument("--no-land-mask", action="store_true",
+                    help="sea mode only: do NOT exclude land from the sea-reference "
+                         "sample. This is plan E2b. The E2 sea cache differs from the "
+                         "median baseline in THREE ways, all from the coastline mask - "
+                         "normalisation, 489 fewer tiles, and 175 fewer source scenes, "
+                         "because entirely-land scenes lose every tile to "
+                         "MAX_INVALID_FRAC. This flag holds the scene population fixed "
+                         "so the normalisation is the only variable. It is a "
+                         "MEASUREMENT tool: land in the sample is what failed the first "
+                         "two E2 audits, so do not ship a cache built with it.")
     ap.add_argument("--suffix", default="",
                     help="appended to the cache prefix, e.g. --suffix sea writes P12sea and "
                          "leaves the existing P12 cache untouched.")
@@ -365,4 +379,5 @@ if __name__ == "__main__":
     # this call, so --suffix was silently ignored and a 9-scene smoke build overwrote
     # the real 2,565-scene P12 cache. An accepted argument that changes nothing is
     # worse than no argument at all.
-    run(a.parts, limit=a.limit, suffix=a.suffix, mode=a.normalise)
+    run(a.parts, limit=a.limit, suffix=a.suffix, mode=a.normalise,
+        exclude_land=not a.no_land_mask)
