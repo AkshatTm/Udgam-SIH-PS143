@@ -169,10 +169,18 @@ def normalise_scene(vv, vh=None, mode="median", transform=None, land_mode="full"
 # ---------------------------------------------------------------------------
 
 def load_classifier(path=None):
-    """-> (model, threshold) or (None, None) if Layer 1 has not been trained."""
+    """-> (model, threshold) or (None, None) if Layer 1 has not been trained.
+
+    The meta path is DERIVED from the checkpoint path. It used to be hardcoded to
+    scene_classifier_meta.json while `path` was overridable, so a tagged
+    classifier silently loaded the SHIPPED model's threshold - and the threshold
+    IS the gate, so that is not a cosmetic mismatch.
+    """
     from pipeline.detect.train_classifier import SceneCNN
     path = path or os.path.join(MODELS, "scene_classifier.pt")
-    meta_p = os.path.join(MODELS, "scene_classifier_meta.json")
+    meta_p = path.replace(".pt", "_meta.json")
+    if not os.path.exists(meta_p):
+        meta_p = os.path.join(MODELS, "scene_classifier_meta.json")
     if not os.path.exists(path):
         return None, None
     ck = torch.load(path, map_location=DEVICE, weights_only=False)

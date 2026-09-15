@@ -77,12 +77,15 @@ def classical_row():
             "note": "row-level precision/recall/F1 on detected regions"}
 
 
-def classifier_row():
-    p = os.path.join(MODELS, "scene_classifier_meta.json")
+def classifier_row(clf=None):
+    p = (clf.replace(".pt", "_meta.json") if clf
+         else os.path.join(MODELS, "scene_classifier_meta.json"))
     if not os.path.exists(p):
         return None, None
     m = json.loads(open(p).read())
-    r = m["part3"]
+    r = m.get("part3")
+    if r is None:                      # a classifier trained without a holdout pass
+        return None, m.get("threshold")
     return {"model": "Classifier only",
             "scene_accuracy": r["scene_accuracy"],
             "oil_recall": r["oil_recall"],
@@ -265,10 +268,10 @@ def decompose(a):
 
 
 def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None, jobs=None,
-              ckpt=None):
+              ckpt=None, clf_path=None):
     """Run the U-Net over Part III, ungated and gated, in one pass over the
     scenes — decoding 450 scenes twice would be pointless I/O."""
-    clf, clf_thr = nets.load_classifier()
+    clf, clf_thr = nets.load_classifier(clf_path)
     unet, unet_thr = nets.load_unet(ckpt)
     _conv = nets.unet_convention(ckpt)
     print(f"  checkpoint convention: channels={_conv['channel_order']} "
