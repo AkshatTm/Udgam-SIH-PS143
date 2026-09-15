@@ -4,7 +4,7 @@
 The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the one-screen answer to
 "where is it".*
 
-**Last updated: 2026-09-15 19:40** — demo done; programme **RESUMED**. E2b cache building.
+**Last updated: 2026-09-15 21:45** — **E2b MEASURED.** The ≥30% gain is the normalisation; the regressions were the data reduction.
 
 ---
 
@@ -100,6 +100,84 @@ normalisation with **no land exclusion**. That separates "the fix" from "we trai
 
 ---
 
+## E2b RESULT — the confound is broken apart
+
+**Same budget, same fold, same evaluation. `P12seanl` = sea normalisation with the coastline mask
+OFF, so the scene and tile population is the baseline's.**
+
+The cache was verified to be a single-variable change before training: tiles 28,129 (identical to
+`P12`), all 175 scenes `P12sea` had lost are back, the **positive tile set is bit-identical**, and
+only **13 tiles of 28,129 (0.05%)** differ — all hard negatives, whose darkness ranking is computed
+*on* the normalisation under test. Normalisation genuinely differs on 118 scenes (4.6%), which is
+the check that the flag did not silently fall back to median.
+
+| band | n | baseline (median) | E2 (sea) | **E2b (sea, no land)** | reading |
+|---|---|---|---|---|---|
+| 0-1% | 53 | 0.6121 | 0.5943 | **0.6287** | recovered, now above baseline |
+| 1-3% | 75 | 0.7503 | 0.7133 | **0.7490** | recovered to baseline |
+| 3-10% | 45 | 0.8377 | 0.7438 | **0.8089** | mostly recovered, still -0.029 |
+| 10-30% | **6** | 0.8962 | 0.7357 | **0.6543** | still down — **but n=6** |
+| **≥30%** | **3** | **0.2820** | 0.8386 | **0.8275** | **the gain SURVIVES** |
+| | | | | | |
+| **pooled** | | 0.6894 | 0.7316 | **0.7503** | +0.0609 vs baseline |
+| 95% CI | | [0.584, 0.781] | [0.695, 0.764] | **[0.700, 0.794]** | |
+| mean IoU | | 0.8386 | 0.8608 | **0.8704** | best of the three |
+| macro/scene | | 0.7287 | 0.6890 | **0.7269** | back to baseline |
+
+### What it settles
+
+1. **The ≥30% fix is the normalisation, not the data reduction.** With every dropped scene
+   restored, the band still scores 0.8275 against the baseline's 0.2820. This was the one way E2's
+   headline could have been an artefact, and it is not.
+2. **The regressions were the data reduction.** Three of four bands recover once the 175 scenes and
+   477 hard negatives come back. `macro/scene` returning to baseline (0.6890 → 0.7269) is the
+   clearest signal: E2's "most scenes slightly worse" signature is gone.
+3. **E2b is the best configuration measured** on pooled, mean IoU and macro/scene simultaneously.
+
+### What it does NOT settle — read these before quoting anything
+
+- **Pooled +0.0609 against a fold spread of 0.0599.** It clears the bar by 0.001. On pooled alone
+  this is still not a result worth defending; the ≥30% band is.
+- **The two heavy bands have n=6 and n=3 on this fold.** They carry 74.7% of the Part III metric
+  and are measured here on nine scenes. The 10-30% "regression" (-0.24) rests on six scenes and may
+  be noise. **Rotate the folds before believing either number.**
+- **Band-weighted by Part III oil mass: baseline 0.6401, E2 0.7746, E2b 0.7554.** E2 scores *higher*
+  than E2b here purely because 10-30% carries 36.4% of the mass — i.e. this ordering is decided by
+  the n=6 band. Best-of-both-per-band is **0.8534**, unchanged.
+
+### ⚠ E2b's cache is NOT shippable, and that is the point
+
+`P12seanl` puts land back into the sea-reference sample — exactly what failed the first two E2
+audits, where the estimator picked a coastline as "sea" and moved the reference by up to 21 dB, at
+which point the entire ocean reads as oil. It is a **measurement instrument**, not a candidate.
+
+So the result is not "ship E2b". It is: *we now want sea normalisation with the land exclusion ON
+for correctness, but without losing 175 scenes of training data.*
+
+### E2c — the structural fix this exposes
+
+`build_cache._norm()` uses **one** mask for **two** different questions:
+
+```python
+v = valid_mask(band, exclude_land=exclude_land, transform=transform)
+ref, scale, _ = sea_reference(band, v, transform=transform)   # (a) estimate the sea
+return np.where(v, out, 0.0), v, ref, scale                   # (b) ...and mark tiles usable
+```
+
+`v` is returned as the scene's `valid` mask, and `run()` drops any tile with
+`(~valid).mean() > MAX_INVALID_FRAC`. So "do not measure the sea level from land" silently became
+"land pixels are unusable data" — which is what deleted 175 scenes and 477 hard negatives.
+
+**These are separate questions and should use separate masks:**
+
+- reference/scale → land-excluded sample (correct, audit-safe)
+- tile eligibility → finite and non-zero only (the baseline's rule)
+
+That should give the ≥30% fix *and* the full 28,129 tiles, with no land in the reference. It is the
+configuration that could actually ship, and neither E2 nor E2b is.
+
+---
+
 ## Status
 
 | item | state | result |
@@ -108,7 +186,7 @@ normalisation with **no land exclusion**. That separates "the fix" from "we trai
 | **E8a** oracle ceiling | ✅ **done** | **0.8446** verified independently (agent said 0.838). Boundary decomposition: at ≥30%, **81% of oracle error is within 5 px of the annotator's line** — that band is annotation-limited |
 | **E1** channel fix + ablation | ✅ **done — NULL** | Four measurements agree it buys nothing: tile IoU 0.6997/0.6911/0.6994, pooled 0.6606/0.6513/0.6549 (spread 0.0093 vs fold noise 0.0599), ≥30% band 0.26–0.28 in all three. **Hypothesis retired.** Kept the rename for hygiene |
 | **E2** sea-referenced normalisation | ✅ **MEASURED — works, with a trade** | **>=30% band 0.282 -> 0.839** (oracle 0.959). Pooled 0.6894 -> 0.7316, inside the fold spread. Four bands regressed, worst -0.161 at 10-30%. Confounded by 175 fewer scenes / 477 fewer hard negatives — isolation run needed. See the result block above |
-| **E2b** isolation: sea norm, NO land exclusion | 🔄 **running** | `--no-land-mask` wired and verified (`4850e43`): bit-identical on open ocean, and on the Campeche coastal look-alike valid 0.943 → 1.000, reference moves 0.33 dB. Cache `P12seanl` building. Separates the normalisation fix from the data reduction — without it we cannot say which half produced +0.557, or which caused the regressions |
+| **E2b** isolation: sea norm, NO land exclusion | ✅ **MEASURED — it separates cleanly** | `--no-land-mask` wired and verified (`4850e43`): bit-identical on open ocean, and on the Campeche coastal look-alike valid 0.943 → 1.000, reference moves 0.33 dB. **Answer: the ≥30% gain is the NORMALISATION** (0.8275 with land exclusion off, against baseline 0.2820), **and the regressions were the DATA REDUCTION** — three of four recover, and `macro/scene` returns to baseline. See the result block below |
 | **E4** loss — Focal+Dice / Tversky | ⬆️ **promoted, not started** | E1 points here: **zero of 200 easy tiles exceed 0.99** in any config, and focal γ=2 de-weights confident pixels by construction |
 | **E3** high-coverage regime | ❌ not started | Only **9** training scenes ≥30%, covering 38% of the holdout's oil mass |
 | **E5** TTA + seed ensemble | ❌ not started | Deliberately last — running it early inflates every intermediate comparison |
@@ -137,6 +215,7 @@ normalisation with **no land exclusion**. That separates "the fix" from "we trai
 | E8a | ~1 day | ~1 h | faster than planned |
 | E1 | ~1 h + 3 runs | ~6 h | 3 training runs + 3 scene evals |
 | E2 rebuild + retrain | ~5 h | ~8 h | 2 cache builds, 2 trainings, 3 evaluation attempts |
+| E2b | ~3 h | ~3.2 h | 41 min build, 79 min train, 11 min eval. On estimate for once |
 
 **Price the remaining items on the E2 experience, not the plan's estimates.**
 
@@ -167,7 +246,7 @@ normalisation with **no land exclusion**. That separates "the fix" from "we trai
 |---|---|---|---|---|
 | `P12` | 2,570 | 28,129 | median | the baseline |
 | `P12sea` | 2,570 | 27,640 | sea-referenced (E2) | 489 fewer tiles, mostly hard negatives |
-| `P12seanl` | *building* | *expect 28,129* | sea-referenced, land exclusion **OFF** (E2b) | measurement only — **never ship a model trained on this**; land in the sea sample is what failed the first two E2 audits |
+| `P12seanl` | 2,570 | 28,129 | sea-referenced, land exclusion **OFF** (E2b) | ✅ verified single-variable vs `P12`: identical positives, 13 of 28,129 tiles differ. Measurement only — **never ship a model trained on this**; land in the sea sample is what failed the first two E2 audits |
 
 Both carry the corrected channel order: `vv_med` median **−20.20 dB** against `vh_med` **−32.87**,
 i.e. VV is in channel 0, in 99.9% of scenes. The old cache had these transposed.
@@ -200,7 +279,27 @@ The reasoning lives in docstrings, not in anyone's head. Read these five in this
 - A swap happens only when the **gated, end-to-end** val-scene number beats the shipped pair by
   **more than the 0.0599 fold spread** — and then on Soum's call, never silently.
 
-## Resume here — E2b, the isolation run
+## Resume here — E2c, then Layer 1
+
+**E2b is done** (see its result block above). The next run is **E2c**: keep the land exclusion for
+the *sea reference*, drop it for *tile eligibility*. One edit in `build_cache._norm()` — return two
+masks instead of one — then the same build / train / evaluate cycle, ~3 h total.
+
+```bash
+# E2c: reference excludes land; tile validity is finite+non-zero, as in the baseline
+python pipeline/detect/build_cache.py --parts 1,2 --normalise sea --suffix seac
+#    CHECK: must match P12 at 28,129 tiles / 2,570 scenes, like P12seanl did
+python pipeline/detect/train_unet.py --epochs 12 --patience 12 --split stratified --fold 0 --cache P12seac --tag e2c_sea_refonly
+python pipeline/detect/evaluate_val.py --fold 0 --ungated --ckpt pipeline/detect/models/unet_e2c_sea_refonly.pt --json pipeline/detect/results/eval_val_e2c.json
+```
+
+**Before trusting any of these band numbers, rotate the folds.** The two bands carrying 74.7% of the
+metric are measured on **n=6 and n=3** at fold 0. `evaluate_val.py --all-folds` is the check, and it
+applies to E2 and E2b as much as to E2c.
+
+---
+
+## Superseded — E2b, the isolation run (kept: the commands are still the pattern)
 
 **Why:** the E2 caches differ three ways, all from the coastline mask — normalisation, 489 fewer
 tiles, and 175 fewer source scenes. The audit measured normalisation as *identical* (0.000 shift,
