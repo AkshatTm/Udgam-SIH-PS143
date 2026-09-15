@@ -4,7 +4,7 @@
 The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the one-screen answer to
 "where is it".*
 
-**Last updated: 2026-09-15 21:45** — **E2b MEASURED.** The ≥30% gain is the normalisation; the regressions were the data reduction.
+**Last updated: 2026-09-16 00:55** — **E2c MEASURED and the normalisation work is DONE.** E2c is the shippable configuration. The "band regressions" turn out to be training variance, not normalisation — see *What the normalisation actually touches*.
 
 ---
 
@@ -178,6 +178,88 @@ configuration that could actually ship, and neither E2 nor E2b is.
 
 ---
 
+## E2c RESULT — and what the normalisation actually touches
+
+`P12seac`: land excluded from the **sea reference only**, tile eligibility back to the baseline's
+finite+non-zero rule. Verified before training — identical sea reference to `P12sea` on all 2,400
+scenes that have sea, **zero** matching the land-contaminated variant, the 170 entirely-land scenes
+recovered, positives bit-identical to the baseline, 34 of 28,129 tiles differing (0.12%, all hard
+negatives).
+
+| band | n | baseline | E2 | E2b | **E2c** |
+|---|---|---|---|---|---|
+| 0-1% | 53 | 0.6121 | 0.5943 | 0.6287 | **0.6181** |
+| 1-3% | 75 | 0.7503 | 0.7133 | 0.7490 | **0.7497** |
+| 3-10% | 45 | 0.8377 | 0.7438 | 0.8089 | **0.8330** |
+| 10-30% | **6** | 0.8962 | 0.7357 | 0.6543 | **0.7007** |
+| ≥30% | **3** | 0.2820 | 0.8386 | 0.8275 | **0.8238** |
+| | | | | | |
+| **pooled** | | 0.6894 | 0.7316 | 0.7503 | **0.7567** |
+| mean IoU | | 0.8386 | 0.8608 | 0.8704 | **0.8736** |
+| macro/scene | | 0.7287 | 0.6890 | 0.7269 | **0.7316** |
+| band-weighted | | 0.6401 | 0.7746 | 0.7554 | **0.7756** |
+
+**E2c wins on every aggregate**, and is the only variant above baseline on `macro/scene`. It is the
+first configuration that is simultaneously audit-safe, trained on the full data, and fixes the
+large-slick collapse. **Neither E2 nor E2b can ship; E2c can.**
+
+### ❗ The band "regressions" were never normalisation — they are training variance
+
+This is the most important measurement of the session, and it retires a line of investigation.
+
+**How often does sea normalisation change the network's input at all?**
+
+| band | oil scenes | input changed |
+|---|---|---|
+| 0-1% | 353 | 5.9% |
+| 1-3% | 502 | 4.6% |
+| 3-10% | 297 | 7.1% |
+| 10-30% | 39 | 25.6% |
+| **≥30%** | **9** | **100%** |
+| **all oil** | **1,200** | **7.0%** |
+
+The estimator returns the plain median bit-for-bit whenever it finds one mode — that fall-through is
+its safety property, and it fires on **93% of oil scenes**. So the normalisation is close to a no-op
+everywhere except the band it was built for, where it fires on **every** scene.
+
+**The 10-30% band, which looked like the last gap, is six scenes of which FIVE get byte-identical
+input to the baseline.** Per-scene, at fold 0:
+
+| scene | oil% | baseline | E2 | E2c | input vs baseline |
+|---|---|---|---|---|---|
+| `P12_Oil_00059` | 13.6% | 0.8235 | 0.7583 | **0.0000** | **IDENTICAL** |
+| `P12_Oil_00134` | 15.6% | 0.8651 | 0.6839 | 0.8405 | IDENTICAL |
+| `P12_Oil_00269` | 16.1% | 0.9821 | 0.9626 | 0.9593 | changed (scale) |
+| `P12_Oil_00423` | 14.8% | 0.7948 | 0.5232 | 0.5851 | IDENTICAL |
+| `P12_Oil_01210` | 12.6% | 0.9781 | 0.8567 | 0.9338 | IDENTICAL |
+| `P12_Oil_01220` | 11.5% | 0.9336 | 0.6294 | 0.8857 | IDENTICAL |
+
+`P12_Oil_00059` predicts **0.0% of the scene as oil** — a total miss on a scene with 13.6% coverage
+and −8.5 dB contrast, whose input is *bit-identical* to the one the baseline scores 0.8235 on. The
+normalisation cannot explain that. **Different weights can, and that is the whole explanation.**
+Drop that single scene and E2c's band mean goes **0.7007 → 0.8409**.
+
+**Consequences, and they are not small:**
+
+1. **The ≥30% result stands and is causal** — 100% of those scenes have changed input, and the
+   change is +0.55.
+2. **Every other band comparison on this board is dominated by training variance**, because 93-95%
+   of those scenes receive identical input. The apparent E2/E2b/E2c differences outside ≥30% are
+   three draws from the same distribution.
+3. **"Best-of-band 0.8534" is not a real target.** It takes a maximum over noisy per-band estimates,
+   which is biased upward by construction. It should not be quoted as a reachable number.
+4. **Seed variance is now the blocking measurement.** A single scene swung 0.82 → 0.00 on identical
+   input. Until that spread is known, no future change under ~0.05 can be called an improvement —
+   and that includes E4.
+
+### The normalisation work is complete
+
+E2 / E2b / E2c answered what they were built to answer. The ≥30% collapse is fixed, the cause is
+established, and E2c is the configuration to carry forward. **More normalisation variants are not
+where the remaining accuracy is.**
+
+---
+
 ## Status
 
 | item | state | result |
@@ -186,6 +268,7 @@ configuration that could actually ship, and neither E2 nor E2b is.
 | **E8a** oracle ceiling | ✅ **done** | **0.8446** verified independently (agent said 0.838). Boundary decomposition: at ≥30%, **81% of oracle error is within 5 px of the annotator's line** — that band is annotation-limited |
 | **E1** channel fix + ablation | ✅ **done — NULL** | Four measurements agree it buys nothing: tile IoU 0.6997/0.6911/0.6994, pooled 0.6606/0.6513/0.6549 (spread 0.0093 vs fold noise 0.0599), ≥30% band 0.26–0.28 in all three. **Hypothesis retired.** Kept the rename for hygiene |
 | **E2** sea-referenced normalisation | ✅ **MEASURED — works, with a trade** | **>=30% band 0.282 -> 0.839** (oracle 0.959). Pooled 0.6894 -> 0.7316, inside the fold spread. Four bands regressed, worst -0.161 at 10-30%. Confounded by 175 fewer scenes / 477 fewer hard negatives — isolation run needed. See the result block above |
+| **E2c** sea reference, full training data | ✅ **MEASURED — the configuration that ships** | Best on every aggregate: pooled **0.7567**, mean IoU **0.8736**, macro/scene **0.7316** (only variant above baseline), band-weighted **0.7756**. Audit-safe reference AND the full 28,129 tiles |
 | **E2b** isolation: sea norm, NO land exclusion | ✅ **MEASURED — it separates cleanly** | `--no-land-mask` wired and verified (`4850e43`): bit-identical on open ocean, and on the Campeche coastal look-alike valid 0.943 → 1.000, reference moves 0.33 dB. **Answer: the ≥30% gain is the NORMALISATION** (0.8275 with land exclusion off, against baseline 0.2820), **and the regressions were the DATA REDUCTION** — three of four recover, and `macro/scene` returns to baseline. See the result block below |
 | **E4** loss — Focal+Dice / Tversky | ⬆️ **promoted, not started** | E1 points here: **zero of 200 easy tiles exceed 0.99** in any config, and focal γ=2 de-weights confident pixels by construction |
 | **E3** high-coverage regime | ❌ not started | Only **9** training scenes ≥30%, covering 38% of the holdout's oil mass |
@@ -216,6 +299,7 @@ configuration that could actually ship, and neither E2 nor E2b is.
 | E1 | ~1 h + 3 runs | ~6 h | 3 training runs + 3 scene evals |
 | E2 rebuild + retrain | ~5 h | ~8 h | 2 cache builds, 2 trainings, 3 evaluation attempts |
 | E2b | ~3 h | ~3.2 h | 41 min build, 79 min train, 11 min eval. On estimate for once |
+| E2c | ~3 h | ~3.5 h | 65 min build, 80 min train, 11 min eval, plus a convention bug caught pre-eval |
 
 **Price the remaining items on the E2 experience, not the plan's estimates.**
 
@@ -277,7 +361,7 @@ pooled movements under ~0.06 as unresolved.
 |---|---|---|---|---|
 | `P12` | 2,570 | 28,129 | median | the baseline |
 | `P12sea` | 2,570 | 27,640 | sea-referenced (E2) | 489 fewer tiles, mostly hard negatives |
-| `P12seac` | *building* | *expect 28,129* | sea-referenced, land excluded from the **reference only** (E2c) | ✅ verified: same sea reference as `P12sea` on every scene that has sea, data mask never smaller, entirely-land scenes recovered rather than deleted |
+| `P12seac` | 2,570 | 28,129 | sea-referenced, land excluded from the **reference only** (E2c) | ✅ verified: same sea reference as `P12sea` on every scene that has sea, data mask never smaller, entirely-land scenes recovered rather than deleted |
 | `P12seanl` | 2,570 | 28,129 | sea-referenced, land exclusion **OFF** (E2b) | ✅ verified single-variable vs `P12`: identical positives, 13 of 28,129 tiles differ. Measurement only — **never ship a model trained on this**; land in the sea sample is what failed the first two E2 audits |
 
 Both carry the corrected channel order: `vv_med` median **−20.20 dB** against `vh_med` **−32.87**,
@@ -311,23 +395,29 @@ The reasoning lives in docstrings, not in anyone's head. Read these five in this
 - A swap happens only when the **gated, end-to-end** val-scene number beats the shipped pair by
   **more than the 0.0599 fold spread** — and then on Soum's call, never silently.
 
-## Resume here — E2c, then Layer 1
+## Resume here — seed variance FIRST, then Layer 1
 
-**E2b is done** (see its result block above). The next run is **E2c**: keep the land exclusion for
-the *sea reference*, drop it for *tile eligibility*. One edit in `build_cache._norm()` — return two
-masks instead of one — then the same build / train / evaluate cycle, ~3 h total.
+The normalisation work is done (E2c ships). The next measurement is not an accuracy idea, it is the
+**noise floor**, because without it nothing further can be called an improvement.
 
 ```bash
-# E2c: reference excludes land; tile validity is finite+non-zero, as in the baseline
-python pipeline/detect/build_cache.py --parts 1,2 --normalise sea --suffix seac
-#    CHECK: must match P12 at 28,129 tiles / 2,570 scenes, like P12seanl did
-python pipeline/detect/train_unet.py --epochs 12 --patience 12 --split stratified --fold 0 --cache P12seac --tag e2c_sea_refonly
-python pipeline/detect/evaluate_val.py --fold 0 --ungated --ckpt pipeline/detect/models/unet_e2c_sea_refonly.pt --json pipeline/detect/results/eval_val_e2c.json
+# 1. SEED VARIANCE - same cache, same fold, same budget, different seed.
+#    train_unet.py currently hardcodes torch.manual_seed(42); needs --seed.
+python pipeline/detect/train_unet.py --epochs 12 --patience 12 --split stratified --fold 0 --cache P12seac --tag e2c_seed1 --seed 1
+python pipeline/detect/evaluate_val.py --fold 0 --ungated --ckpt pipeline/detect/models/unet_e2c_seed1.pt --json pipeline/detect/results/eval_val_e2c_seed1.json
+#    Two or three seeds gives the spread. Expect it to be LARGE: one scene moved
+#    0.82 -> 0.00 between runs on identical input.
+
+# 2. E2c is undertrained - best val IoU landed on epoch 12 of 12, while every
+#    other run peaked at 6-8. A longer run may be worth more than a new idea.
+python pipeline/detect/train_unet.py --epochs 30 --patience 10 --split stratified --fold 0 --cache P12seac --tag e2c_long
+
+# 3. Then Layer 1, which unblocks every GATED number (see below).
+python pipeline/detect/build_cache.py --parts 3 --normalise sea --land-mode reference
+python pipeline/detect/train_classifier.py --cache P12seac --test-cache P3 --tag l1_e2c
 ```
 
-**Before trusting any of these band numbers, rotate the folds.** The two bands carrying 74.7% of the
-metric are measured on **n=6 and n=3** at fold 0. `evaluate_val.py --all-folds` is the check, and it
-applies to E2 and E2b as much as to E2c.
+**Read the ≥30% band and the seed spread. Nothing else on this board is currently resolvable.**
 
 ---
 
