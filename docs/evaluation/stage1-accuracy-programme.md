@@ -4,7 +4,7 @@
 The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the one-screen answer to
 "where is it".*
 
-**Last updated: 2026-09-15 11:20** — **E2 measured. The fix works; it is also a trade.**
+**Last updated: 2026-09-15 10:10** — E2 measured; programme **PAUSED for the demo**, resumes at E2b.
 
 ---
 
@@ -18,6 +18,12 @@ This programme is **separate and additive**: it was written after the >85% accur
 set. It is **December work, not demo work.** Nothing in it is on the critical path for
 15 Sept 17:00, and nothing in it may overwrite `models/unet.pt` or `models/scene_classifier.pt`,
 which are what the demo loads.
+
+> **PAUSED 2026-09-15 for the demo.** Verified the same morning, read-only: nine cases **PASS**,
+> `unet.pt` and `scene_classifier.pt` untouched since 12–13 Sept, the shipped checkpoint still
+> reports `band_order`/`median`, and the live detections come from the **classical** path — the
+> U-Net is not in the demo's critical path at all. No GPU work was run on demo day. Resume at
+> **E2b**, below.
 
 ## The three numbers, which are different things
 
@@ -166,19 +172,63 @@ i.e. VV is in channel 0, in 99.9% of scenes. The old cache had these transposed.
 coastline land mask marks land invalid, so more tiles exceed `MAX_INVALID_FRAC` and are dropped —
 6,373 hard negatives against 6,850. Do not report the comparison as isolating normalisation.
 
-## Next session — exact commands
+## If you are resuming cold
+
+The reasoning lives in docstrings, not in anyone's head. Read these five in this order:
+
+| file | what it explains |
+|---|---|
+| `pipeline/detect/normalise.py` | the sea-reference estimator, the four discriminators that were tried and falsified, and why a real coastline replaced the brightness heuristic |
+| `pipeline/detect/split.py` | why the old split could not see the failure (1 scene ≥30% in validation) |
+| `pipeline/detect/evaluate_val.py` | why tile IoU is the wrong metric, and why `--ungated` is mandatory right now |
+| `pipeline/detect/oracle_ceiling.py` | how the 0.8446 ceiling is measured and why it decides the whole target |
+| `pipeline/detect/build_cache.py::scene_arrays` | the channel order, and that old checkpoints are incompatible with the new caches |
+
+`docs/updates/soumirya.md` carries the narrative; this file is the board.
+
+## Model-swap policy — Soum's instruction, written down because it is easy to get wrong
+
+- Every retrain writes to a **tagged** file. `models/unet.pt` and `models/scene_classifier.pt`
+  are **never** written by an experiment. `_baseline` copies sit beside both.
+- **The two layers swap as a PAIR or not at all.** A new Layer 1 with an old Layer 2 is exactly
+  the mismatch that made the E2 evaluation read 0.0000: the shipped classifier returns
+  P(oil) **0.001–0.010** on new-convention input, so the gate closes on every scene.
+- A swap happens only when the **gated, end-to-end** val-scene number beats the shipped pair by
+  **more than the 0.0599 fold spread** — and then on Soum's call, never silently.
+
+## Resume here — E2b, the isolation run
+
+**Why:** the E2 caches differ three ways, all from the coastline mask — normalisation, 489 fewer
+tiles, and 175 fewer source scenes. The audit measured normalisation as *identical* (0.000 shift,
+1.000 scale) on the bands that regressed, so the data reduction is the likelier cause. That is
+inference, not measurement, and E2b settles it.
 
 ```bash
-# baseline and E2, same budget, same stratified fold, TAGGED outputs
-python pipeline/detect/train_unet.py --epochs 12 --patience 12     --split stratified --fold 0 --tag base_median          # trains from P12
-python pipeline/detect/train_unet.py --epochs 12 --patience 12     --split stratified --fold 0 --tag e2_sea               # NEEDS --cache P12sea (not yet wired)
+# 1. build_cache.py needs --no-land-mask; _norm() currently hardcodes exclude_land=True in sea mode
+python pipeline/detect/build_cache.py --parts 1,2 --normalise sea --no-land-mask --suffix seanl
+#    CHECK: P12seanl should match P12 at 28,129 tiles / 2,570 scenes. If it does not, the flag
+#    did not take effect — that exact failure already cost one cache (see Incidents).
 
-python pipeline/detect/evaluate_val.py --fold 0 --ckpt pipeline/detect/models/unet_base_median.pt
-python pipeline/detect/evaluate_val.py --fold 0 --ckpt pipeline/detect/models/unet_e2_sea.pt
+# 2. same budget and fold as the other two runs
+python pipeline/detect/train_unet.py --epochs 12 --patience 12     --split stratified --fold 0 --cache P12seanl --tag e2b_sea_noland
+
+# 3. --ungated is MANDATORY: Layer 1 is stale and closes the gate on everything
+python pipeline/detect/evaluate_val.py --fold 0 --ungated     --ckpt pipeline/detect/models/unet_e2b_sea_noland.pt
 ```
 
-**`train_unet.py` has no `--cache` flag yet** — it hardcodes `TileStore("P12")`. That is the first
-edit of the next session, before any training.
+**How to read it:** if E2b keeps the ≥30% gain **and** recovers the regressed bands, the land
+exclusion caused the regressions and the fix is clean. If the regressions persist, they are
+intrinsic to sea normalisation and the trade is real.
 
-**Read the ≥30% band, not the pooled number.** Pooled moves by less than the 0.0599 fold spread
-unless that band moves a lot. Today it sits at 0.26–0.28; the oracle says 0.959 is available.
+**Then Layer 1.** `train_classifier.py:393` hardcodes `load_split("P12")` — the same bug the U-Net
+had. Add `--cache`, retrain on whichever cache wins E2b, tag the output. It is a small CNN over
+2,570 downsampled scenes, but it evaluates **four variants**. Only after this does a *gated* number
+mean anything, and that is the number the swap decision needs.
+
+**Then E4 (loss)** — still promoted above E3. E1's surviving finding: zero of 200 easy positive
+tiles exceed 0.99 in *any* config including the shipped one, and it survives removing the
+augmentation entirely. Focal γ=2 de-weights already-confident pixels by construction. Focal+Dice
+first, then Tversky (α=0.3, β=0.7).
+
+**Read the ≥30% band, not pooled.** Pooled moves less than the 0.0599 fold spread unless that band
+moves a lot.
