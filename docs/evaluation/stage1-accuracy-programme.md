@@ -4,7 +4,7 @@
 The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the one-screen answer to
 "where is it".*
 
-**Last updated: 2026-09-15 10:10** — E2 measured; programme **PAUSED for the demo**, resumes at E2b.
+**Last updated: 2026-09-15 19:40** — demo done; programme **RESUMED**. E2b cache building.
 
 ---
 
@@ -19,6 +19,8 @@ set. It is **December work, not demo work.** Nothing in it is on the critical pa
 15 Sept 17:00, and nothing in it may overwrite `models/unet.pt` or `models/scene_classifier.pt`,
 which are what the demo loads.
 
+> **RESUMED 2026-09-15 19:25**, after the demo. The pause record below stands as written.
+>
 > **PAUSED 2026-09-15 for the demo.** Verified the same morning, read-only: nine cases **PASS**,
 > `unet.pt` and `scene_classifier.pt` untouched since 12–13 Sept, the shipped checkpoint still
 > reports `band_order`/`median`, and the live detections come from the **classical** path — the
@@ -106,7 +108,7 @@ normalisation with **no land exclusion**. That separates "the fix" from "we trai
 | **E8a** oracle ceiling | ✅ **done** | **0.8446** verified independently (agent said 0.838). Boundary decomposition: at ≥30%, **81% of oracle error is within 5 px of the annotator's line** — that band is annotation-limited |
 | **E1** channel fix + ablation | ✅ **done — NULL** | Four measurements agree it buys nothing: tile IoU 0.6997/0.6911/0.6994, pooled 0.6606/0.6513/0.6549 (spread 0.0093 vs fold noise 0.0599), ≥30% band 0.26–0.28 in all three. **Hypothesis retired.** Kept the rename for hygiene |
 | **E2** sea-referenced normalisation | ✅ **MEASURED — works, with a trade** | **>=30% band 0.282 -> 0.839** (oracle 0.959). Pooled 0.6894 -> 0.7316, inside the fold spread. Four bands regressed, worst -0.161 at 10-30%. Confounded by 175 fewer scenes / 477 fewer hard negatives — isolation run needed. See the result block above |
-| **E2b** isolation: sea norm, NO land exclusion | 🔜 **next** | Separates the normalisation fix from the data reduction. Without it we cannot say which half produced +0.557, or which caused the regressions |
+| **E2b** isolation: sea norm, NO land exclusion | 🔄 **running** | `--no-land-mask` wired and verified (`4850e43`): bit-identical on open ocean, and on the Campeche coastal look-alike valid 0.943 → 1.000, reference moves 0.33 dB. Cache `P12seanl` building. Separates the normalisation fix from the data reduction — without it we cannot say which half produced +0.557, or which caused the regressions |
 | **E4** loss — Focal+Dice / Tversky | ⬆️ **promoted, not started** | E1 points here: **zero of 200 easy tiles exceed 0.99** in any config, and focal γ=2 de-weights confident pixels by construction |
 | **E3** high-coverage regime | ❌ not started | Only **9** training scenes ≥30%, covering 38% of the holdout's oil mass |
 | **E5** TTA + seed ensemble | ❌ not started | Deliberately last — running it early inflates every intermediate comparison |
@@ -118,9 +120,10 @@ normalisation with **no land exclusion**. That separates "the fix" from "we trai
 
 | item | state |
 |---|---|
-| **Layer 1 is stale against the new caches** | ⚠️ **NEW, and it blocks the gated metric.** The shipped classifier returns P(oil) **0.001-0.010** on new-convention input against a 0.143 threshold, so the gate closes on every scene. All E2 numbers above are therefore **ungated**. Layer 1 must be retrained on the new cache before any gated or end-to-end number means anything |
+| **Layer 1 is stale against the new caches** | ⚠️ **NEW, and it blocks the gated metric.** The shipped classifier returns P(oil) **0.001-0.010** on new-convention input against a 0.143 threshold, so the gate closes on every scene. All E2 numbers above are therefore **ungated**. Layer 1 must be retrained on the new cache before any gated or end-to-end number means anything. **`--cache` now wired** (`4850e43`), so the retrain is unblocked |
 | Python **3.13.5** vs the pinned **3.11** | ❓ open — Akshat's call. Only item that could break Stage 1 on another machine |
 | `contrast_centre_db` / `contrast_edge_db` | ❓ dropped for demo; Anushka needs it for the weathering flag. ~10 lines, works on 11 of 12 oil features |
+| **The `P3` holdout cache is STALE** | ⚠️ **NEW.** Built 12 Sept, before the channel-order fix — its manifest has no `channel_order`, i.e. channels TRANSPOSED relative to `P12`/`P12sea`. Any Part III number from a new-convention model is meaningless until it is rebuilt: `build_cache.py --parts 3 --normalise sea`. `train_classifier.py` now **aborts** on the mismatch rather than reporting nonsense |
 | **170 of 1,370 non-oil scenes are entirely land** | ⚠️ unreported to Akshat — "look-alike rejection 0.940" is partly measured on farmland |
 
 ---
@@ -164,6 +167,7 @@ normalisation with **no land exclusion**. That separates "the fix" from "we trai
 |---|---|---|---|---|
 | `P12` | 2,570 | 28,129 | median | the baseline |
 | `P12sea` | 2,570 | 27,640 | sea-referenced (E2) | 489 fewer tiles, mostly hard negatives |
+| `P12seanl` | *building* | *expect 28,129* | sea-referenced, land exclusion **OFF** (E2b) | measurement only — **never ship a model trained on this**; land in the sea sample is what failed the first two E2 audits |
 
 Both carry the corrected channel order: `vv_med` median **−20.20 dB** against `vh_med` **−32.87**,
 i.e. VV is in channel 0, in 99.9% of scenes. The old cache had these transposed.
@@ -220,10 +224,23 @@ python pipeline/detect/evaluate_val.py --fold 0 --ungated     --ckpt pipeline/de
 exclusion caused the regressions and the fix is clean. If the regressions persist, they are
 intrinsic to sea normalisation and the trade is real.
 
-**Then Layer 1.** `train_classifier.py:393` hardcodes `load_split("P12")` — the same bug the U-Net
-had. Add `--cache`, retrain on whichever cache wins E2b, tag the output. It is a small CNN over
-2,570 downsampled scenes, but it evaluates **four variants**. Only after this does a *gated* number
-mean anything, and that is the number the swap decision needs.
+**Then Layer 1.** `--cache`, `--test-cache` and `--tag` are now wired (`4850e43`), so this is
+unblocked. Two things were found while wiring it, and both are why it had not been safe to just run:
+
+- the script wrote `models/scene_classifier.pt` **unconditionally** — the file the demo loads. It
+  now refuses without `--tag` or an explicit `--overwrite-shipped`.
+- the **`P3` cache is stale** (12 Sept, channels transposed). A new-convention classifier scored
+  against it returns confident nonsense rather than an error, so the run now aborts on the mismatch.
+  **Rebuild P3 before any holdout number**, matching the winning cache's normalisation.
+
+```bash
+# only after E2b has named a winner; --tag is mandatory, the shipped pair is not touched
+python pipeline/detect/build_cache.py --parts 3 --normalise sea
+python pipeline/detect/train_classifier.py --cache <winner> --test-cache P3 --tag l1_<winner>
+```
+
+It is a small CNN over 2,570 downsampled scenes, but it evaluates **four variants**. Only after this
+does a *gated* number mean anything, and that is the number the swap decision needs.
 
 **Then E4 (loss)** — still promoted above E3. E1's surviving finding: zero of 200 easy positive
 tiles exceed 0.99 in *any* config including the shipped one, and it survives removing the
