@@ -329,10 +329,18 @@ def main():
     ap.add_argument("--no-domain-aug", action="store_true",
                     help="geometric augmentation only — the run that overfitted by epoch 3")
     ap.add_argument("--weight-decay", type=float, default=1e-4)
+    ap.add_argument("--seed", type=int, default=42,
+                    help="TRAINING seed only - weight init, shuffling, augmentation. "
+                         "The split is NOT affected: split.py uses its own generator at "
+                         "a fixed seed, so --seed re-rolls the model and holds the data "
+                         "constant. That is what makes it a measurement of training "
+                         "variance. Needed because one val scene swung IoU 0.82 -> 0.00 "
+                         "between runs on BIT-IDENTICAL input, so the noise floor is "
+                         "unknown and no change under it can be called an improvement.")
     a = ap.parse_args()
 
     os.makedirs(MODELS, exist_ok=True)
-    torch.manual_seed(42); np.random.seed(42)
+    torch.manual_seed(a.seed); np.random.seed(a.seed)
     amp = (not a.no_amp) and DEVICE.type == "cuda"
 
     print("=" * 72)
@@ -475,6 +483,7 @@ def main():
                    "cache": a.cache,
                    "channel_order": ("vv_first" if a.cache != "P12legacy" else "band_order"),
                    **_cache_convention(a.cache),
+                   "seed": a.seed,
                    "split": a.split, "fold": a.fold,
                    "xpol_channel": a.xpol_channel, "xpol_p": a.xpol_p}, fh, indent=2)
     print(f"\n  saved {ckpt_path}\n  saved {meta_path}")
