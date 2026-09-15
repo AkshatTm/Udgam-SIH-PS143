@@ -4,7 +4,7 @@
 The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the one-screen answer to
 "where is it".*
 
-**Last updated: 2026-09-16 04:15** — **noise floor MEASURED at 3 seeds.** Pooled sd **0.0267**. Only the ≥30% result survives it. Previously — — **E2c MEASURED and the normalisation work is DONE.** E2c is the shippable configuration. The "band regressions" turn out to be training variance, not normalisation — see *What the normalisation actually touches*.
+**Last updated: 2026-09-16 05:00** — **first END-TO-END gated number: 0.7566** on validation. Layer 1 retrained; the gate is essentially free. Previously — — **noise floor MEASURED at 3 seeds.** Pooled sd **0.0267**. Only the ≥30% result survives it. Previously — — **E2c MEASURED and the normalisation work is DONE.** E2c is the shippable configuration. The "band regressions" turn out to be training variance, not normalisation — see *What the normalisation actually touches*.
 
 ---
 
@@ -325,6 +325,56 @@ Options, in order of how much they actually buy:
 
 ---
 
+## END-TO-END — the real two-layer pipeline, gated (2026-09-16)
+
+Layer 1 retrained on `P12seac` (tagged `l1_e2c`; the shipped pair is untouched), Part III cache
+rebuilt as `P3seac` under the corrected convention. **This is the first number in this programme
+that measures the pipeline as it would actually run.**
+
+| | ungated (Layer 2 alone) | **gated (real pipeline)** |
+|---|---|---|
+| pooled IoU | 0.7567 | **0.7566** |
+| macro/scene | 0.7316 | 0.7313 |
+| mean IoU | 0.8736 | 0.8735 |
+| oil recall | 0.9945 | 0.9890 |
+| **look-alike rejection** | **0.0777** | **0.9612** |
+
+**The gate costs 0.0001 IoU and buys look-alike rejection from 0.078 to 0.961.** Layer 2 alone
+floods look-alike scenes with false positives; Layer 1 removes 96% of them without measurably
+harming segmentation. Verified genuinely gated: the run prints the classifier path and threshold
+(0.4896) and records the `Classifier + U-Net` row.
+
+### Layer 1, new vs shipped (Part III — disclosure, not selection)
+
+| | shipped | `l1_e2c` | |
+|---|---|---|---|
+| scene accuracy | 0.951 | 0.940 | −0.011 |
+| **oil recall** | 0.927 | **0.873** | **−0.053** |
+| look-alike rejection | 0.940 | **0.960** | +0.020 |
+| clean-ocean rejection | 0.987 | 0.987 | — |
+
+The new classifier trades recall for look-alike rejection — arguably the wrong direction for a spill
+detector, and **tunable**: the threshold moved from 0.1427 to 0.4896 under the same
+`--min-recall 0.90` floor. Raising that floor is the cheap lever if the gate becomes the bottleneck.
+Both are single draws and Layer 1 seed variance is **unmeasured**, so −0.011 may be noise.
+
+Note the recall gap by population: **0.989 on validation vs 0.873 on Part III**. Validation is drawn
+from Parts I+II, which the classifier trained on. The gate will be lossier on the true holdout.
+
+### Where this leaves the target
+
+| | value | measurement |
+|---|---|---|
+| programme start | **0.4349** | Part III, gated, shipped model |
+| **now** | **0.7566** | **validation, gated, E2c + l1_e2c** |
+| target | 0.85 | |
+
+**These two are still not comparable** — different scene populations. They are now at least the same
+KIND of measurement (gated, end-to-end), which they were not before tonight. Closing the gap
+honestly requires running Part III, **which stays sealed** until a final configuration is chosen.
+
+---
+
 ## Status
 
 | item | state | result |
@@ -460,32 +510,33 @@ The reasoning lives in docstrings, not in anyone's head. Read these five in this
 - A swap happens only when the **gated, end-to-end** val-scene number beats the shipped pair by
   **more than the 0.0599 fold spread** — and then on Soum's call, never silently.
 
-## Resume here — Layer 1, for the first END-TO-END number
+## Resume here — a decision, then E4
 
-Seed variance is measured (above). The normalisation work is complete and E2c is the configuration
-to carry. **The open question is no longer "which normalisation" — it is "what does the real,
-gated pipeline actually score", and nothing on this board answers that.**
+Layer 1 is done and the pipeline measures end-to-end. **The next move is a judgement call about the
+holdout, not a compute task.**
+
+**The Part III question.** We now hold a complete, coherent configuration: `unet_e2c_sea_refonly` +
+`scene_classifier_l1_e2c`. Running Part III would say where we actually stand against 0.85. But A6
+says Part III runs ONCE, on a final configuration chosen entirely on validation — and E4, E3 and E5
+are still unrun. Spending it now buys a progress number and costs the holdout's independence.
+**Soum's call, and Akshat should know either way.**
+
+**If we do not run it, the work continues on validation:**
 
 ```bash
-# 1. the P3 holdout cache is STALE (12 Sept, transposed channels). Rebuilding it
-#    re-derives holdout INPUTS under the corrected convention - it is not tuning.
-python pipeline/detect/build_cache.py --parts 3 --normalise sea --land-mode reference
-
-# 2. Layer 1 on the winning cache. --tag is mandatory; the shipped pair is untouched.
-python pipeline/detect/train_classifier.py --cache P12seac --test-cache P3 --tag l1_e2c
-
-# 3. the GATED number on validation scenes - drop --ungated, pass BOTH new models
-python pipeline/detect/evaluate_val.py --fold 0 --ckpt pipeline/detect/models/unet_e2c_sea_refonly.pt
+# E4 - loss. At 3 seeds, because a single run can no longer detect anything under ~0.08 pooled.
+for S in 42 1 2; do
+  python pipeline/detect/train_unet.py --epochs 12 --patience 12 --split stratified --fold 0 --cache P12seac --tag e4_focaldice_s$S --seed $S
+done
 ```
 
-**Part III stays sealed** until a final configuration is chosen. Note that step 2 prints Part III
-figures for the classifier: selection there is on validation loss and a validation PR curve, and the
-Part III row is disclosure, not tuning — but do not let it steer a choice.
+**Before E4, read the noise-floor block.** Pooled sd is 0.0267. Select on `macro/scene` or
+`mean IoU` (sd ~0.0135, half as noisy) and report pooled. And E5 (seed ensembling) is now arguably
+the highest-value item rather than the last, because it attacks the variance that is currently the
+binding constraint on measuring anything at all.
 
-**Deferred, deliberately:** the longer E2c run (it peaked at epoch 12 of 12, so it is undertrained)
-is no longer obviously worth 3 seeds x 3 h. Revisit once there is a gated number to improve against.
-
-**Read the ≥30% band and the seed sd. Nothing smaller than ~0.08 pooled is a result.**
+**Cheap lever if the gate becomes the bottleneck:** retrain Layer 1 with `--min-recall 0.95`. Part
+III oil recall is 0.873, i.e. 19 of 150 oil scenes never reach Layer 2.
 
 ---
 
