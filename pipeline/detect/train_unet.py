@@ -65,6 +65,29 @@ CACHE = os.path.join(_ROOT, "data", "cache")
 TILES = os.path.join(CACHE, "tiles")
 MODELS = os.path.join(_HERE, "models")
 CKPT = os.path.join(MODELS, "unet.pt")
+
+
+def _cache_convention(prefix):
+    """-> {"norm_mode":..., "land_mask":...} read from the cache's OWN manifest.
+
+    This used to be ("sea" if prefix.endswith("sea") else "median"), a filename
+    heuristic standing in for data that the manifest records explicitly. It broke
+    the moment a third cache appeared: P12seanl is sea-normalised but does not end
+    in "sea", so the run stamped norm_mode="median" onto a sea-trained model and
+    inference would have median-normalised it. Nothing would have errored; the
+    scene-level score would simply have been wrong, which is the same failure mode
+    that already cost a full train+eval cycle.
+    """
+    f = os.path.join(_ROOT, "data", "cache", "manifest_%s.json" % prefix)
+    conv = {"norm_mode": "median", "land_mask": True}
+    try:
+        m = json.loads(open(f, encoding="utf-8").read())
+        conv["norm_mode"] = m.get("norm_mode") or "median"
+        lm = m.get("land_mask")
+        conv["land_mask"] = True if lm is None else bool(lm)
+    except Exception as exc:
+        print("  [WARN] cannot read %s (%s) - assuming %s" % (f, exc, conv))
+    return conv
 META = os.path.join(MODELS, "unet_meta.json")
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -447,10 +470,10 @@ def main():
                    # tiles. nets.py reads these to build the input correctly.
                    "cache": a.cache,
                    "channel_order": ("vv_first" if a.cache != "P12legacy" else "band_order"),
-                   "norm_mode": ("sea" if a.cache.endswith("sea") else "median"),
+                   **_cache_convention(a.cache),
                    "split": a.split, "fold": a.fold,
                    "xpol_channel": a.xpol_channel, "xpol_p": a.xpol_p}, fh, indent=2)
-    print(f"\n  saved {CKPT}\n  saved {META}")
+    print(f"\n  saved {ckpt_path}\n  saved {meta_path}")
     print(f"  best validation IoU {best_t_iou:.4f} at threshold {best_t}")
     print("\n  Part III IoU — gated and ungated — is evaluate_unet.py, not this file.")
 

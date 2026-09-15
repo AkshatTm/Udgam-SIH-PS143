@@ -272,7 +272,7 @@ def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None, jobs=None
     unet, unet_thr = nets.load_unet(ckpt)
     _conv = nets.unet_convention(ckpt)
     print(f"  checkpoint convention: channels={_conv['channel_order']} "
-          f"norm={_conv['norm_mode']}")
+          f"norm={_conv['norm_mode']} land_mask={_conv['land_mask']}")
     if unet is None:
         return [], None
     if clf is None and True in use_gate_list:
@@ -324,7 +324,8 @@ def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None, jobs=None
         else:
             first, second = vv, vh
         norm, valid, _ = nets.normalise_scene(first, second,
-                                              mode=_conv["norm_mode"], transform=_tr)
+                                              mode=_conv["norm_mode"], transform=_tr,
+                                              exclude_land=_conv["land_mask"])
 
         gt = np.zeros(vv.shape, bool)
         if cls == "Oil" and os.path.exists(msk_path):
