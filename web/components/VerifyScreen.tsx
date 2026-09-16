@@ -1,15 +1,23 @@
 "use client";
 
-// Screen 4 — Verify. Two equal columns (what UDGAM concluded | what the record says), a verdict
-// badge that reads the same for HIT and MISS, the official source as a real external link, and
-// the human explanation rendered verbatim. Rendered as a full-cover layer over the (still
-// mounted) MapView by CaseWorkspace when the stage is `verify`; the ContextPanel and the
+// Screen 4 — Verify. Two equal sections (what UDGAM concluded, then what the record says), a
+// verdict badge that reads the same for HIT and MISS, the official source as a real external
+// link, and the human explanation rendered verbatim. Rendered as a full-cover layer over the
+// (still mounted) MapView by CaseWorkspace when the stage is `verify`; the ContextPanel and the
 // Trace/Detect footer controls are suppressed for this stage. The bottom-right primary action
 // ("Try another case") is still CaseWorkspace's, unchanged.
 //
-// The two columns are deliberately identical in weight and width. This is the screen where the
-// project is either right or wrong in front of a judge, and a layout that gave our own column
-// more room — or dressed a MISS in red — would be arguing rather than reporting.
+// The two sections are full-width and identically styled, stacked UDGAM-first rather than side
+// by side — the ordering states our own conclusion before the reader is handed a record to
+// check it against, but neither section gets more width, more emphasis, or different card
+// treatment. This is the screen where the project is either right or wrong in front of a judge,
+// and a layout that gave our own section more room — or dressed a MISS in red — would be
+// arguing rather than reporting.
+//
+// The verdict's reasoning and each suspect's score-component breakdown are collapsed by
+// default (VerdictSection, SuspectEvidence) — both toggled by a click, not by anything that
+// runs on a timer or a scroll position. That is the "interactivity" this screen has: nothing
+// here is decorative motion, and nothing collapses information a judge hasn't chosen to hide.
 //
 // It never generates prose. `assessment.explanation`, `official_finding.summary` and every
 // caveat are hand-authored research, rendered verbatim, and nothing here writes a sentence
@@ -25,11 +33,22 @@
 // store for every case that has `verify` (store.ts loads it with the `attribute` act), so this
 // costs no extra fetch.
 
+import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import type { Suspect } from "@/lib/suspects";
+import type { Assessment } from "@/lib/verification";
 import { AIS_SAMPLING_LABEL, ComponentBars, FunnelBar } from "@/components/attribution";
 import ExternalLink from "./ExternalLink";
 import VerdictBadge from "./VerdictBadge";
+
+/** First sentence (or a hard clip) of a hand-authored explanation, for the collapsed teaser
+ *  under the verdict badge. Never runs on anything the app itself wrote — `a.explanation` is
+ *  always human prose, so clipping it can shorten but never misrepresent it. */
+function leadSentence(text: string, max = 160): string {
+  const stop = text.search(/[.!?](\s|$)/);
+  const cut = stop > 0 && stop < max ? stop + 1 : max;
+  return text.length <= cut ? text : `${text.slice(0, cut).trimEnd()}…`;
+}
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div className="t-label">{children}</div>;
@@ -52,7 +71,12 @@ const COVER = "absolute inset-0 z-[5] overflow-y-auto bg-abyss px-8 py-10";
 /** One named vessel with the evidence that put it there. Rendering a bare MMSI — which is what
  *  this screen used to do — makes a 0.62 on a six-vessel pool and a 0.05 on a crowded one look
  *  identical, and leaves a reader unable to weigh our own result at all. */
-function SuspectEvidence({ s, rank }: { s: Suspect; rank: number }) {
+function SuspectEvidence({ s, rank, defaultOpen = false }: { s: Suspect; rank: number; defaultOpen?: boolean }) {
+  // The seven-row component breakdown is the single bulkiest thing on this screen, repeated
+  // once per candidate — collapsed by default is what keeps a 3-4 vessel shortlist from
+  // reading as a wall of bars. The name, score, closest approach and reasons (the parts a
+  // reader needs to weigh the claim without digging) stay visible either way.
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="rounded-lg border border-line bg-raised/40 p-4">
       <div className="flex items-start justify-between gap-4">
@@ -81,13 +105,6 @@ function SuspectEvidence({ s, rank }: { s: Suspect; rank: number }) {
         {s.edgeTruncated ? " · at search-box edge" : ""}
       </div>
 
-      {s.components && (
-        <div className="mt-4">
-          <SectionLabel>Score components</SectionLabel>
-          <ComponentBars components={s.components} notes={s.componentNotes} />
-        </div>
-      )}
-
       {s.reasons.length > 0 && (
         <ul className="mt-4 space-y-1.5">
           {s.reasons.map((r, i) => (
@@ -96,6 +113,23 @@ function SuspectEvidence({ s, rank }: { s: Suspect; rank: number }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {s.components && (
+        <div className="mt-4 border-t border-line/60 pt-3">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <SectionLabel>Score components</SectionLabel>
+            <span className="t-label text-ink-3">
+              {open ? "Hide ▴" : "Show ▾"}
+            </span>
+          </button>
+          {open && <ComponentBars components={s.components} notes={s.componentNotes} />}
+        </div>
       )}
     </div>
   );
@@ -138,7 +172,7 @@ export default function VerifyScreen() {
     // idle / loading — never a blank screen (docs/team/harshita-frontend.md D4).
     return (
       <div className={COVER}>
-        <div className="mx-auto grid max-w-5xl gap-10 md:grid-cols-2">
+        <div className="mx-auto max-w-5xl space-y-3">
           <ColumnHeading>What UDGAM concluded</ColumnHeading>
           {/* The source type is not known until the bundle lands — stay neutral until it does. */}
           <ColumnHeading>What the documented record says</ColumnHeading>
@@ -184,19 +218,206 @@ export default function VerifyScreen() {
   return (
     <div className={COVER}>
       <div className="anim-rise mx-auto max-w-5xl pb-24">
-        {/* The verdict leads. It used to sit under both columns, which pushed the one thing a
-            judge is waiting for below the fold on any case with a long caveat — and on a
-            demo that means someone has to scroll to the answer. Stating it first and then
-            showing both sides underneath is also the honest order: the claim, then the
-            evidence for and against it. */}
-        <div className="border-b border-line pb-10">
-          <div className="flex justify-center">
-            <VerdictBadge verdict={a.verdict} />
+        <VerdictSection assessment={a} />
+
+        {/* B — on a case with no record to check against, the caveat IS the finding. Always
+            visible regardless of the reasoning toggle above — it explains why there is no
+            verdict to give, which is not something to fold away. */}
+        {of.sourceType === "none" && of.caveat && (
+          <div className="mx-auto mt-8 max-w-[72ch] rounded-lg border border-[#fbbf24]/30 bg-[#fbbf24]/[0.07] p-5">
+            <div className="t-label text-[#fcd34d]/80">Why there is nothing to check against</div>
+            <p className="mt-2 t-small text-pretty text-[#fde68a]/85">{of.caveat}</p>
           </div>
-          {/* The badge is centred; the reasoning is not. These explanations run to a couple of
-              hundred words on a case we got wrong, and centred prose at that length is a wall
-              — a ragged right edge and a fixed left margin is what makes it readable. */}
-          <div className="mx-auto mt-8 max-w-[72ch]">
+        )}
+
+        {/* Both sections below are full-width and identically styled — stacked, not columned,
+            so putting UDGAM's own conclusion first is ordering, not extra weight. The
+            documented record still gets the same card treatment underneath, unchanged in
+            substance from the version that used to sit beside it. */}
+        <section className="mt-12">
+          <ColumnHeading>What UDGAM concluded</ColumnHeading>
+          <p className="mt-4 max-w-[72ch] t-body text-pretty text-ink-2">{nr.originSummary}</p>
+
+          {hasKnownOrigin && (
+            <p className="mt-4 max-w-[72ch] rounded-lg border border-line bg-raised px-4 py-3 t-small text-pretty text-ink-3">
+              Origin seeded from a documented source, not a UDGAM detection
+              {knownOriginLabel ? ` — ${knownOriginLabel}` : ""}.
+            </p>
+          )}
+
+          <div className="mt-7">
+            {/* B — where no record exists to confirm or refute it, a named vessel is a
+                candidate the funnel returned and nothing more. The heading has to say so:
+                "Vessel shortlist" next to a NOT APPLICABLE badge invites a reader to hear a
+                conclusion that nobody reached. */}
+            <SectionLabel>
+              {of.sourceType === "none" ? "Candidate surfaced — unconfirmed" : "Vessel shortlist"}
+            </SectionLabel>
+
+            {nr.abstained ? (
+              <AbstainState />
+            ) : shortlist.length > 0 ? (
+              <>
+                {of.sourceType === "none" && (
+                  <p className="mt-2 max-w-[72ch] t-small text-pretty text-ink-3">
+                    Surfaced by the attribution funnel. No investigation, no named party and no
+                    enforcement exist for this slick, so nothing here confirms or refutes it.
+                  </p>
+                )}
+                {/* Full width now buys room for two cards per row instead of one long stack —
+                    each card is short by default since its score breakdown collapses. */}
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {shortlist.map(({ mmsi, scored }, i) =>
+                    scored ? (
+                      <SuspectEvidence key={`${mmsi}-${i}`} s={scored} rank={i + 1} defaultOpen={i === 0} />
+                    ) : (
+                      // The bundles disagree: verification.json names an MMSI that
+                      // suspects.json does not score. Surfaced as a contract issue, the same
+                      // way the rest of the web layer treats a mismatch — never silently
+                      // dropped, and never filled in from somewhere else.
+                      <div
+                        key={`${mmsi}-${i}`}
+                        className="rounded-lg border border-alert/30 bg-alert/[0.07] p-4"
+                      >
+                        <div className="font-mono text-[14px] tabular-nums text-ink">
+                          MMSI {mmsi}
+                        </div>
+                        <p className="mt-2 t-small text-ink-2">
+                          Named in verification.json but not scored in suspects.json — the two
+                          bundles disagree. A contract issue to fix in the producing code.
+                        </p>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 t-body text-ink-2">UDGAM named no vessel.</p>
+            )}
+          </div>
+
+          {/* A4 and A3 side by side on the width this section now has — two short facts about
+              the shortlist rather than two full-width blocks stacked one under the other. */}
+          {(missingFromFeed.length > 0 || suspects) && (
+            <div className="mt-7 grid gap-4 sm:grid-cols-2">
+              {/* A4 — stated plainly, because without it a reader has no way to tell a scoring
+                  failure from a coverage one, and will assume the first. */}
+              {missingFromFeed.length > 0 && (
+                <div className="rounded-lg border border-line bg-raised px-4 py-3">
+                  <SectionLabel>Why the record&rsquo;s vessel is not in our shortlist</SectionLabel>
+                  {missingFromFeed.map((p, i) => (
+                    <p key={i} className="mt-2 t-small text-pretty text-ink-2">
+                      No position report for <span className="text-ink">{p.name}</span> (MMSI{" "}
+                      <span className="font-mono tabular-nums">{p.mmsi}</span>) appears in this
+                      case&rsquo;s AIS feed
+                      {suspects ? ` — ${suspects.funnel.inRegion} vessels cover this scene` : ""}.
+                      UDGAM ranked the vessels it could see.
+                    </p>
+                  ))}
+                  {aisLabel && <p className="mt-2 t-small text-ink-3">{aisLabel}</p>}
+                </div>
+              )}
+
+              {/* A3 — the candidate pool. Six vessels in region reads very differently from a
+                  hundred, and until now the screen showed neither. */}
+              {suspects && (
+                <div className={missingFromFeed.length > 0 ? "" : "sm:col-span-2 sm:max-w-[360px]"}>
+                  <SectionLabel>Candidate pool</SectionLabel>
+                  {aisLabel && <p className="mt-1 t-small text-ink-3">{aisLabel}</p>}
+                  <div className="mt-3">
+                    <FunnelBar funnel={suspects.funnel} />
+                  </div>
+                  {/* A side count, not a fifth narrowing stage. null (field absent) ≠ 0 (field
+                      present and zero) — see Funnel.droppedShortTrack. */}
+                  {suspects.funnel.droppedShortTrack !== null && (
+                    <p className="mt-2 t-small text-ink-2">
+                      {suspects.funnel.droppedShortTrack} dropped — fewer than{" "}
+                      {meta?.ais_source === "gfw_hourly" ? "2 hourly AIS positions" : "5 AIS reports"}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── The documented finding — an investigation, another algorithm's attribution,
+              press, or an explicit absence. The heading says which. ── */}
+        <section className="mt-12 border-t border-line pt-12">
+          <ColumnHeading>
+            {FINDING_HEADING[of.sourceType] ?? "What the documented record says"}
+          </ColumnHeading>
+          <p className="mt-4 max-w-[72ch] t-body text-pretty text-ink-2">{of.summary}</p>
+
+          {(of.responsibleParties.length > 0 || of.volumeReported) && (
+            <div className="mt-7 grid gap-6 sm:grid-cols-2">
+              {of.responsibleParties.length > 0 && (
+                <div>
+                  <SectionLabel>Responsible parties</SectionLabel>
+                  <ul className="mt-2 space-y-2">
+                    {of.responsibleParties.map((p, i) => (
+                      <li key={`${p.name}-${i}`} className="t-body">
+                        <span className="text-ink">{p.name}</span>
+                        {p.role ? <span className="text-ink-3"> — {p.role}</span> : null}
+                        <span className="ml-1.5 font-mono text-[12px] text-ink-3">
+                          (MMSI {p.mmsi ?? "—"}
+                          {p.imo ? `, IMO ${p.imo}` : ""})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {of.volumeReported && (
+                <div>
+                  <SectionLabel>Volume reported</SectionLabel>
+                  <p className="mt-2 t-body text-ink">{of.volumeReported}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Already rendered prominently above the sections when it IS the finding. */}
+          {of.caveat && of.sourceType !== "none" && (
+            <div className="mt-7 max-w-[72ch]">
+              <SectionLabel>Caveat</SectionLabel>
+              <p className="mt-2 t-small text-pretty text-ink-2">{of.caveat}</p>
+            </div>
+          )}
+
+          <div className="mt-7">
+            <SectionLabel>Source</SectionLabel>
+            <p className="mt-2 t-body">
+              <ExternalLink href={of.sourceUrl}>{of.sourceName}</ExternalLink>
+            </p>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/** The verdict badge and the reasoning behind it. Collapsed by default — the badge states the
+ *  claim on its own; the paragraph or two of hand-authored reasoning underneath was, on any
+ *  case with a real caveat, the single largest block on the screen and the first thing that
+ *  made this screen feel like a wall of text rather than a verdict. Clicking the badge (or the
+ *  teaser line under it) reveals it. Nothing here shortens or rewrites `a.explanation` itself —
+ *  the teaser is a clip of the same human sentence, never a summary this app wrote. */
+function VerdictSection({ assessment: a }: { assessment: Assessment }) {
+  const [open, setOpen] = useState(false);
+  const toggle = () => setOpen((v) => !v);
+  return (
+    <div className="border-b border-line pb-10">
+      <div className="flex justify-center">
+        <VerdictBadge verdict={a.verdict} expanded={open} onToggle={toggle} />
+      </div>
+      {/* The badge is centred; the reasoning is not. These explanations run to a couple of
+          hundred words on a case we got wrong, and centred prose at that length is a wall
+          — a ragged right edge and a fixed left margin is what makes it readable. */}
+      <div className="mx-auto mt-6 max-w-[72ch]">
+        {open ? (
+          <>
             <p className="t-subtitle text-pretty text-ink">{a.explanation}</p>
             {a.whatWouldHaveHelped && (
               <div className="mt-6">
@@ -206,170 +427,22 @@ export default function VerifyScreen() {
                 </p>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* B — on a case with no record to check against, the caveat IS the finding. Leaving it
-            at the foot of the right column (where it sits on every other case) buries the one
-            paragraph that explains why there is no verdict to give. */}
-        {of.sourceType === "none" && of.caveat && (
-          <div className="mx-auto mt-10 max-w-[72ch] rounded-lg border border-[#fbbf24]/30 bg-[#fbbf24]/[0.07] p-5">
-            <div className="t-label text-[#fcd34d]/80">Why there is nothing to check against</div>
-            <p className="mt-2 t-small text-pretty text-[#fde68a]/85">{of.caveat}</p>
-          </div>
+            <button
+              type="button"
+              onClick={toggle}
+              className="mt-4 t-label text-ink-3 underline decoration-dotted underline-offset-4 hover:text-ink-2"
+            >
+              Hide reasoning
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={toggle} className="block w-full text-center">
+            <p className="t-body text-pretty text-ink-2">{leadSentence(a.explanation)}</p>
+            <span className="mt-2 inline-block t-label text-ink-3 underline decoration-dotted underline-offset-4">
+              Read the full assessment
+            </span>
+          </button>
         )}
-
-        <div className="mt-10 grid gap-10 md:grid-cols-2">
-          {/* ── UDGAM ── */}
-          <section className="md:border-r md:border-line md:pr-10">
-            <ColumnHeading>What UDGAM concluded</ColumnHeading>
-            <p className="mt-4 t-body text-pretty text-ink-2">{nr.originSummary}</p>
-
-            {hasKnownOrigin && (
-              <p className="mt-4 rounded-lg border border-line bg-raised px-4 py-3 t-small text-pretty text-ink-3">
-                Origin seeded from a documented source, not a UDGAM detection
-                {knownOriginLabel ? ` — ${knownOriginLabel}` : ""}.
-              </p>
-            )}
-
-            <div className="mt-7">
-              {/* B — where no record exists to confirm or refute it, a named vessel is a
-                  candidate the funnel returned and nothing more. The heading has to say so:
-                  "Vessel shortlist" next to a NOT APPLICABLE badge invites a reader to hear a
-                  conclusion that nobody reached. */}
-              <SectionLabel>
-                {of.sourceType === "none" ? "Candidate surfaced — unconfirmed" : "Vessel shortlist"}
-              </SectionLabel>
-
-              {nr.abstained ? (
-                <AbstainState />
-              ) : shortlist.length > 0 ? (
-                <>
-                  {of.sourceType === "none" && (
-                    <p className="mt-2 t-small text-pretty text-ink-3">
-                      Surfaced by the attribution funnel. No investigation, no named party and no
-                      enforcement exist for this slick, so nothing here confirms or refutes it.
-                    </p>
-                  )}
-                  <div className="mt-3 space-y-3">
-                    {shortlist.map(({ mmsi, scored }, i) =>
-                      scored ? (
-                        <SuspectEvidence key={`${mmsi}-${i}`} s={scored} rank={i + 1} />
-                      ) : (
-                        // The bundles disagree: verification.json names an MMSI that
-                        // suspects.json does not score. Surfaced as a contract issue, the same
-                        // way the rest of the web layer treats a mismatch — never silently
-                        // dropped, and never filled in from somewhere else.
-                        <div
-                          key={`${mmsi}-${i}`}
-                          className="rounded-lg border border-alert/30 bg-alert/[0.07] p-4"
-                        >
-                          <div className="font-mono text-[14px] tabular-nums text-ink">
-                            MMSI {mmsi}
-                          </div>
-                          <p className="mt-2 t-small text-ink-2">
-                            Named in verification.json but not scored in suspects.json — the two
-                            bundles disagree. A contract issue to fix in the producing code.
-                          </p>
-                        </div>
-                      ),
-                    )}
-                  </div>
-                </>
-              ) : (
-                <p className="mt-2 t-body text-ink-2">UDGAM named no vessel.</p>
-              )}
-            </div>
-
-            {/* A4 — stated plainly, because without it a reader has no way to tell a scoring
-                failure from a coverage one, and will assume the first. */}
-            {missingFromFeed.length > 0 && (
-              <div className="mt-7 rounded-lg border border-line bg-raised px-4 py-3">
-                <SectionLabel>Why the record&rsquo;s vessel is not in our shortlist</SectionLabel>
-                {missingFromFeed.map((p, i) => (
-                  <p key={i} className="mt-2 t-small text-pretty text-ink-2">
-                    No position report for <span className="text-ink">{p.name}</span> (MMSI{" "}
-                    <span className="font-mono tabular-nums">{p.mmsi}</span>) appears in this
-                    case&rsquo;s AIS feed
-                    {suspects ? ` — ${suspects.funnel.inRegion} vessels cover this scene` : ""}.
-                    UDGAM ranked the vessels it could see.
-                  </p>
-                ))}
-                {aisLabel && <p className="mt-2 t-small text-ink-3">{aisLabel}</p>}
-              </div>
-            )}
-
-            {/* A3 — the candidate pool. Six vessels in region reads very differently from a
-                hundred, and until now the screen showed neither. */}
-            {suspects && (
-              <div className="mt-7">
-                <SectionLabel>Candidate pool</SectionLabel>
-                {aisLabel && <p className="mt-1 t-small text-ink-3">{aisLabel}</p>}
-                <div className="mt-3">
-                  <FunnelBar funnel={suspects.funnel} />
-                </div>
-                {/* A side count, not a fifth narrowing stage. null (field absent) ≠ 0 (field
-                    present and zero) — see Funnel.droppedShortTrack. */}
-                {suspects.funnel.droppedShortTrack !== null && (
-                  <p className="mt-2 t-small text-ink-2">
-                    {suspects.funnel.droppedShortTrack} dropped — fewer than{" "}
-                    {meta?.ais_source === "gfw_hourly" ? "2 hourly AIS positions" : "5 AIS reports"}
-                  </p>
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* ── The documented finding — an investigation, another algorithm's attribution,
-                press, or an explicit absence. The heading says which. ── */}
-          <section>
-            <ColumnHeading>
-              {FINDING_HEADING[of.sourceType] ?? "What the documented record says"}
-            </ColumnHeading>
-            <p className="mt-4 t-body text-pretty text-ink-2">{of.summary}</p>
-
-            {of.responsibleParties.length > 0 && (
-              <div className="mt-7">
-                <SectionLabel>Responsible parties</SectionLabel>
-                <ul className="mt-2 space-y-2">
-                  {of.responsibleParties.map((p, i) => (
-                    <li key={`${p.name}-${i}`} className="t-body">
-                      <span className="text-ink">{p.name}</span>
-                      {p.role ? <span className="text-ink-3"> — {p.role}</span> : null}
-                      <span className="ml-1.5 font-mono text-[12px] text-ink-3">
-                        (MMSI {p.mmsi ?? "—"}
-                        {p.imo ? `, IMO ${p.imo}` : ""})
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {of.volumeReported && (
-              <div className="mt-7">
-                <SectionLabel>Volume reported</SectionLabel>
-                <p className="mt-2 t-body text-ink">{of.volumeReported}</p>
-              </div>
-            )}
-
-            {/* Already rendered prominently above the columns when it IS the finding. */}
-            {of.caveat && of.sourceType !== "none" && (
-              <div className="mt-7">
-                <SectionLabel>Caveat</SectionLabel>
-                <p className="mt-2 t-small text-pretty text-ink-2">{of.caveat}</p>
-              </div>
-            )}
-
-            <div className="mt-7">
-              <SectionLabel>Source</SectionLabel>
-              <p className="mt-2 t-body">
-                <ExternalLink href={of.sourceUrl}>{of.sourceName}</ExternalLink>
-              </p>
-            </div>
-          </section>
-        </div>
-
       </div>
     </div>
   );

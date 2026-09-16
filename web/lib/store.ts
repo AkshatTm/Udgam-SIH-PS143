@@ -88,6 +88,17 @@ export interface AppState {
 
   layers: Record<LayerId, boolean>;
   tNorm: number; // 0..1, 1 = "T-0 detect". Bound to an integer timestep via lib/timestep.ts.
+  // Forward playhead: 0 at T0, 1 at the forward forecast horizon (lib/forward.ts
+  // forwardSpanHours). Independent of tNorm — the two share one visual slider (TimeSlider),
+  // centred on T0, but only one is ever off its rest value at a time: dragging right zeroes
+  // tNorm back to 1 (T0) and drives forwardNorm; dragging left does the reverse. `null` /
+  // forward.envelope.length === 0 means this case has no forecast, and the right half of the
+  // slider is inert.
+  forwardNorm: number;
+  // True only while the dedicated forward-drift button is auto-scrubbing forwardNorm 0 -> 1.
+  // Mutually exclusive with `playing` — starting one stops the other, since both animate the
+  // same physical slider handle.
+  forwardPlaying: boolean;
 
   /** Guided flow. A stage's results are hidden until the judge presses its Run button, so the
    *  Detect screen first shows the raw SAR scene on its own ("Scene"), and each later stage
@@ -113,6 +124,8 @@ export interface AppState {
   setTNorm: (t: number) => void;
   setPlaying: (p: boolean) => void;
   togglePlaying: () => void;
+  setForwardNorm: (t: number) => void;
+  setForwardPlaying: (p: boolean) => void;
   /** One-time Trace-stage arrival: enable the particle + origin layers and autoplay the
    *  rewind from T−0. No-ops unless particles + origin are both `ready` and this case has not
    *  been initialised yet, so it is safe to call on every render. */
@@ -214,6 +227,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     vessels: false,
   },
   tNorm: 1,
+  forwardNorm: 0,
+  forwardPlaying: false,
 
   revealed: { ...UNREVEALED },
   running: null,
@@ -243,6 +258,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       autoPlaying: false,
       traceInitFor: null,
       tNorm: 1,
+      forwardNorm: 0,
+      forwardPlaying: false,
       revealed: { ...UNREVEALED },
       running: null,
       // Reset the origin cloud for the incoming case.
@@ -435,6 +452,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPlaying: (p) => set(p ? { playing: true } : { playing: false, autoPlaying: false }),
   togglePlaying: () =>
     set((s) => (s.playing ? { playing: false, autoPlaying: false } : { playing: true })),
+  setForwardNorm: (t) => set({ forwardNorm: Math.min(1, Math.max(0, t)) }),
+  setForwardPlaying: (p) => set({ forwardPlaying: p }),
 
   initTrace: () => {
     const s = get();
@@ -444,6 +463,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       traceInitFor: s.activeCaseId,
       layers: { ...st.layers, particles: true, origin: true },
       tNorm: 1, // T−0 / positions[0]
+      forwardNorm: 0,
+      forwardPlaying: false,
       playing: true, // existing usePlayback rewinds T−0 → T−24h once, then stops
       autoPlaying: true, // Slice 2 — run that first rewind at AUTOPLAY_STEPS_PER_SEC
     }));
@@ -481,6 +502,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       revealed: { ...UNREVEALED },
       running: null,
       tNorm: 1,
+      forwardNorm: 0,
+      forwardPlaying: false,
       activeStage: "detect" as Act,
       layers: {
         sar: true,

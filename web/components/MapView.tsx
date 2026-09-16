@@ -33,7 +33,7 @@ import { BitmapLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl
 import { RUN_DURATION_MS, useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
 import { buildOriginImage, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
-import { buildForwardRings, buildForwardTrack, type ForwardRing } from "@/lib/forward";
+import { buildForwardRings, buildForwardTrack, forwardSpanHours, type ForwardRing } from "@/lib/forward";
 import { sceneAndVesselExtent, sceneParticleOriginExtent } from "@/lib/extent";
 import type { Bounds, GeoBounds, LonLat } from "@/lib/contracts";
 
@@ -383,12 +383,14 @@ export default function MapView() {
     [origin],
   );
 
-  // Master 6.10 forward slick. Static geometry with no timestep dependency: the existing slider
-  // runs T-24h -> T-0 (the rewind), and the forecast lives on the far side of t0. Rather than
-  // overload one slider with two time domains, the whole 24 h cone is drawn at once and the
-  // fade carries the hour. `forward` is null on a case Stage 2 produced no forecast for.
+  // Master 6.10 forward slick. The ring/track geometry is still built ONCE per bundle (the
+  // km→degree conversion never re-runs on a scrub — same discipline as origin). What is NEW is
+  // that the slider now carries both time domains (TimeSlider: T0 centred, right half forward),
+  // so the cone is revealed progressively up to the forward playhead instead of drawn whole.
+  // `forward` is null on a case Stage 2 produced no forecast for.
   const forward = useAppStore((s) => s.forward);
   const forwardVisible = useAppStore((s) => s.layers.forward);
+  const forwardNorm = useAppStore((s) => s.forwardNorm);
   const forwardRings = useMemo(
     () => (forward ? buildForwardRings(forward) : null),
     [forward],
@@ -397,6 +399,42 @@ export default function MapView() {
     () => (forward ? buildForwardTrack(forward) : null),
     [forward],
   );
+  // Current forward playhead in hours. `forwardNorm` is continuous (lib/useForwardPlayback.ts
+  // advances it by elapsed time, not by step), so this is too — there is no per-hour snapping
+  // the way particle timesteps snap, because the forward envelope has no positions-per-step
+  // array to index into.
+  const forwardSpan = forward ? forwardSpanHours(forward) : 0;
+  const currentForwardHours = forwardNorm * forwardSpan;
+  // Reveal: rings/track are filtered down to hours already reached, cheap array work over
+  // pre-tessellated paths (never a re-tessellation — see buildForwardRings). The leading edge
+  // is linearly interpolated between the two bracketing envelope centroids so the track grows
+  // smoothly frame-to-frame instead of jumping hour to hour.
+  const visibleForwardRings = useMemo(() => {
+    if (!forwardRings) return null;
+    return forwardRings.filter((r) => r.hours <= currentForwardHours + 1e-9);
+  }, [forwardRings, currentForwardHours]);
+  const forwardProgress = useMemo(() => {
+    if (!forward || !forwardTrack || forwardTrack.length === 0) {
+      return { track: null as LonLat[] | null, lead: null as LonLat | null };
+    }
+    const envelope = forward.envelope;
+    let i = 0;
+    while (i < envelope.length - 1 && envelope[i + 1].hours <= currentForwardHours) i++;
+    const track = forwardTrack.slice(0, i + 1);
+    let lead = forwardTrack[i];
+    const next = envelope[i + 1];
+    if (next && next.hours > envelope[i].hours) {
+      const span = next.hours - envelope[i].hours;
+      const frac = Math.min(1, Math.max(0, (currentForwardHours - envelope[i].hours) / span));
+      if (frac > 0) {
+        const a = forwardTrack[i];
+        const b = forwardTrack[i + 1];
+        lead = [a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac];
+        track.push(lead);
+      }
+    }
+    return { track, lead };
+  }, [forward, forwardTrack, currentForwardHours]);
 
   // Phase 5 attribution. `vessels` is static geometry (no timestep dependency at all) — the
   // PathLayer built from it is memoised on the bundle + suspects identity, never on `t`.
@@ -887,14 +925,20 @@ export default function MapView() {
     return list;
   }, [originImage, origin, originRings, originOpacity]);
 
-  // Forward cone + centroid track. Built once per bundle and toggled purely by visibility, so
-  // turning it on costs nothing and a scrub never touches it.
+  // Forward cone + centroid track. Ring/track geometry is built once per bundle; what changes on
+  // a scrub is only which prefix of that geometry is visible (`visibleForwardRings` /
+  // `forwardProgress`, filtered above) and the lead marker's position — cheap per-frame work,
+  // never a rebuild of the tessellated paths themselves.
   const forwardLayerList = useMemo(() => {
-    if (!forwardVisible || !forwardRings || !forwardTrack) return [];
-    return [
+    if (!forwardVisible || !visibleForwardRings || !forwardProgress.track) return [];
+    const list: (
+      | PathLayer<ForwardRing>
+      | PathLayer<{ path: LonLat[] }>
+      | ScatterplotLayer<{ position: LonLat }>
+    )[] = [
       new PathLayer<ForwardRing>({
         id: "forward-rings",
-        data: forwardRings,
+        data: visibleForwardRings,
         getPath: forwardRingPath,
         getColor: forwardRingColor,
         getWidth: forwardRingWidth,
@@ -906,7 +950,7 @@ export default function MapView() {
       }),
       new PathLayer<{ path: LonLat[] }>({
         id: "forward-track",
-        data: [{ path: forwardTrack }],
+        data: [{ path: forwardProgress.track }],
         getPath: (d) => d.path,
         getColor: FORWARD_TRACK_COLOR,
         getWidth: FORWARD_TRACK_WIDTH_PX,
@@ -917,7 +961,26 @@ export default function MapView() {
         pickable: false,
       }),
     ];
-  }, [forwardVisible, forwardRings, forwardTrack]);
+    // Leading-edge marker — only while the playhead is short of the horizon, so it does not sit
+    // redundantly on top of the terminal r50 ring once the forecast is fully revealed.
+    if (forwardProgress.lead && forwardNorm < 1) {
+      list.push(
+        new ScatterplotLayer<{ position: LonLat }>({
+          id: "forward-lead",
+          data: [{ position: forwardProgress.lead }],
+          getPosition: (d: { position: LonLat }) => d.position,
+          getFillColor: FORWARD_TRACK_COLOR,
+          getRadius: 4,
+          radiusUnits: "pixels",
+          radiusMinPixels: 3,
+          radiusMaxPixels: 5,
+          stroked: false,
+          pickable: false,
+        }),
+      );
+    }
+    return list;
+  }, [forwardVisible, visibleForwardRings, forwardProgress, forwardNorm]);
 
   // Particle cloud — one pre-built binary position frame per timestep (Phase 2). This is the
   // only deck layer that is rebuilt on every playback tick; `frames[t]` is a pre-computed view,
