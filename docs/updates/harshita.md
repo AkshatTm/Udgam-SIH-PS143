@@ -12,6 +12,75 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-16 11:30] P0 + P1 — static frontend live (S3, not CloudFront)
+
+**Done:** Closed P0 and P1 of `harshita-deployment.md`. P0: confirmed all 9 gallery cases'
+`sar_vv_vh.tif` (~198 MB total) are on disk and already git-tracked, no LFS, no gitignore
+surprise — the Docker build context for P2 has what it needs already. P1: found `web/next.config.mjs`
+had no `output: "export"`, and neither dynamic route (`app/case/[id]/page.tsx`,
+`app/case/[id]/[stage]/page.tsx`) had `generateStaticParams` — static export cannot resolve a
+dynamic segment at request time since there's no server, so `next build` would not have produced
+a working export as the brief assumed. Fixed both; build now emits 50 pages (gallery + 9 case
+redirects + 36 stage pages + 404) cleanly.
+
+**Architecture deviation from the brief:** AWS blocked all new CloudFront resource creation with
+an account-verification hold that support says can take up to a week — incompatible with the
+timeline, and squarely what the brief's own §2.3 escape hatch is for ("if AWS fights you... don't
+grind, message Akshat"). Skipped CloudFront entirely. The frontend now serves as plain HTTP
+directly from an S3 bucket in static-website-hosting mode
+(`http://udgam-frontend-verdict.s3-website.ap-south-1.amazonaws.com`) — `trailingSlash: true` in
+`next.config.mjs` is what makes this work (every route emits `<route>/index.html`, which S3's own
+IndexDocument setting resolves on a folder-style request). **Consequence for P3/P4:** the EC2 API
+will also need to stay plain HTTP (no TLS) rather than sitting behind CloudFront's `/api/*`
+behavior as planned — an HTTPS frontend calling a bare-HTTP API hits the browser's mixed-content
+block, but HTTP-to-HTTP with CORS enabled on FastAPI's side does not. This needs the same call
+before P3 starts. **Licensing note:** given the choice, kept all 9 cases (including
+`case-mumbai-2023` / `case-jamnagar-2024`, GFW non-commercial-only data per `DATA_LICENSES.md`)
+in the public build rather than the brief's 7-case fallback — a free hackathon demo was judged
+not to trigger GFW's commercial-use clause. Flagging here in case Akshat wants to revisit.
+
+Also added `.github/workflows/deploy.yml` (build + `npm ci` + `next build` + `aws s3 sync` on
+push to `main` touching `web/`, `cases/`, or the sync script, plus `workflow_dispatch` for an
+on-demand redeploy at freeze) so P4/P6 redeploys don't need manual console uploads. First run
+failed on `npm ci` — `web/package-lock.json` was missing/mismatched `@emnapi/*` optional entries,
+tolerated by `npm install` (what local dev always used) but not by `npm ci`'s strict check.
+Regenerated the lock file, verified a clean `npm ci` + build locally, pushed — second run
+succeeded.
+
+**Files touched:** `web/next.config.mjs` (modified — `output: "export"`, `trailingSlash: true`) ·
+`web/app/case/[id]/page.tsx` (modified — `generateStaticParams`) ·
+`web/app/case/[id]/[stage]/page.tsx` (modified — `generateStaticParams`) ·
+`web/package-lock.json` (regenerated) · `.github/workflows/deploy.yml` (new) ·
+`docs/updates/harshita.md` (this entry).
+
+**Run command:**
+```bash
+python scripts/sync_web_cases.py --clean
+cd web && npm ci && npm run build
+```
+Expected output: `out/` with 50 static pages, no server needed. Deployed by the GitHub Actions
+`deploy` workflow (or manually: `aws s3 sync web/out s3://udgam-frontend-verdict --delete`).
+
+**Checkpoint artefact:** live URL confirmed loading the Gallery and case detail pages with SAR
+imagery rendering correctly, checked in-browser by Harshita. GitHub Actions `deploy` workflow run
+green on the second attempt (first attempt's `npm ci` failure log reviewed, root-caused, fixed).
+
+**Open issues:**
+- Phone check + full 5-screen click-through (P1 step 4/5 in the brief) not yet explicitly
+  confirmed screen-by-screen — only the Gallery + SAR rendering were checked directly.
+- Link not yet sent to the group / QR not yet on the title slide (P1's last two steps).
+- No HTTPS on the live link (plain `http://`) — a demo-cosmetics gap, not functional, tracked
+  above under the CloudFront deviation.
+- P2 (FastAPI container) not started.
+- P3 needs a pre-check that EC2 launch itself isn't also throttled by the same AWS verification
+  hold before assuming it'll go smoothly.
+
+**Next:** P2 — build `api/main.py` (`/api/health`, `/api/detect`, `/api/detect/upload`) and the
+Dockerfile locally, diff its output against the committed `detections.geojson` bundles before
+touching AWS at all.
+
+---
+
 ## [2026-09-13 19:00] Detect QA close-out — human/browser QA on all 9 real Gallery cases
 
 **Done:** Browser-tested the Detect screen for every case currently reachable from the Gallery
