@@ -496,7 +496,30 @@ def main():
         # running on the raw array, so a port scene returned its own buildings
         # as vessels (Ennore: 1,377 of them, peaking at +34 dB on land).
         from pipeline.detect.darkspot import prepare as _prepare
-        _, _, _land, _ = _prepare(vv, px_km2)
+        # ...but prepare() infers land from BRIGHTNESS, and that estimator is not
+        # trustworthy on its own: measured, it flagged 31-65% of a land-FREE scene
+        # as land, because its reference is the 20th percentile of local means,
+        # which sits inside a dark feature. Here it also fails the other way -- a
+        # low-lying or radar-dark shore is not bright, so it is not masked, and the
+        # contacts on it are reported as radar contacts.
+        #
+        # These contacts are Stage 3's dark-vessel input. A contact with no AIS
+        # match at scene time IS the dark-vessel claim, so a land return inside
+        # this list makes that claim unsafe. Use a REAL coastline (~1 km offline
+        # raster, no API) and let prepare() OR it with the brightness mask, so we
+        # get the true coast AND still drop bright rigs and islands.
+        _coast = None
+        try:
+            if transform is not None and not transform.is_identity:
+                from pipeline.detect.normalise import coastline_land
+                _coast = coastline_land(vv.shape, transform)
+        except Exception as exc:
+            print(f"[detect] ships  : [WARN] coastline unavailable ({exc}); "
+                  f"brightness land mask only")
+            _coast = None
+        if _coast is not None:
+            print(f"[detect] ships  : coastline land {_coast.mean():.1%} of scene")
+        _, _, _land, _ = _prepare(vv, px_km2, external_land=_coast)
         ships, ship_stats = detect_ships(vv, transform, min_db=a.ship_min_db,
                                          k_sigma=a.ship_k_sigma, return_stats=True,
                                          exclude=_land)

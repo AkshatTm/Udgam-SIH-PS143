@@ -77,12 +77,15 @@ def classical_row():
             "note": "row-level precision/recall/F1 on detected regions"}
 
 
-def classifier_row():
-    p = os.path.join(MODELS, "scene_classifier_meta.json")
+def classifier_row(clf=None):
+    p = (clf.replace(".pt", "_meta.json") if clf
+         else os.path.join(MODELS, "scene_classifier_meta.json"))
     if not os.path.exists(p):
         return None, None
     m = json.loads(open(p).read())
-    r = m["part3"]
+    r = m.get("part3")
+    if r is None:                      # a classifier trained without a holdout pass
+        return None, m.get("threshold")
     return {"model": "Classifier only",
             "scene_accuracy": r["scene_accuracy"],
             "oil_recall": r["oil_recall"],
@@ -265,11 +268,14 @@ def decompose(a):
 
 
 def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None, jobs=None,
-              ckpt=None):
+              ckpt=None, clf_path=None):
     """Run the U-Net over Part III, ungated and gated, in one pass over the
     scenes — decoding 450 scenes twice would be pointless I/O."""
-    clf, clf_thr = nets.load_classifier()
+    clf, clf_thr = nets.load_classifier(clf_path)
     unet, unet_thr = nets.load_unet(ckpt)
+    _conv = nets.unet_convention(ckpt)
+    print(f"  checkpoint convention: channels={_conv['channel_order']} "
+          f"norm={_conv['norm_mode']} land_mode={_conv['land_mode']}")
     if unet is None:
         return [], None
     if clf is None and True in use_gate_list:
@@ -310,7 +316,19 @@ def unet_rows(gate_threshold, use_gate_list=(False, True), limit=None, jobs=None
         with rasterio.open(img_path) as src:
             vv = src.read(1).astype(np.float32)
             vh = src.read(2).astype(np.float32) if src.count >= 2 else None
-        norm, valid, _ = nets.normalise_scene(vv, vh)
+            _tr = src.transform
+        # Build the input in the convention THIS checkpoint was trained on. Reading
+        # band 1 as VV is right for a GEE export and wrong for a Zenodo tile, and the
+        # models trained after the 2026-09-14 rebuild expect [VV, VH] on both. Getting
+        # this wrong is silent: it cost a full train+eval cycle that scored ~0.000 at
+        # scene level while the same models were at tile IoU 0.62.
+        if _conv["channel_order"] == "vv_first" and vh is not None                 and nets._looks_like_zenodo(vv, vh):
+            first, second = vh, vv           # band 2 is the co-pol channel here
+        else:
+            first, second = vv, vh
+        norm, valid, _ = nets.normalise_scene(first, second,
+                                              mode=_conv["norm_mode"], transform=_tr,
+                                              land_mode=_conv["land_mode"])
 
         gt = np.zeros(vv.shape, bool)
         if cls == "Oil" and os.path.exists(msk_path):
@@ -372,6 +390,13 @@ def main():
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--limit", type=int, default=None, help="first N scenes — smoke test")
     ap.add_argument("--skip-unet", action="store_true")
+    ap.add_argument("--ckpt", default=None,
+                    help="explicit Layer 2 checkpoint; default models/unet.pt")
+    ap.add_argument("--clf", default=None,
+                    help="explicit Layer 1 checkpoint; default models/scene_classifier.pt")
+    ap.add_argument("--json", default=None,
+                    help="write here instead of results/eval_part3.json, so the shipped "
+                         "baseline is never overwritten")
     a = ap.parse_args()
 
     print("=" * 78)
@@ -385,7 +410,7 @@ def main():
     else:
         print("  [skip] classical row: run train.py first")
 
-    cl, gate_thr = classifier_row()
+    cl, gate_thr = classifier_row(a.clf)
     if cl:
         rows.append(cl)
     else:
@@ -393,7 +418,7 @@ def main():
         gate_thr = 0.5
 
     if not a.skip_unet:
-        ur, _ = unet_rows(gate_thr, limit=a.limit)
+        ur, _ = unet_rows(gate_thr, limit=a.limit, ckpt=a.ckpt, clf_path=a.clf)
         rows.extend(ur)
 
     print()
@@ -471,11 +496,11 @@ def main():
         print("  the strictest and the honest one. The others exist so the comparison is")
         print("  like-for-like, NOT so we can pick the flattering number (B2).")
 
-    out_path = OUT_JSON
+    out_path = a.json or OUT_JSON
     if a.limit:
         # A smoke run must never overwrite the authoritative numbers. It did once,
         # silently, and the 450-scene results had to be restored from git.
-        out_path = OUT_JSON.replace(".json", "_smoke.json")
+        out_path = out_path.replace(".json", "_smoke.json")
         print(f"\n  [--limit {a.limit}] PARTIAL RUN — these numbers are NOT the "
               f"Part III result.")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)

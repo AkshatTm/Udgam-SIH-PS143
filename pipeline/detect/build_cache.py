@@ -87,18 +87,44 @@ MAX_NEG_PER_SCENE = 12
 NORMALISE_MODE = "sea"      # "median" reproduces the original cache exactly
 
 
-def _norm(band, mode, transform=None):
+def _norm(band, mode, transform=None, land_mode="full"):
     """THE normalisation, from pipeline/detect/normalise.py. This file used to hold a
     second copy of the same rule, which is the shape of bug that made the k_sigma fix
-    inert for a day; there is now one implementation and both producers call it."""
-    from pipeline.detect.normalise import normalise_band as _nb, sea_reference, valid_mask
+    inert for a day; there is now one implementation and both producers call it.
+
+    TWO MASKS, BECAUSE THERE ARE TWO QUESTIONS (plan E2c)
+    -----------------------------------------------------
+    This function used to compute ONE land-excluded mask and use it for both:
+
+        ref, scale = sea_reference(band, v)      (a) where is sea level?
+        return where(v, out, 0.0), v, ...        (b) ...and which pixels are usable?
+
+    `v` is returned as the scene's `valid` mask, and run() drops any tile with
+    (~valid).mean() > MAX_INVALID_FRAC. So excluding land from the REFERENCE SAMPLE
+    -- which is correct, and is what makes the estimator safe -- also marked every
+    land pixel as missing data, which dropped 175 scenes and 477 hard negatives from
+    the cache. E2b measured that data loss, not the normalisation, as the cause of
+    the band regressions in E2.
+
+    They are now separate:
+
+      v_ref   land-excluded, and ONLY ever the sample the sea reference is estimated
+              from. Land in this sample is what failed the first two E2 audits: the
+              estimator picked a coastline as "sea" and moved the reference by up to
+              21 dB, at which point the whole ocean reads as oil.
+      v_data  finite and non-zero -- the baseline's rule, and the one thing tile
+              eligibility should ever depend on. Land is real data; it is simply not
+              sea, and a network is perfectly capable of learning that.
+
+    land_mode selects how they relate:
+      "full"       v_ref land-excluded, v_data = v_ref     (E2,  P12sea)
+      "reference"  v_ref land-excluded, v_data finite-only (E2c, P12seac)
+      "none"       neither excludes land                   (E2b, P12seanl)
+    """
+    from pipeline.detect.normalise import normalise_band as _nb, sea_normalise
     if mode == "sea":
-        v = valid_mask(band, exclude_land=True, transform=transform)
-        if not v.any():
-            return np.zeros_like(band, np.float32), v, 0.0, 1.0
-        ref, scale, _ = sea_reference(band, v, transform=transform)
-        out = np.clip((band - ref) / scale, -CLIP_SIGMA, CLIP_SIGMA) / CLIP_SIGMA
-        return np.where(v, out, 0.0).astype(np.float32), v, ref, scale
+        return sea_normalise(band, transform=transform, land_mode=land_mode,
+                             clip_sigma=CLIP_SIGMA)
     out, v, ref, scale = _nb(band, "median")
     return out, v, ref, scale
 
@@ -125,7 +151,7 @@ def normalise(band):
     return norm, valid, med, mad
 
 
-def scene_arrays(img_path, mode=None):
+def scene_arrays(img_path, mode=None, land_mode="full"):
     """-> (norm (H,W,2) float32, valid (H,W) bool, stats dict).
 
     CHANNEL ORDER IS NOW CORRECT, and this is a breaking change to the cache.
@@ -162,8 +188,10 @@ def scene_arrays(img_path, mode=None):
         vh_raw = src.read(1).astype(np.float32)                 # band 1 IS cross-pol
         vv_raw = src.read(2).astype(np.float32) if src.count >= 2 else vh_raw.copy()
         transform = src.transform
-    n_vv, val_vv, ref_vv, sc_vv = _norm(vv_raw, mode=mode, transform=transform)
-    n_vh, val_vh, ref_vh, sc_vh = _norm(vh_raw, mode=mode, transform=transform)
+    n_vv, val_vv, ref_vv, sc_vv = _norm(vv_raw, mode=mode, transform=transform,
+                                        land_mode=land_mode)
+    n_vh, val_vh, ref_vh, sc_vh = _norm(vh_raw, mode=mode, transform=transform,
+                                        land_mode=land_mode)
     norm = np.stack([n_vv, n_vh], axis=-1)                      # channel 0 = VV
     valid = val_vv & val_vh
     # Both references are stored. Layer 3 inverts contrast_db through the MEDIAN pair, so
@@ -174,7 +202,8 @@ def scene_arrays(img_path, mode=None):
              "vh_med": round(med_vh, 4), "vh_mad": round(mad_vh, 4),
              "vv_ref": round(ref_vv, 4), "vv_scale": round(sc_vv, 4),
              "vh_ref": round(ref_vh, 4), "vh_scale": round(sc_vh, 4),
-             "norm_mode": mode}
+             "norm_mode": mode, "land_mode": land_mode,
+             "land_mask": (land_mode == "full")}
     return norm, valid, stats
 
 
@@ -229,7 +258,7 @@ class ShardWriter:
                        "meta": self.meta}, fh)
 
 
-def run(parts_key, limit=None, suffix="", mode=None):
+def run(parts_key, limit=None, suffix="", mode=None, land_mode="full"):
     os.makedirs(CACHE, exist_ok=True)
     prefix = PARTS[parts_key]["prefix"] + (suffix or "")
     # The old cache is NOT overwritten. A rebuild that turns out worse has to be
@@ -253,7 +282,8 @@ def run(parts_key, limit=None, suffix="", mode=None):
 
     for i, (scene_id, cls, img_path, msk_path) in enumerate(jobs, 1):
         try:
-            norm, valid, stats = scene_arrays(img_path, mode=mode)
+            norm, valid, stats = scene_arrays(img_path, mode=mode,
+                                              land_mode=land_mode)
             h, w = valid.shape
             gt = load_mask(msk_path, (h, w)) if cls == "Oil" else np.zeros((h, w), np.uint8)
 
@@ -324,6 +354,8 @@ def run(parts_key, limit=None, suffix="", mode=None):
     with open(os.path.join(CACHE, f"manifest_{prefix}.json"), "w") as fh:
         json.dump({"prefix": prefix, "parts": parts_key,
                    "norm_mode": mode or NORMALISE_MODE,
+                   "land_mode": land_mode,
+                   "land_mask": (land_mode == "full"),
                    "channel_order": "0=VV(co-pol, read band 2), 1=VH(cross-pol, read band 1)",
                    "scene_ids": scene_ids, "scene_labels": scene_labels,
                    "scene_px": SCENE_SIZE, "tile_px": TILE,
@@ -357,6 +389,24 @@ if __name__ == "__main__":
                     help="median = the original whole-scene median+MAD. sea = plan E2, "
                          "sea-referenced, which un-compresses large-slick scenes where the "
                          "old scale was 1.8x-4.2x too wide.")
+    ap.add_argument("--land-mode", choices=("full", "reference", "none"), default="full",
+                    help="sea mode only. full = exclude land from the sea reference AND "
+                         "from tile eligibility (E2, P12sea) - this is what dropped 175 "
+                         "scenes. reference = exclude land from the REFERENCE ONLY, tile "
+                         "eligibility stays finite+non-zero as in the baseline (E2c) - "
+                         "the only variant that is both audit-safe and keeps the full "
+                         "training set. none = exclude nowhere (E2b, P12seanl), a "
+                         "measurement instrument that must never be shipped.")
+    ap.add_argument("--no-land-mask", action="store_true",
+                    help="sea mode only: do NOT exclude land from the sea-reference "
+                         "sample. This is plan E2b. The E2 sea cache differs from the "
+                         "median baseline in THREE ways, all from the coastline mask - "
+                         "normalisation, 489 fewer tiles, and 175 fewer source scenes, "
+                         "because entirely-land scenes lose every tile to "
+                         "MAX_INVALID_FRAC. This flag holds the scene population fixed "
+                         "so the normalisation is the only variable. It is a "
+                         "MEASUREMENT tool: land in the sample is what failed the first "
+                         "two E2 audits, so do not ship a cache built with it.")
     ap.add_argument("--suffix", default="",
                     help="appended to the cache prefix, e.g. --suffix sea writes P12sea and "
                          "leaves the existing P12 cache untouched.")
@@ -365,4 +415,8 @@ if __name__ == "__main__":
     # this call, so --suffix was silently ignored and a 9-scene smoke build overwrote
     # the real 2,565-scene P12 cache. An accepted argument that changes nothing is
     # worse than no argument at all.
-    run(a.parts, limit=a.limit, suffix=a.suffix, mode=a.normalise)
+    lm = "none" if a.no_land_mask else a.land_mode
+    if a.no_land_mask and a.land_mode != "full":
+        raise SystemExit("[FAIL] pass --land-mode or the deprecated --no-land-mask, "
+                         "not both.")
+    run(a.parts, limit=a.limit, suffix=a.suffix, mode=a.normalise, land_mode=lm)

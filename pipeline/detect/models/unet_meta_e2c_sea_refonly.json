@@ -1,0 +1,30 @@
+{
+  "depth": 7,
+  "filters": [
+    16,
+    32,
+    64,
+    128,
+    256,
+    512,
+    1024
+  ],
+  "loss": "focal(alpha=0.75, gamma=2.0)",
+  "threshold": 0.5,
+  "threshold_selected_on": "validation tiles",
+  "val_iou_at_threshold": 0.6478,
+  "val_iou_at_0.5": 0.6478,
+  "n_train_tiles": 23802,
+  "n_val_tiles": 4327,
+  "trained_on": "Zenodo Parts I+II tiles, split by scene",
+  "cache": "P12seac",
+  "channel_order": "vv_first",
+  "norm_mode": "sea",
+  "land_mask": true,
+  "split": "stratified",
+  "fold": 0,
+  "xpol_channel": 1,
+  "xpol_p": 0.25,
+  "land_mode": "reference",
+  "meta_repaired": "land_mode added: this run predates the 3-state land_mode and serialised as the boolean land_mask=False, which inference would have read as 'none' - estimating the sea reference WITHOUT excluding land, while the model was trained WITH it. Weights unaffected; only the record of what they expect was wrong."
+}

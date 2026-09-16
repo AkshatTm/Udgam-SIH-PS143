@@ -12,6 +12,169 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-16 12:30] P2 + P3 — Python pinned to 3.13, and the nine-figure evidence set
+
+**Done:**
+
+**P2 — the pin is 3.13.** Akshat ruled. `requirements.txt` and `CLAUDE.md` both said 3.11; every
+model here was trained and is served on **3.13.5 / torch 2.6.0+cu124 / torchvision 0.21.0+cu124 /
+CUDA 12.4**, so the docs described an environment nobody was running. Moving the models the day
+before the demo is the riskier option, so the documentation moved. Full resolved table written to
+`docs/receipts.md` with the one-line command that reproduces it. **Harshita is unblocked.**
+
+It matters beyond tidiness: the checkpoints are `torch.save` pickles, and loading them under a
+materially different torch is the class of failure that does not raise — it returns weights that
+load and behave differently.
+
+**P3 — nine figures, `pipeline/detect/make_figures.py` → `docs/evaluation/figures/stage1/`.**
+200 dpi PNG, every caption printing its **source path** and its **split**, n on every bar. Nothing
+is recomputed from a model — every number is read from a committed results file, so a figure can
+never silently disagree with the deck.
+
+| # | proves |
+|---|---|
+| F1.1 | 139/11/11/289 → accuracy 0.951, oil recall 0.927, look-alike 0.940, clean-ocean 0.987 |
+| F1.2 | the threshold was set on **validation**, not on the test set |
+| F1.3 | the gate costs 0.014 IoU, buys 0.48 look-alike rejection |
+| F1.4 | 0.4349 is the strictest of eight; the literature's definition gives **0.6871** |
+| F1.5 | the coverage cliff — and **no demo case sits in the failure band** |
+| F1.6 | Cerulean agreement, median IoU 0.483, recall 0.796–0.942 |
+| F1.7 | second polarisation: val F1 0.346→0.643, Part III precision 5.8× at identical recall |
+| F1.8 | rule margin in dB, 12 detections, **7 clear / 5 marginal** |
+| F1.9 | oracle ceiling 0.8446 — and **we beat it on 3 of 5 bands** |
+
+**One thing I would not fake, and it is labelled on the figure.** F1.2 needs a PR *curve*, and the
+shipped classifier's validation probabilities are **not recoverable** — it was trained on the
+pre-14-Sept cache, which was rebuilt with the corrected channel order. So the curve is drawn from
+the reproducible `l1_e2c` classifier, and the shipped model appears as a **single operating point
+computed from its own stored confusion matrix**. Both are labelled on the axes. Drawing the shipped
+curve on the new cache would have looked better and been a fabrication.
+
+**Checked by eye, not just by exit code** — the farmland incident was found only by opening the
+image. Fixed three layout faults that a glance caught: F1.2 had every operating point crushed into
+one corner (now zoomed to recall ≥0.84 with leader lines), F1.4's range label sat on the title, and
+F1.8's annotations sat on the bars.
+
+**Files:** `pipeline/detect/make_figures.py` (new), `docs/evaluation/figures/stage1/*` (9 PNG +
+README), `requirements.txt`, `CLAUDE.md`, `docs/receipts.md`
+
+**Run:** `python pipeline/detect/make_figures.py`
+
+**Open:** P3 acceptance asks the figure numbers be cross-checked against
+`docs/evaluation/deck-numbers.md` — every figure reads from the same JSON that file cites, so they
+cannot drift, but a human should still eyeball the deck once. Handoffs to Harshita (figures) and
+Jaiveer (land-masked contacts + per-case pixel area) are ready.
+
+## [2026-09-16 11:40] P1 — land-masked the ship contacts: 142 → 110
+
+**Done:** Routed the ship detector through a **real coastline** instead of the brightness-inferred
+land mask. `darkspot.prepare()` already had an `external_land` parameter for exactly this; `run.py`
+was calling it without one, so contacts were being filtered only by a brightness heuristic that
+(a) over-flags dark scenes and (b) misses a radar-dark shore entirely.
+
+| case | before | after | coastline land |
+|---|---|---|---|
+| jacksonville | 2 | 2 | 0.0% |
+| farallones | 0 | 0 | 0.0% |
+| huntington | 43 | 43 | 0.7% |
+| gulf-alaska | **0** | **0** | 0.0% |
+| mumbai | 21 | 21 | 0.0% |
+| jamnagar | 3 | 3 | 0.0% |
+| **ennore** | **72** | **41** | **26.3%** |
+| **lookalike-zenodo** | **1** | **0** | **59.0%** |
+| nospill-zenodo | 0 | 0 | 0.0% |
+| **TOTAL** | **142** | **110** | **32 land contacts removed** |
+
+**The brief's hypothesis was right for Ennore and wrong for Huntington.** I checked every export
+box against real geography before trusting the mask:
+
+- **Ennore** 80.28–80.45 E, 13.10–13.30 N → **26.3% land**, the Chennai coast. 31 contacts removed.
+- **Huntington** −118.17 to −118.05 W → **0.7% land**; the box is 99.3% water and the east edge only
+  clips the shore. **Its 43 contacts are NOT land returns.** Brightest is **+23.5 dB**, which is a
+  hard target, not a wave crest — this is a busy harbour approach.
+- **Mumbai** 72.09–72.27 E, 18.40–18.61 N → **0.0%**, ~50 km SW of the city in open sea.
+- **Jacksonville** −79.68 W, 30.2–30.6 N → **0.0%**, ~190 km offshore.
+- **Alaska stays at zero.** Unchanged, as required.
+
+**⚠ `case-lookalike-zenodo` is 59% land**, and its single contact sat on it. That is the same shape
+of problem as the farmland scene that got `nospill-zenodo` replaced. **Case selection is Akshat's —
+flagging, not acting.**
+
+**Verified before committing:** every **oil feature is byte-identical** across all nine bundles —
+only `ship_detections` changed, in 2 files. `k_sigma` unchanged at **4.0**. No bundle hand-edited.
+
+**Contact brightness after the mask** (the brief's second gate):
+
+| case | n | max dB | median | min |
+|---|---|---|---|---|
+| jacksonville | 2 | −7.34 | −7.74 | −8.13 |
+| huntington | 43 | +23.47 | +0.81 | −9.49 |
+| mumbai | 21 | +17.17 | +3.68 | −6.94 |
+| jamnagar | 3 | +8.74 | +2.63 | −2.02 |
+| ennore | 41 | +22.21 | −2.09 | −6.12 |
+
+**Files:** `pipeline/detect/run.py`, `cases/case-ennore-lookalike-2023/detections.geojson`,
+`cases/case-lookalike-zenodo/detections.geojson`
+
+**Run:**
+```bash
+python pipeline/detect/run.py --case <id> --rule-contrast -3.0 --rule-elongation 2.5
+python pipeline/export/build_case.py --case <id> --stage detect
+python scripts/validate_case.py cases/<id>     # 9/9 PASS
+```
+
+**Open — for Akshat:**
+1. **`ship_detections` has no m² field.** Per 1.3 I did **not** add one (do not extend a schema
+   unilaterally). Per-case pixel area is computed and handed to Jaiveer instead: **50.7 m²
+   (Alaska) to 97.4 m² (Ennore), 1.92× spread**; `MIN_PX=4` → **203–389 m²**. `est_length_m` stays
+   `null`.
+2. **No `detections.geojson` carries a `meta` block at all** — `meta` is `null` in all nine. So
+   `meta.provenance` is absent everywhere and D33 routes every case to `satellite`/classical. That
+   matches the brief, **but `soumirya_case_nominations.md` states the two Zenodo cases "are
+   benchmark-provenance, so run.py routes them to Layer 1 + Layer 2" — which is false as the
+   bundles stand.** Either the doc or the bundles needs correcting.
+3. **The brief's `case-nospill-zenodo` = 31 contacts is stale.** It is **0**, and has been since the
+   farmland scene was replaced with `P3_No oil_00027`.
+
+## [2026-09-16 09:40] P0 — deck corrections from Akshat's final-day brief
+
+**Done:** Worked P0 of the final-day brief. Two of the three items were already closed by earlier
+work; the third had two LIVE instances, one of them worse than the brief described.
+
+- **0.1 "23% accuracy" — already struck.** Confirmed by grep across `docs/`, `web/` and the eval
+  JSON/CSV. The only surviving `23` in Stage 1 context is `receipts.md:307` and `akshat.md:307`,
+  both of which record that the figure does not exist. Stage 2's `0.23 h` overhang on `case-000`
+  and a `scheduler@0.23.2` entry in `web/package-lock.json` are unrelated. **No action needed.**
+- **0.2 `soumirya_case_nominations.md` — already corrected 13 Sept.** The file reads **0.940** and
+  carries an explicit note recording the trade (rejection 0.960 → 0.940 bought oil recall
+  0.893 → 0.927 and accuracy 0.947 → 0.951). **No action needed.**
+- **0.3 two dead claims — FIXED, two live instances:**
+  - `docs/architecture/stage1-detection.md` stated in its **Traps** list, as current fact: *"Band 1
+    is VV, band 2 is VH. VH is the strongest feature."* **Both halves are wrong**, and the band-order
+    half is the more dangerous one — a traps list is exactly where someone goes to check. Replaced
+    with the measurement: over 297 Part III scenes Zenodo's band 1 runs **8.15 dB darker** and is
+    darker in **290 of 297**, so Zenodo is band 1 = VH and the GEE exports are band 1 = VV. Decide
+    from pixels, never the filename.
+  - `docs/team/jaiveer-stage3-attribution.md` carried *"Soumirya's finding is that VH is the
+    strongest single discriminator"* — inside a section headed **"this is your slide"**. Replaced
+    with the channel-agnostic ablation (val F1 0.346 → 0.643, Part III precision 5.8x at identical
+    recall, 4/36 both ways) and an explicit "do not name a polarisation on this slide".
+
+**Also checked, and clean:** `web/src/` contains **no** hardcoded accuracy figures and none of the
+dead claims — the UI reads from JSON as designed, so no deck number can drift there.
+
+`deck-numbers.md` already lists both dead claims in its "dead claim" column, which is correct.
+Remaining hits in `docs/updates/*.md` are historical log entries superseded by newer ones at the
+top of each file; logs are append-only and were left as history.
+
+**Files:** `docs/architecture/stage1-detection.md`, `docs/team/jaiveer-stage3-attribution.md`
+
+**Run:** `grep -rniE "VH is the (strongest|discriminator)" docs/ web/ --include=*.md --include=*.html`
+
+**Open:** P1 (land-mask the contacts), P2 (Python 3.13 ruling — Harshita is blocked on this),
+P3 (nine figures). A Layer 1 `--min-recall 0.95` run was already in flight when the brief arrived;
+it writes **tagged files only**, touches no shipped model, and its result stays out of the deck.
+
 ## [2026-09-14 20:10] Phase — Alaska ship_detections: why it is empty, and the px -> m question
 
 **Done:** Answered both of Jaiveer's Stage 3 blockers with measurements, no code changed.
