@@ -635,12 +635,27 @@ def f1_9():
 
 FIGS = {1: f1_1, 2: f1_2, 3: f1_3, 4: f1_4, 5: f1_5, 6: f1_6, 7: f1_7, 8: f1_8, 9: f1_9}
 
+# THE DECK SET. Four figures that carry the scores and the system claim:
+#   F1.1  Layer 1 numbers, with the confusion matrix behind them
+#   F1.4  Layer 2 numbers, all eight definitions so the comparison is like-for-like
+#   F1.3  the gate earns its place - the one design decision worth a slide
+#   F1.6  an INDEPENDENT detector agrees with us on five real incidents
+#
+# The other five are methodology and diagnosis (PR curve, coverage cliff,
+# polarisation ablation, rule margin, oracle ceiling). They stay in the repo and
+# stay one flag away, because "we have the working behind it" is the answer to a
+# question, even when it is not a slide.
+CORE = [1, 4, 3, 6]
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", type=int, action="append",
                     help="figure number(s) to build; default is all nine")
+    ap.add_argument("--core", action="store_true",
+                    help="build only the four deck figures (F1.1, F1.3, F1.4, F1.6). The other "
+                         "five are methodology and diagnosis - kept in the repo, one flag away.")
     ap.add_argument("--pair", choices=sorted(PAIRS), default="updated",
                     help="which model pair the evidence set describes. Both are scored on the "
                          "SAME Part III holdout, so this changes WHICH MODEL is documented, not "
@@ -660,7 +675,7 @@ def main():
     if L2["file"]:
         print("  [!] Layer 2 figures are VALIDATION. Every affected title says so.")
         print("      Layer 1 remains the Part III holdout.\n")
-    want = a.only or sorted(FIGS)
+    want = a.only or (CORE if a.core else sorted(FIGS))
     print("Stage 1 evidence set -> %s\n" % os.path.relpath(OUT, _ROOT))
     for n in want:
         try:

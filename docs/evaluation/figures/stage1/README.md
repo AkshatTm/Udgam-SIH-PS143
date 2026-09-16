@@ -16,6 +16,36 @@ it quickly.
 Rules applied to all nine: **no figure without n · no percentage without its metric named · every
 caption carries its source path and its split.**
 
+## The DECK set — four figures
+
+`python pipeline/detect/make_figures.py --pair updated --l2-split validation --core`
+
+| # | carries |
+|---|---|
+| **F1.1** | Layer 1's numbers, with the confusion matrix behind them |
+| **F1.4** | Layer 2's numbers — all eight definitions, so a comparison is like-for-like |
+| **F1.3** | the gate earns its place — the one design decision worth a slide |
+| **F1.6** | an **independent** detector agrees with us on five real incidents |
+
+That is the whole scores-and-system story. **F1.6 is the one competing teams cannot produce**, and
+it is worth more than another chart of our own numbers.
+
+## The other five — kept, not presented
+
+F1.2 (PR curve), F1.5 (coverage cliff), F1.7 (polarisation ablation), F1.8 (rule margin) and
+F1.9 (oracle ceiling) are methodology and diagnosis. They stay in the repo and one flag away
+(`--only 9`), because *"we have the working behind it"* is the answer to a question even when it is
+not a slide.
+
+Two worth having open in a second tab:
+
+- **F1.5** carries *"no case in the demo library sits in the failure band"* — the protective claim
+  if anyone presses on the weak coverage band.
+- **F1.2** carries *"the threshold was chosen on validation, not on the test set"* — the
+  methodological point most published work cannot demonstrate.
+
+---
+
 | # | file | what it proves | source | split |
 |---|---|---|---|---|
 | F1.1 | `F1.1_layer1_confusion_matrix.png` | Layer 1: 139 TP / 15 FP / 11 FN / 285 TN → accuracy **0.942**, oil recall **0.927**, look-alike rejection **0.920**, clean-ocean rejection **0.980** | `models/scene_classifier_l1_e2c_recall_meta.json` | Part III holdout, 450 scenes |
