@@ -1,0 +1,6 @@
+# UDGAM deployment API — only the container installs this, not the six team laptops.
+# Kept separate from the root requirements.txt for the same reason requirements-detect.txt
+# is separate: nobody who isn't running the API needs these.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20

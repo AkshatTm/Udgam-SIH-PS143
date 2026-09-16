@@ -156,6 +156,38 @@ function CaseCard({ c, first }: { c: GalleryCase; first: boolean }) {
   );
 }
 
+/** Tier 1b entry point (harshita-deployment.md Part 1.1) — same card shape as CaseCard so it
+ *  reads as a peer of the library, not an afterthought bolted below it. */
+function UploadCard() {
+  return (
+    <Link
+      href="/upload"
+      className="group relative flex min-h-[300px] flex-col overflow-hidden rounded-lg border border-dashed border-line bg-hull transition-colors duration-300 hover:border-drift focus-visible:border-drift"
+    >
+      <div className="flex h-[172px] items-center justify-center border-b border-line/60 bg-raised/40">
+        <span
+          aria-hidden
+          className="flex h-12 w-12 items-center justify-center rounded-full border border-line-strong text-[22px] text-ink-2 transition-colors duration-200 group-hover:border-drift group-hover:text-drift"
+        >
+          ↑
+        </span>
+      </div>
+      <div className="relative flex flex-1 flex-col px-5 pb-5 pt-4">
+        <h3 className="t-subtitle text-ink transition-colors duration-200 group-hover:text-white">
+          Upload your own scene
+        </h3>
+        <p className="mt-2 t-small text-pretty text-ink-2">
+          Bring a GeoTIFF and run the real Detect stage on it live — Detect only; Trace and
+          Attribute need data this image doesn&apos;t carry.
+        </p>
+        <div className="mt-auto pt-4 text-[13px] font-medium text-drift">
+          Run Detect →
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 type GalleryState =
@@ -305,6 +337,7 @@ export default function Gallery() {
               <p className="mt-8 t-body text-ink-3">cases/index.json lists no cases.</p>
             ) : (
               <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <UploadCard />
                 {state.cases.map((c, i) => (
                   <CaseCard key={c.id} c={c} first={i === 0} />
                 ))}

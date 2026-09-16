@@ -111,6 +111,11 @@ export interface AppState {
   /** Play the Run animation for `stage`, then reveal its results. No-op if already revealed or
    *  another run is in flight. Attribute turns the vessel-track layer on when it lands. */
   runStage: (stage: Act) => void;
+  /** Overwrite `detections` with a freshly re-run result (Tier 1a "Re-run detector"), for the
+   *  same case only — a stale response from a case the judge has since navigated away from is
+   *  dropped by the caller before this is ever invoked. Re-seeds the best-oil selection so a
+   *  changed top detection is what's shown. */
+  setDetections: (d: DetectionCollection) => void;
   /** Return to a clean Gallery state (docs/team/harshita-frontend.md C8, Master §2.1). Clears only the transient
    *  session state the next judge must not inherit — slider, selection, stage, layers,
    *  playback, the Trace-arrival guard — and re-seeds the best-oil detection. When the case is
@@ -388,6 +393,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectDetection: (id) => set({ selectedDetectionId: id }),
+  setDetections: (d) =>
+    set({ detections: d, detectionsPending: false, selectedDetectionId: bestOilDetectionId(d) }),
   setHoveredSuspect: (mmsi) => set({ hoveredSuspectMmsi: mmsi }),
 
   toggleLayer: (id) =>

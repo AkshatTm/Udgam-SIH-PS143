@@ -115,7 +115,7 @@ function validateShipDetections(ships: unknown, where: string): void {
   });
 }
 
-function validateDetections(d: DetectionCollection, id: string): void {
+export function validateDetections(d: DetectionCollection, id: string): void {
   if (!d || d.type !== "FeatureCollection" || !Array.isArray(d.features)) {
     throw new Error(`${id}/detections.geojson: not a FeatureCollection with a features array`);
   }

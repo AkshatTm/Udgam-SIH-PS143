@@ -9,6 +9,7 @@ import {
   YAxis,
 } from "recharts";
 import { useAppStore } from "@/lib/store";
+import ReRunButton from "./ReRunButton";
 import type {
   AisSource,
   Bounds,
@@ -1237,6 +1238,7 @@ export default function ContextPanel() {
           // D1 — a designed result, not an error (docs/team/harshita-frontend.md Part D). Guide the judge to the
           // rejected look-alikes; their DetectionCard carries the "why not oil" evidence.
           <>
+            <ReRunButton />
             <div className="mb-4 rounded border border-line bg-raised p-3">
               <div className="t-label">
                 Stage 01 — Detect
@@ -1256,6 +1258,7 @@ export default function ContextPanel() {
           </>
         ) : (
           <>
+            <ReRunButton />
             {/* Screen-1 oil-detection headline (docs/team/harshita-frontend.md Screen 1).
                 Shown only when oilCount > 0 — D1 (oilCount === 0) has its own messaging above. */}
             <div className="mb-4">

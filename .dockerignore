@@ -1,0 +1,12 @@
+# The API image only needs pipeline/, scripts/, cases/, api/ (see Dockerfile's explicit
+# COPYs) — everything else here just slows down sending the build context to the daemon.
+.git
+web/node_modules
+web/.next
+web/out
+web/public/cases
+docs
+data
+verification
+.vscode
+*.md
