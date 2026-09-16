@@ -358,15 +358,18 @@ def f1_3():
                 "%.3f" % r.get_height(), ha="center", fontsize=8)
     ax.annotate("", xy=(0 + w/2, b[0]), xytext=(0 - w/2, a[0]),
                 arrowprops=dict(arrowstyle="->", color=GREEN, lw=1.6))
-    ax.text(0, (a[0] + b[0]) / 2, "  +0.48", color=GREEN, fontsize=9, fontweight="bold")
+    ax.text(0, (a[0] + b[0]) / 2, "  %+.2f" % (b[0] - a[0]), color=GREEN, fontsize=9,
+            fontweight="bold")
     ax.annotate("", xy=(3 + w/2, b[3]), xytext=(3 - w/2, a[3]),
                 arrowprops=dict(arrowstyle="->", color=RED, lw=1.6))
-    ax.text(3, (a[3] + b[3]) / 2, "  −0.014", color=RED, fontsize=9, fontweight="bold")
+    ax.text(3, (a[3] + b[3]) / 2, "  %+.3f" % (b[3] - a[3]), color=RED, fontsize=9,
+            fontweight="bold")
     ax.set_xticks(x); ax.set_xticklabels(labels)
-    ax.set_ylim(0, 1.08); ax.set_ylabel("score")
+    ax.set_ylabel("score")
     ax.set_title(_l2_title("The gate costs %.3f IoU and buys %.2f look-alike rejection"
                            % (a[3] - b[3], b[0] - a[0])), fontsize=10)
-    ax.legend(fontsize=8, frameon=False, loc="lower right")
+    ax.set_ylim(0, 1.16)
+    ax.legend(fontsize=8, frameon=False, loc="upper left", ncol=2)
     ax.grid(axis="y", alpha=0.3, color=GRID)
     _caption(fig, "%s  Ungating buys %+.3f pooled IoU and costs look-alike rejection "
                   "%.2f → %.2f. We take the trade: a false spill alert is worse than a "
