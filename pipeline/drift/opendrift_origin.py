@@ -78,7 +78,7 @@ def main(argv=None):
     ap.add_argument("--elements", type=int, default=2000, help="per member")
     ap.add_argument("--seed", type=int, default=143)
     ap.add_argument("--out", default=str(HERE / "out"))
-    ap.add_argument("--jobs", type=int, default=4, help="members in parallel; 1 = serial")
+    ap.add_argument("--jobs", type=int, default=3, help="members in parallel; 1 = serial")
     a = ap.parse_args(argv)
 
     import opendrift

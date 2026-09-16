@@ -72,8 +72,8 @@ def parse_args(argv=None):
     ap.add_argument("--timestep-minutes", type=int, default=15)
     ap.add_argument("--field-case", default=None,
                     help="use this case's cached field (default: --case)")
-    ap.add_argument("--jobs", type=int, default=4,
-                    help="members run in parallel (4 = this machine's physical cores). "
+    ap.add_argument("--jobs", type=int, default=3,
+                    help="members run in parallel (3: each worker holds ~1.5 GB). "
                          "1 = serial, for debugging")
     ap.add_argument("--batch", action="store_true",
                     help="twin mode: read out/twins/<case>/age_batch_request.json "

@@ -240,17 +240,28 @@ def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=
 
 
 def age_weighted_pool(collected, posterior_hours, posterior_prob, timestep_minutes,
-                      min_prob=1e-4):
+                      min_prob=1e-4, hpd=None):
     """(points, weights) pooling the collected frames by the age posterior.
 
     Each grid age t maps to step round(t * 60 / dt). A frame gets the posterior mass of its
     age, spread evenly over its points, so a frame's total weight is its probability whatever
     its particle count. Ages with < `min_prob` mass are dropped (they would add points, not
     information). Weights sum to 1.
+
+    `hpd` = (lo, hi): pool ONLY the ages inside the stated release window, renormalised.
+    MEASURED REASON (17 Sept 2026, Jacksonville): the calibrated posterior put 66 % of its mass
+    within 6 h, 80 % within [0.5, 13.5] h, and 11 % spread thinly past 24 h. In the Gulf Stream
+    that thin tail lies up to 400 km upstream, and it alone dragged r90 from ~35 km to 108 km
+    and tripped abstain on the hero case. The bundle states the 80 % interval as the release
+    window; an origin cloud built from ages OUTSIDE that window describes a different event
+    from the one the window claims. Truncating makes the two agree. The tail is not hidden:
+    `age_posterior.prob` still carries it.
     """
     pts, wts = [], []
     for t, p in zip(posterior_hours, posterior_prob):
         if p < min_prob:
+            continue
+        if hpd is not None and not (float(hpd[0]) - 1e-9 <= float(t) <= float(hpd[1]) + 1e-9):
             continue
         k = int(round(float(t) * 60.0 / timestep_minutes))
         frame = collected.get(k)

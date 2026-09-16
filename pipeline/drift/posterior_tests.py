@@ -187,6 +187,18 @@ def run(check):
                 r90w > 3 * r90y, f"r90 {r90y:.1f} km for a 1-3 h posterior vs {r90w:.1f} km "
                 f"when every hour to 24 h is equally likely")
 
+    # a young posterior with a thin old tail: 85 % in 1-3 h, 15 % spread over 13-24 h
+    tail = np.where(grid24 <= 3, 0.85 / 3, 0.0) + np.where(grid24 >= 13, 0.15 / 12, 0.0)
+    pt, wt_ = ens.age_weighted_pool(e_coll[3], grid24, tail, 15)
+    ph, wh = ens.age_weighted_pool(e_coll[3], grid24, tail, 15, hpd=(0.5, 3.5))
+    _, _, r90_tail = ens.radii_km(pt, weights=wt_)
+    _, _, r90_hpd = ens.radii_km(ph, weights=wh)
+    ok &= check("12q the origin is pooled over the stated window only: a thin tail outside it "
+                "cannot drag r90",
+                r90_hpd < 0.5 * r90_tail and abs(wh.sum() - 1) < 1e-9,
+                f"r90 {r90_tail:.1f} km with the 15 % tail, {r90_hpd:.1f} km pooled over the "
+                f"[0.5, 3.5] h window it states")
+
     s, e, m = ens.time_window([], [], [], T0, 15, steps, age_band=(4.5, 12.5))
     s0, e0, m0 = ens.time_window([], [], [], T0, 15, steps)
     ok &= check("12p an age band becomes the window, method 'age'; no band leaves today's "

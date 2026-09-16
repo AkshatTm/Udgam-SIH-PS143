@@ -591,7 +591,7 @@ def main():
     if drive:
         endpoints, conv_idx, members, collected = res
         pool = ens.age_weighted_pool(collected, post["hours_grid"], post["prob"],
-                                     a.timestep_minutes)
+                                     a.timestep_minutes, hpd=post["hpd80"])
         if pool[0] is None:
             pool = None
         else:

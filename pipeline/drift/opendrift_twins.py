@@ -90,7 +90,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--field", required=True)
     ap.add_argument("--elements", type=int, default=1500)
-    ap.add_argument("--jobs", type=int, default=4, help="groups in parallel; 1 = serial")
+    ap.add_argument("--jobs", type=int, default=3, help="groups in parallel; 1 = serial")
     a = ap.parse_args(argv)
 
     from opendrift_age import run_members

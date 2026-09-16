@@ -185,8 +185,11 @@ def main():
     ap.add_argument("--opendrift", action="store_true",
                     help="also run OpenOil (age) and OceanDrift (origin) from odenv/ and pool "
                          "them. Off the demo path; absent odenv -> our model alone")
-    ap.add_argument("--od-jobs", type=int, default=4,
-                    help="OpenDrift members in parallel (4 = physical cores on the build laptop)")
+    ap.add_argument("--pool", action="store_true",
+                    help="pool OpenDrift output that already exists in out/ (from "
+                         "run_opendrift_all.sh) without rerunning OpenDrift")
+    ap.add_argument("--od-jobs", type=int, default=3,
+                    help="OpenDrift members in parallel (3: ~1.5 GB per worker on a 16 GB laptop)")
     ap.add_argument("--notes-only", action="store_true",
                     help="only write the D35 seed note into meta.notes; runs no drift")
     a = ap.parse_args()
@@ -239,7 +242,7 @@ def main():
         if rc != 0:
             summary.append((case, "FAILED at the backward run", False))
             continue
-        if a.opendrift:
+        if a.opendrift or a.pool:
             sh([py, drift / "pool_models.py", "--case", case], "pool models", a.dry_run)
 
         if not a.skip_forward:

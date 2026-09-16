@@ -44,8 +44,11 @@ def opendrift_pool(z, post):
         pts = pos[-1]
         return pts, np.full(len(pts), 1.0 / len(pts)), "final frame"
     pts, wts = [], []
+    lo, hi = post["hpd80"]
     for t, p in zip(post["hours_grid"], post["prob"]):
-        if p < 1e-4:
+        # same window as our pool (ensemble.age_weighted_pool): only ages inside the stated
+        # release window, so both models describe the event the window claims
+        if p < 1e-4 or not (lo - 1e-9 <= float(t) <= hi + 1e-9):
             continue
         j = int(np.argmin(np.abs(hours - float(t))))
         f = pos[j]
