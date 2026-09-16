@@ -16,7 +16,7 @@ The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the 
 | **Layer 1** | retrained on the new convention; **gated pipeline measurable for the first time** |
 | **Layer 1 threshold** | recall **0.873 → 0.927** on Part III by changing the RULE, no retraining |
 | **the gate** | now **free**: gated pooled = ungated ceiling exactly, 0 oil scenes lost |
-| **Part III** | run ONCE on the frozen configuration — see the result block |
+| **Part III** | run ONCE on the frozen configuration — **the fix did NOT transfer**: ≥30% band 0.085 → 0.160, not the 0.82 seen on validation |
 
 ---
 
@@ -513,6 +513,53 @@ The trade on Part III is **+0.053 oil recall for −0.040 look-alike rejection**
 - but **"look-alike rejection 0.940"** is a quoted deck figure, and this would make it 0.920.
 
 Both are tagged and on disk. **Soum's call, post-demo.** Nothing shipped is affected.
+
+---
+
+## ❌ PART III, RUN ONCE — the fix does NOT transfer to the holdout
+
+**16 Sept, on a configuration frozen and recorded BEFORE the run**: `unet_e2c_sea_refonly.pt`
++ `scene_classifier_l1_e2c_recall.pt`, both selected entirely on validation. Written to
+`results/eval_part3_e2c.json`; the original `eval_part3.json` is untouched.
+
+| Part III, gated, 450 scenes | before | after | |
+|---|---|---|---|
+| **pooled oil IoU** | **0.4349** | **0.4516** | +0.0167 |
+| oil recall | 0.920 | 0.927 | +0.007 |
+| look-alike rejection | 0.940 | 0.913 | −0.027 |
+| `miou_pooled` | 0.6871 | 0.6956 | +0.0085 |
+
+| per-scene IoU by coverage | n | before | after | |
+|---|---|---|---|---|
+| 0-1% | 18 | 0.6685 | 0.6874 | +0.019 |
+| 1-3% | 39 | 0.7566 | 0.7459 | −0.011 |
+| 3-10% | 52 | 0.7826 | 0.7546 | −0.028 |
+| 10-30% | 29 | 0.6595 | 0.6101 | −0.049 |
+| **≥30%** | **12** | **0.0848** | **0.1596** | **+0.075** |
+
+### Read it honestly
+
+1. **The ≥30% fix did not transfer.** Validation: **0.282 → 0.816** (3 seeds). Holdout:
+   **0.085 → 0.160**. The mechanism that works in development largely does not generalise, and
+   **that is the single most important open question in this programme.**
+2. **Pooled +0.0167 is inside the seed noise** (sd 0.0267). The 95% CI is **[0.3534, 0.5622]** and
+   contains the old value. **This is not a presentable improvement** and must not be quoted as one.
+3. **Three mid bands regressed slightly**, worst −0.049 at 10-30%. Also within noise individually,
+   but the direction is consistent and it partly cancels the ≥30% gain.
+
+### Why validation and holdout disagree — the hypothesis to test first tomorrow
+
+Validation is drawn from **Parts I+II**, which the model trained on. Part III is a different
+acquisition set. The sea-reference estimator fires on **100% of ≥30% scenes** by construction, so
+the *normalisation* is being applied there — what is failing is the **segmentation learned from 9
+training scenes** in that regime. That points at **E3 (the high-coverage data problem)**, not at
+another normalisation variant. **E3 should now outrank E4.**
+
+### Cost recorded
+
+**Part III has now been scored twice in this project's life.** Both times on a configuration frozen
+beforehand, neither time tuned against. A third run is a third look — treat the holdout as
+**no longer independent** and weigh that before spending it again.
 
 ---
 
