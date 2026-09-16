@@ -20,6 +20,76 @@ docs/updates/anushka.md. Read the top entry and tell me where I left off."*
 
 ---
 
+## [2026-09-16] Final day — Akshat's rulings applied, P2 Version A (forward drift)
+
+**Done:** Applied Akshat's 16 Sept rulings to the figures. Built forward drift Version A: the published 50-member ensemble run forward
+24 h with stranding. Output is `F2.9_both_directions.png` (backward and forward r50/r90 on one axis, t0 at centre) and
+`docs/evaluation/stage2-forward.md`. No schema change and no bundle written. **Result: 0% stranded and no landfall within 24 h on all six cases**
+(tracker verified against a synthetic coast). Forward +24 h r90: Jacksonville 35.5 km … Gulf of Alaska 3.1 km.
+
+**Rulings applied:**
+- **`forward_impact.json` is DEFERRED to post-demo, not refused.** The `forward_<case>.json` numbers drop straight in.
+- **F2.4 is a single-run trajectory comparison, not ensemble agreement.** `r90_ratio` is not computable and no bundle carries `opendrift_comparison`.
+  Removed "we run both and render both clouds" from the caption. The D5 amendment and §6.5 annotation are Akshat's.
+- **F2.6 now quotes Jacksonville mass only:** 3.67:1, 20.1% of high-probability mass outside r50. The cell-count stat is removed.
+- **F2.7 now frames age as designed capability, not triggered on these scenes** (D19 precedent).
+- **F2.3 caption:** the roadmap claim is scoped. A finer current field tightens Jacksonville (91%) and Mumbai (50%). On Farallones, Jamnagar and Huntington,
+  slick size dominates. Also added the cross-check: Alaska wind 53% of variance agrees with wind_share 0.73.
+
+**Checks Akshat asked for:**
+- **Age fields:** every spill bundle has `age_method: "none"`, but `age_hours` is **present as `null`**, not absent. The validator accepts null.
+  Making it absent means changing `run.py`'s `write_origin` and republishing six bundles. Not done on freeze day. **Needs Akshat's call.**
+  Harshita still needs to confirm the Trace screen hides the age row on null.
+- **Aspect 3.67 vs 3.68:** I cannot reproduce 3.68 from the shipped bundle. Endpoint PCA gives 3.665, grid-weighted PCA 3.661, and per-point cos(lat) 3.665–3.669.
+  3.68 likely comes from an earlier run or a different projection. Suggest D36/§6.7 quote 3.67.
+- **case-000 `wind_share`:** already **absent** from `cases/case-000/origin.json`, so no `make_case000.py` change is needed. The only 23% is the
+  prose line in `docs/STAGE2_NUMBERS.md` §8.7 (a real-field diagnostic run). Annotated there as not in any bundle and not a Stage 1 metric.
+
+**Files touched:** `pipeline/drift/eval_forward.py` (new) · `pipeline/drift/plot_evidence.py` (F2.3/4/6/7 captions, new F2.9) ·
+`docs/evaluation/figures/stage2/F2.*.png` · `docs/evaluation/figures/stage2/data/forward_<case>.json` ×6 · `docs/evaluation/stage2-forward.md` (new) ·
+`docs/STAGE2_NUMBERS.md` (§8.7 annotation)
+
+**Run command:**
+```bash
+for c in case-jacksonville-2024 case-farallones-2023 case-jamnagar-2024 case-mumbai-2023 case-gulf-alaska-2023 case-huntington-2021; do python pipeline/drift/eval_forward.py --case $c; done
+python pipeline/drift/plot_evidence.py
+```
+
+**Open issues:**
+- Forward horizon is 24 h (field cache ends ~24.6–26 h past t0). +48/+72 h need a wider fetch, which is post-demo.
+- Assets at risk are not produced (no cited asset layer fetched).
+- `meta.notes` is not written (bundle is produced by `build_case.py`, Akshat's lane).
+- **Three Pythons are now confirmed:** Soum 3.13, repo pin 3.11, these runs 3.10. This feeds the Frozen Convention 8 ruling.
+
+---
+
+## [2026-09-16] Final day P1 — Stage 2 evidence set (F2.1–F2.8)
+
+**Done:** Eight 200 dpi figures in `docs/evaluation/figures/stage2/`, each captioned with its source path and n. Built from the shipped bundles and measured data only; no bundle was written. F2.1 needed per-hour radii that the bundles do not store, so `eval_growth.py` re-runs the exact published ensemble (seed 143, 3000 × 50) with hourly frames kept, into a scratch dir. It refuses unless its 24 h r50/r90 match `origin.json`, and **all six reproduce** (e.g. Jacksonville 13.099 / 31.113 vs shipped 13.1 / 31.11). Drift tests re-run: **11/11 suites, 76/76 assertions**.
+
+**Files touched:** `pipeline/drift/eval_growth.py` (new) · `pipeline/drift/plot_evidence.py` (new) · `docs/evaluation/figures/stage2/F2.1…F2.8_*.png` (output) · `docs/evaluation/figures/stage2/data/growth_<case>.json` ×6, `drift_tests_2026-09-16.txt` (evidence)
+
+**Run command:**
+```bash
+for c in case-jacksonville-2024 case-farallones-2023 case-jamnagar-2024 case-mumbai-2023 case-gulf-alaska-2023 case-huntington-2021; do python pipeline/drift/eval_growth.py --case $c; done
+python pipeline/drift/plot_evidence.py
+```
+
+**Where the brief and the data disagreed. The figures follow the data:**
+1. **F2.2:** brief says 5 suites / 20 assertions. The suite is now 11 / 76.
+2. **F2.3:** no measured weights existed, so the budget is now **measured**: pooled 24 h endpoint variance split into the current-scale term, the wind-coefficient term (linear fit over the 50 runs) and within-run spread. Current leads between runs on 5 of 6 cases (Jacksonville 91%). **Gulf of Alaska inverts** (wind 53%). Within-run spread (mostly slick length) is the largest block on Farallones, Jamnagar and Huntington. Omitted physics is not modelled, so it is stated in text, not drawn as a bar.
+3. **F2.4:** `origin.json` has **no `opendrift_comparison` block** and `out/opendrift_*.json` are not on disk. The plot uses the §8.4 table in `docs/STAGE2_NUMBERS.md` (centroid separation vs travel, with r50 for scale). **`r90_ratio` does not exist** (the comparison was single-run) and is not plotted.
+4. **F2.6:** 10.65 km / 3.68:1 are Jacksonville's, and they check out: measured **10.6 km, 3.67:1**. But **4.38:1 / 44.7% are case-000 (D8)**, not Jacksonville. On Jacksonville, **23.7%** of high-probability cells (≥0.5 of peak) lie outside r50, carrying **20.1%** of their mass. The caption says so.
+5. **F2.7:** every estimator is `null` on all six cases (chronic/unknown gate, no independent volume, Huntington shear-dominated). **There is no N = 1**, so the figure shows 18 grey slots with reasons.
+6. **F2.1:** growth is **not monotonic everywhere**. Farallones and Jamnagar are nearly flat, and Huntington dips after ~19 h. The caption says this rather than "widens every hour".
+
+**Open issues:**
+- `eval_growth.py` and the tests were run in a Linux VM (Python 3.10) with `scipy` and `global-land-mask` installed there; not yet re-run in the Windows venv.
+- P2 (forward drift) not started; Akshat's ruling on `forward_impact.json` still to be asked.
+- Jacksonville travel is quoted as 149 km (§8.9, merged ribbon) in F2.1 and 140.2 km (§8.4, OpenDrift run) in F2.4. Both are correct for their own run.
+
+---
+
 ## [2026-09-13 00:20] Phase 4 — GSHHG coastline + stranding (decision D7)
 
 **Done:** Six things landed together.

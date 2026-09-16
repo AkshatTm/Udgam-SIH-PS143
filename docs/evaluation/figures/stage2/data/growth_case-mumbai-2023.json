@@ -1,0 +1,143 @@
+{
+ "case": "case-mumbai-2023",
+ "source": "cases/case-mumbai-2023/origin.json (24 h end state) + re-run of run.py --real --particles 3000 --runs 50 with hourly frames kept",
+ "n_runs": 50,
+ "n_particles_per_run": 3000,
+ "n_points_per_hour": 150000,
+ "shipped": {
+  "radius_50_km": 2.0,
+  "radius_90_km": 3.71
+ },
+ "rerun_origin": {
+  "radius_50_km": 2.0,
+  "radius_90_km": 3.71
+ },
+ "reproduces_shipped": true,
+ "growth": [
+  {
+   "hours_back": 0,
+   "radius_50_km": 1.313,
+   "radius_90_km": 2.346
+  },
+  {
+   "hours_back": 1,
+   "radius_50_km": 1.323,
+   "radius_90_km": 2.361
+  },
+  {
+   "hours_back": 2,
+   "radius_50_km": 1.335,
+   "radius_90_km": 2.38
+  },
+  {
+   "hours_back": 3,
+   "radius_50_km": 1.349,
+   "radius_90_km": 2.403
+  },
+  {
+   "hours_back": 4,
+   "radius_50_km": 1.365,
+   "radius_90_km": 2.431
+  },
+  {
+   "hours_back": 5,
+   "radius_50_km": 1.385,
+   "radius_90_km": 2.464
+  },
+  {
+   "hours_back": 6,
+   "radius_50_km": 1.405,
+   "radius_90_km": 2.499
+  },
+  {
+   "hours_back": 7,
+   "radius_50_km": 1.424,
+   "radius_90_km": 2.532
+  },
+  {
+   "hours_back": 8,
+   "radius_50_km": 1.444,
+   "radius_90_km": 2.564
+  },
+  {
+   "hours_back": 9,
+   "radius_50_km": 1.469,
+   "radius_90_km": 2.602
+  },
+  {
+   "hours_back": 10,
+   "radius_50_km": 1.497,
+   "radius_90_km": 2.649
+  },
+  {
+   "hours_back": 11,
+   "radius_50_km": 1.53,
+   "radius_90_km": 2.702
+  },
+  {
+   "hours_back": 12,
+   "radius_50_km": 1.566,
+   "radius_90_km": 2.761
+  },
+  {
+   "hours_back": 13,
+   "radius_50_km": 1.604,
+   "radius_90_km": 2.825
+  },
+  {
+   "hours_back": 14,
+   "radius_50_km": 1.646,
+   "radius_90_km": 2.894
+  },
+  {
+   "hours_back": 15,
+   "radius_50_km": 1.685,
+   "radius_90_km": 2.968
+  },
+  {
+   "hours_back": 16,
+   "radius_50_km": 1.723,
+   "radius_90_km": 3.048
+  },
+  {
+   "hours_back": 17,
+   "radius_50_km": 1.759,
+   "radius_90_km": 3.131
+  },
+  {
+   "hours_back": 18,
+   "radius_50_km": 1.794,
+   "radius_90_km": 3.212
+  },
+  {
+   "hours_back": 19,
+   "radius_50_km": 1.828,
+   "radius_90_km": 3.295
+  },
+  {
+   "hours_back": 20,
+   "radius_50_km": 1.86,
+   "radius_90_km": 3.378
+  },
+  {
+   "hours_back": 21,
+   "radius_50_km": 1.892,
+   "radius_90_km": 3.461
+  },
+  {
+   "hours_back": 22,
+   "radius_50_km": 1.926,
+   "radius_90_km": 3.542
+  },
+  {
+   "hours_back": 23,
+   "radius_50_km": 1.96,
+   "radius_90_km": 3.624
+  },
+  {
+   "hours_back": 24,
+   "radius_50_km": 1.998,
+   "radius_90_km": 3.713
+  }
+ ]
+}

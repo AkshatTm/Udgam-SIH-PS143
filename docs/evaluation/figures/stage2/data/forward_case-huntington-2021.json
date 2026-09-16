@@ -1,0 +1,268 @@
+{
+ "case": "case-huntington-2021",
+ "t0": "2021-10-02T01:58:21Z",
+ "direction": "forward",
+ "horizon_hours": 24,
+ "horizon_note": "field cache covers ~24-26 h past t0; 48 h and 72 h need a wider fetch and are not extrapolated",
+ "n_runs": 50,
+ "n_particles_per_run": 3000,
+ "wind_coeff": "stratified U(0.025, 0.035), same draws as the backward ensemble",
+ "seeded_ashore_fraction": 0.0,
+ "first_landfall_hours": null,
+ "stranded_fraction_at_horizon": 0.0,
+ "centroid_displacement_km_at_horizon": 5.96,
+ "edge_margin_km": 108.2,
+ "envelope": [
+  {
+   "hours": 0,
+   "radius_50_km": 1.082,
+   "radius_90_km": 1.951,
+   "centroid": [
+    -118.09036,
+    33.63963
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 1,
+   "radius_50_km": 1.124,
+   "radius_90_km": 2.016,
+   "centroid": [
+    -118.08627,
+    33.6375
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 2,
+   "radius_50_km": 1.157,
+   "radius_90_km": 2.073,
+   "centroid": [
+    -118.08327,
+    33.63418
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 3,
+   "radius_50_km": 1.18,
+   "radius_90_km": 2.114,
+   "centroid": [
+    -118.08228,
+    33.63068
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 4,
+   "radius_50_km": 1.199,
+   "radius_90_km": 2.143,
+   "centroid": [
+    -118.08297,
+    33.62752
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 5,
+   "radius_50_km": 1.222,
+   "radius_90_km": 2.17,
+   "centroid": [
+    -118.08451,
+    33.62493
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 6,
+   "radius_50_km": 1.249,
+   "radius_90_km": 2.201,
+   "centroid": [
+    -118.08623,
+    33.62273
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 7,
+   "radius_50_km": 1.28,
+   "radius_90_km": 2.239,
+   "centroid": [
+    -118.08811,
+    33.62053
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 8,
+   "radius_50_km": 1.315,
+   "radius_90_km": 2.278,
+   "centroid": [
+    -118.09026,
+    33.61814
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 9,
+   "radius_50_km": 1.348,
+   "radius_90_km": 2.323,
+   "centroid": [
+    -118.09248,
+    33.61568
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 10,
+   "radius_50_km": 1.37,
+   "radius_90_km": 2.376,
+   "centroid": [
+    -118.09477,
+    33.61346
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 11,
+   "radius_50_km": 1.385,
+   "radius_90_km": 2.433,
+   "centroid": [
+    -118.09731,
+    33.61172
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 12,
+   "radius_50_km": 1.397,
+   "radius_90_km": 2.486,
+   "centroid": [
+    -118.09995,
+    33.61048
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 13,
+   "radius_50_km": 1.404,
+   "radius_90_km": 2.536,
+   "centroid": [
+    -118.10243,
+    33.60969
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 14,
+   "radius_50_km": 1.413,
+   "radius_90_km": 2.584,
+   "centroid": [
+    -118.10442,
+    33.60917
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 15,
+   "radius_50_km": 1.427,
+   "radius_90_km": 2.64,
+   "centroid": [
+    -118.10549,
+    33.60875
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 16,
+   "radius_50_km": 1.449,
+   "radius_90_km": 2.708,
+   "centroid": [
+    -118.10526,
+    33.6085
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 17,
+   "radius_50_km": 1.478,
+   "radius_90_km": 2.787,
+   "centroid": [
+    -118.1035,
+    33.60844
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 18,
+   "radius_50_km": 1.516,
+   "radius_90_km": 2.871,
+   "centroid": [
+    -118.10004,
+    33.60838
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 19,
+   "radius_50_km": 1.563,
+   "radius_90_km": 2.961,
+   "centroid": [
+    -118.09511,
+    33.60806
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 20,
+   "radius_50_km": 1.59,
+   "radius_90_km": 3.049,
+   "centroid": [
+    -118.08869,
+    33.60711
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 21,
+   "radius_50_km": 1.58,
+   "radius_90_km": 3.132,
+   "centroid": [
+    -118.08058,
+    33.60552
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 22,
+   "radius_50_km": 1.553,
+   "radius_90_km": 3.199,
+   "centroid": [
+    -118.07099,
+    33.60337
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 23,
+   "radius_50_km": 1.555,
+   "radius_90_km": 3.245,
+   "centroid": [
+    -118.06132,
+    33.60025
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 24,
+   "radius_50_km": 1.602,
+   "radius_90_km": 3.269,
+   "centroid": [
+    -118.05302,
+    33.59606
+   ],
+   "stranded_fraction": 0.0
+  }
+ ],
+ "source": "re-run of run.py seeding for case-huntington-2021, 50-member ensemble forward, GSHHG stranding on"
+}

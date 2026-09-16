@@ -1,0 +1,143 @@
+{
+ "case": "case-farallones-2023",
+ "source": "cases/case-farallones-2023/origin.json (24 h end state) + re-run of run.py --real --particles 3000 --runs 50 with hourly frames kept",
+ "n_runs": 50,
+ "n_particles_per_run": 3000,
+ "n_points_per_hour": 150000,
+ "shipped": {
+  "radius_50_km": 4.44,
+  "radius_90_km": 8.82
+ },
+ "rerun_origin": {
+  "radius_50_km": 4.44,
+  "radius_90_km": 8.82
+ },
+ "reproduces_shipped": true,
+ "growth": [
+  {
+   "hours_back": 0,
+   "radius_50_km": 4.378,
+   "radius_90_km": 7.738
+  },
+  {
+   "hours_back": 1,
+   "radius_50_km": 4.403,
+   "radius_90_km": 7.789
+  },
+  {
+   "hours_back": 2,
+   "radius_50_km": 4.423,
+   "radius_90_km": 7.827
+  },
+  {
+   "hours_back": 3,
+   "radius_50_km": 4.439,
+   "radius_90_km": 7.856
+  },
+  {
+   "hours_back": 4,
+   "radius_50_km": 4.452,
+   "radius_90_km": 7.887
+  },
+  {
+   "hours_back": 5,
+   "radius_50_km": 4.461,
+   "radius_90_km": 7.924
+  },
+  {
+   "hours_back": 6,
+   "radius_50_km": 4.459,
+   "radius_90_km": 7.958
+  },
+  {
+   "hours_back": 7,
+   "radius_50_km": 4.452,
+   "radius_90_km": 7.975
+  },
+  {
+   "hours_back": 8,
+   "radius_50_km": 4.435,
+   "radius_90_km": 7.974
+  },
+  {
+   "hours_back": 9,
+   "radius_50_km": 4.412,
+   "radius_90_km": 7.953
+  },
+  {
+   "hours_back": 10,
+   "radius_50_km": 4.388,
+   "radius_90_km": 7.932
+  },
+  {
+   "hours_back": 11,
+   "radius_50_km": 4.36,
+   "radius_90_km": 7.909
+  },
+  {
+   "hours_back": 12,
+   "radius_50_km": 4.33,
+   "radius_90_km": 7.885
+  },
+  {
+   "hours_back": 13,
+   "radius_50_km": 4.305,
+   "radius_90_km": 7.869
+  },
+  {
+   "hours_back": 14,
+   "radius_50_km": 4.294,
+   "radius_90_km": 7.86
+  },
+  {
+   "hours_back": 15,
+   "radius_50_km": 4.29,
+   "radius_90_km": 7.872
+  },
+  {
+   "hours_back": 16,
+   "radius_50_km": 4.283,
+   "radius_90_km": 7.89
+  },
+  {
+   "hours_back": 17,
+   "radius_50_km": 4.281,
+   "radius_90_km": 7.914
+  },
+  {
+   "hours_back": 18,
+   "radius_50_km": 4.303,
+   "radius_90_km": 7.968
+  },
+  {
+   "hours_back": 19,
+   "radius_50_km": 4.341,
+   "radius_90_km": 8.052
+  },
+  {
+   "hours_back": 20,
+   "radius_50_km": 4.375,
+   "radius_90_km": 8.176
+  },
+  {
+   "hours_back": 21,
+   "radius_50_km": 4.396,
+   "radius_90_km": 8.32
+  },
+  {
+   "hours_back": 22,
+   "radius_50_km": 4.415,
+   "radius_90_km": 8.476
+  },
+  {
+   "hours_back": 23,
+   "radius_50_km": 4.428,
+   "radius_90_km": 8.645
+  },
+  {
+   "hours_back": 24,
+   "radius_50_km": 4.442,
+   "radius_90_km": 8.823
+  }
+ ]
+}
