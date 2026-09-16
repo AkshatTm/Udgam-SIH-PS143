@@ -194,10 +194,17 @@ function circle(centre: LonLat, radiusKm: number, segments: number): LonLat[] {
   return path;
 }
 
+/** Hours spanned by the forecast, endpoint of the forward playhead (forwardNorm 0..1 * this). */
+export function forwardSpanHours(forward: ForwardBundle): number {
+  return Math.max(forward.envelope[forward.envelope.length - 1].hours, 1);
+}
+
 /**
  * The spreading cone: one r90 ring per hour, drawn around that hour's centroid, plus the r50/r90
  * pair at the horizon. Built ONCE per bundle — the km→degree conversion never runs on a scrub,
- * the same discipline as buildOriginRadiusRings.
+ * the same discipline as buildOriginRadiusRings. MapView filters the result down to the rings at
+ * or before the forward playhead on every scrub — a cheap array filter over pre-tessellated
+ * paths, never a re-tessellation.
  *
  * Every hour is drawn rather than only the endpoint because the shape between them is the actual
  * result: the slick both travels (centroid moves) and spreads (radius grows), and a single
@@ -205,7 +212,7 @@ function circle(centre: LonLat, radiusKm: number, segments: number): LonLat[] {
  */
 export function buildForwardRings(forward: ForwardBundle, segments = 96): ForwardRing[] {
   const last = forward.envelope[forward.envelope.length - 1];
-  const span = Math.max(last.hours, 1);
+  const span = forwardSpanHours(forward);
   const rings: ForwardRing[] = [];
 
   for (const f of forward.envelope) {

@@ -22,12 +22,43 @@ const VERDICT_COLOR: Record<Verdict, string> = {
   not_applicable: "border-line-strong bg-white/[0.05] text-ink-2",
 };
 
-export default function VerdictBadge({ verdict }: { verdict: Verdict }) {
+// The badge doubles as the show/hide control for the reasoning underneath it (VerifyScreen owns
+// that state — the badge only reports the click and its current open/closed state so the
+// chevron and aria-expanded stay truthful). `onToggle` is optional so the badge still renders
+// inert wherever a verdict needs stating without anything to expand.
+export default function VerdictBadge({
+  verdict,
+  expanded,
+  onToggle,
+}: {
+  verdict: Verdict;
+  expanded?: boolean;
+  onToggle?: () => void;
+}) {
+  const label = VERDICT_LABEL[verdict];
+  if (!onToggle) {
+    return (
+      <div
+        className={`inline-flex min-w-[180px] items-center justify-center rounded-full border px-8 py-3 text-[15px] font-semibold uppercase tracking-[0.22em] ${VERDICT_COLOR[verdict]}`}
+      >
+        {label}
+      </div>
+    );
+  }
   return (
-    <div
-      className={`inline-flex min-w-[180px] items-center justify-center rounded-full border px-8 py-3 text-[15px] font-semibold uppercase tracking-[0.22em] ${VERDICT_COLOR[verdict]}`}
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={expanded}
+      className={`inline-flex min-w-[180px] items-center justify-center gap-2.5 rounded-full border px-8 py-3 text-[15px] font-semibold uppercase tracking-[0.22em] transition hover:brightness-110 active:scale-[0.98] ${VERDICT_COLOR[verdict]}`}
     >
-      {VERDICT_LABEL[verdict]}
-    </div>
+      {label}
+      <span
+        aria-hidden
+        className={`text-[11px] transition-transform duration-150 ${expanded ? "rotate-180" : ""}`}
+      >
+        ▾
+      </span>
+    </button>
   );
 }

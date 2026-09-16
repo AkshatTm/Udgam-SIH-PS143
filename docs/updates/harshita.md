@@ -81,6 +81,94 @@ touching AWS at all.
 
 ---
 
+## [2026-09-16 09:55] Forward slick fix — auto-reveals, and is now its own "Run" action
+
+**Done:** Fixed the bug from the previous entry: dragging the slider into the forward zone or
+pressing the new forward-drift transport button animated `forwardNorm` but drew nothing, because
+`layers.forward` still defaulted to off and nothing turned it on. Both entry points now call
+each other's layer on (`TimeSlider.tsx` `showForwardLayer()`). Separately, added the explicit
+"Run forward slick" affordance that was still missing: the "Forward slick" chip in
+`LayerToggles.tsx` reads "Run forward slick" (drift-coloured outline, not the flat toggle style)
+until its first press, and that first press both turns the layer on and plays the T0→horizon
+sweep once — the same guided-reveal feel as "Run backward drift" turning on particles/origin and
+autoplaying. Every press after the first is a plain show/hide toggle, same as every other chip.
+
+**Files touched:** `web/components/TimeSlider.tsx` (modified — `showForwardLayer()` called from
+both `onScrub` and `onForwardPlayPause`) · `web/components/LayerToggles.tsx` (modified —
+`onForwardChipClick`, conditional "Run forward slick" label/styling)
+
+**Run command:**
+```bash
+cd web && npm run dev
+```
+Expected output: on `/case/case-farallones-2023/trace` (has a real `forward_impact.json`), after
+"Run backward drift", drag the slider right of centre WITHOUT touching the Layers row — the
+amber cone now appears on its own. Same for pressing only the new forward play button in the
+footer. The "Forward slick" chip in the Layers row reads "Run forward slick" until first
+pressed, then behaves like every other layer toggle.
+
+**Checkpoint artefact:** re-drove it headless with Playwright — confirmed the chip's own label
+is "Run forward slick" pre-press, confirmed the layer turns on from a slider drag alone with zero
+manual toggle clicks, and confirmed it turns on from the footer play button alone. Zero console
+errors. `npx tsc --noEmit` and `npx eslint` clean on both files.
+
+**Open issues:** none known.
+
+**Next:** spot-check the rest of the case list with a forecast in the real demo browser (carried
+over from the previous entry — still only verified on Farallones).
+
+---
+
+## [2026-09-16 09:15] Trace slider — one physical handle, T0 centred, forward drift animates
+
+**Done:** Reworked the Trace-stage time slider so it carries both time domains instead of the
+backward-only rewind: T0 is now the centre, the left half is the existing backward rewind
+(unchanged particle/origin behaviour, driven by `tNorm`), and the right half is a new forward
+zone (`forwardNorm`, 0..1) that progressively reveals the forward forecast cone/track up to the
+playhead hour instead of drawing the whole 24 h cone at once. Added a second "Forward drift" play
+button next to the existing rewind button (`lib/useForwardPlayback.ts`, mirrors
+`usePlayback.ts`); the two are mutually exclusive — starting either one resets the other's axis
+back to its T0 rest value and stops it. Right end label reads the case's actual forecast horizon
+(`T+Nh`, from `forward_impact.json`'s `horizon_hours`) rather than a hardcoded 24. Cases with no
+`forward_impact.json` leave the right half inert (forward button disabled, drag snaps back to 0).
+
+**Files touched:** `web/components/TimeSlider.tsx` (modified) · `web/components/MapView.tsx`
+(modified — forward rings/track now filtered to the playhead each render instead of drawn whole)
+· `web/lib/store.ts` (modified — added `forwardNorm`/`forwardPlaying` + setters, reset on case
+load/initTrace/resetToGallery) · `web/lib/forward.ts` (modified — added `forwardSpanHours`
+helper) · `web/lib/useForwardPlayback.ts` (new)
+
+**Run command:**
+```bash
+cd web && npm run dev
+```
+Expected output: open `/case/case-farallones-2023/trace`, press "Run backward drift" to reveal
+the panel, then drag the footer slider right of centre — the amber forward cone grows from T0
+outward instead of appearing whole; the new play button (▶ next to the existing rewind button)
+animates the same sweep and stops at the horizon.
+
+**Checkpoint artefact:** drove it headless with Playwright against the dev server
+(`case-farallones-2023`, which has a real `forward_impact.json`) — screenshots confirmed T0
+centring, progressive cone reveal on drag, the forward button animating 0→horizon and resting
+there, and the backward button correctly stopping forward playback and resetting to T0 before
+rewinding. Zero console errors across the run. `npx tsc --noEmit` and `npx eslint` both clean on
+every touched file.
+
+**Open issues:**
+- The forward leading-edge marker and partial track use linear interpolation between hourly
+  envelope points for a smooth sweep — fine visually, but it's a presentation choice, not
+  something Stage 2 computed; worth flagging if a judge asks what the marker's exact position
+  means between hour marks.
+- Didn't add a resting-pulse test for the case where a judge switches straight from a fully-
+  forward state to picking a new case — reset paths (`loadActiveCase`, `resetToGallery`) zero
+  both `forwardNorm`/`forwardPlaying`, but only exercised this via the Farallones case in this
+  session, not the full case list.
+
+**Next:** spot-check the other cases with a forecast (any with `forward_impact.json`) in the
+actual demo browser, not just Farallones.
+
+---
+
 ## [2026-09-13 19:00] Detect QA close-out — human/browser QA on all 9 real Gallery cases
 
 **Done:** Browser-tested the Detect screen for every case currently reachable from the Gallery
