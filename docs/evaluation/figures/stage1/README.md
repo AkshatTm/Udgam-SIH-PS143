@@ -20,44 +20,39 @@ caption carries its source path and its split.**
 
 `python pipeline/detect/make_figures.py --pair updated --l2-split validation --core`
 
-| # | carries |
-|---|---|
-| **F1.1** | Layer 1's numbers, with the confusion matrix behind them |
-| **F1.4** | Layer 2's numbers — all eight definitions, so a comparison is like-for-like |
-| **F1.3** | the gate earns its place — the one design decision worth a slide |
-| **F1.6** | an **independent** detector agrees with us on five real incidents |
+| # | file | carries |
+|---|---|---|
+| **F1.1** | `F1.1_layer1_scores.png` | Layer 1's numbers, with the confusion matrix behind them |
+| **F1.2** | `F1.2_layer2_scores.png` | Layer 2's numbers — all eight definitions, so a comparison is like-for-like |
+| **F1.3** | `F1.3_gate_ablation.png` | the gate earns its place — the one design decision worth a slide |
+| **F1.4** | `F1.4_cerulean_agreement.png` | an **independent** detector agrees with us on five real incidents |
 
-That is the whole scores-and-system story. **F1.6 is the one competing teams cannot produce**, and
-it is worth more than another chart of our own numbers.
+Numbered in **presentation order**. That is the whole scores-and-system story.
+**F1.4 is the one competing teams cannot produce**, and it is worth more than another chart of our
+own numbers.
 
-## The other five — moved to `appendix/`, not deleted
+## The appendix — `appendix/`, kept not deleted
 
-F1.2 (PR curve), F1.5 (coverage cliff), F1.7 (polarisation ablation), F1.8 (rule margin) and
-F1.9 (oracle ceiling) are methodology and diagnosis. **This folder now holds only the four deck
-figures; those five live in `appendix/`.** They are kept rather than deleted because *"we have the
-working behind it"* is the answer to a question even when it is not a slide — and they rebuild in
-seconds (`--only 5`).
+| # | file | carries |
+|---|---|---|
+| A1 | `appendix/A1_pr_curve_and_gate.png` | the threshold was set on **validation**, not on the test set |
+| A2 | `appendix/A2_coverage_cliff.png` | per-scene IoU by oil coverage — and **no demo case sits in the failure band** |
+| A3 | `appendix/A3_second_polarisation_ablation.png` | the second polarisation lifts val F1 **0.346 → 0.643**, precision **5.8×** at identical recall |
+| A4 | `appendix/A4_rule_margin.png` | on satellite cases `confidence` is a **rule margin** in dB — 12 detections, 7 clear / 5 marginal |
+| A5 | `appendix/A5_oracle_ceiling.png` | a GT-informed oracle ceilings at **0.8446** |
 
-Two worth having open in a second tab:
+Methodology and diagnosis. Kept because *"we have the working behind it"* answers a question even
+when it is not a slide, and they rebuild in seconds.
 
-- **F1.5** carries *"no case in the demo library sits in the failure band"* — the protective claim
-  if anyone presses on the weak coverage band.
-- **F1.2** carries *"the threshold was chosen on validation, not on the test set"* — the
-  methodological point most published work cannot demonstrate.
+**Two worth open in a second tab:** **A2** carries *"no case in the demo library sits in the failure
+band"* — the protection if anyone presses on the weak coverage band. **A1** carries *"the threshold
+was chosen on validation, not on the test set"*, which most published work cannot demonstrate.
 
----
+## Naming
 
-| # | file | what it proves | source | split |
-|---|---|---|---|---|
-| F1.1 | `F1.1_layer1_confusion_matrix.png` | Layer 1: 139 TP / 15 FP / 11 FN / 285 TN → accuracy **0.942**, oil recall **0.927**, look-alike rejection **0.920**, clean-ocean rejection **0.980** | `models/scene_classifier_l1_e2c_recall_meta.json` | Part III holdout, 450 scenes |
-| F1.2 | `appendix/F1.2_pr_curve_and_gate.png` | the decision threshold was set on **validation**, not on the test set | `models/scene_classifier_meta.json`, `models/scene_classifier_l1_e2c.pt` | validation slice of Parts I+II |
-| F1.3 | `F1.3_gate_ablation.png` | the gate costs **0.008 IoU** and buys **0.60** look-alike rejection | `results/eval_part3_e2c.json` | Part III holdout, 450 scenes |
-| F1.4 | `F1.4_eight_iou_definitions.png` | we report **0.452**, the strictest of eight definitions; the literature's definition gives **0.696** on the same pixels | `results/eval_part3_e2c.json` | Part III holdout, gated |
-| F1.5 | `appendix/F1.5_coverage_cliff.png` | 138 of 150 scenes score 0.61–0.76; **12 scenes ≥30% coverage** drag pooled down — and **no demo case sits in that band** | `results/eval_part3_e2c.json`, `cases/*/detections.geojson` | Part III, 150 oil scenes |
-| F1.6 | `F1.6_cerulean_agreement.png` | median IoU **0.483** vs an operational detector, recall **0.796–0.942** | `results/iou_cerulean.json` | five real incidents |
-| F1.7 | `appendix/F1.7_second_polarisation_ablation.png` | the second polarisation lifts val F1 **0.346 → 0.643** and Part III precision **5.8×** at identical recall | `receipts.md` L104, `updates/soumirya.md` §622 | validation + Part III |
-| F1.8 | `appendix/F1.8_rule_margin.png` | on satellite cases `confidence` is a **rule margin**, drawn in dB — 12 detections, **7 clear / 5 marginal** | `cases/*/detections.geojson` | the live case library |
-| F1.9 | `appendix/F1.9_oracle_ceiling.png` | a GT-informed oracle ceilings at **0.8446**; we beat it on the three smallest bands | `results/oracle_ceiling.json`, `results/eval_part3_e2c.json` | oracle on 228 Parts I+II scenes — no Part III pixel read |
+Figure identity is a **slug**; the number comes from which set it lands in
+(`DECK_NUM` / `APPX_NUM` in `make_figures.py`). The old numbering left gaps once five figures came
+out — F1.1, F1.3, F1.4, F1.6 — and a gap in a deck reads as a missing slide.
 
 ## Three things to say out loud, because the figure alone does not say them
 

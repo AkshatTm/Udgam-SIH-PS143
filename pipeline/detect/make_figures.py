@@ -184,9 +184,33 @@ def _caption(fig, text):
              color=MUTED, wrap=True)
 
 
-def _save(fig, name):
-    os.makedirs(OUT, exist_ok=True)
-    p = os.path.join(OUT, name)
+# Figure identity is a SLUG; the number is derived from which set it lands in.
+# Deck figures are numbered in PRESENTATION order, which is why 4 comes before 3:
+# Layer 1 numbers, then Layer 2 numbers, then the gate, then the external check.
+SLUG = {1: "layer1_scores", 2: "pr_curve_and_gate", 3: "gate_ablation",
+        4: "layer2_scores", 5: "coverage_cliff", 6: "cerulean_agreement",
+        7: "second_polarisation_ablation", 8: "rule_margin", 9: "oracle_ceiling"}
+DECK_NUM = {1: "F1.1", 4: "F1.2", 3: "F1.3", 6: "F1.4"}
+APPX_NUM = {2: "A1", 5: "A2", 7: "A3", 8: "A4", 9: "A5"}
+_CUR = None          # figure id currently being drawn; set by main()
+
+
+def _outfile():
+    """-> (directory, filename) for the figure being drawn.
+
+    Deck figures go to the stage1 folder as F1.1-F1.4; everything else goes to
+    appendix/ as A1-A5, so the two schemes cannot collide.
+    """
+    n = _CUR
+    if n in DECK_NUM:
+        return OUT, "%s_%s.png" % (DECK_NUM[n], SLUG[n])
+    return os.path.join(OUT, "appendix"), "%s_%s.png" % (APPX_NUM[n], SLUG[n])
+
+
+def _save(fig, name=None):
+    d, name = _outfile()
+    os.makedirs(d, exist_ok=True)
+    p = os.path.join(d, name)
     fig.savefig(p, dpi=DPI, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print("  wrote %s" % os.path.relpath(p, _ROOT))
@@ -677,7 +701,9 @@ def main():
         print("      Layer 1 remains the Part III holdout.\n")
     want = a.only or (CORE if a.core else sorted(FIGS))
     print("Stage 1 evidence set -> %s\n" % os.path.relpath(OUT, _ROOT))
+    global _CUR
     for n in want:
+        _CUR = n
         try:
             FIGS[n]()
         except Exception as exc:

@@ -44,7 +44,7 @@ this benchmark does not demonstrate that separation."*
 
 ---
 
-## SLIDE 1b — Layer 2, segmentation   *(F1.4)*
+## SLIDE 1b — Layer 2, segmentation   *(F1.2)*
 
 > **SPLIT: held-out VALIDATION scenes — Parts I+II, 388 scenes, fold 0.**
 > Source: `pipeline/detect/results/eval_val_e2c_gated_recall.json`
@@ -80,7 +80,7 @@ segmentation cost."*
 
 ---
 
-## SLIDE 2 — Where the model fails, and where it does not   *(F1.5)*
+## SLIDE 2 — Where the model fails, and where it does not   *(A2, appendix)*
 
 > **SPLIT: held-out VALIDATION scenes, 182 oil scenes.**
 
@@ -104,7 +104,7 @@ oil coverage across the nine cases runs **0.00% to 2.25%**.
 
 ---
 
-## SLIDE 3 — External validation   *(F1.6)*
+## SLIDE 3 — External validation   *(F1.4)*
 
 > **Against Cerulean (SkyTruth's operational detector), five real incidents.**
 > Source: `pipeline/detect/results/iou_cerulean.json`
