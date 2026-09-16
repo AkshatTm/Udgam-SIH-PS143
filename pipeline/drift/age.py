@@ -68,6 +68,7 @@ import numpy as np
 
 import ensemble as ens
 from fields import load_case_field, make_fake, require_aware, speed
+from slick import merge_oil_features, pick_slick
 from step import as_positions, deg_to_m, integrate
 
 HERE = Path(__file__).resolve().parent
@@ -980,14 +981,6 @@ def round_band(band, nd=1):
 # CLI
 # ---------------------------------------------------------------------------------------
 
-def pick_slick(dets):
-    oil = [f for f in dets.get("features", [])
-           if (f.get("properties") or {}).get("classification") == "oil"]
-    if not oil:
-        return None
-    return max(oil, key=lambda f: f["properties"].get("confidence", 0.0))
-
-
 def parse_ts(s):
     from datetime import datetime
     return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
@@ -1060,7 +1053,6 @@ def main():
         # was actually seeded from. Importing it rather than re-implementing is the point:
         # two different answers to "which slick?" is the kind of divergence nobody notices.
         sys.path.insert(0, str(HERE))
-        from run import merge_oil_features
         feat, slick_diag = merge_oil_features(json.loads(det_path.read_text()),
                                               mode=a.merge_oil)
 

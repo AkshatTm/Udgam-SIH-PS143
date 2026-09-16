@@ -15,6 +15,9 @@ data/labels/*
 # Environments
 venv/
 .venv/
+# Throwaway venv for OpenDrift (~90 packages incl. Cartopy). Deliberately NOT the project venv —
+# see pipeline/drift/requirements-opendrift.txt for why it is installed separately.
+odenv/
 node_modules/
 __pycache__/
 *.pyc

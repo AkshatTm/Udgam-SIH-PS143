@@ -116,7 +116,7 @@ def seed_note(case, dry):
     import math
     import re
     sys.path.insert(0, str(HERE))
-    from run import merge_oil_features   # same package; Stage 2's own seed logic
+    from slick import merge_oil_features   # same package; Stage 2's own seed logic
 
     cdir = REPO / "cases" / case
     dets = json.loads((cdir / "detections.geojson").read_text(encoding="utf-8"))
