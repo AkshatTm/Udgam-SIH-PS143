@@ -52,6 +52,45 @@ RESULTS = os.path.join(_HERE, "results")
 MODELS = os.path.join(_HERE, "models")
 OUT = os.path.join(_ROOT, "docs", "evaluation", "figures", "stage1")
 
+# WHICH PAIR IS THE EVIDENCE SET ABOUT?
+#
+# Both were scored on the SAME Zenodo Part III holdout, 450 scenes, on a
+# configuration frozen before the run. Switching changes which model the figures
+# describe; it does not change what any caption is allowed to claim, because the
+# split is identical either way.
+#
+#   shipped  models/unet.pt + models/scene_classifier.pt        -> eval_part3.json
+#   updated  unet_e2c_sea_refonly + scene_classifier_l1_e2c_recall
+#                                                               -> eval_part3_e2c.json
+PAIRS = {
+    "shipped": {
+        "part3": "eval_part3.json",
+        "clf_meta": "scene_classifier_meta.json",
+        "label": "shipped pair",
+        "l2": "unet.pt", "l1": "scene_classifier.pt",
+    },
+    "updated": {
+        "part3": "eval_part3_e2c.json",
+        "clf_meta": "scene_classifier_l1_e2c_recall_meta.json",
+        "label": "E2c pair",
+        "l2": "unet_e2c_sea_refonly.pt", "l1": "scene_classifier_l1_e2c_recall.pt",
+    },
+}
+PAIR = PAIRS["updated"]
+
+
+def _part3():
+    return _load(os.path.join(RESULTS, PAIR["part3"]))
+
+
+def _clf_meta():
+    return _load(os.path.join(MODELS, PAIR["clf_meta"]))
+
+
+def _prov():
+    """The provenance string every caption ends with."""
+    return ("Models: %s + %s (%s)." % (PAIR["l2"], PAIR["l1"], PAIR["label"]))
+
 DPI = 200
 INK = "#1a1a1a"
 MUTED = "#6b7280"
@@ -101,7 +140,7 @@ def _save(fig, name):
 # F1.1 — Layer 1 confusion matrix
 # ---------------------------------------------------------------------------
 def f1_1():
-    m = _load(os.path.join(MODELS, "scene_classifier_meta.json"))["part3"]
+    m = _clf_meta()["part3"]
     tp, fp, fn, tn = m["tp"], m["fp"], m["fn"], m["tn"]
     cm = np.array([[tn, fp], [fn, tp]], float)
 
@@ -122,24 +161,26 @@ def f1_1():
         s.set_visible(False)
 
     ax2.axis("off")
-    rates = [("scene accuracy", m["scene_accuracy"], "(139+289) / 450"),
-             ("oil recall", m["oil_recall"], "139 / 150 oil scenes"),
-             ("look-alike rejection", m["lookalike_rejection"], "141 / 150 look-alikes"),
-             ("clean-ocean rejection", m["cleanocean_rejection"], "148 / 150 clean scenes")]
+    rates = [("scene accuracy", m["scene_accuracy"], "(%d+%d) / 450" % (tp, tn)),
+             ("oil recall", m["oil_recall"], "%d / 150 oil scenes" % tp),
+             ("look-alike rejection", m["lookalike_rejection"],
+              "%d / 150 look-alikes" % round(150 * m["lookalike_rejection"])),
+             ("clean-ocean rejection", m["cleanocean_rejection"],
+              "%d / 150 clean scenes" % round(150 * m["cleanocean_rejection"]))]
     y = 0.88
     for label, v, how in rates:
         ax2.text(0.0, y, label, fontsize=9, color=INK)
         ax2.text(0.62, y, "%.3f" % v, fontsize=13, color=BLUE, fontweight="bold")
         ax2.text(0.0, y - 0.07, how, fontsize=7, color=MUTED)
         y -= 0.20
-    ax2.text(0.0, 0.06, "decision threshold 0.143 — chosen on a Parts I+II\n"
-                        "validation split under a 0.90 recall floor, NOT on\n"
-                        "these 450 test scenes.",
-             fontsize=7.5, color=AMBER, style="italic")
+    ax2.text(0.0, 0.06, "decision threshold %.3f — chosen on a Parts I+II\n"
+                        "validation split, NOT on these 450 test scenes."
+             % m["threshold"], fontsize=7.5, color=AMBER, style="italic")
 
-    _caption(fig, "Source: pipeline/detect/models/scene_classifier_meta.json  ·  "
-                  "Split: Zenodo Part III holdout, 450 scenes (150 oil / 150 look-alike / "
-                  "150 clean ocean), scene-level split — trained on Parts I+II only (D1).")
+    _caption(fig, "Source: pipeline/detect/models/%s  ·  Split: Zenodo Part III holdout, "
+                  "450 scenes (150 oil / 150 look-alike / 150 clean ocean), scene-level split "
+                  "— trained on Parts I+II only (D1).  %s"
+                  % (PAIR["clf_meta"], _prov()))
     fig.subplots_adjust(bottom=0.18)
     _save(fig, "F1.1_layer1_confusion_matrix.png")
 
@@ -156,6 +197,7 @@ def f1_2():
 
     ship = _load(os.path.join(MODELS, "scene_classifier_meta.json"))
     v = ship["validation"]
+    cur_thr = _clf_meta()["threshold"]
     ship_rec = v["tp"] / (v["tp"] + v["fn"])
     ship_prec = v["tp"] / (v["tp"] + v["fp"])
 
@@ -210,7 +252,7 @@ def f1_2():
 # F1.3 — the gate ablation
 # ---------------------------------------------------------------------------
 def f1_3():
-    rows = {r["model"]: r for r in _rows(_load(os.path.join(RESULTS, "eval_part3.json")))}
+    rows = {r["model"]: r for r in _rows(_part3())}
     ung, gat = rows["U-Net only (no gate)"], rows["Classifier + U-Net"]
     labels = ["look-alike\nrejection", "clean-ocean\nrejection", "oil recall", "pooled oil IoU"]
     a = [ung["lookalike_rejection"], ung["cleanocean_rejection"], ung["oil_recall"], ung["iou_positives"]]
@@ -234,10 +276,11 @@ def f1_3():
     ax.set_title("The gate costs 0.014 IoU and buys 0.48 look-alike rejection", fontsize=10)
     ax.legend(fontsize=8, frameon=False, loc="lower right")
     ax.grid(axis="y", alpha=0.3, color=GRID)
-    _caption(fig, "Source: pipeline/detect/results/eval_part3.json  ·  Split: Zenodo Part III "
-                  "holdout, 450 scenes (150 oil / 150 look-alike / 150 clean ocean).  "
-                  "Ungating buys +0.014 pooled IoU and costs look-alike rejection 0.94 → 0.46. "
-                  "We take the trade: a false spill alert is worse than a slightly looser outline.")
+    _caption(fig, "Source: pipeline/detect/results/%s  ·  Split: Zenodo Part III holdout, "
+                  "450 scenes (150 oil / 150 look-alike / 150 clean ocean).  Ungating buys "
+                  "%+.3f pooled IoU and costs look-alike rejection %.2f → %.2f. We take the "
+                  "trade: a false spill alert is worse than a slightly looser outline.  %s"
+                  % (PAIR["part3"], a[3] - b[3], b[0], a[0], _prov()))
     fig.subplots_adjust(bottom=0.24)
     _save(fig, "F1.3_gate_ablation.png")
 
@@ -246,7 +289,7 @@ def f1_3():
 # F1.4 — the eight IoU definitions   (the strongest figure in the set)
 # ---------------------------------------------------------------------------
 def f1_4():
-    g = {r["model"]: r for r in _rows(_load(os.path.join(RESULTS, "eval_part3.json")))}["Classifier + U-Net"]
+    g = {r["model"]: r for r in _rows(_part3())}["Classifier + U-Net"]
     md = g["metric_decomposition"]
     order = [("iou_oil_pooled", "oil-class IoU, pooled\n← WHAT WE REPORT"),
              ("iou_oil_macro_tile", "oil-class IoU, mean over tiles"),
@@ -275,10 +318,11 @@ def f1_4():
     ax.set_xlim(0, 1.06); ax.set_xlabel("value")
     ax.set_title("Eight definitions. Same model, same pixels, same 450 scenes.", fontsize=10)
     ax.grid(axis="x", alpha=0.3, color=GRID)
-    _caption(fig, "Source: pipeline/detect/results/eval_part3.json  ·  Split: Zenodo Part III "
-                  "holdout, 450 scenes, gated (Classifier + U-Net).  We report 0.4349 — the "
-                  "STRICTEST of the eight. The others are printed so a comparison against any "
-                  "published number is like-for-like, not so we can pick the flattering one.")
+    _caption(fig, "Source: pipeline/detect/results/%s  ·  Split: Zenodo Part III holdout, "
+                  "450 scenes, gated (Classifier + U-Net).  We report %.4f — the STRICTEST of "
+                  "the eight. The others are printed so a comparison against any published "
+                  "number is like-for-like, not so we can pick the flattering one.  %s"
+                  % (PAIR["part3"], vals[0], _prov()))
     fig.subplots_adjust(bottom=0.22)
     _save(fig, "F1.4_eight_iou_definitions.png")
 
@@ -287,7 +331,7 @@ def f1_4():
 # F1.5 — the coverage cliff
 # ---------------------------------------------------------------------------
 def f1_5():
-    g = {r["model"]: r for r in _rows(_load(os.path.join(RESULTS, "eval_part3.json")))}["Classifier + U-Net"]
+    g = {r["model"]: r for r in _rows(_part3())}["Classifier + U-Net"]
     bands = g["metric_decomposition"]["iou_by_slick_size"]["value"]
     order = ["0-1% oil", "1-3% oil", "3-10% oil", "10-30% oil", "30-101% oil"]
     labs = ["0–1%", "1–3%", "3–10%", "10–30%", "≥30%"]
@@ -317,12 +361,13 @@ def f1_5():
         ax2.plot([xx], [0.93], marker="v", color=GREEN, ms=7, clip_on=False)
     ax2.text(0.28, 0.965, "▼ our nine demo cases — measured coverage %.2f–%.2f%%"
              % (min(cov), max(cov)), color=GREEN, fontsize=7.5)
-    _caption(fig, "Source: pipeline/detect/results/eval_part3.json (bands) and "
-                  "cases/*/detections.geojson (demo coverage)  ·  Split: Zenodo Part III "
-                  "holdout, 150 oil scenes.  138 of 150 scenes score 0.66–0.78. Pooled IoU "
-                  "collapses because 12 scenes above 30% coverage hold ~38% of all oil pixels "
-                  "and pooling weights a scene by its slick size. NO CASE IN THE DEMO LIBRARY "
-                  "SITS IN THAT BAND — measured, not assumed.")
+    _caption(fig, "Sources: pipeline/detect/results/%s (bands) and cases/*/detections.geojson "
+                  "(demo coverage)  ·  Split: Zenodo Part III holdout, 150 oil scenes.  The "
+                  "four bands below 30%% coverage score %.2f–%.2f. Pooled IoU collapses because "
+                  "the 12 scenes above 30%% hold ~38%% of all oil pixels and pooling weights a "
+                  "scene by its slick size. NO CASE IN THE DEMO LIBRARY SITS IN THAT BAND — "
+                  "measured, not assumed.  %s"
+                  % (PAIR["part3"], min(vals[:4]), max(vals[:4]), _prov()))
     fig.subplots_adjust(bottom=0.26)
     _save(fig, "F1.5_coverage_cliff.png")
 
@@ -485,7 +530,7 @@ def f1_8():
 # ---------------------------------------------------------------------------
 def f1_9():
     o = _load(os.path.join(RESULTS, "oracle_ceiling.json"))
-    g = {r["model"]: r for r in _rows(_load(os.path.join(RESULTS, "eval_part3.json")))}["Classifier + U-Net"]
+    g = {r["model"]: r for r in _rows(_part3())}["Classifier + U-Net"]
     bands = g["metric_decomposition"]["iou_by_slick_size"]["value"]
     key = {"0-1%": "0-1% oil", "1-3%": "1-3% oil", "3-10%": "3-10% oil",
            "10-30%": "10-30% oil", ">=30%": "30-101% oil"}
@@ -513,7 +558,7 @@ def f1_9():
                  fontsize=9.5)
     ax.legend(fontsize=8, frameon=False, loc="upper left")
     ax.grid(axis="y", alpha=0.3, color=GRID)
-    _caption(fig, "Sources: pipeline/detect/results/oracle_ceiling.json and eval_part3.json  ·  "
+    _caption(fig, "Sources: pipeline/detect/results/oracle_ceiling.json and %s  ·  " % PAIR["part3"] +
                   "Oracle measured on 228 Parts I+II oil scenes — NO PART III PIXEL IS READ by "
                   "it; the ceiling is re-weighted by Part III band oil-mass to be comparable.  "
                   "The oracle CHEATS in exactly one way: it takes the sea reference from the "
@@ -531,7 +576,14 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", type=int, action="append",
                     help="figure number(s) to build; default is all nine")
+    ap.add_argument("--pair", choices=sorted(PAIRS), default="updated",
+                    help="which model pair the evidence set describes. Both are scored on the "
+                         "SAME Part III holdout, so this changes WHICH MODEL is documented, not "
+                         "what a caption may claim.")
     a = ap.parse_args()
+    global PAIR
+    PAIR = PAIRS[a.pair]
+    print("  pair: %s  (%s + %s)\n" % (PAIR["label"], PAIR["l2"], PAIR["l1"]))
     want = a.only or sorted(FIGS)
     print("Stage 1 evidence set -> %s\n" % os.path.relpath(OUT, _ROOT))
     for n in want:
