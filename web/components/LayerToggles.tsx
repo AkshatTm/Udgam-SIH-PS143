@@ -21,6 +21,8 @@ export default function LayerToggles() {
   const layers = useAppStore((s) => s.layers);
   const toggleLayer = useAppStore((s) => s.toggleLayer);
   const meta = useAppStore((s) => s.meta);
+  const setForwardNorm = useAppStore((s) => s.setForwardNorm);
+  const setForwardPlaying = useAppStore((s) => s.setForwardPlaying);
 
   const revealed = useAppStore((s) => s.revealed);
   const traceAvailable = (meta?.acts_available.includes("trace") ?? false) && revealed.trace;
@@ -28,6 +30,18 @@ export default function LayerToggles() {
   // rather than hidden, so "this case has no forecast" is visible instead of silently missing.
   const forwardBundle = useAppStore((s) => s.forward);
   const forwardAvailable = traceAvailable && forwardBundle !== null;
+  // First press is a "Run": turning the layer on also plays the T0 -> horizon sweep once, the
+  // same guided-reveal feel as "Run backward drift" (which turns particles/origin on and
+  // autoplays via initTrace). Every press after that is a plain show/hide toggle.
+  const onForwardChipClick = () => {
+    if (!layers.forward) {
+      toggleLayer("forward");
+      setForwardNorm(0);
+      setForwardPlaying(true);
+    } else {
+      toggleLayer("forward");
+    }
+  };
   const attributeAvailable =
     (meta?.acts_available.includes("attribute") ?? false) && revealed.attribute;
 
@@ -44,18 +58,24 @@ export default function LayerToggles() {
           (!needsForward || forwardAvailable) &&
           (!needsAttribute || attributeAvailable);
         const on = layers[id];
+        // Before its first run, the forward chip IS the "Run forward slick" action — pressing
+        // it turns the layer on and plays the T0 -> horizon sweep once (onForwardChipClick).
+        // Once on, it reverts to a plain show/hide toggle like every other chip.
+        const isForwardRunCta = needsForward && enabled && !on;
         return (
           <button
             key={id}
             type="button"
             disabled={!enabled}
-            onClick={() => toggleLayer(id)}
+            onClick={() => (needsForward ? onForwardChipClick() : toggleLayer(id))}
             aria-pressed={on}
             title={
               enabled
-                ? on
-                  ? `Hide ${label}`
-                  : `Show ${label}`
+                ? isForwardRunCta
+                  ? "Run the forward forecast from T0 to the horizon"
+                  : on
+                    ? `Hide ${label}`
+                    : `Show ${label}`
                 : needsTrace
                   ? `${label} — appears once the drift has been run`
                   : needsForward
@@ -69,9 +89,11 @@ export default function LayerToggles() {
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors duration-150 ${
               !enabled
                 ? "cursor-not-allowed text-ink-4"
-                : on
-                  ? "bg-white/[0.08] text-ink"
-                  : "text-ink-3 hover:bg-white/[0.04] hover:text-ink-2"
+                : isForwardRunCta
+                  ? "border border-drift/50 text-drift hover:border-drift hover:bg-drift/10"
+                  : on
+                    ? "bg-white/[0.08] text-ink"
+                    : "text-ink-3 hover:bg-white/[0.04] hover:text-ink-2"
             }`}
           >
             <span
@@ -79,7 +101,7 @@ export default function LayerToggles() {
               className="h-1.5 w-1.5 shrink-0 rounded-full transition-opacity duration-150"
               style={{ background: swatch, opacity: !enabled ? 0.25 : on ? 1 : 0.4 }}
             />
-            {label}
+            {isForwardRunCta ? "Run forward slick" : label}
           </button>
         );
       })}
