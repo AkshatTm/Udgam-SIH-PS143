@@ -79,35 +79,7 @@ because a false spill alert is worse than a slightly looser outline."*
 
 ---
 
-## SLIDE 3 — The fix, and the honest status of it
-
-**This is the slide teams that hardcode results cannot give.**
-
-**On held-out validation scenes** (Parts I+II, coverage-stratified split, scenes never trained on),
-sea-referenced normalisation takes the failing band:
-
-| ≥30% coverage band | value |
-|---|---|
-| baseline | **0.282** |
-| after the fix, mean of 3 seeds | **0.816** ± 0.055 |
-
-Source: `pipeline/detect/results/eval_val_e2c*.json`
-
-**Say exactly this, including the last sentence:**
-
-> *"On held-out validation scenes the failing band goes from 0.28 to 0.82, measured across three
-> independent training runs. **This is a validation number, not our test number.** We ran the
-> sealed holdout once on the frozen configuration and the band reached 0.16 there, not 0.82 — the
-> fix does not fully transfer yet. So our headline stays 0.435, and closing that generalisation gap
-> is our next piece of work."*
-
-**Why say it:** it is true, it is checkable, and it demonstrates that we know the difference between
-a development result and a test result. A panel that has heard three teams quote validation numbers
-as accuracy will notice.
-
----
-
-## SLIDE 4 — External validation
+## SLIDE 3 — External validation
 
 **Against Cerulean (SkyTruth's operational detector) on five real incidents.**
 Source: `pipeline/detect/results/iou_cerulean.json`
@@ -128,13 +100,27 @@ there is the expected result and is reported, not hidden.
 
 ---
 
+## ONE model, ONE split — deliberately
+
+Every figure and every number in this file comes from **the shipped pair** scored on the **Zenodo
+Part III holdout, 450 scenes**. There is no second model anywhere in the deck, and no validation
+number is quoted as an accuracy.
+
+That is a presentation decision AND a defensive one: a mixed deck invites "which model is that
+number from?", and the answer has to be instant. Here it always is.
+
+**If asked whether you have anything better in development:** yes, and say it plainly —
+*"We have a fix for the large-slick failure that reaches 0.82 on that band on held-out validation
+scenes. It does not transfer to the sealed holdout yet, where it reaches 0.16, so we are not
+quoting it as a result."* That answer is stronger than the number would have been.
+
 ## The question you will be asked, and the answer
 
-**"How does that compare on your test set?"**
+**"Is that your test set or your validation set?"**
 
-> *"0.435 pooled oil-class IoU, gated, on the 450-scene Part III holdout — that is the number on
-> the slide. The 0.82 figure is validation only, and I flagged it as such: on the holdout that band
-> reaches 0.16, so the fix has not transferred yet."*
+> *"Test. Every number on these slides is the Zenodo Part III holdout — 450 scenes, scene-level
+> split, the model never trained on any of them. The only figure drawn from validation is the
+> threshold selection in F1.2, and it is labelled on the axes."*
 
 **"Why is your IoU low when your accuracy is 98%?"**
 
@@ -156,7 +142,10 @@ there is the expected result and is reported, not hidden.
 - "VH is the discriminator" — the feature was computed from the co-pol band. Say *"adding a second
   polarisation lifts validation F1 0.346 → 0.643 and Part III precision 5.8× at identical recall."*
 - "The networks don't transfer to real exports" — false; that was a channel swap.
-- "Dark vessel" for anything Stage 1 emits. Every contact we produce is **unattributed**.
-- Any contact count as verified — the Ennore (72), Huntington (43) and nospill-zenodo (31) lists
-  are **not yet land-masked**.
+- **Contact counts: use the CURRENT ones.** They were land-masked on 16 Sept with a real coastline:
+  **Ennore 72 → 41**, `lookalike-zenodo` 1 → 0, total **142 → 110**. Huntington (43), Mumbai (21),
+  Jamnagar (3) and Jacksonville (2) are unchanged — those boxes are 0.0–0.7% land, so their contacts
+  were never land returns. Huntington's brightest is **+23.5 dB**, a hard target.
+- **"Dark vessel"** for anything Stage 1 emits. Every contact we produce is **unattributed** — a
+  contact becomes a dark-vessel claim only after Stage 3 fails to match it to AIS.
 - Alaska has **zero** contacts and that is correct — it is a field-of-view limit, not a threshold.
