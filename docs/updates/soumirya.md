@@ -12,6 +12,45 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-16 09:40] P0 — deck corrections from Akshat's final-day brief
+
+**Done:** Worked P0 of the final-day brief. Two of the three items were already closed by earlier
+work; the third had two LIVE instances, one of them worse than the brief described.
+
+- **0.1 "23% accuracy" — already struck.** Confirmed by grep across `docs/`, `web/` and the eval
+  JSON/CSV. The only surviving `23` in Stage 1 context is `receipts.md:307` and `akshat.md:307`,
+  both of which record that the figure does not exist. Stage 2's `0.23 h` overhang on `case-000`
+  and a `scheduler@0.23.2` entry in `web/package-lock.json` are unrelated. **No action needed.**
+- **0.2 `soumirya_case_nominations.md` — already corrected 13 Sept.** The file reads **0.940** and
+  carries an explicit note recording the trade (rejection 0.960 → 0.940 bought oil recall
+  0.893 → 0.927 and accuracy 0.947 → 0.951). **No action needed.**
+- **0.3 two dead claims — FIXED, two live instances:**
+  - `docs/architecture/stage1-detection.md` stated in its **Traps** list, as current fact: *"Band 1
+    is VV, band 2 is VH. VH is the strongest feature."* **Both halves are wrong**, and the band-order
+    half is the more dangerous one — a traps list is exactly where someone goes to check. Replaced
+    with the measurement: over 297 Part III scenes Zenodo's band 1 runs **8.15 dB darker** and is
+    darker in **290 of 297**, so Zenodo is band 1 = VH and the GEE exports are band 1 = VV. Decide
+    from pixels, never the filename.
+  - `docs/team/jaiveer-stage3-attribution.md` carried *"Soumirya's finding is that VH is the
+    strongest single discriminator"* — inside a section headed **"this is your slide"**. Replaced
+    with the channel-agnostic ablation (val F1 0.346 → 0.643, Part III precision 5.8x at identical
+    recall, 4/36 both ways) and an explicit "do not name a polarisation on this slide".
+
+**Also checked, and clean:** `web/src/` contains **no** hardcoded accuracy figures and none of the
+dead claims — the UI reads from JSON as designed, so no deck number can drift there.
+
+`deck-numbers.md` already lists both dead claims in its "dead claim" column, which is correct.
+Remaining hits in `docs/updates/*.md` are historical log entries superseded by newer ones at the
+top of each file; logs are append-only and were left as history.
+
+**Files:** `docs/architecture/stage1-detection.md`, `docs/team/jaiveer-stage3-attribution.md`
+
+**Run:** `grep -rniE "VH is the (strongest|discriminator)" docs/ web/ --include=*.md --include=*.html`
+
+**Open:** P1 (land-mask the contacts), P2 (Python 3.13 ruling — Harshita is blocked on this),
+P3 (nine figures). A Layer 1 `--min-recall 0.95` run was already in flight when the brief arrived;
+it writes **tagged files only**, touches no shipped model, and its result stays out of the deck.
+
 ## [2026-09-14 20:10] Phase — Alaska ship_detections: why it is empty, and the px -> m question
 
 **Done:** Answered both of Jaiveer's Stage 3 blockers with measurements, no code changed.

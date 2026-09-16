@@ -150,9 +150,20 @@ any case with `trace` in `acts_available`.
 
 - Pixel (0, 0) is top-left = (west, north). Getting this wrong flips every polygon vertically and
   the result still looks like a plausible slick.
-- Band 1 is VV, band 2 is VH. VH is the strongest feature and the signal is ~1 dB deep, which is
-  why exports are 2-band float32 GeoTIFF rather than 8-bit PNG (decision D14) — quantisation
-  destroys it.
+- **Band order is NOT the same in both corpora, and assuming it is has already cost us a full
+  train-and-evaluate cycle.** Measured over 297 Part III scenes: Zenodo's band 1 runs **8.15 dB
+  darker** than band 2 and is darker in **290 of 297** — i.e. Zenodo is **band 1 = VH (cross-pol),
+  band 2 = VV (co-pol)**, because over ocean cross-pol sits 6–10 dB below co-pol by physics. The
+  GEE exports are the other way round: **band 1 = VV**. Decide from the pixels, never from the
+  filename (`nets._looks_like_zenodo`). Getting this wrong does not error — it returns confident
+  nonsense.
+- **"VH is the strongest feature" is dead as stated.** The feature that carried the ablation was
+  computed from band 2, which on Zenodo is **VV**. The channel *names* were swapped, not the
+  result: adding the second polarisation is still real and still worth a slide (val F1
+  0.346 → 0.643, Part III precision 0.049 → 0.286 at identical recall). Quote the ablation, not a
+  polarisation, until a retrain fixes the naming.
+- The signal is ~1 dB deep, which is why exports are 2-band float32 GeoTIFF rather than 8-bit PNG
+  (decision D14) — quantisation destroys it.
 - Contrast for a dark spot is never positive. An elongation ratio is never below 1.
 
 Full list: [`../TRAPS.md`](../TRAPS.md).
