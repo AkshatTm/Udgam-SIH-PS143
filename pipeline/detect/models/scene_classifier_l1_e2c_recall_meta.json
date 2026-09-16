@@ -1,0 +1,173 @@
+{
+  "variant": "both32",
+  "config": {
+    "filters": 32,
+    "pool": "both"
+  },
+  "cache": "P12seac",
+  "test_cache": "P3seac",
+  "channel_order": "0=VV(co-pol, read band 2), 1=VH(cross-pol, read band 1)",
+  "norm_mode": "sea",
+  "threshold": 0.1279999999999999,
+  "min_recall_floor": 0.9,
+  "threshold_selected_on": "validation split of Parts I+II: the lowest threshold with validation precision >= 0.95. A gate's errors are asymmetric - a false negative is unrecoverable and one rejected >=30% scene costs -0.046 pooled IoU, while a false positive is recoverable because Layer 2 still segments and can reject.",
+  "variant_selected_on": "validation loss",
+  "trained_on": "Zenodo Parts I+II",
+  "tested_on": "Zenodo Part III",
+  "n_parameters": 63873,
+  "validation": {
+    "threshold": 0.4896,
+    "scene_accuracy": 0.9845,
+    "oil_recall": 0.9889,
+    "lookalike_rejection": 0.9592,
+    "cleanocean_rejection": 1.0,
+    "tp": 178,
+    "fp": 4,
+    "fn": 2,
+    "tn": 202,
+    "per_class": {
+      "Oil": {
+        "n": 180,
+        "recall": 0.9888888888888889
+      },
+      "Lookalike": {
+        "n": 98,
+        "rejection": 0.9591836734693877
+      },
+      "No oil": {
+        "n": 108,
+        "rejection": 1.0
+      }
+    }
+  },
+  "part3": {
+    "threshold": 0.128,
+    "scene_accuracy": 0.9422,
+    "oil_recall": 0.9267,
+    "lookalike_rejection": 0.92,
+    "cleanocean_rejection": 0.98,
+    "tp": 139,
+    "fp": 15,
+    "fn": 11,
+    "tn": 285,
+    "per_class": {
+      "Oil": {
+        "n": 150,
+        "recall": 0.9266666666666666
+      },
+      "Lookalike": {
+        "n": 150,
+        "rejection": 0.92
+      },
+      "No oil": {
+        "n": 150,
+        "rejection": 0.98
+      }
+    }
+  },
+  "all_variants_part3": {
+    "paper_avg32": {
+      "threshold": 0.4896,
+      "scene_accuracy": 0.9422,
+      "oil_recall": 0.8733,
+      "lookalike_rejection": 0.9667,
+      "cleanocean_rejection": 0.9867,
+      "tp": 131,
+      "fp": 7,
+      "fn": 19,
+      "tn": 293,
+      "per_class": {
+        "Oil": {
+          "n": 150,
+          "recall": 0.8733333333333333
+        },
+        "Lookalike": {
+          "n": 150,
+          "rejection": 0.9666666666666667
+        },
+        "No oil": {
+          "n": 150,
+          "rejection": 0.9866666666666667
+        }
+      }
+    },
+    "max32": {
+      "threshold": 0.4896,
+      "scene_accuracy": 0.9378,
+      "oil_recall": 0.8533,
+      "lookalike_rejection": 0.9733,
+      "cleanocean_rejection": 0.9867,
+      "tp": 128,
+      "fp": 6,
+      "fn": 22,
+      "tn": 294,
+      "per_class": {
+        "Oil": {
+          "n": 150,
+          "recall": 0.8533333333333334
+        },
+        "Lookalike": {
+          "n": 150,
+          "rejection": 0.9733333333333334
+        },
+        "No oil": {
+          "n": 150,
+          "rejection": 0.9866666666666667
+        }
+      }
+    },
+    "both32": {
+      "threshold": 0.4896,
+      "scene_accuracy": 0.94,
+      "oil_recall": 0.8733,
+      "lookalike_rejection": 0.96,
+      "cleanocean_rejection": 0.9867,
+      "tp": 131,
+      "fp": 8,
+      "fn": 19,
+      "tn": 292,
+      "per_class": {
+        "Oil": {
+          "n": 150,
+          "recall": 0.8733333333333333
+        },
+        "Lookalike": {
+          "n": 150,
+          "rejection": 0.96
+        },
+        "No oil": {
+          "n": 150,
+          "rejection": 0.9866666666666667
+        }
+      }
+    },
+    "both_wide": {
+      "threshold": 0.4896,
+      "scene_accuracy": 0.9378,
+      "oil_recall": 0.88,
+      "lookalike_rejection": 0.9467,
+      "cleanocean_rejection": 0.9867,
+      "tp": 132,
+      "fp": 10,
+      "fn": 18,
+      "tn": 290,
+      "per_class": {
+        "Oil": {
+          "n": 150,
+          "recall": 0.88
+        },
+        "Lookalike": {
+          "n": 150,
+          "rejection": 0.9466666666666667
+        },
+        "No oil": {
+          "n": 150,
+          "rejection": 0.9866666666666667
+        }
+      }
+    }
+  },
+  "retrained": false,
+  "threshold_prev": 0.4895855486392975,
+  "note": "SAME WEIGHTS as scene_classifier_l1_e2c.pt - only the threshold differs. No retraining, so this carries no model-change confound, unlike the r95 run."
+}
