@@ -474,7 +474,8 @@ def check_particles(d, box, meta, fname="particles.json", expect="backward", req
             "particles must never be added or dropped mid-run")
     span_h = (p["n_steps"] - 1) * p["timestep_minutes"] / 60
     if not 6 <= span_h <= 72:
-        warn(f"{fname}: run spans {span_h:.1f} h; the demo is scoped to ~24 h")
+        warn(f"{fname}: run spans {span_h:.1f} h; Stage 2 is scoped to at most 72 h "
+             f"(the rewind horizon, raised from 24 h on 16 Sept 2026)")
     if box:
         for si in (0, len(pos) // 2, len(pos) - 1):
             for pt in pos[si][::max(1, len(pos[si]) // 50)]:
@@ -486,13 +487,30 @@ def check_particles(d, box, meta, fname="particles.json", expect="backward", req
         dx = (b[0] - a[0]) * 111.32 * math.cos(mlat)
         dy = (b[1] - a[1]) * 111.32
         dist = math.hypot(dx, dy)
-        if dist > 400:
+        # DERIVE THE CEILING FROM THE SPAN, do not hardcode it.
+        #
+        # This used to be a flat `dist > 400`, which was right for the only span that existed
+        # when it was written (24 h). At the 72 h horizon Jacksonville travels ~443 km at a
+        # perfectly plausible 1.7 m/s, so the flat number would have ERRORED on the hero case --
+        # the exact failure step.py's own assert_displacement_plausible docstring describes:
+        # "the guard was calibrated on the first case in the library and then met the second".
+        #
+        # MAX_PLAUSIBLE_SPEED_MS = 3.0 is step.py's, kept in sync by hand because this script is
+        # deliberately stdlib-only so CI installs nothing. The warn threshold is the same speed
+        # bound at a more ordinary 1.9 m/s.
+        max_speed_ms = 3.0
+        ceiling_km = max_speed_ms * 3.6 * span_h
+        warn_km = 1.9 * 3.6 * span_h
+        if dist > ceiling_km:
             err(f"{fname}: particle 0 travelled {dist:.0f} km in {span_h:.0f} h "
+                f"= {dist / max(span_h, 1e-9) / 3.6:.2f} m/s, past the {max_speed_ms} m/s "
+                f"ceiling ({ceiling_km:.0f} km over this span) "
                 "— check current units (HYCOM on GEE is int x 0.001 m/s: divide by 1000)")
         elif dist < 0.5:
             err(f"{fname}: particle 0 barely moved ({dist:.2f} km) — fields may be zero")
-        elif dist > 250:
-            warn(f"{fname}: particle 0 travelled {dist:.0f} km — high but not impossible")
+        elif dist > warn_km:
+            warn(f"{fname}: particle 0 travelled {dist:.0f} km in {span_h:.0f} h "
+                 f"= {dist / max(span_h, 1e-9) / 3.6:.2f} m/s — high but not impossible")
     except (IndexError, TypeError):
         err(f"{fname}/positions: malformed coordinate arrays")
     return p

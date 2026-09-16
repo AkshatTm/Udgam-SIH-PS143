@@ -35,7 +35,26 @@ DEFAULT_PROJECT = "project-c6f47846-50cd-4991-94c"
 # Ennore, matching docs/team/anushka-stage2-drift.md Phase 2. [west, south, east, north]
 ENNORE_BBOX = [79.5, 12.0, 81.5, 14.5]
 ENNORE_T0 = datetime(2017, 1, 29, 0, 14, 0, tzinfo=timezone.utc)
-LOOKBACK_HOURS = 30
+
+# HOW FAR BACK STAGE 2 CAN HONESTLY REWIND. Raised from 24 h on 16 Sept 2026.
+#
+# A fixed 24 h rewind was never a physical statement -- it was a default, and origin.json's
+# `bounded` time_window is literally [t0 - span, t0 - span/3], i.e. an artefact of that default
+# rendered in the UI as RELEASE WINDOW. A slick can be six hours old or two days old, and the
+# answer has to be able to say which.
+#
+# THE BINDING CONSTRAINT IS HYCOM'S CADENCE, NOT THE INTEGRATOR. HYCOM on GEE is DAILY, so a
+# 30 h lookback holds only two snapshots and anything past the older one is CLAMPED, not
+# modelled -- the field stops varying and the extent curve flattens, which the age estimator
+# then (correctly) refuses for a data reason that looks like a physics one. 78 h guarantees FOUR
+# daily 00:00Z snapshots for any t0, including the worst case of a t0 a few minutes past
+# midnight, so the whole 72 h span is interpolated between real slices.
+#
+# The pad grows with this automatically (required_pad_km scales with hours), and fetch_gee's
+# getRegion request is chunked to stay inside GEE's response ceiling as a result.
+REWIND_HOURS = 72.0
+LOOKBACK_SLACK_HOURS = 6.0
+LOOKBACK_HOURS = int(REWIND_HOURS + LOOKBACK_SLACK_HOURS)      # 78
 
 CURRENTS = "HYCOM/sea_water_velocity"
 CURRENT_BANDS = ["velocity_u_0", "velocity_v_0"]        # surface layer, int * 0.001 m/s

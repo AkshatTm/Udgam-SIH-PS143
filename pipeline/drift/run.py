@@ -71,6 +71,43 @@ def r5(x):
 
 
 
+def subsample_for_output(history, integration_dt_min, output_dt_min):
+    """Thin an integration history down to the frames that ship in particles.json.
+
+    THE INTEGRATION TIMESTEP AND THE OUTPUT TIMESTEP ARE DIFFERENT THINGS, and conflating them
+    is the next silent bug in this file. Integration runs at 15 min because that is what the RK2
+    error budget and the known-answer tests are built on. OUTPUT runs at 45 min because the
+    frontend animates it: at 72 h, 15-min frames would be 289 x 3000 positions, about 17 MB of
+    JSON, against the 97 x 3000 the demo machine was actually tested on (web/CLAUDE.md).
+
+    72 h at 45 min is 96 intervals = 97 stored positions -- byte-for-byte the same shape
+    particles.json has always had, so nothing in web/ changes and frozen convention 4
+    (duration = (n_steps - 1) x timestep_minutes) still holds exactly, now against the OUTPUT
+    timestep that particles.json actually declares.
+
+    Returns (frames, output_dt_min). Refuses rather than silently shipping a file whose declared
+    timestep does not match its contents.
+    """
+    stride = output_dt_min / integration_dt_min
+    if abs(stride - round(stride)) > 1e-9:
+        raise SystemExit(
+            f"--output-timestep-minutes {output_dt_min} is not a whole multiple of "
+            f"--timestep-minutes {integration_dt_min}. particles.json declares ONE timestep and "
+            f"the frontend derives every frame time from it, so a fractional stride would put "
+            f"every rendered timestamp slightly wrong with nothing to catch it.")
+    stride = int(round(stride))
+    frames = history[::stride]
+    span_in = (len(history) - 1) * integration_dt_min
+    span_out = (len(frames) - 1) * output_dt_min
+    if span_out != span_in:
+        raise SystemExit(
+            f"subsampling changed the span: {span_in} min integrated but {span_out} min would "
+            f"be declared ({len(history)} frames at {integration_dt_min} min -> {len(frames)} "
+            f"at {output_dt_min} min). Choose --steps so that (steps-1) is divisible by "
+            f"{stride}.")
+    return frames, output_dt_min
+
+
 def write_particles(path, t0, positions, dt_min):
     path.write_text(json.dumps({
         "t0": iso(t0), "direction": "backward", "timestep_minutes": dt_min,
@@ -284,7 +321,9 @@ def run_forward(a, meta, t0, field, seed, feat, out_dir):
     positions = np.round(history, 5).tolist()
     out_dir.mkdir(parents=True, exist_ok=True)
     fwd_path = out_dir / "particles_forward.json"
-    write_particles_forward(fwd_path, t0, positions, a.timestep_minutes)
+    fwd_frames, fwd_dt = subsample_for_output(np.asarray(positions), a.timestep_minutes,
+                                              a.output_timestep_minutes)
+    write_particles_forward(fwd_path, t0, fwd_frames.tolist(), fwd_dt)
 
     impact = coastal_impact(history, times, strand_step, a.timestep_minutes)
     impact_path = out_dir / f"coastal_impact_{a.case}.json"
@@ -342,10 +381,18 @@ def main():
     ap.add_argument("--particles", type=int, default=3000)
     ap.add_argument("--runs", type=int, default=50,
                     help="ensemble members. The cut order allows 25; say so in origin.json.")
-    ap.add_argument("--steps", type=int, default=97,
-                    help="STORED POSITIONS, not physics steps: 97 = t0 + 96 backward "
-                         "intervals = exactly 24.0 h (CONTRACTS.md 5)")
-    ap.add_argument("--timestep-minutes", type=int, default=15)
+    ap.add_argument("--steps", type=int, default=289,
+                    help="STORED POSITIONS, not physics steps: 289 = t0 + 288 backward "
+                         "intervals of 15 min = exactly 72.0 h (CONTRACTS.md 5). Was 97 (24 h) "
+                         "until 16 Sept 2026; the rewind now has to be able to reach a release "
+                         "two days before the pass, and the age band picks the slice.")
+    ap.add_argument("--timestep-minutes", type=int, default=15,
+                    help="INTEGRATION timestep. Not what particles.json declares -- see "
+                         "--output-timestep-minutes.")
+    ap.add_argument("--output-timestep-minutes", type=int, default=45,
+                    help="timestep particles.json DECLARES and ships. 72 h at 45 min is 97 "
+                         "frames, the same size the frontend was tested at; 15-min frames over "
+                         "72 h would be ~17 MB of JSON.")
     ap.add_argument("--seed", type=int, default=143)
     ap.add_argument("--merge-oil", choices=["auto", "always", "never"], default="auto",
                     help="a slick broken into several oil features is ONE slick when it "
@@ -488,7 +535,9 @@ def main():
 
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    write_particles(out_dir / "particles.json", t0, positions, a.timestep_minutes)
+    out_frames, out_dt = subsample_for_output(np.asarray(positions), a.timestep_minutes,
+                                              a.output_timestep_minutes)
+    write_particles(out_dir / "particles.json", t0, out_frames.tolist(), out_dt)
     clon, clat, r50, r90, method, abstain = write_origin(
         out_dir / "origin.json", endpoints, conv_idx, members,
         t0, a.timestep_minutes, a.steps, a.runs, stranded_fraction=strand_frac,

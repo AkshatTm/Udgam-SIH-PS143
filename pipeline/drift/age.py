@@ -1108,8 +1108,12 @@ def main():
     ap.add_argument("--origin", default=None,
                     help="origin.json to read the centroid from and patch "
                          "(default <out>/origin.json)")
-    ap.add_argument("--candidates", default="2:36:2", metavar="LO:HI:STEP",
-                    help="candidate ages in hours for the shear estimator")
+    ap.add_argument("--candidates", default="2:72:4", metavar="LO:HI:STEP",
+                    help="candidate ages in hours for the shear estimator. Reaches 72 h from "
+                         "16 Sept 2026 (was 2:36:2) because the rewind does. The step widens "
+                         "2 -> 4 to hold runtime roughly constant: candidates are separate "
+                         "forward runs and the later ones are the long ones, so a 2 h step to "
+                         "72 h would be ~4x the work, not 2x.")
     ap.add_argument("--merge-oil", choices=["auto", "always", "never"], default="auto",
                     help="must match run.py's setting -- the age is read off the same slick "
                          "the origin was seeded from")

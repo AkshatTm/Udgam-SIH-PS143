@@ -414,7 +414,7 @@ def assert_field_covers(field, t_start, t_end, label="run", tol_frac=0.05, tol_m
           f"({overhang / span_h * 100:.0f}% of a {span_h:.1f} h span)\n"
         + f"  Past the axis the field is CLAMPED, not modelled -- every step re-uses the edge\n"
           f"  snapshot and the output looks entirely normal. Refetch a wider window:\n"
-          f"    python pipeline/drift/fetch_fields.py --case <id> --hours 30 "
+          f"    python pipeline/drift/fetch_fields.py --case <id> --hours 78 "
           f"--forward-hours {max(24.0, short_after):.0f} --force")
 
 
