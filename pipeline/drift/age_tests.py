@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from age import (SEED_SIGMA_M, _curve_with_wind, combine_bands, deformation_rate_s, elongation_age,
+from age import (SEED_PARTICLES, SEED_SIGMA_M, _curve_with_wind, combine_bands, deformation_rate_s, elongation_age,
                  fay_age,
                  fay_predicted_area_km2, fay_radius_km, invert_curve, observed_major_axis_km,
                  polygon_major_axis_km, slick_major_axis_km,
@@ -424,5 +424,21 @@ def run(check):
                 raised,
                 "an unseeded random walk makes two runs of the same case disagree with nothing "
                 "to point at, so rk2_step refuses -- loudly, like every other guard in step.py")
+
+    # --- 6z  the particle count keeps the noise floor BELOW the monotonicity gate ------
+    # This is the assertion that stops someone "optimising" SEED_PARTICLES back down.
+    #
+    # With diffusion on, the extent curve is stochastic, and check_monotonic refuses the whole
+    # estimator on a >2% fall between candidates. The relative standard error of a sigma estimate
+    # from n particles is 1/sqrt(2(n-1)). At the old n=300 that is 4.09% -- TWICE the gate -- so
+    # spurious refusals were structurally guaranteed, and Huntington duly failed 6/20 members on
+    # dips of 2.8-3.3%, all inside the noise band. Lowering the noise is the fix; widening the
+    # gate would blind it to a real convergence, which is the one thing it exists to catch.
+    noise_floor = 1.0 / math.sqrt(2.0 * (SEED_PARTICLES - 1))
+    ok &= check("6z  the seed cloud is large enough that sampling noise cannot trip the gate",
+                noise_floor < 0.02,
+                f"n={SEED_PARTICLES} -> SE(sigma) = {100 * noise_floor:.2f}%, below the 2.00% "
+                f"check_monotonic tolerance. At n=300 it was 4.09% and the estimator refused "
+                f"every case on its own sampling noise")
 
     return ok

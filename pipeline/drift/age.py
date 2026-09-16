@@ -122,7 +122,25 @@ WEATHERING_WIND_HI_MS = 10.0
 # Shear-dispersion seeding: a tight cloud, because we are measuring how the ocean spreads it,
 # not how wide we made it.
 SEED_SIGMA_M = 200.0
-SEED_PARTICLES = 300
+# RAISED FROM 300 TO 2000 ON 16 SEPT 2026, and the number is derived rather than chosen.
+#
+# With diffusion on (Phase 1) the extent curve is STOCHASTIC, and `check_monotonic` refuses the
+# whole estimator if modelled extent ever falls by more than tol_frac = 2% between candidates.
+# The relative standard error of a sigma estimate from n particles is 1/sqrt(2(n-1)):
+#
+#       n =  300  ->  4.09%        n = 1200  ->  2.04%
+#       n =  600  ->  2.89%        n = 2000  ->  1.58%
+#
+# At 300 the noise floor is TWICE the tolerance, so spurious monotonicity failures were
+# structurally guaranteed the moment the random walk was switched on -- and that is exactly what
+# happened: Huntington failed 6/20 members on dips of 2.8-3.3%, every one of them inside the
+# n=300 noise band and none of them a field squeezing the cloud.
+#
+# The fix is to lower the noise, NOT to raise the tolerance. `check_monotonic` exists to catch a
+# field that is genuinely converging, and widening it to swallow 4% sampling noise would blind it
+# to a real 3% violation. 2000 puts the noise floor at 1.58%, below the 2% gate, with margin.
+# Cost is ~6.7x the integration work in C3.1 only; nothing else in Stage 2 uses this.
+SEED_PARTICLES = 2000
 
 
 # ---------------------------------------------------------------------------------------
@@ -641,6 +659,11 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
 
     area_ratios = [m["area_ratio"] for m in members if m["area_ratio"]]
     diag = {
+        # Set here, before any of the skip returns below, so a refusal still says which way the
+        # gate went. It used to be assigned only on the success path, which meant the one case
+        # you most want it on -- a skipped estimator -- reported age_gate: null.
+        "age_gate": "unknown_widened" if widened else "acute",
+        "gate_reason": gate_reason,
         "n_members": n_members,
         "n_fitted": len(fits),
         "matched_on": "major_axis_length_km",
@@ -680,8 +703,6 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
     pct = UNKNOWN_PERCENTILE if widened else 10.0
     lo = float(np.percentile(fits, pct))
     hi = float(np.percentile(fits, 100.0 - pct))
-    diag["age_gate"] = "unknown_widened" if widened else "acute"
-    diag["gate_reason"] = gate_reason
     diag["band_percentiles"] = [pct, 100.0 - pct]
     return (lo, hi), diag
 
