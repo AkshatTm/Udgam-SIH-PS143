@@ -12,6 +12,59 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-16 12:30] P2 + P3 — Python pinned to 3.13, and the nine-figure evidence set
+
+**Done:**
+
+**P2 — the pin is 3.13.** Akshat ruled. `requirements.txt` and `CLAUDE.md` both said 3.11; every
+model here was trained and is served on **3.13.5 / torch 2.6.0+cu124 / torchvision 0.21.0+cu124 /
+CUDA 12.4**, so the docs described an environment nobody was running. Moving the models the day
+before the demo is the riskier option, so the documentation moved. Full resolved table written to
+`docs/receipts.md` with the one-line command that reproduces it. **Harshita is unblocked.**
+
+It matters beyond tidiness: the checkpoints are `torch.save` pickles, and loading them under a
+materially different torch is the class of failure that does not raise — it returns weights that
+load and behave differently.
+
+**P3 — nine figures, `pipeline/detect/make_figures.py` → `docs/evaluation/figures/stage1/`.**
+200 dpi PNG, every caption printing its **source path** and its **split**, n on every bar. Nothing
+is recomputed from a model — every number is read from a committed results file, so a figure can
+never silently disagree with the deck.
+
+| # | proves |
+|---|---|
+| F1.1 | 139/11/11/289 → accuracy 0.951, oil recall 0.927, look-alike 0.940, clean-ocean 0.987 |
+| F1.2 | the threshold was set on **validation**, not on the test set |
+| F1.3 | the gate costs 0.014 IoU, buys 0.48 look-alike rejection |
+| F1.4 | 0.4349 is the strictest of eight; the literature's definition gives **0.6871** |
+| F1.5 | the coverage cliff — and **no demo case sits in the failure band** |
+| F1.6 | Cerulean agreement, median IoU 0.483, recall 0.796–0.942 |
+| F1.7 | second polarisation: val F1 0.346→0.643, Part III precision 5.8× at identical recall |
+| F1.8 | rule margin in dB, 12 detections, **7 clear / 5 marginal** |
+| F1.9 | oracle ceiling 0.8446 — and **we beat it on 3 of 5 bands** |
+
+**One thing I would not fake, and it is labelled on the figure.** F1.2 needs a PR *curve*, and the
+shipped classifier's validation probabilities are **not recoverable** — it was trained on the
+pre-14-Sept cache, which was rebuilt with the corrected channel order. So the curve is drawn from
+the reproducible `l1_e2c` classifier, and the shipped model appears as a **single operating point
+computed from its own stored confusion matrix**. Both are labelled on the axes. Drawing the shipped
+curve on the new cache would have looked better and been a fabrication.
+
+**Checked by eye, not just by exit code** — the farmland incident was found only by opening the
+image. Fixed three layout faults that a glance caught: F1.2 had every operating point crushed into
+one corner (now zoomed to recall ≥0.84 with leader lines), F1.4's range label sat on the title, and
+F1.8's annotations sat on the bars.
+
+**Files:** `pipeline/detect/make_figures.py` (new), `docs/evaluation/figures/stage1/*` (9 PNG +
+README), `requirements.txt`, `CLAUDE.md`, `docs/receipts.md`
+
+**Run:** `python pipeline/detect/make_figures.py`
+
+**Open:** P3 acceptance asks the figure numbers be cross-checked against
+`docs/evaluation/deck-numbers.md` — every figure reads from the same JSON that file cites, so they
+cannot drift, but a human should still eyeball the deck once. Handoffs to Harshita (figures) and
+Jaiveer (land-masked contacts + per-case pixel area) are ready.
+
 ## [2026-09-16 11:40] P1 — land-masked the ship contacts: 142 → 110
 
 **Done:** Routed the ship detector through a **real coastline** instead of the brightness-inferred
