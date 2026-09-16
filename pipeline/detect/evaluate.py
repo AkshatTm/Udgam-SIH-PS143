@@ -390,6 +390,13 @@ def main():
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--limit", type=int, default=None, help="first N scenes — smoke test")
     ap.add_argument("--skip-unet", action="store_true")
+    ap.add_argument("--ckpt", default=None,
+                    help="explicit Layer 2 checkpoint; default models/unet.pt")
+    ap.add_argument("--clf", default=None,
+                    help="explicit Layer 1 checkpoint; default models/scene_classifier.pt")
+    ap.add_argument("--json", default=None,
+                    help="write here instead of results/eval_part3.json, so the shipped "
+                         "baseline is never overwritten")
     a = ap.parse_args()
 
     print("=" * 78)
@@ -403,7 +410,7 @@ def main():
     else:
         print("  [skip] classical row: run train.py first")
 
-    cl, gate_thr = classifier_row()
+    cl, gate_thr = classifier_row(a.clf)
     if cl:
         rows.append(cl)
     else:
@@ -411,7 +418,7 @@ def main():
         gate_thr = 0.5
 
     if not a.skip_unet:
-        ur, _ = unet_rows(gate_thr, limit=a.limit)
+        ur, _ = unet_rows(gate_thr, limit=a.limit, ckpt=a.ckpt, clf_path=a.clf)
         rows.extend(ur)
 
     print()
@@ -489,11 +496,11 @@ def main():
         print("  the strictest and the honest one. The others exist so the comparison is")
         print("  like-for-like, NOT so we can pick the flattering number (B2).")
 
-    out_path = OUT_JSON
+    out_path = a.json or OUT_JSON
     if a.limit:
         # A smoke run must never overwrite the authoritative numbers. It did once,
         # silently, and the 450-scene results had to be restored from git.
-        out_path = OUT_JSON.replace(".json", "_smoke.json")
+        out_path = out_path.replace(".json", "_smoke.json")
         print(f"\n  [--limit {a.limit}] PARTIAL RUN — these numbers are NOT the "
               f"Part III result.")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)

@@ -4,7 +4,19 @@
 The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the one-screen answer to
 "where is it".*
 
-**Last updated: 2026-09-16 10:45** — **Layer 1 recall FIXED without retraining**: Part III oil recall 0.873 → 0.927 by changing the threshold RULE. The gate is now free (matches ungated exactly). Previously — — **`--min-recall 0.95` FAILED** (recall 0.873 → 0.853) and Layer 1 training is **nondeterministic**. One rejected large slick costs **−0.046 pooled**. Programme frozen per Akshat's final-day brief. Previously — — **first END-TO-END gated number: 0.7566** on validation. Layer 1 retrained; the gate is essentially free. Previously — — **noise floor MEASURED at 3 seeds.** Pooled sd **0.0267**. Only the ≥30% result survives it. Previously — — **E2c MEASURED and the normalisation work is DONE.** E2c is the shippable configuration. The "band regressions" turn out to be training variance, not normalisation — see *What the normalisation actually touches*.
+**Last updated: 2026-09-16 11:00** — **PAUSED for today.** Resumes tomorrow.
+
+### What changed in this session (15 Sept evening → 16 Sept morning)
+
+| | result |
+|---|---|
+| **E2b** | the ≥30% gain is the **normalisation**, not the data reduction |
+| **E2c** | the configuration that **ships** — audit-safe reference AND the full training set |
+| **noise floor** | pooled **sd 0.0267** over 3 seeds. Only the ≥30% result clears it |
+| **Layer 1** | retrained on the new convention; **gated pipeline measurable for the first time** |
+| **Layer 1 threshold** | recall **0.873 → 0.927** on Part III by changing the RULE, no retraining |
+| **the gate** | now **free**: gated pooled = ungated ceiling exactly, 0 oil scenes lost |
+| **Part III** | run ONCE on the frozen configuration — see the result block |
 
 ---
 
@@ -514,9 +526,11 @@ Both are tagged and on disk. **Soum's call, post-demo.** Nothing shipped is affe
 | **E2** sea-referenced normalisation | ✅ **MEASURED — works, with a trade** | **>=30% band 0.282 -> 0.839** (oracle 0.959). Pooled 0.6894 -> 0.7316, inside the fold spread. Four bands regressed, worst -0.161 at 10-30%. Confounded by 175 fewer scenes / 477 fewer hard negatives — isolation run needed. See the result block above |
 | **E2c** sea reference, full training data | ✅ **MEASURED — the configuration that ships** | Best on every aggregate: pooled **0.7567**, mean IoU **0.8736**, macro/scene **0.7316** (only variant above baseline), band-weighted **0.7756**. Audit-safe reference AND the full 28,129 tiles |
 | **E2b** isolation: sea norm, NO land exclusion | ✅ **MEASURED — it separates cleanly** | `--no-land-mask` wired and verified (`4850e43`): bit-identical on open ocean, and on the Campeche coastal look-alike valid 0.943 → 1.000, reference moves 0.33 dB. **Answer: the ≥30% gain is the NORMALISATION** (0.8275 with land exclusion off, against baseline 0.2820), **and the regressions were the DATA REDUCTION** — three of four recover, and `macro/scene` returns to baseline. See the result block below |
+| **Layer 1** retrain + threshold rule | ✅ **done** | Retrained on `P12seac` (`l1_e2c`), Part III cache rebuilt as `P3seac`. Threshold rule changed from max-F1 to a **precision ≥ 0.95 floor**: Part III oil recall **0.873 → 0.927**, no retraining, no confound. Gated pooled = the ungated ceiling exactly |
+| **seed variance** | ✅ **measured** | 3 seeds, identical data: pooled **sd 0.0267**, spread 0.0490. ≥30% band sd 0.0551. **Nothing under ~0.08 pooled is detectable in a single run** |
 | **E4** loss — Focal+Dice / Tversky | ⬆️ **promoted, not started** | E1 points here: **zero of 200 easy tiles exceed 0.99** in any config, and focal γ=2 de-weights confident pixels by construction |
 | **E3** high-coverage regime | ❌ not started | Only **9** training scenes ≥30%, covering 38% of the holdout's oil mass |
-| **E5** TTA + seed ensemble | ❌ not started | Deliberately last — running it early inflates every intermediate comparison |
+| **E5** TTA + seed ensemble | ⬆️ **promoted — argue it goes FIRST now** | Was "deliberately last" because it inflates intermediate comparisons. That reasoning is now weak: **variance is the binding constraint on measuring anything**, and ensembling attacks it directly |
 | **E6** scene conditioning | ⏸ conditional | Only if E2 underdelivers. Same argument as E2, so likely redundant if E2 works |
 | **E7** architecture | ⛔ **not doing** | The dominant error is an input-representation failure, invariant to architecture |
 | **E8c** annotation ceiling + our-cases GT | ❌ not started | Human time approved. Decides whether 0.85 is a target or a mirage |
@@ -525,10 +539,10 @@ Both are tagged and on disk. **Soum's call, post-demo.** Nothing shipped is affe
 
 | item | state |
 |---|---|
-| **Layer 1 is stale against the new caches** | ⚠️ **NEW, and it blocks the gated metric.** The shipped classifier returns P(oil) **0.001-0.010** on new-convention input against a 0.143 threshold, so the gate closes on every scene. All E2 numbers above are therefore **ungated**. Layer 1 must be retrained on the new cache before any gated or end-to-end number means anything. **`--cache` now wired** (`4850e43`), so the retrain is unblocked |
+| ~~**Layer 1 is stale against the new caches**~~ | ✅ **RESOLVED 16 Sept** — retrained as `l1_e2c` on `P12seac`; the gated metric works. Original note: The shipped classifier returns P(oil) **0.001-0.010** on new-convention input against a 0.143 threshold, so the gate closes on every scene. All E2 numbers above are therefore **ungated**. Layer 1 must be retrained on the new cache before any gated or end-to-end number means anything. **`--cache` now wired** (`4850e43`), so the retrain is unblocked |
 | Python **3.13.5** vs the pinned **3.11** | ❓ open — Akshat's call. Only item that could break Stage 1 on another machine |
 | `contrast_centre_db` / `contrast_edge_db` | ❓ dropped for demo; Anushka needs it for the weathering flag. ~10 lines, works on 11 of 12 oil features |
-| **The `P3` holdout cache is STALE** | ⚠️ **NEW.** Built 12 Sept, before the channel-order fix — its manifest has no `channel_order`, i.e. channels TRANSPOSED relative to `P12`/`P12sea`. Any Part III number from a new-convention model is meaningless until it is rebuilt: `build_cache.py --parts 3 --normalise sea`. `train_classifier.py` now **aborts** on the mismatch rather than reporting nonsense |
+| ~~**The `P3` holdout cache is STALE**~~ | ✅ **RESOLVED 16 Sept** — rebuilt as `P3seac` (450 scenes, 4,575 tiles, sea/reference, correct channel order). The stale `P3` is left in place untouched. Original note: Built 12 Sept, before the channel-order fix — its manifest has no `channel_order`, i.e. channels TRANSPOSED relative to `P12`/`P12sea`. Any Part III number from a new-convention model is meaningless until it is rebuilt: `build_cache.py --parts 3 --normalise sea`. `train_classifier.py` now **aborts** on the mismatch rather than reporting nonsense |
 | **170 of 1,370 non-oil scenes are entirely land** | ⚠️ unreported to Akshat — "look-alike rejection 0.940" is partly measured on farmland |
 
 ---
@@ -608,12 +622,16 @@ pooled movements under ~0.06 as unresolved.
 | `P12seac` | 2,570 | 28,129 | sea-referenced, land excluded from the **reference only** (E2c) | ✅ verified: same sea reference as `P12sea` on every scene that has sea, data mask never smaller, entirely-land scenes recovered rather than deleted |
 | `P12seanl` | 2,570 | 28,129 | sea-referenced, land exclusion **OFF** (E2b) | ✅ verified single-variable vs `P12`: identical positives, 13 of 28,129 tiles differ. Measurement only — **never ship a model trained on this**; land in the sea sample is what failed the first two E2 audits |
 
-Both carry the corrected channel order: `vv_med` median **−20.20 dB** against `vh_med` **−32.87**,
-i.e. VV is in channel 0, in 99.9% of scenes. The old cache had these transposed.
+| `P3` | 450 | 4,575 | median, **LEGACY channel order** | built 12 Sept, channels TRANSPOSED. Superseded; left in place, do not train or score against it |
+| `P3seac` | 450 | 4,575 | sea-referenced, reference-only land mask | ✅ the holdout cache matching `P12seac`. Built 16 Sept |
 
-⚠️ **The two caches differ by TWO changes, not one.** Beyond normalisation, the sea cache's
-coastline land mask marks land invalid, so more tiles exceed `MAX_INVALID_FRAC` and are dropped —
-6,373 hard negatives against 6,850. Do not report the comparison as isolating normalisation.
+All `P12*` caches carry the corrected channel order: `vv_med` median **−20.20 dB** against `vh_med`
+**−32.87**, i.e. VV is in channel 0, in 99.9% of scenes. The old cache had these transposed.
+
+⚠️ **`P12sea` differs from `P12` by TWO changes, not one** — normalisation *and* 489 fewer tiles /
+175 fewer contributing scenes, because its coastline mask marks land invalid and those tiles then
+exceed `MAX_INVALID_FRAC`. **`P12seac` is the one that isolates normalisation properly** and is what
+should be used from here.
 
 ## If you are resuming cold
 
@@ -626,6 +644,8 @@ The reasoning lives in docstrings, not in anyone's head. Read these five in this
 | `pipeline/detect/evaluate_val.py` | why tile IoU is the wrong metric, and why `--ungated` is mandatory right now |
 | `pipeline/detect/oracle_ceiling.py` | how the 0.8446 ceiling is measured and why it decides the whole target |
 | `pipeline/detect/build_cache.py::scene_arrays` | the channel order, and that old checkpoints are incompatible with the new caches |
+| `pipeline/detect/normalise.py::sea_normalise` | the TWO-MASK rule (E2c): land excluded from the sea reference, never from tile eligibility. One implementation, called by both the cache builder and inference |
+| `pipeline/detect/train_classifier.py::cache_convention` | why a channel-order mismatch between train and test caches is a hard failure rather than a silent wrong number |
 
 `docs/updates/soumirya.md` carries the narrative; this file is the board.
 
@@ -639,33 +659,50 @@ The reasoning lives in docstrings, not in anyone's head. Read these five in this
 - A swap happens only when the **gated, end-to-end** val-scene number beats the shipped pair by
   **more than the 0.0599 fold spread** — and then on Soum's call, never silently.
 
-## Resume here — a decision, then E4
+## ⏸ PAUSED 16 Sept — resume tomorrow
 
-Layer 1 is done and the pipeline measures end-to-end. **The next move is a judgement call about the
-holdout, not a compute task.**
+**Model work is frozen** per Akshat's final-day brief (16 Sept): the demo runs the **classical**
+path, all nine cases PASS from it, and none of this programme is on the demo's critical path.
+Today's remaining Stage 1 work is the brief's P1–P3 (land-mask the contacts, the Python 3.13
+ruling, the nine evidence figures) — **none of which touches a model.**
 
-**The Part III question.** We now hold a complete, coherent configuration: `unet_e2c_sea_refonly` +
-`scene_classifier_l1_e2c`. Running Part III would say where we actually stand against 0.85. But A6
-says Part III runs ONCE, on a final configuration chosen entirely on validation — and E4, E3 and E5
-are still unrun. Spending it now buys a progress number and costs the holdout's independence.
-**Soum's call, and Akshat should know either way.**
+### The state you are resuming into
 
-**If we do not run it, the work continues on validation:**
+- **`P12seac` is the cache. `unet_e2c_sea_refonly.pt` + `scene_classifier_l1_e2c_recall.pt` is the
+  pair.** Everything is tagged; `models/unet.pt` and `models/scene_classifier.pt` are untouched.
+- **Part III has been spent once**, on that frozen pair, chosen entirely on validation. Running it
+  again after further work is a **second look** — treat it as no longer independent.
+- **The noise floor is 0.0267 pooled.** Nothing under ~0.08 is detectable in a single run.
+
+### Where the remaining accuracy actually is
+
+1. **E5 — seed ensembling. Argue this goes FIRST now.** Its "run it last" rationale was that it
+   inflates intermediate comparisons. But variance is now the *binding constraint on measuring
+   anything at all*, and ensembling attacks it directly. It is also the only item that makes every
+   later experiment cheaper to evaluate.
+2. **E3 — the high-coverage regime.** Only **9** training scenes ≥30% exist, and that band carries
+   38.3% of the holdout's oil mass. This is a data problem, and it is the one the oracle says is
+   still open (ceiling 0.959 there, we reach ~0.82).
+3. **E4 — loss (Focal+Dice, then Tversky).** Run at **3 seeds** or it is not a measurement.
+4. **E8c — the annotation ceiling.** The item that could tell us 0.85 is not reachable at all: at
+   ≥30%, **81% of even the ORACLE's error is within 5 px of the annotator's line.**
 
 ```bash
-# E4 - loss. At 3 seeds, because a single run can no longer detect anything under ~0.08 pooled.
+# E5 first - three seeds of the SAME config, then average the probability maps
 for S in 42 1 2; do
-  python pipeline/detect/train_unet.py --epochs 12 --patience 12 --split stratified --fold 0 --cache P12seac --tag e4_focaldice_s$S --seed $S
+  python pipeline/detect/train_unet.py --epochs 12 --patience 12 --split stratified --fold 0 --cache P12seac --tag e5_ens_s$S --seed $S
 done
+# (seeds 42, 1 and 2 of E2c already exist as unet_e2c_sea_refonly / _seed1 / _seed2 - reuse them)
 ```
 
-**Before E4, read the noise-floor block.** Pooled sd is 0.0267. Select on `macro/scene` or
-`mean IoU` (sd ~0.0135, half as noisy) and report pooled. And E5 (seed ensembling) is now arguably
-the highest-value item rather than the last, because it attacks the variance that is currently the
-binding constraint on measuring anything at all.
+### Two things that are NOT accuracy work but block other people
 
-**Cheap lever if the gate becomes the bottleneck:** retrain Layer 1 with `--min-recall 0.95`. Part
-III oil recall is 0.873, i.e. 19 of 150 oil scenes never reach Layer 2.
+- **Python 3.13.5 / torch 2.6.0+cu124 / torchvision 0.21.0+cu124** — the repo pins 3.11. Harshita's
+  base image is blocked on Akshat's ruling. **One message.**
+- **170 of 1,370 non-oil scenes are entirely land**, so "look-alike rejection 0.940" is partly
+  measured on farmland. Still unreported to Akshat.
+
+**Read the ≥30% band and the seed sd. Nothing smaller than ~0.08 pooled is a result.**
 
 ---
 
