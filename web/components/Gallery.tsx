@@ -16,6 +16,7 @@ import Link from "next/link";
 import { formatAcquisitionDate, loadGallery, type GalleryCase } from "@/lib/cases";
 import FlowField from "./FlowField";
 import { DetectDiagram, TraceDiagram, AttributeDiagram } from "./home/StageDiagrams";
+import UploadModal from "./UploadModal";
 
 /** Case-type badge: the same colour the map draws that thing in. */
 const CASE_TYPE: Record<
@@ -156,38 +157,6 @@ function CaseCard({ c, first }: { c: GalleryCase; first: boolean }) {
   );
 }
 
-/** Tier 1b entry point (harshita-deployment.md Part 1.1) — same card shape as CaseCard so it
- *  reads as a peer of the library, not an afterthought bolted below it. */
-function UploadCard() {
-  return (
-    <Link
-      href="/upload"
-      className="group relative flex min-h-[300px] flex-col overflow-hidden rounded-lg border border-dashed border-line bg-hull transition-colors duration-300 hover:border-drift focus-visible:border-drift"
-    >
-      <div className="flex h-[172px] items-center justify-center border-b border-line/60 bg-raised/40">
-        <span
-          aria-hidden
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-line-strong text-[22px] text-ink-2 transition-colors duration-200 group-hover:border-drift group-hover:text-drift"
-        >
-          ↑
-        </span>
-      </div>
-      <div className="relative flex flex-1 flex-col px-5 pb-5 pt-4">
-        <h3 className="t-subtitle text-ink transition-colors duration-200 group-hover:text-white">
-          Upload your own scene
-        </h3>
-        <p className="mt-2 t-small text-pretty text-ink-2">
-          Bring a GeoTIFF and run the real Detect stage on it live — Detect only; Trace and
-          Attribute need data this image doesn&apos;t carry.
-        </p>
-        <div className="mt-auto pt-4 text-[13px] font-medium text-drift">
-          Run Detect →
-        </div>
-      </div>
-    </Link>
-  );
-}
-
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 type GalleryState =
@@ -197,6 +166,7 @@ type GalleryState =
 
 export default function Gallery() {
   const [state, setState] = useState<GalleryState>({ status: "loading" });
+  const [uploadOpen, setUploadOpen] = useState(false);
   const casesRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -248,7 +218,7 @@ export default function Gallery() {
               there.
             </p>
 
-            <div className="mt-10 flex flex-wrap items-center gap-x-7 gap-y-4">
+            <div className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-4">
               <button
                 type="button"
                 onClick={() =>
@@ -257,6 +227,13 @@ export default function Gallery() {
                 className="rounded-full bg-drift px-6 py-3 text-[15px] font-semibold text-abyss transition-transform duration-200 ease-out hover:scale-[1.03]"
               >
                 Open a case
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadOpen(true)}
+                className="rounded-full border border-line-strong px-6 py-3 text-[15px] font-semibold text-ink transition-colors duration-200 ease-out hover:border-drift hover:text-drift"
+              >
+                Upload custom case
               </button>
               <span className="t-small text-ink-3">
                 Nine real Sentinel-1 scenes, each with a documented outcome
@@ -337,7 +314,6 @@ export default function Gallery() {
               <p className="mt-8 t-body text-ink-3">cases/index.json lists no cases.</p>
             ) : (
               <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                <UploadCard />
                 {state.cases.map((c, i) => (
                   <CaseCard key={c.id} c={c} first={i === 0} />
                 ))}
@@ -351,6 +327,8 @@ export default function Gallery() {
           </div>
         </footer>
       </div>
+
+      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
     </div>
   );
 }
