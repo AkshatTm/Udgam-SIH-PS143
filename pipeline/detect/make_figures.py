@@ -127,9 +127,12 @@ def _l2_src():
     if L2["file"] is None:
         return ("Source: pipeline/detect/results/%s  ·  Split: %s, gated (Classifier + U-Net)."
                 % (PAIR["part3"], L2["tag"]))
-    return ("Source: pipeline/detect/results/%s  ·  Split: %s, gated (Classifier + U-Net). "
-            "THIS IS A VALIDATION FIGURE, NOT A TEST FIGURE — for this same pair the Part III "
-            "holdout figure is pooled oil IoU 0.4516." % (L2["file"], L2["tag"]))
+    # The split label is what makes a validation figure honest, and it is not
+    # optional. The holdout comparison that used to sit here was removed on
+    # request; the source file and the split it names are not removable, because
+    # a caption that cannot be checked is the only kind that can mislead.
+    return ("Source: pipeline/detect/results/%s  ·  Split: %s, gated (Classifier + U-Net)."
+            % (L2["file"], L2["tag"]))
 
 
 def _part3():
@@ -656,7 +659,7 @@ def main():
     print("  Layer 2: %s\n" % L2["tag"])
     if L2["file"]:
         print("  [!] Layer 2 figures are VALIDATION. Every affected title says so.")
-        print("      The holdout figure for this pair is pooled IoU 0.4516 - say it if asked.\n")
+        print("      Layer 1 remains the Part III holdout.\n")
     want = a.only or sorted(FIGS)
     print("Stage 1 evidence set -> %s\n" % os.path.relpath(OUT, _ROOT))
     for n in want:
