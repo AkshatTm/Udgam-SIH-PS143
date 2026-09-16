@@ -66,6 +66,9 @@ MODELS = os.path.join(_HERE, "models")
 CKPT = os.path.join(MODELS, "scene_classifier.pt")
 META = os.path.join(MODELS, "scene_classifier_meta.json")
 
+NL = chr(10)   # newline, built rather than escaped: see the heredoc note in
+               # scratchpad/patch_clf.py
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DOMAIN_AUG = True   # set from --no-domain-aug
 
@@ -134,6 +137,23 @@ VARIANTS = {
 # ---------------------------------------------------------------------------
 # Data
 # ---------------------------------------------------------------------------
+
+def cache_convention(prefix):
+    """-> (channel_order, norm_mode) for a cache, or ("legacy", "median") if the
+    manifest predates the provenance block.
+
+    WHY THIS GUARD EXISTS. The P12/P12sea caches were rebuilt on 14 Sept with the
+    corrected channel order (0=VV); the P3 cache was built on 12 Sept and has the
+    channels TRANSPOSED. Training on one and scoring on the other is the exact bug
+    that made the E2 evaluation read 0.0000 for a day - it does not error, it
+    returns confident nonsense. A checkpoint that cannot state its own convention
+    is how that happens, so the mismatch is a hard failure here.
+    """
+    f = os.path.join(CACHE, "manifest_%s.json" % prefix)
+    man = json.loads(open(f, encoding="utf-8").read())
+    return (man.get("channel_order") or "legacy",
+            man.get("norm_mode") or "median")
+
 
 def load_split(prefix):
     arr = np.load(os.path.join(CACHE, f"scenes_{prefix}.npy"))          # (N,256,256,2) f16
@@ -378,7 +398,36 @@ def main():
                     help="validation recall floor when picking the threshold")
     ap.add_argument("--variants", default="all",
                     help="comma-separated subset of VARIANTS, or 'all'")
+    ap.add_argument("--cache", default="P12",
+                    help="training cache prefix, e.g. P12sea or P12seanl. This was "
+                         "hardcoded to P12 - the same bug train_unet.py had: the flag "
+                         "existed for the U-Net while Layer 1 silently ignored every "
+                         "new cache.")
+    ap.add_argument("--test-cache", default="P3",
+                    help="holdout cache prefix. Must share the training cache's "
+                         "channel order or the run aborts.")
+    ap.add_argument("--tag", default=None,
+                    help="write scene_classifier_<tag>.pt instead of the SHIPPED "
+                         "scene_classifier.pt. Every experiment must set this.")
+    ap.add_argument("--overwrite-shipped", action="store_true",
+                    help="permit writing the shipped scene_classifier.pt. Required "
+                         "when --tag is absent. The demo loads that file, and the swap "
+                         "policy is that Layer 1 and Layer 2 move as a PAIR, gated, on "
+                         "Soum's call - never as a side effect of a run.")
     a = ap.parse_args()
+
+    if not a.tag and not a.overwrite_shipped:
+        raise SystemExit(
+            "[REFUSED] this would overwrite the SHIPPED "
+            "models/scene_classifier.pt." + NL +
+            "          Pass --tag <name> to write a tagged checkpoint instead," + NL +
+            "          or --overwrite-shipped if replacing the shipped model is" + NL +
+            "          genuinely what you mean.")
+
+    ckpt_path, meta_path = CKPT, META
+    if a.tag:
+        ckpt_path = os.path.join(MODELS, "scene_classifier_%s.pt" % a.tag)
+        meta_path = os.path.join(MODELS, "scene_classifier_%s_meta.json" % a.tag)
 
     global DOMAIN_AUG
     DOMAIN_AUG = not a.no_domain_aug
@@ -390,11 +439,28 @@ def main():
     print("=" * 72)
     print("  LAYER 1 - scene classifier   device=%s" % DEVICE)
     print("=" * 72)
-    Xtr_all, ytr_all, ids_tr, cls_tr = load_split("P12")
-    Xte, yte, ids_te, cls_te = load_split("P3")
+    tr_conv, tr_norm = cache_convention(a.cache)
+    te_conv, te_norm = cache_convention(a.test_cache)
+    print("  train cache %s  (%s / %s)" % (a.cache, tr_conv[:34], tr_norm))
+    print("  test  cache %s  (%s / %s)" % (a.test_cache, te_conv[:34], te_norm))
+    if tr_conv != te_conv:
+        raise SystemExit(
+            "[FAIL] channel-order mismatch: %s is %r but %s is %r." % (
+                a.cache, tr_conv[:40], a.test_cache, te_conv[:40]) + NL +
+            "       Scoring across a transposition does not error, it returns" + NL +
+            "       confident nonsense. Rebuild the holdout cache first:" + NL +
+            "         python pipeline/detect/build_cache.py --parts 3 "
+            "--normalise %s" % tr_norm)
+    if tr_norm != te_norm:
+        print("  [WARN] normalisation differs: %r vs %r. The holdout is normalised "
+              "differently from training." % (tr_norm, te_norm))
+
+    Xtr_all, ytr_all, ids_tr, cls_tr = load_split(a.cache)
+    Xte, yte, ids_te, cls_te = load_split(a.test_cache)
 
     if set(ids_tr) & set(ids_te):
-        raise SystemExit("[FAIL] scene ids overlap between P12 and P3")
+        raise SystemExit("[FAIL] scene ids overlap between %s and %s"
+                         % (a.cache, a.test_cache))
 
     idx = np.arange(len(ytr_all))
     tr_idx, va_idx = train_test_split(idx, test_size=0.15, stratify=ytr_all,
@@ -474,9 +540,13 @@ def main():
     kw = VARIANTS[best_name]
     torch.save({"state_dict": model.state_dict(), "arch": "SceneCNN",
                 "in_ch": 2, "filters": kw["filters"], "pool": kw["pool"],
-                "variant": best_name}, CKPT)
-    with open(META, "w") as fh:
+                "variant": best_name,
+                "cache": a.cache, "channel_order": tr_conv,
+                "norm_mode": tr_norm}, ckpt_path)
+    with open(meta_path, "w") as fh:
         json.dump({"variant": best_name, "config": kw,
+                   "cache": a.cache, "test_cache": a.test_cache,
+                   "channel_order": tr_conv, "norm_mode": tr_norm,
                    "threshold": thr, "min_recall_floor": a.min_recall,
                    "threshold_selected_on": "validation split of Parts I+II, PR curve",
                    "variant_selected_on": "validation loss",
@@ -484,7 +554,7 @@ def main():
                    "n_parameters": trained[best_name]["params"],
                    "validation": va_rep, "part3": rep,
                    "all_variants_part3": all_rep}, fh, indent=2)
-    print("\n  saved %s\n  saved %s" % (CKPT, META))
+    print("\n  saved %s\n  saved %s" % (ckpt_path, meta_path))
     print("\n  Quote as: scene classification accuracy on the Zenodo Part III holdout,")
     print("  scene-level split, threshold and architecture both chosen on validation.")
 

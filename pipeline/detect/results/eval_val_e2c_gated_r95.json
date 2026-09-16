@@ -1,0 +1,91 @@
+{
+  "split": "Parts I+II held out, coverage-stratified (split.py)",
+  "folds": {
+    "0": {
+      "model": "Classifier + U-Net",
+      "scene_accuracy": null,
+      "oil_recall": 0.9835,
+      "lookalike_rejection": 0.9417,
+      "cleanocean_rejection": 0.9903,
+      "precision": null,
+      "f1": null,
+      "scene_recall": "179/182",
+      "iou_positives": 0.711,
+      "iou_all": 0.6943,
+      "note": "binarisation threshold 0.5",
+      "metric_decomposition": {
+        "iou_oil_pooled": {
+          "value": 0.711,
+          "definition": "oil class only; intersection and union POOLED over whole positive scenes; background excluded from numerator and denominator. The strictest of these, and what we report."
+        },
+        "iou_background_pooled": {
+          "value": 0.9886,
+          "definition": "background class only, same pooling. Near 1.0 because background is 96-98% of every scene."
+        },
+        "miou_pooled": {
+          "value": 0.8498,
+          "definition": "mean IoU over {background, oil}. THE AUTHORS' LIKELY DEFINITION \u2014 it is what 'IoU' usually means in a segmentation paper quoting accuracy beside it."
+        },
+        "pixel_accuracy_positives": {
+          "value": 0.9889,
+          "definition": "pixels classified correctly, over POSITIVE scenes only. The strict population: every scene here actually contains oil, so background-guessing earns less."
+        },
+        "pixel_accuracy_all450": {
+          "value": 0.9944,
+          "definition": "pixels classified correctly over ALL 450 scenes. The authors quote '99% accuracy' without naming the population, and the 300 negative scenes are nearly free marks, so this is the more likely match for their figure. Both are measured because guessing which one they meant is not evidence."
+        },
+        "dice_oil_pooled": {
+          "value": 0.8311,
+          "definition": "Dice / F1 on the oil class, pooled. Always >= IoU; Dice = 2*IoU/(1+IoU)."
+        },
+        "iou_oil_macro_scene": {
+          "value": 0.7278,
+          "definition": "oil IoU computed PER SCENE then averaged over the 182 positive scenes. Differs from pooled because pooling lets the largest slicks dominate.",
+          "n": 182
+        },
+        "iou_oil_macro_tile": {
+          "value": 0.6225,
+          "definition": "oil IoU per 256x256 tile, averaged over the 2574 tiles that CONTAIN oil. Easier again: a tile with oil in it is a pre-localised problem. A plausible alternative reading of the authors' number.",
+          "n": 2574
+        },
+        "iou_by_slick_size": {
+          "value": {
+            "0-1% oil": {
+              "n": 53,
+              "mean_iou": 0.6181
+            },
+            "1-3% oil": {
+              "n": 75,
+              "mean_iou": 0.7491
+            },
+            "3-10% oil": {
+              "n": 45,
+              "mean_iou": 0.833
+            },
+            "10-30% oil": {
+              "n": 6,
+              "mean_iou": 0.7007
+            },
+            "30-101% oil": {
+              "n": 3,
+              "mean_iou": 0.6087
+            }
+          },
+          "definition": "mean per-scene oil IoU, split by how much of the scene is oil. Pooled IoU weights a scene by its slick size, so if the big slicks are the weak ones, pooled collapses while macro-per-scene does not. This says whether that is what is happening."
+        },
+        "pooled_ci95": {
+          "value": null,
+          "ci": [
+            0.5973138355130189,
+            0.8012403748893445
+          ],
+          "definition": "95% scene-level bootstrap interval on iou_oil_pooled. Quote the interval, not the third decimal of the point estimate \u2014 a few large scenes dominate the pooled number."
+        },
+        "invalid_px_fraction": {
+          "value": 0.0266,
+          "definition": "share of pixels masked invalid (land/NaN) across positive scenes. Reported so nobody wonders whether the background numbers are inflated by masked-out area."
+        }
+      }
+    }
+  }
+}

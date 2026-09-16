@@ -1,0 +1,268 @@
+{
+ "case": "case-farallones-2023",
+ "t0": "2023-03-17T14:24:42Z",
+ "direction": "forward",
+ "horizon_hours": 24,
+ "horizon_note": "field cache covers ~24-26 h past t0; 48 h and 72 h need a wider fetch and are not extrapolated",
+ "n_runs": 50,
+ "n_particles_per_run": 3000,
+ "wind_coeff": "stratified U(0.025, 0.035), same draws as the backward ensemble",
+ "seeded_ashore_fraction": 0.0,
+ "first_landfall_hours": null,
+ "stranded_fraction_at_horizon": 0.0,
+ "centroid_displacement_km_at_horizon": 27.03,
+ "edge_margin_km": 84.0,
+ "envelope": [
+  {
+   "hours": 0,
+   "radius_50_km": 4.378,
+   "radius_90_km": 7.738,
+   "centroid": [
+    -123.8733,
+    37.79409
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 1,
+   "radius_50_km": 4.339,
+   "radius_90_km": 7.671,
+   "centroid": [
+    -123.87421,
+    37.77974
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 2,
+   "radius_50_km": 4.287,
+   "radius_90_km": 7.59,
+   "centroid": [
+    -123.87793,
+    37.76516
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 3,
+   "radius_50_km": 4.227,
+   "radius_90_km": 7.495,
+   "centroid": [
+    -123.8838,
+    37.75146
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 4,
+   "radius_50_km": 4.159,
+   "radius_90_km": 7.376,
+   "centroid": [
+    -123.89091,
+    37.73904
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 5,
+   "radius_50_km": 4.104,
+   "radius_90_km": 7.257,
+   "centroid": [
+    -123.89806,
+    37.72779
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 6,
+   "radius_50_km": 4.064,
+   "radius_90_km": 7.157,
+   "centroid": [
+    -123.90516,
+    37.71725
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 7,
+   "radius_50_km": 4.05,
+   "radius_90_km": 7.078,
+   "centroid": [
+    -123.91299,
+    37.70758
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 8,
+   "radius_50_km": 4.065,
+   "radius_90_km": 7.034,
+   "centroid": [
+    -123.9211,
+    37.69882
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 9,
+   "radius_50_km": 4.097,
+   "radius_90_km": 7.019,
+   "centroid": [
+    -123.92818,
+    37.6912
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 10,
+   "radius_50_km": 4.135,
+   "radius_90_km": 7.027,
+   "centroid": [
+    -123.93329,
+    37.68438
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 11,
+   "radius_50_km": 4.18,
+   "radius_90_km": 7.056,
+   "centroid": [
+    -123.93609,
+    37.67781
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 12,
+   "radius_50_km": 4.225,
+   "radius_90_km": 7.11,
+   "centroid": [
+    -123.93764,
+    37.67128
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 13,
+   "radius_50_km": 4.27,
+   "radius_90_km": 7.187,
+   "centroid": [
+    -123.9384,
+    37.66446
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 14,
+   "radius_50_km": 4.322,
+   "radius_90_km": 7.296,
+   "centroid": [
+    -123.93895,
+    37.65649
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 15,
+   "radius_50_km": 4.393,
+   "radius_90_km": 7.444,
+   "centroid": [
+    -123.93907,
+    37.64704
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 16,
+   "radius_50_km": 4.486,
+   "radius_90_km": 7.629,
+   "centroid": [
+    -123.93936,
+    37.63639
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 17,
+   "radius_50_km": 4.605,
+   "radius_90_km": 7.832,
+   "centroid": [
+    -123.94237,
+    37.62567
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 18,
+   "radius_50_km": 4.749,
+   "radius_90_km": 8.04,
+   "centroid": [
+    -123.94861,
+    37.61517
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 19,
+   "radius_50_km": 4.915,
+   "radius_90_km": 8.253,
+   "centroid": [
+    -123.95696,
+    37.60508
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 20,
+   "radius_50_km": 5.076,
+   "radius_90_km": 8.448,
+   "centroid": [
+    -123.96556,
+    37.59614
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 21,
+   "radius_50_km": 5.235,
+   "radius_90_km": 8.639,
+   "centroid": [
+    -123.97422,
+    37.58837
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 22,
+   "radius_50_km": 5.388,
+   "radius_90_km": 8.826,
+   "centroid": [
+    -123.98546,
+    37.58208
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 23,
+   "radius_50_km": 5.529,
+   "radius_90_km": 8.997,
+   "centroid": [
+    -123.99819,
+    37.5785
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 24,
+   "radius_50_km": 5.653,
+   "radius_90_km": 9.14,
+   "centroid": [
+    -124.01269,
+    37.57772
+   ],
+   "stranded_fraction": 0.0
+  }
+ ],
+ "source": "re-run of run.py seeding for case-farallones-2023, 50-member ensemble forward, GSHHG stranding on"
+}

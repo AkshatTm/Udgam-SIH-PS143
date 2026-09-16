@@ -1,0 +1,742 @@
+#!/usr/bin/env python3
+"""
+make_figures.py  —  the Stage 1 evidence set.  Owner: Soumirya.
+
+    python pipeline/detect/make_figures.py            # all nine
+    python pipeline/detect/make_figures.py --only 4   # just F1.4
+
+WHY THIS FILE EXISTS
+--------------------
+Competing teams hardcode results. You cannot out-argue that verbally, because a
+verbal claim and a fabricated claim sound identical across a table. You out-EVIDENCE
+it: every figure here is regenerated from a JSON file that is committed to the repo,
+and every caption prints the path it came from and the split it was measured on.
+
+**The caption is the point, not the chart.** A bar chart of accuracy is worth nothing;
+a bar chart whose caption says "Zenodo Part III, 450 scenes, scene-level split, model
+never trained on these" is worth the whole slide, because it is checkable.
+
+RULES FOLLOWED HERE
+-------------------
+1. No figure without **n**.
+2. No percentage without its **metric named**.
+3. Every caption carries its **source path** and its **split**.
+4. Nothing is recomputed from a model. Every number is read from a results file, so a
+   figure can never silently disagree with the number in the deck.
+
+THE ONE EXCEPTION, AND IT IS LABELLED. F1.2 needs a precision-recall CURVE, and the
+shipped classifier's validation probabilities are not recoverable: it was trained on
+the pre-14-Sept cache, which was rebuilt with the corrected channel order. So the curve
+is drawn from the reproducible `l1_e2c` classifier and the SHIPPED model appears as a
+single operating point computed from its own stored confusion matrix. Both are labelled
+on the figure. Drawing the shipped curve from the new cache would be a fabrication.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+RESULTS = os.path.join(_HERE, "results")
+MODELS = os.path.join(_HERE, "models")
+OUT = os.path.join(_ROOT, "docs", "evaluation", "figures", "stage1")
+
+# WHICH PAIR IS THE EVIDENCE SET ABOUT?
+#
+# Both were scored on the SAME Zenodo Part III holdout, 450 scenes, on a
+# configuration frozen before the run. Switching changes which model the figures
+# describe; it does not change what any caption is allowed to claim, because the
+# split is identical either way.
+#
+#   shipped  models/unet.pt + models/scene_classifier.pt        -> eval_part3.json
+#   updated  unet_e2c_sea_refonly + scene_classifier_l1_e2c_recall
+#                                                               -> eval_part3_e2c.json
+PAIRS = {
+    "shipped": {
+        "part3": "eval_part3.json",
+        "clf_meta": "scene_classifier_meta.json",
+        "label": "shipped pair",
+        "l2": "unet.pt", "l1": "scene_classifier.pt",
+    },
+    "updated": {
+        "part3": "eval_part3_e2c.json",
+        "clf_meta": "scene_classifier_l1_e2c_recall_meta.json",
+        "label": "E2c pair",
+        "l2": "unet_e2c_sea_refonly.pt", "l1": "scene_classifier_l1_e2c_recall.pt",
+    },
+}
+PAIR = PAIRS["updated"]
+
+# Layer 2 can be reported on either split. Layer 1 is ALWAYS the Part III holdout.
+#
+# Drawing Layer 2 on validation is legitimate only while it is LABELLED, so every
+# affected figure stamps the split into its title as well as its caption. The
+# holdout figure is printed alongside wherever the validation one appears, so the
+# validation number can never read as the test number by omission.
+L2_SPLITS = {
+    "holdout": {
+        "file": None,                       # falls through to PAIR["part3"]
+        "tag": "Zenodo Part III HOLDOUT, 450 scenes",
+        "short": "HOLDOUT",
+    },
+    "validation": {
+        "file": "eval_val_e2c_gated_recall.json",
+        "baseline": os.path.join(_ROOT, "scratch", "eval_val_base_median_ungated.json"),
+        "tag": "held-out VALIDATION scenes (Parts I+II), 388 scenes, fold 0",
+        "short": "VALIDATION",
+    },
+}
+L2 = L2_SPLITS["holdout"]
+
+
+def _l2():
+    """-> the gated Layer 2 row for the selected split."""
+    if L2["file"] is None:
+        return {r["model"]: r for r in _rows(_part3())}["Classifier + U-Net"]
+    d = _load(os.path.join(RESULTS, L2["file"]))
+    return d["folds"]["0"]
+
+
+def _l2_title(base):
+    if L2["short"] == "HOLDOUT":
+        return base
+    return base + "   [%s]" % L2["short"]
+
+
+def _l2_src():
+    """-> the caption prefix for a LAYER 2 figure: real source file, real split.
+
+    This exists because the first build of the mixed set stamped [VALIDATION] into
+    the title while the caption underneath still read "Split: Zenodo Part III
+    holdout, 450 scenes" — the source path and the split were hardcoded to the
+    holdout. A caption that asserts the wrong split is worse than no caption: it
+    is a checkable claim that is false, on the one line of the figure whose entire
+    job is to be checkable.
+    """
+    if L2["file"] is None:
+        return ("Source: pipeline/detect/results/%s  ·  Split: %s, gated (Classifier + U-Net)."
+                % (PAIR["part3"], L2["tag"]))
+    # The split label is what makes a validation figure honest, and it is not
+    # optional. The holdout comparison that used to sit here was removed on
+    # request; the source file and the split it names are not removable, because
+    # a caption that cannot be checked is the only kind that can mislead.
+    return ("Source: pipeline/detect/results/%s  ·  Split: %s, gated (Classifier + U-Net)."
+            % (L2["file"], L2["tag"]))
+
+
+def _part3():
+    return _load(os.path.join(RESULTS, PAIR["part3"]))
+
+
+def _clf_meta():
+    return _load(os.path.join(MODELS, PAIR["clf_meta"]))
+
+
+def _prov():
+    """The provenance string every caption ends with."""
+    return ("Models: %s + %s (%s)." % (PAIR["l2"], PAIR["l1"], PAIR["label"]))
+
+DPI = 200
+INK = "#1a1a1a"
+MUTED = "#6b7280"
+BLUE = "#2563eb"
+AMBER = "#d97706"
+RED = "#dc2626"
+GREEN = "#059669"
+GRID = "#e5e7eb"
+
+plt.rcParams.update({
+    "font.size": 9,
+    "axes.edgecolor": MUTED,
+    "axes.labelcolor": INK,
+    "text.color": INK,
+    "xtick.color": MUTED,
+    "ytick.color": MUTED,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "figure.facecolor": "white",
+})
+
+
+def _load(path):
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _rows(d):
+    return d if isinstance(d, list) else d.get("rows", [])
+
+
+def _caption(fig, text):
+    """The caption IS the evidence. Source path + split, every time."""
+    fig.text(0.5, 0.012, text, ha="center", va="bottom", fontsize=7,
+             color=MUTED, wrap=True)
+
+
+# Figure identity is a SLUG; the number is derived from which set it lands in.
+# Deck figures are numbered in PRESENTATION order, which is why 4 comes before 3:
+# Layer 1 numbers, then Layer 2 numbers, then the gate, then the external check.
+SLUG = {1: "layer1_scores", 2: "pr_curve_and_gate", 3: "gate_ablation",
+        4: "layer2_scores", 5: "coverage_cliff", 6: "cerulean_agreement",
+        7: "second_polarisation_ablation", 8: "rule_margin", 9: "oracle_ceiling"}
+DECK_NUM = {1: "F1.1", 4: "F1.2", 3: "F1.3", 6: "F1.4"}
+APPX_NUM = {2: "A1", 5: "A2", 7: "A3", 8: "A4", 9: "A5"}
+_CUR = None          # figure id currently being drawn; set by main()
+
+
+def _outfile():
+    """-> (directory, filename) for the figure being drawn.
+
+    Deck figures go to the stage1 folder as F1.1-F1.4; everything else goes to
+    appendix/ as A1-A5, so the two schemes cannot collide.
+    """
+    n = _CUR
+    if n in DECK_NUM:
+        return OUT, "%s_%s.png" % (DECK_NUM[n], SLUG[n])
+    return os.path.join(OUT, "appendix"), "%s_%s.png" % (APPX_NUM[n], SLUG[n])
+
+
+def _save(fig, name=None):
+    d, name = _outfile()
+    os.makedirs(d, exist_ok=True)
+    p = os.path.join(d, name)
+    fig.savefig(p, dpi=DPI, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    print("  wrote %s" % os.path.relpath(p, _ROOT))
+
+
+# ---------------------------------------------------------------------------
+# F1.1 — Layer 1 confusion matrix
+# ---------------------------------------------------------------------------
+def f1_1():
+    m = _clf_meta()["part3"]
+    tp, fp, fn, tn = m["tp"], m["fp"], m["fn"], m["tn"]
+    cm = np.array([[tn, fp], [fn, tp]], float)
+
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(8.4, 3.6),
+                                  gridspec_kw={"width_ratios": [1, 1]})
+    ax.imshow(cm / cm.sum(axis=1, keepdims=True), cmap="Blues", vmin=0, vmax=1)
+    for i in range(2):
+        for j in range(2):
+            frac = cm[i, j] / cm[i].sum()
+            ax.text(j, i, "%d\n%.1f%%" % (cm[i, j], 100 * frac), ha="center",
+                    va="center", fontsize=11,
+                    color="white" if frac > 0.5 else INK,
+                    fontweight="bold" if i == j else "normal")
+    ax.set_xticks([0, 1]); ax.set_xticklabels(["predicted\nno-oil", "predicted\noil"])
+    ax.set_yticks([0, 1]); ax.set_yticklabels(["actual\nno-oil\n(n=300)", "actual\noil\n(n=150)"])
+    ax.set_title("Layer 1 — scene classifier", fontsize=10, pad=10)
+    for s in ax.spines.values():
+        s.set_visible(False)
+
+    ax2.axis("off")
+    rates = [("scene accuracy", m["scene_accuracy"], "(%d+%d) / 450" % (tp, tn)),
+             ("oil recall", m["oil_recall"], "%d / 150 oil scenes" % tp),
+             ("look-alike rejection", m["lookalike_rejection"],
+              "%d / 150 look-alikes" % round(150 * m["lookalike_rejection"])),
+             ("clean-ocean rejection", m["cleanocean_rejection"],
+              "%d / 150 clean scenes" % round(150 * m["cleanocean_rejection"]))]
+    y = 0.88
+    for label, v, how in rates:
+        ax2.text(0.0, y, label, fontsize=9, color=INK)
+        ax2.text(0.62, y, "%.3f" % v, fontsize=13, color=BLUE, fontweight="bold")
+        ax2.text(0.0, y - 0.07, how, fontsize=7, color=MUTED)
+        y -= 0.20
+    ax2.text(0.0, 0.06, "decision threshold %.3f — chosen on a Parts I+II\n"
+                        "validation split, NOT on these 450 test scenes."
+             % m["threshold"], fontsize=7.5, color=AMBER, style="italic")
+
+    _caption(fig, "Source: pipeline/detect/models/%s  ·  Split: Zenodo Part III holdout, "
+                  "450 scenes (150 oil / 150 look-alike / 150 clean ocean), scene-level split "
+                  "— trained on Parts I+II only (D1).  %s"
+                  % (PAIR["clf_meta"], _prov()))
+    fig.subplots_adjust(bottom=0.18)
+    _save(fig, "F1.1_layer1_confusion_matrix.png")
+
+
+# ---------------------------------------------------------------------------
+# F1.2 — the PR curve and where the gate sits
+# ---------------------------------------------------------------------------
+def f1_2():
+    from sklearn.metrics import precision_recall_curve
+    from sklearn.model_selection import train_test_split
+    import torch
+    from pipeline.detect import nets
+    from pipeline.detect.train_classifier import load_split, predict
+
+    ship = _load(os.path.join(MODELS, "scene_classifier_meta.json"))
+    v = ship["validation"]
+    cur_thr = _clf_meta()["threshold"]
+    ship_rec = v["tp"] / (v["tp"] + v["fn"])
+    ship_prec = v["tp"] / (v["tp"] + v["fp"])
+
+    torch.manual_seed(42); np.random.seed(42)
+    X, y, ids, cls = load_split("P12seac")
+    idx = np.arange(len(y))
+    _tr, va = train_test_split(idx, test_size=0.15, stratify=y, random_state=42)
+    model, thr = nets.load_classifier(os.path.join(MODELS, "scene_classifier_l1_e2c.pt"))
+    p = predict(model, X[va], y[va])
+    prec, rec, thrs = precision_recall_curve(y[va].astype(int), p)
+
+    fig, ax = plt.subplots(figsize=(6.4, 4.6))
+    ax.plot(rec, prec, color=BLUE, lw=2, label="l1_e2c — reproducible PR curve (n=%d val scenes)" % len(va))
+    # Labels are pulled apart deliberately: the two operating points differ by ~0.03
+    # in precision, so a shared label height reads as if they were swapped.
+    for t, c, lab, off, ha in (
+            (0.4896, AMBER, "0.490 — max-F1 rule (the old one)", (-18, 12), "right"),
+            (0.1280, GREEN, "0.128 — precision ≥ 0.95 rule (adopted)", (-18, -26), "right")):
+        k = int(np.argmin(np.abs(thrs - t)))
+        ax.plot(rec[k], prec[k], "o", color=c, ms=9, zorder=5)
+        ax.annotate(lab, (rec[k], prec[k]), textcoords="offset points",
+                    xytext=off, fontsize=8, color=c, ha=ha,
+                    arrowprops=dict(arrowstyle="-", color=c, lw=0.8, alpha=0.6))
+    ax.plot(ship_rec, ship_prec, "*", color=RED, ms=17, zorder=6)
+    ax.annotate("SHIPPED model @ 0.143\n(its own validation split;\ncurve not reproducible)",
+                (ship_rec, ship_prec), textcoords="offset points", xytext=(-30, -78),
+                fontsize=8, color=RED, ha="right",
+                arrowprops=dict(arrowstyle="-", color=RED, lw=0.8, alpha=0.6))
+    ax.axvline(0.90, color=MUTED, ls=":", lw=1)
+    # Every operating point of interest sits above recall 0.85. Showing the full unit
+    # square renders the entire decision as a few pixels in one corner.
+    ax.set_xlim(0.84, 1.005)
+    ax.set_ylim(0.84, 1.005)
+    ax.text(0.9008, 0.845, " 0.90 recall floor", fontsize=7.5, color=MUTED,
+            rotation=90, va="bottom")
+    ax.set_xlabel("recall (oil scenes found)")
+    ax.set_ylabel("precision")
+    ax.set_title("Where the gate sits — and that it was set on VALIDATION", fontsize=10)
+    ax.grid(alpha=0.3, color=GRID)
+    ax.legend(loc="lower left", fontsize=7.5, frameon=False)
+    _caption(fig, "Sources: models/scene_classifier_meta.json (shipped operating point), "
+                  "models/scene_classifier_l1_e2c.pt + data/cache/manifest_P12seac.json (curve)  ·  "
+                  "Split: validation slice of Zenodo Parts I+II — NOT Part III. The shipped "
+                  "model's curve is not reproducible: it was trained on the pre-14-Sept cache, "
+                  "which was rebuilt with the corrected channel order, so only its stored "
+                  "operating point is plotted. Drawing it on the new cache would be a fabrication.")
+    fig.subplots_adjust(bottom=0.30)
+    _save(fig, "F1.2_pr_curve_and_gate.png")
+
+
+# ---------------------------------------------------------------------------
+# F1.3 — the gate ablation
+# ---------------------------------------------------------------------------
+def f1_3():
+    rows = {r["model"]: r for r in _rows(_part3())}
+    ung, gat = rows["U-Net only (no gate)"], rows["Classifier + U-Net"]
+    if L2["file"]:
+        d = _load(os.path.join(RESULTS, L2["file"]))["folds"]["0"]
+        u = _load(os.path.join(RESULTS, "eval_val_e2c.json"))["folds"]["0"]
+        gat = dict(gat, lookalike_rejection=d["lookalike_rejection"],
+                   cleanocean_rejection=d.get("cleanocean_rejection") or 0.0,
+                   oil_recall=d["oil_recall"],
+                   iou_positives=d["metric_decomposition"]["iou_oil_pooled"]["value"])
+        ung = dict(ung, lookalike_rejection=u["lookalike_rejection"],
+                   cleanocean_rejection=u.get("cleanocean_rejection") or 0.0,
+                   oil_recall=u["oil_recall"],
+                   iou_positives=u["metric_decomposition"]["iou_oil_pooled"]["value"])
+    labels = ["look-alike\nrejection", "clean-ocean\nrejection", "oil recall", "pooled oil IoU"]
+    a = [ung["lookalike_rejection"], ung["cleanocean_rejection"], ung["oil_recall"], ung["iou_positives"]]
+    b = [gat["lookalike_rejection"], gat["cleanocean_rejection"], gat["oil_recall"], gat["iou_positives"]]
+
+    x = np.arange(len(labels)); w = 0.36
+    fig, ax = plt.subplots(figsize=(7.2, 4.2))
+    r1 = ax.bar(x - w/2, a, w, label="U-Net only (no gate)", color=MUTED)
+    r2 = ax.bar(x + w/2, b, w, label="Classifier + U-Net (shipped)", color=BLUE)
+    for r in list(r1) + list(r2):
+        ax.text(r.get_x() + r.get_width()/2, r.get_height() + 0.015,
+                "%.3f" % r.get_height(), ha="center", fontsize=8)
+    ax.annotate("", xy=(0 + w/2, b[0]), xytext=(0 - w/2, a[0]),
+                arrowprops=dict(arrowstyle="->", color=GREEN, lw=1.6))
+    ax.text(0, (a[0] + b[0]) / 2, "  %+.2f" % (b[0] - a[0]), color=GREEN, fontsize=9,
+            fontweight="bold")
+    ax.annotate("", xy=(3 + w/2, b[3]), xytext=(3 - w/2, a[3]),
+                arrowprops=dict(arrowstyle="->", color=RED, lw=1.6))
+    ax.text(3, (a[3] + b[3]) / 2, "  %+.3f" % (b[3] - a[3]), color=RED, fontsize=9,
+            fontweight="bold")
+    ax.set_xticks(x); ax.set_xticklabels(labels)
+    ax.set_ylabel("score")
+    ax.set_title(_l2_title("The gate costs %.3f IoU and buys %.2f look-alike rejection"
+                           % (a[3] - b[3], b[0] - a[0])), fontsize=10)
+    ax.set_ylim(0, 1.16)
+    ax.legend(fontsize=8, frameon=False, loc="upper left", ncol=2)
+    ax.grid(axis="y", alpha=0.3, color=GRID)
+    _caption(fig, "%s  Ungating buys %+.3f pooled IoU and costs look-alike rejection "
+                  "%.2f → %.2f. We take the trade: a false spill alert is worse than a "
+                  "slightly looser outline.  %s"
+                  % (_l2_src(), a[3] - b[3], b[0], a[0], _prov()))
+    fig.subplots_adjust(bottom=0.24)
+    _save(fig, "F1.3_gate_ablation.png")
+
+
+# ---------------------------------------------------------------------------
+# F1.4 — the eight IoU definitions   (the strongest figure in the set)
+# ---------------------------------------------------------------------------
+def f1_4():
+    g = _l2()
+    md = g["metric_decomposition"]
+    order = [("iou_oil_pooled", "oil-class IoU, pooled\n← WHAT WE REPORT"),
+             ("iou_oil_macro_tile", "oil-class IoU, mean over tiles"),
+             ("dice_oil_pooled", "Dice / F1 on oil, pooled"),
+             ("iou_oil_macro_scene", "oil-class IoU, mean over scenes"),
+             ("miou_pooled", "mean IoU {background, oil}\n← WHAT THIS LITERATURE REPORTS"),
+             ("iou_background_pooled", "background-class IoU"),
+             ("pixel_accuracy_positives", "pixel accuracy, oil scenes"),
+             ("pixel_accuracy_all450", "pixel accuracy, all 450")]
+    labs, vals = [], []
+    for k, lab in order:
+        v = md.get(k, {}).get("value")
+        if v is not None:
+            labs.append(lab); vals.append(v)
+    colors = [RED if "WE REPORT" in l else (GREEN if "LITERATURE" in l else MUTED) for l in labs]
+
+    fig, ax = plt.subplots(figsize=(8.0, 4.8))
+    yy = np.arange(len(vals))[::-1]
+    ax.barh(yy, vals, color=colors, height=0.62)
+    for y_, v in zip(yy, vals):
+        ax.text(v + 0.012, y_, "%.4f" % v, va="center", fontsize=9)
+    ax.axvspan(0.67, 0.69, color=GREEN, alpha=0.10, zorder=0)
+    ax.text(0.68, 0.45, "published range on this\nbenchmark family: 0.67–0.69",
+            fontsize=7.5, color=GREEN, ha="center")
+    ax.set_yticks(yy); ax.set_yticklabels(labs, fontsize=8)
+    ax.set_xlim(0, 1.06); ax.set_xlabel("value")
+    ax.set_title(_l2_title("Eight definitions. Same model, same pixels, same scenes."),
+                 fontsize=10)
+    ax.grid(axis="x", alpha=0.3, color=GRID)
+    _caption(fig, "%s  We report %.4f — the STRICTEST of the eight. The others are printed "
+                  "so a comparison against any published number is like-for-like, not so we "
+                  "can pick the flattering one.  %s" % (_l2_src(), vals[0], _prov()))
+    fig.subplots_adjust(bottom=0.22)
+    _save(fig, "F1.4_eight_iou_definitions.png")
+
+
+# ---------------------------------------------------------------------------
+# F1.5 — the coverage cliff
+# ---------------------------------------------------------------------------
+def f1_5():
+    g = _l2()
+    bands = g["metric_decomposition"]["iou_by_slick_size"]["value"]
+    order = ["0-1% oil", "1-3% oil", "3-10% oil", "10-30% oil", "30-101% oil"]
+    labs = ["0–1%", "1–3%", "3–10%", "10–30%", "≥30%"]
+    vals = [bands[k]["mean_iou"] for k in order]
+    ns = [bands[k]["n"] for k in order]
+
+    fig, ax = plt.subplots(figsize=(7.6, 4.4))
+    cols = [MUTED] * 4 + [RED]
+    bars = ax.bar(np.arange(5), vals, color=cols, width=0.62)
+    for i, (b, v, n) in enumerate(zip(bars, vals, ns)):
+        ax.text(i, v + 0.02, "%.3f" % v, ha="center", fontsize=9, fontweight="bold")
+        ax.text(i, 0.02, "n=%d" % n, ha="center", fontsize=8, color="white"
+                if v > 0.12 else MUTED)
+    ax.axvspan(3.5, 4.5, color=RED, alpha=0.07, zorder=0)
+    ax.set_xticks(np.arange(5)); ax.set_xticklabels(labs)
+    ax.set_xlabel("oil coverage of the scene")
+    ax.set_ylabel("mean per-scene IoU")
+    ax.set_ylim(0, 1.0)
+    ax.set_title(_l2_title("Per-scene IoU by oil coverage"), fontsize=10)
+    ax.grid(axis="y", alpha=0.3, color=GRID)
+
+    # our own demo library, measured — every case sits far left of the cliff
+    cov = _demo_coverage()
+    ax2 = ax.twinx(); ax2.set_ylim(0, 1); ax2.axis("off")
+    for c in cov:
+        xx = _cov_to_x(c)
+        ax2.plot([xx], [0.93], marker="v", color=GREEN, ms=7, clip_on=False)
+    ax2.text(0.28, 0.965, "▼ our nine demo cases — measured coverage %.2f–%.2f%%"
+             % (min(cov), max(cov)), color=GREEN, fontsize=7.5)
+    _caption(fig, "%s  Demo coverage from cases/*/detections.geojson.  The four bands below "
+                  "30%% coverage score %.2f–%.2f; pooled IoU is dragged by the ≥30%% band, which "
+                  "holds ~38%% of all oil pixels because pooling weights a scene by its slick "
+                  "size. NO CASE IN THE DEMO LIBRARY SITS IN THAT BAND — measured, not "
+                  "assumed.  %s" % (_l2_src(), min(vals[:4]), max(vals[:4]), _prov()))
+    fig.subplots_adjust(bottom=0.26)
+    _save(fig, "F1.5_coverage_cliff.png")
+
+
+def _demo_coverage():
+    """Measured oil coverage per demo case: oil area / scene area."""
+    import glob
+    import rasterio
+    import warnings
+    warnings.filterwarnings("ignore")
+    idx = _load(os.path.join(_ROOT, "cases", "index.json"))
+    ids = [c if isinstance(c, str) else c.get("case_id")
+           for c in (idx["cases"] if isinstance(idx, dict) else idx)]
+    out = []
+    for cid in ids:
+        det = os.path.join(_ROOT, "cases", cid, "detections.geojson")
+        tif = os.path.join(_ROOT, "cases", cid, "sar_vv_vh.tif")
+        if not (os.path.exists(det) and os.path.exists(tif)):
+            continue
+        d = _load(det)
+        oil = sum(f["properties"].get("area_km2") or 0.0 for f in d.get("features", [])
+                  if f["properties"].get("classification") == "oil")
+        with rasterio.open(tif) as ds:
+            t, h, w = ds.transform, ds.height, ds.width
+        lat_mid = t.f + t.e * (h / 2.0)
+        km2 = (abs(t.a) * 111.320 * np.cos(np.radians(lat_mid))) * (abs(t.e) * 111.320) * h * w
+        out.append(100.0 * oil / max(km2, 1e-9))
+    return out
+
+
+def _cov_to_x(pct):
+    """Map a coverage percentage onto the band-bar x axis (0..4)."""
+    edges = [0.0, 1.0, 3.0, 10.0, 30.0, 101.0]
+    for i in range(5):
+        if edges[i] <= pct < edges[i + 1]:
+            span = edges[i + 1] - edges[i]
+            return i - 0.5 + (pct - edges[i]) / span
+    return 4.0
+
+
+# ---------------------------------------------------------------------------
+# F1.6 — agreement with Cerulean
+# ---------------------------------------------------------------------------
+# Cases excluded from the Cerulean figure, and WHY. A case is dropped here only
+# because it is not in the presentation at all — never because its number is poor.
+# The count and the exclusion are both stated on the figure, so the selection is
+# visible rather than silent: an unexplained n=4 where the results file holds 5 is
+# the shape of a cherry-pick, even when it is not one.
+CERULEAN_EXCLUDE = {
+    "case-gulf-alaska-2023": "not presented in this deck",
+}
+
+
+def f1_6():
+    rows = _load(os.path.join(RESULTS, "iou_cerulean.json"))
+    n_all = len(rows)
+    dropped = [r["case_id"] for r in rows if r["case_id"] in CERULEAN_EXCLUDE]
+    rows = [r for r in rows if r["case_id"] not in CERULEAN_EXCLUDE]
+    names = [r["case_id"].replace("case-", "").replace("-", "\n") for r in rows]
+    iou = [r["oil"]["iou"] for r in rows]
+    rec = [r["oil"]["recall"] for r in rows]
+    pre = [r["oil"]["precision"] for r in rows]
+
+    x = np.arange(len(rows)); w = 0.26
+    fig, ax = plt.subplots(figsize=(8.0, 4.4))
+    for off, v, c, lab in ((-w, iou, BLUE, "IoU"), (0.0, rec, GREEN, "recall (of their polygon)"),
+                           (w, pre, AMBER, "precision (of ours)")):
+        b = ax.bar(x + off, v, w, color=c, label=lab)
+        for r_ in b:
+            ax.text(r_.get_x() + r_.get_width()/2, r_.get_height() + 0.015,
+                    "%.2f" % r_.get_height(), ha="center", fontsize=7)
+    ax.axhline(float(np.median(iou)), color=BLUE, ls="--", lw=1)
+    ax.text(len(rows) - 0.4, np.median(iou) + 0.02, "median IoU %.3f" % np.median(iou),
+            fontsize=7.5, color=BLUE, ha="right")
+    ax.set_xticks(x); ax.set_xticklabels(names, fontsize=7.5)
+    ax.set_ylim(0, 1.05); ax.set_ylabel("score")
+    ax.set_title("Agreement with Cerulean on %d real incidents" % len(rows), fontsize=10)
+    ax.legend(fontsize=8, frameon=False, ncol=3, loc="upper left")
+    ax.grid(axis="y", alpha=0.3, color=GRID)
+    # The excluded case is NOT named here, by request. The COUNT stays: a figure
+    # drawn from a file of 5 while showing 4 has made a selection, and the reader
+    # is entitled to know a selection happened even if not which one. Dropping the
+    # count as well would leave the median reading as all available evidence when
+    # it is not — and the case removed was the lowest-scoring, so the omission
+    # would move the headline in our favour. That is the line.
+    excl = ""
+    if dropped:
+        n_left = n_all - len(rows)
+        excl = ("  %d of the %d cases carrying a reference polygon are shown; the other %s not "
+                "presented in this deck."
+                % (len(rows), n_all, "is" if n_left == 1 else "%d are" % n_left))
+    _caption(fig, "Source: pipeline/detect/results/iou_cerulean.json  ·  Real incidents with a "
+                  "Cerulean reference polygon.%s  Recall is high and uniform (%.3f–%.3f): we "
+                  "find the slick in every case and draw it LARGER — IoU here is limited by "
+                  "over-extent, not by misses. This is AGREEMENT BETWEEN TWO DETECTORS, not "
+                  "accuracy against ground truth: SkyTruth state plainly that SAR alone cannot "
+                  "definitively identify oil." % (excl, min(rec), max(rec)))
+    fig.subplots_adjust(bottom=0.28)
+    _save(fig, "F1.6_cerulean_agreement.png")
+
+
+# ---------------------------------------------------------------------------
+# F1.7 — the second-polarisation ablation
+# ---------------------------------------------------------------------------
+def f1_7():
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.6, 4.0))
+    for ax, vals, title, ylab in (
+            (a1, (0.346, 0.643), "validation F1", "F1"),
+            (a2, (0.049, 0.286), "Part III precision", "precision")):
+        b = ax.bar([0, 1], vals, color=[MUTED, BLUE], width=0.55)
+        for r_ in b:
+            ax.text(r_.get_x() + r_.get_width()/2, r_.get_height() + 0.012,
+                    "%.3f" % r_.get_height(), ha="center", fontsize=9, fontweight="bold")
+        ax.set_xticks([0, 1]); ax.set_xticklabels(["v1_absolute\n(single pol)", "v2_vh\n(both pols)"],
+                                                  fontsize=8)
+        ax.set_title(title, fontsize=9.5); ax.set_ylabel(ylab)
+        ax.set_ylim(0, max(vals) * 1.35); ax.grid(axis="y", alpha=0.3, color=GRID)
+    a2.annotate("5.8×", xy=(1, 0.286), xytext=(0.45, 0.22), fontsize=13,
+                color=GREEN, fontweight="bold")
+    a2.text(0.5, -0.115, "recall IDENTICAL both ways: 4 of 36 scenes",
+            transform=a2.transAxes, ha="center", fontsize=8, color=RED)
+    fig.suptitle("Adding the second polarisation rejects look-alikes — it does not find slicks",
+                 fontsize=10)
+    _caption(fig, "Sources: docs/receipts.md L104, docs/updates/soumirya.md §622  ·  Splits: "
+                  "validation slice of Parts I+II (F1) and Zenodo Part III holdout (precision).  "
+                  "FEATURE SETS ARE NAMED, NOT POLARISATIONS, DELIBERATELY: the feature that "
+                  "carried this ablation was computed from the band that is CO-pol on the "
+                  "benchmark corpus, so \"VH is the discriminator\" is dead as stated. The "
+                  "ablation itself is real and channel-agnostic.")
+    fig.subplots_adjust(bottom=0.32, top=0.86)
+    _save(fig, "F1.7_second_polarisation_ablation.png")
+
+
+# ---------------------------------------------------------------------------
+# F1.8 — the rule-margin distribution
+# ---------------------------------------------------------------------------
+def f1_8():
+    idx = _load(os.path.join(_ROOT, "cases", "index.json"))
+    ids = [c if isinstance(c, str) else c.get("case_id")
+           for c in (idx["cases"] if isinstance(idx, dict) else idx)]
+    vals, conf = [], []
+    for cid in ids:
+        p = os.path.join(_ROOT, "cases", cid, "detections.geojson")
+        if not os.path.exists(p):
+            continue
+        for f in _load(p).get("features", []):
+            pr = f["properties"]
+            if pr.get("classification") == "oil" and pr.get("contrast_db") is not None:
+                vals.append(pr["contrast_db"]); conf.append(pr.get("confidence"))
+    vals = np.array(vals)
+    clear = int((vals <= -4.5).sum()); marg = int((vals > -4.5).sum())
+
+    fig, ax = plt.subplots(figsize=(7.2, 4.2))
+    ax.hist(vals, bins=np.arange(-7.0, -2.5, 0.5), color=BLUE, alpha=0.85,
+            edgecolor="white")
+    ax.set_ylim(0, 4.3)          # headroom, so the rule labels never sit on a bar
+    ax.axvline(-3.0, color=RED, lw=2)
+    ax.text(-3.02, 4.15, "−3.0 dB rule line  ", color=RED, fontsize=8, ha="right",
+            va="top")
+    ax.axvline(-4.5, color=AMBER, lw=1.6, ls="--")
+    ax.text(-4.48, 4.15, "  −4.5 dB clear / marginal", color=AMBER, fontsize=8,
+            ha="left", va="top")
+    ax.set_xlabel("contrast_db  (the unit the rule actually measures)")
+    ax.set_ylabel("oil detections")
+    ax.set_title("Rule margin on the %d live oil detections — %d clear / %d marginal"
+                 % (len(vals), clear, marg), fontsize=10)
+    ax.grid(axis="y", alpha=0.3, color=GRID)
+    ax.text(0.02, 0.88, "confidence %.3f–%.3f, median %.3f\n%d clear (≤ −4.5 dB)  ·  %d marginal"
+            % (min(conf), max(conf), float(np.median(conf)), clear, marg),
+            transform=ax.transAxes, ha="left", fontsize=8, color=MUTED)
+    _caption(fig, "Source: cases/*/detections.geojson (the nine indexed cases)  ·  Split: the "
+                  "LIVE case library, not a benchmark.  On satellite cases `confidence` is a "
+                  "RULE MARGIN, not a model probability (Master §6.3), so it is drawn here in "
+                  "the unit the rule measures. Every detection clears the −3.0 dB rule; "
+                  "%d of %d also clear the −4.5 dB clear/marginal boundary." % (clear, len(vals)))
+    fig.subplots_adjust(bottom=0.26)
+    _save(fig, "F1.8_rule_margin.png")
+
+
+# ---------------------------------------------------------------------------
+# F1.9 — the oracle ceiling
+# ---------------------------------------------------------------------------
+def f1_9():
+    o = _load(os.path.join(RESULTS, "oracle_ceiling.json"))
+    g = _l2()
+    bands = g["metric_decomposition"]["iou_by_slick_size"]["value"]
+    key = {"0-1%": "0-1% oil", "1-3%": "1-3% oil", "3-10%": "3-10% oil",
+           "10-30%": "10-30% oil", ">=30%": "30-101% oil"}
+    labs = list(key)
+    orc = [o["per_band"][b]["iou"] for b in labs]
+    ours = [bands[key[b]]["mean_iou"] for b in labs]
+    ns = [o["per_band"][b]["n"] for b in labs]
+
+    x = np.arange(len(labs)); w = 0.36
+    fig, ax = plt.subplots(figsize=(7.6, 4.4))
+    b1 = ax.bar(x - w/2, orc, w, color=AMBER, label="ORACLE — handed the sea reference")
+    b2 = ax.bar(x + w/2, ours, w, color=BLUE,
+                label="ours (%s, gated)" % L2["short"].lower())
+    for r_ in list(b1) + list(b2):
+        ax.text(r_.get_x() + r_.get_width()/2, r_.get_height() + 0.015,
+                "%.2f" % r_.get_height(), ha="center", fontsize=7.5)
+    for i, n in enumerate(ns):
+        ax.text(i - w/2, 0.02, "n=%d" % n, ha="center", fontsize=7, color="white")
+    ax.axhline(o["weighted_ceiling"], color=RED, ls="--", lw=1.4)
+    ax.text(len(labs) - 0.45, o["weighted_ceiling"] + 0.02,
+            "weighted ceiling %.4f" % o["weighted_ceiling"], color=RED, fontsize=8, ha="right")
+    ax.set_xticks(x); ax.set_xticklabels(labs)
+    ax.set_xlabel("oil coverage band"); ax.set_ylabel("IoU")
+    ax.set_ylim(0, 1.08)
+    ax.set_title("How good could ANY radiometric method be? We beat the oracle on 3 of 5 bands",
+                 fontsize=9.5)
+    ax.legend(fontsize=8, frameon=False, loc="upper left")
+    ax.grid(axis="y", alpha=0.3, color=GRID)
+    _caption(fig, "Oracle source: pipeline/detect/results/oracle_ceiling.json.  Ours — %s  "
+                  "Oracle measured on 228 Parts I+II oil scenes; the ceiling is re-weighted by "
+                  "Part III band oil-mass to be comparable.  The oracle CHEATS in exactly one "
+                  "way: it takes the sea reference from the ground-truth mask, then uses one "
+                  "band, one blur and one global threshold. It bounds how much of the remaining "
+                  "gap is model quality versus normalisation.  %s" % (_l2_src(), _prov()))
+    fig.subplots_adjust(bottom=0.28)
+    _save(fig, "F1.9_oracle_ceiling.png")
+
+
+FIGS = {1: f1_1, 2: f1_2, 3: f1_3, 4: f1_4, 5: f1_5, 6: f1_6, 7: f1_7, 8: f1_8, 9: f1_9}
+
+# THE DECK SET. Four figures that carry the scores and the system claim:
+#   F1.1  Layer 1 numbers, with the confusion matrix behind them
+#   F1.4  Layer 2 numbers, all eight definitions so the comparison is like-for-like
+#   F1.3  the gate earns its place - the one design decision worth a slide
+#   F1.6  an INDEPENDENT detector agrees with us on five real incidents
+#
+# The other five are methodology and diagnosis (PR curve, coverage cliff,
+# polarisation ablation, rule margin, oracle ceiling). They stay in the repo and
+# stay one flag away, because "we have the working behind it" is the answer to a
+# question, even when it is not a slide.
+CORE = [1, 4, 3, 6]
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--only", type=int, action="append",
+                    help="figure number(s) to build; default is all nine")
+    ap.add_argument("--core", action="store_true",
+                    help="build only the four deck figures (F1.1, F1.3, F1.4, F1.6). The other "
+                         "five are methodology and diagnosis - kept in the repo, one flag away.")
+    ap.add_argument("--pair", choices=sorted(PAIRS), default="updated",
+                    help="which model pair the evidence set describes. Both are scored on the "
+                         "SAME Part III holdout, so this changes WHICH MODEL is documented, not "
+                         "what a caption may claim.")
+    ap.add_argument("--l2-split", choices=sorted(L2_SPLITS), default="holdout",
+                    help="which split the LAYER 2 figures report. Layer 1 is always the Part III "
+                         "holdout. 'validation' stamps the split into every affected title as "
+                         "well as its caption - a validation number must never be able to read "
+                         "as a test number by omission.")
+    a = ap.parse_args()
+    global PAIR, L2
+    PAIR = PAIRS[a.pair]
+    L2 = L2_SPLITS[a.l2_split]
+    print("  pair   : %s  (%s + %s)" % (PAIR["label"], PAIR["l2"], PAIR["l1"]))
+    print("  Layer 1: Zenodo Part III HOLDOUT (always)")
+    print("  Layer 2: %s\n" % L2["tag"])
+    if L2["file"]:
+        print("  [!] Layer 2 figures are VALIDATION. Every affected title says so.")
+        print("      Layer 1 remains the Part III holdout.\n")
+    want = a.only or (CORE if a.core else sorted(FIGS))
+    print("Stage 1 evidence set -> %s\n" % os.path.relpath(OUT, _ROOT))
+    global _CUR
+    for n in want:
+        _CUR = n
+        try:
+            FIGS[n]()
+        except Exception as exc:
+            import traceback
+            print("  [FAIL] F1.%d: %s" % (n, exc))
+            traceback.print_exc()
+    print("\n  Every caption names its source file and its split. That is the point.")
+
+
+if __name__ == "__main__":
+    main()

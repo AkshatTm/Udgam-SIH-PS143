@@ -1,0 +1,268 @@
+{
+ "case": "case-mumbai-2023",
+ "t0": "2023-09-03T01:03:33Z",
+ "direction": "forward",
+ "horizon_hours": 24,
+ "horizon_note": "field cache covers ~24-26 h past t0; 48 h and 72 h need a wider fetch and are not extrapolated",
+ "n_runs": 50,
+ "n_particles_per_run": 3000,
+ "wind_coeff": "stratified U(0.025, 0.035), same draws as the backward ensemble",
+ "seeded_ashore_fraction": 0.0,
+ "first_landfall_hours": null,
+ "stranded_fraction_at_horizon": 0.0,
+ "centroid_displacement_km_at_horizon": 27.94,
+ "edge_margin_km": 84.1,
+ "envelope": [
+  {
+   "hours": 0,
+   "radius_50_km": 1.313,
+   "radius_90_km": 2.346,
+   "centroid": [
+    72.17696,
+    18.472
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 1,
+   "radius_50_km": 1.308,
+   "radius_90_km": 2.334,
+   "centroid": [
+    72.18191,
+    18.4663
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 2,
+   "radius_50_km": 1.307,
+   "radius_90_km": 2.327,
+   "centroid": [
+    72.18664,
+    18.4601
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 3,
+   "radius_50_km": 1.312,
+   "radius_90_km": 2.333,
+   "centroid": [
+    72.19123,
+    18.45326
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 4,
+   "radius_50_km": 1.327,
+   "radius_90_km": 2.352,
+   "centroid": [
+    72.19571,
+    18.44569
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 5,
+   "radius_50_km": 1.35,
+   "radius_90_km": 2.384,
+   "centroid": [
+    72.19991,
+    18.43746
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 6,
+   "radius_50_km": 1.38,
+   "radius_90_km": 2.43,
+   "centroid": [
+    72.20372,
+    18.42869
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 7,
+   "radius_50_km": 1.419,
+   "radius_90_km": 2.489,
+   "centroid": [
+    72.20749,
+    18.4193
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 8,
+   "radius_50_km": 1.467,
+   "radius_90_km": 2.57,
+   "centroid": [
+    72.21151,
+    18.40919
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 9,
+   "radius_50_km": 1.521,
+   "radius_90_km": 2.675,
+   "centroid": [
+    72.21575,
+    18.39852
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 10,
+   "radius_50_km": 1.577,
+   "radius_90_km": 2.799,
+   "centroid": [
+    72.22011,
+    18.38736
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 11,
+   "radius_50_km": 1.637,
+   "radius_90_km": 2.944,
+   "centroid": [
+    72.2246,
+    18.37586
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 12,
+   "radius_50_km": 1.7,
+   "radius_90_km": 3.11,
+   "centroid": [
+    72.22889,
+    18.36415
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 13,
+   "radius_50_km": 1.764,
+   "radius_90_km": 3.298,
+   "centroid": [
+    72.23287,
+    18.35232
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 14,
+   "radius_50_km": 1.831,
+   "radius_90_km": 3.497,
+   "centroid": [
+    72.23658,
+    18.34051
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 15,
+   "radius_50_km": 1.899,
+   "radius_90_km": 3.711,
+   "centroid": [
+    72.23994,
+    18.3289
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 16,
+   "radius_50_km": 1.97,
+   "radius_90_km": 3.937,
+   "centroid": [
+    72.24302,
+    18.31764
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 17,
+   "radius_50_km": 2.043,
+   "radius_90_km": 4.17,
+   "centroid": [
+    72.24613,
+    18.30684
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 18,
+   "radius_50_km": 2.121,
+   "radius_90_km": 4.402,
+   "centroid": [
+    72.2496,
+    18.29668
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 19,
+   "radius_50_km": 2.204,
+   "radius_90_km": 4.636,
+   "centroid": [
+    72.25344,
+    18.28701
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 20,
+   "radius_50_km": 2.287,
+   "radius_90_km": 4.867,
+   "centroid": [
+    72.25751,
+    18.27758
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 21,
+   "radius_50_km": 2.372,
+   "radius_90_km": 5.097,
+   "centroid": [
+    72.2615,
+    18.2682
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 22,
+   "radius_50_km": 2.458,
+   "radius_90_km": 5.329,
+   "centroid": [
+    72.26558,
+    18.25862
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 23,
+   "radius_50_km": 2.547,
+   "radius_90_km": 5.567,
+   "centroid": [
+    72.26982,
+    18.24871
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 24,
+   "radius_50_km": 2.636,
+   "radius_90_km": 5.799,
+   "centroid": [
+    72.27398,
+    18.23846
+   ],
+   "stranded_fraction": 0.0
+  }
+ ],
+ "source": "re-run of run.py seeding for case-mumbai-2023, 50-member ensemble forward, GSHHG stranding on"
+}

@@ -1,0 +1,29 @@
+{
+  "depth": 7,
+  "filters": [
+    16,
+    32,
+    64,
+    128,
+    256,
+    512,
+    1024
+  ],
+  "loss": "focal(alpha=0.75, gamma=2.0)",
+  "threshold": 0.5,
+  "threshold_selected_on": "validation tiles",
+  "val_iou_at_threshold": 0.6312,
+  "val_iou_at_0.5": 0.6312,
+  "n_train_tiles": 23802,
+  "n_val_tiles": 4327,
+  "trained_on": "Zenodo Parts I+II tiles, split by scene",
+  "cache": "P12seac",
+  "channel_order": "vv_first",
+  "norm_mode": "sea",
+  "land_mode": "reference",
+  "seed": 2,
+  "split": "stratified",
+  "fold": 0,
+  "xpol_channel": 1,
+  "xpol_p": 0.25
+}

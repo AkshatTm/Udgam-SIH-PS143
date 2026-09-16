@@ -21,12 +21,15 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from age import (combine_bands, deformation_rate_s, elongation_age, fay_age,
+from age import (SEED_PARTICLES, SEED_SIGMA_M, _curve_with_wind, check_monotonic,
+                 crossing_index, late_dips, combine_bands, deformation_rate_s, elongation_age,
+                 fay_age,
                  fay_predicted_area_km2, fay_radius_km, invert_curve, observed_major_axis_km,
                  polygon_major_axis_km, slick_major_axis_km,
                  pca_extent, seed_cloud, shear_dispersion_age, shear_extent_curve,
                  weathering_flag)
-from step import integrate
+import step
+from step import integrate, rk2_step
 
 T0 = datetime(2017, 1, 29, 0, 14, 0, tzinfo=timezone.utc)
 ENNORE = [80.35, 13.25]
@@ -151,11 +154,28 @@ def run(check):
                   f"by dividing by 3.2 -- it has to be recomputed. At Jacksonville's aspect "
                   f"~168 the factor is ~13x")
 
-    # --- 6f  the acute gate actually gates ----------------------------------------------
+    # --- 6f  the gate is three-way: refuse chronic, allow acute, widen unknown ----------
+    # REWRITTEN 16 Sept 2026, when the gate stopped being `== "acute"`. The old assertion only
+    # checked that chronic was refused, which an unreachable gate also satisfies. This one pins
+    # all three branches AND the ordering between them, so a gate that refuses everything (the
+    # bug we actually had) fails here instead of looking strict.
     chronic_band, chronic_diag = elongation_age(8.2, 1.0e-5, "chronic")
-    ok &= check("6f  a chronic discharge is refused, not estimated",
-                chronic_band is None and "chronic" in chronic_diag.get("skipped", ""),
-                f"discharge_class='chronic' -> None. {chronic_diag.get('skipped')}")
+    acute_band, acute_diag = elongation_age(8.2, 1.0e-5, "acute")
+    unk_band, unk_diag = elongation_age(8.2, 1.0e-5, "unknown")
+    acute_w = (acute_band[1] - acute_band[0]) if acute_band else None
+    unk_w = (unk_band[1] - unk_band[0]) if unk_band else None
+    ok &= check("6f  chronic is refused, acute runs, unknown runs WIDER -- not refused",
+                chronic_band is None and "'chronic'" in chronic_diag.get("skipped", "")
+                and acute_band is not None and unk_band is not None
+                and unk_w > acute_w
+                and acute_diag["age_gate"] == "acute"
+                and unk_diag["age_gate"] == "unknown_widened",
+                f"chronic -> None ({chronic_diag['age_gate']}); acute -> "
+                f"[{acute_band[0]:.1f}, {acute_band[1]:.1f}] h, width {acute_w:.1f} h; "
+                f"unknown -> [{unk_band[0]:.1f}, {unk_band[1]:.1f}] h, width {unk_w:.1f} h "
+                f"(x{unk_w / acute_w:.2f} wider). Refusing 'unknown', as the gate did until "
+                f"16 Sept, refused 13 of the 17 oil detections in the library -- every case"
+)
 
     # --- 6g  Fay's exponent -------------------------------------------------------------
     r1 = fay_radius_km(1.0, 1000.0, 1.3, 900.0)
@@ -233,43 +253,39 @@ def run(check):
                 f"centre -12 dB vs edge -8 dB = {wdiag['gradient_db']:.1f} dB gradient "
                 f"-> {flag}")
 
-    # --- 6r  C3.1 carries the SAME acute gate as C3.3 ----------------------------------
+    # --- 6r  C3.1 carries the SAME three-way gate as C3.3 ------------------------------
     # On a chronic discharge the major axis is the vessel's track, not shear stretching a
     # patch: case-jacksonville-2024 is a 31.17 km ribbon of 4.55 km2, aspect ~170, width
     # ~190 m. No ocean does that in 36 h; a ship at transit speed does. So an estimator that
     # matches the major axis must refuse there, or it returns a confident wrong number.
+    #
+    # THIS ASSERTION HAS NOW CHANGED TWICE, and both times because it pinned a CLAIM rather than
+    # a BEHAVIOUR. It first required the words "MISSING INPUT" on the 'unknown' branch, which
+    # went false when Soumirya's detections landed. It was then rewritten to require "SHAPE
+    # ALONE" and "0 of 13" -- and "0 of 13" went stale too (the library holds 17 oil detections
+    # now, still none acute), while "NOT a missing field" described a gate that has since been
+    # removed for being unreachable.
+    #
+    # So it no longer asserts any sentence. It asserts what the gate DOES: chronic refuses,
+    # acute runs, unknown runs. A message can be reworded without breaking this; a gate that
+    # goes back to refusing every real slick cannot.
     gated, gdiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
                                         n_members=2, discharge_class="chronic")
     open_gate, odiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
                                             n_members=2, discharge_class="acute")
-    # The refusal must also say WHOSE problem it is, and WHAT IT IS.
-    #
-    # THIS ASSERTION CHANGED ON 13 SEPT, AND THE REASON MATTERS. It used to require the word
-    # "MISSING INPUT" in the 'unknown' message, because A5 had found discharge_class unset on
-    # every case and absent from every detections.geojson. Soumirya's detections then landed for all
-    # seven live cases and discharge_class IS emitted on every feature -- so the old wording was
-    # asserting something factually false, and a test that pins a false claim is worse than no
-    # test. The claim it replaces is stronger, not weaker: classify_discharge() reads SHAPE
-    # ALONE (elongation < 3 -> acute, >= 5 and straight -> chronic, else unknown), so 0 of the
-    # 13 oil detections in the library are acute and none ever can be. A5's conclusion survives
-    # structurally; only its stated cause was wrong.
     unset, udiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
                                         n_members=2, discharge_class="unknown")
-    ok &= check("6r  C3.1 refuses a chronic slick, runs on an acute one, and names the cause",
-                gated is None and "'chronic'" in gdiag.get("skipped", "")
-                and "nothing is missing" in gdiag.get("skipped", "")
-                and unset is None
-                and "NOT a missing field" in udiag.get("skipped", "")
-                and "SHAPE ALONE" in udiag.get("skipped", "")
-                and "0 of 13" in udiag.get("skipped", "")
-                and "members" in odiag,
-                f"chronic -> None, and the reason says the gate is correct and nothing is "
-                f"missing. unknown -> None, and the reason says it is NOT a missing field -- "
-                f"discharge_class IS emitted, it is computed from SHAPE ALONE, and 0 of 13 oil "
-                f"detections can ever be acute. "
-                f"acute -> ran {odiag.get('n_members')} members, {odiag.get('n_fitted')} fits "
-                f"against a 31.17 km axis. Those are three different situations and the "
-                f"diagnostics now distinguish them")
+    ok &= check("6r  C3.1 refuses only chronic; acute and unknown both reach the integrator",
+                gated is None
+                and gdiag.get("age_gate") == "chronic_refused"
+                and "'chronic'" in gdiag.get("skipped", "")
+                and "members" in odiag and odiag.get("age_gate") != "chronic_refused"
+                and "members" in udiag and udiag.get("age_gate") != "chronic_refused",
+                f"chronic -> None, gate {gdiag['age_gate']!r}, and the reason is the vessel's "
+                f"track rather than a missing field. acute -> ran "
+                f"{odiag.get('n_members')} members; unknown -> ran {udiag.get('n_members')} "
+                f"members. Both reach the integrator against a 31.17 km axis, which is the "
+                f"whole point: the old gate let neither of them run on any case in the library")
 
     # --- 6s  the major axis is MEASURED off the polygon, not inferred from an ellipse --
     # A1 made C3.1 match the observed major axis. Deriving that axis from area x elongation
@@ -328,5 +344,144 @@ def run(check):
                 out_of_range is None and abs(length - 11.38) < 0.05,
                 f"target 99 against a 1-3 curve -> {out_of_range}; and area 12.4 km2 with "
                 f"elongation 8.2 -> major axis {length:.2f} km")
+
+    # === Phase 1, 16 Sept 2026: horizontal diffusion ===================================
+    # These four exist because diffusion is the one term in this stage that is STOCHASTIC and
+    # OFF BY DEFAULT. Both properties are load-bearing and both are easy to break silently.
+
+    shear_field = LinearShearField(ENNORE[1])
+
+    # --- 6v  K=0 reproduces the deterministic curve EXACTLY (the regression pin) --------
+    base = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [6.0, 12.0], 15, 400,
+                            wind_coeff=0.03, seed=143)
+    again = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [6.0, 12.0], 15, 400,
+                             wind_coeff=0.03, seed=143, diffusivity=0.0)
+    ok &= check("6v  diffusivity=0 is bit-identical to the deterministic curve",
+                np.array_equal(base[1], again[1]),
+                f"major axes {base[1].round(4).tolist()} both ways. The default must never "
+                f"perturb the advection-only physics every other test asserts exactly")
+
+    # --- 6w  K>0 grows the cloud by the analytic TAYLOR-DISPERSION amount --------------
+    #
+    # THE OBVIOUS EXPECTATION IS WRONG HERE, and getting it wrong first is what makes this test
+    # worth having. Adding a random walk of sigma = sqrt(2KT) in quadrature with the advective
+    # axis predicts 2.14 km; the model produces 3.67 km. That is not a bug, it is SHEAR-DIFFUSION
+    # COUPLING: a particle that diffuses across-stream lands in water moving at a different
+    # speed and is then carried differentially downstream. For simple shear u = S*y the
+    # along-stream variance is
+    #
+    #     sigma_xx^2(t) = sigma_0^2 (1 + S^2 t^2)  +  2 K t  +  (2/3) S^2 K t^3
+    #                     \_ pure shear _/            \_ walk _/   \_ Taylor _/
+    #
+    # and at K = 50, S = 5e-5, t = 12 h the t^3 term alone is 60% of the total variance.
+    #
+    # That is the whole reason Phase 1 unblocks C3.1. Plain diffusion would add ~2 km to a
+    # 0.5 km axis; diffusion THROUGH A SHEARED FIELD adds enough to reach the 2.3-10.1 km slicks
+    # the library actually contains. The estimator is measuring the real ocean's dispersion, and
+    # this closed form is the only place it can be checked against something known exactly.
+    K = 50.0
+    T_h = 12.0
+    n_p = 2000
+    wet = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [T_h], 15, n_p,
+                           wind_coeff=0.03, seed=143, diffusivity=K)
+    dry = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [T_h], 15, n_p,
+                           wind_coeff=0.03, seed=143, diffusivity=0.0)
+    t_s = T_h * 3600.0
+    s0 = SEED_SIGMA_M
+    var_shear = s0 * s0 * (1.0 + (TEST_SHEAR_S * t_s) ** 2)
+    var_walk = 2.0 * K * t_s
+    var_taylor = (2.0 / 3.0) * TEST_SHEAR_S ** 2 * K * t_s ** 3
+    predicted = math.sqrt(var_shear + var_walk + var_taylor) / 1000.0
+    naive = math.hypot(float(dry[1][0]), math.sqrt(var_walk) / 1000.0)
+    measured = float(wet[1][0])
+    ok &= check("6w  K>0 spreads the cloud by the analytic Taylor-dispersion amount",
+                abs(measured - predicted) / predicted < 0.12,
+                f"K={K:g} m2/s over {T_h:g} h: major-axis sigma {measured:.3f} km against the "
+                f"closed form {predicted:.3f} km. The naive no-coupling guess is {naive:.3f} km "
+                f"-- the (2/3)S^2Kt^3 Taylor term is "
+                f"{100 * var_taylor / (var_shear + var_walk + var_taylor):.0f}% of the variance. "
+                f"Advection alone gives {float(dry[1][0]):.3f} km, which is why C3.1 stalled at "
+                f"~1.3 km on real HYCOM and refused on every case")
+
+    # --- 6x  the random walk is SEEDED: same seed, same answer -------------------------
+    r1 = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [6.0], 15, 300,
+                          wind_coeff=0.03, seed=77, diffusivity=40.0)
+    r2 = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [6.0], 15, 300,
+                          wind_coeff=0.03, seed=77, diffusivity=40.0)
+    r3 = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [6.0], 15, 300,
+                          wind_coeff=0.03, seed=78, diffusivity=40.0)
+    ok &= check("6x  a seeded diffusive run is reproducible, and a different seed differs",
+                np.array_equal(r1[1], r2[1]) and not np.array_equal(r1[1], r3[1]),
+                f"seed 77 twice -> {float(r1[1][0]):.5f} km both times; seed 78 -> "
+                f"{float(r3[1][0]):.5f} km. A stochastic model nobody can re-run is not a model")
+
+    # --- 6y  K>0 with no rng REFUSES rather than silently seeding itself ---------------
+    raised = False
+    try:
+        rk2_step(np.array([[80.35, 13.25]]), T0, 900.0, shear_field, diffusivity=25.0, rng=None)
+    except ValueError as exc:
+        raised = "rng" in str(exc)
+    ok &= check("6y  diffusivity>0 without an rng raises, never quietly picks a seed",
+                raised,
+                "an unseeded random walk makes two runs of the same case disagree with nothing "
+                "to point at, so rk2_step refuses -- loudly, like every other guard in step.py")
+
+    # --- 6z  the particle count keeps the noise floor BELOW the monotonicity gate ------
+    # This is the assertion that stops someone "optimising" SEED_PARTICLES back down.
+    #
+    # With diffusion on, the extent curve is stochastic, and check_monotonic refuses the whole
+    # estimator on a >2% fall between candidates. The relative standard error of a sigma estimate
+    # from n particles is 1/sqrt(2(n-1)). At the old n=300 that is 4.09% -- TWICE the gate -- so
+    # spurious refusals were structurally guaranteed, and Huntington duly failed 6/20 members on
+    # dips of 2.8-3.3%, all inside the noise band. Lowering the noise is the fix; widening the
+    # gate would blind it to a real convergence, which is the one thing it exists to catch.
+    noise_floor = 1.0 / math.sqrt(2.0 * (SEED_PARTICLES - 1))
+    ok &= check("6z  the seed cloud is large enough that sampling noise cannot trip the gate",
+                noise_floor < 0.02,
+                f"n={SEED_PARTICLES} -> SE(sigma) = {100 * noise_floor:.2f}%, below the 2.00% "
+                f"check_monotonic tolerance. At n=300 it was 4.09% and the estimator refused "
+                f"every case on its own sampling noise")
+
+    # === the monotonicity gate is scoped to the inversion (16 Sept 2026) ================
+    # A dip BELOW the crossing can put a second crossing under the target, which would make the
+    # age ambiguous -- that must still refuse. A dip ABOVE it cannot, and must not.
+    #
+    # This is the pair that stops the scoping being read as "we loosened the check because it
+    # was inconvenient". It is narrower where narrowness changes an answer and unchanged where
+    # it does not.
+    hrs = [2.0, 6.0, 10.0, 14.0, 18.0, 22.0]
+
+    # --- 6aa  a dip PAST the crossing does not refuse a sound inversion ----------------
+    late = [1.0, 2.0, 3.0, 9.0, 8.0, 12.0]        # crossing at 3.5 is at index 2-3; dip at 18 h
+    xi_late = crossing_index(late, 3.5)
+    ok_late, _, _ = check_monotonic(hrs, late, up_to=xi_late)
+    dips_late = late_dips(hrs, late, after=xi_late)
+    ok &= check("6aa a dip BEYOND the crossing is recorded, not fatal",
+                ok_late and xi_late == 3 and len(dips_late) == 1,
+                f"curve {late} crosses 3.5 at index {xi_late} (between "
+                f"{hrs[xi_late-1]:g} and {hrs[xi_late]:g} h) and dips at "
+                f"{dips_late[0]['from_hours']:g}->{dips_late[0]['to_hours']:g} h, "
+                f"{100*dips_late[0]['drop_frac']:.0f}%. The dip is past the crossing, so the age "
+                f"is still unique. This is Huntington at 72 h: all 20 members dip at 42-46 h "
+                f"while all 11 inversions sit at 2-7 h")
+
+    # --- 6bb  a dip BEFORE the crossing still refuses ---------------------------------
+    early = [1.0, 3.0, 2.0, 4.0, 9.0, 12.0]       # dips at index 2, well under a 8.0 target
+    xi_early = crossing_index(early, 8.0)
+    ok_early, bad_i, detail_early = check_monotonic(hrs, early, up_to=xi_early)
+    ok &= check("6bb a dip BEFORE the crossing still refuses -- the age would be ambiguous",
+                (not ok_early) and bad_i == 2,
+                f"curve {early} crosses 8.0 at index {xi_early}, but falls at index {bad_i} "
+                f"first: {detail_early}. A non-monotonic stretch below the target can cross it "
+                f"more than once, and a second crossing is a second age")
+
+    # --- 6cc  a member that never reaches the target contributes no fit ---------------
+    never = [9.0, 10.0, 11.0, 12.0, 13.0, 14.0]   # starts above a 3.5 target
+    ok &= check("6cc a curve that never crosses the target has no inversion to protect",
+                crossing_index(never, 3.5) is None and crossing_index(never, 99.0) is None,
+                "a member whose modelled extent starts above the observed one (high diffusivity) "
+                "or never reaches it contributes no fit either way, and is counted in n_fitted "
+                "rather than blamed on the field. Conflating the two read 20/20 monotonicity "
+                "failures on Huntington where only 9 members simply started above the target")
 
     return ok

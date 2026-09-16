@@ -10,6 +10,41 @@ on screen within five seconds, not a story. Internals are binding — whatever w
 
 ---
 
+## Resolved runtime environment — Stage 1 models
+
+*Recorded 2026-09-16 by Soumirya, per Akshat's ruling on Frozen Convention 8.*
+
+**The documentation said Python 3.11. Every model in this repository was trained and is served on
+Python 3.13.5.** Nobody was running 3.11. Rather than move the models the day before the demo, the
+ruling amended the docs. This block exists so the deployment container and a developer laptop are
+**provably** the same environment, rather than approximately.
+
+| component | resolved version |
+|---|---|
+| Python | **3.13.5** |
+| torch | **2.6.0+cu124** |
+| torchvision | **0.21.0+cu124** |
+| CUDA (torch build) | 12.4 |
+| numpy | 2.5.3 |
+| scipy | 1.18.1 |
+| rasterio | 1.5.1 |
+| opencv (cv2) | 5.0.0 |
+| scikit-learn | 1.9.0 |
+| matplotlib | 3.11.1 |
+| global-land-mask | 1.0.0 |
+
+**Why it matters beyond tidiness:** the checkpoints in `pipeline/detect/models/` are
+`torch.save` pickles. Loading them under a materially different torch is the class of failure that
+does not raise — it returns weights that load but behave differently. `requirements.txt` and
+`CLAUDE.md` were both amended to 3.13 on the same day.
+
+**Reproduce this table:**
+```bash
+venv/Scripts/python.exe -c "import sys,torch,torchvision;print(sys.version.split()[0],torch.__version__,torchvision.__version__)"
+```
+
+---
+
 ## Sentinel-1 SAR scenes (Google Earth Engine, `COPERNICUS/S1_GRD`)
 
 **All seven scene ids below are full and confirmed.** Every one was verified against GEE with

@@ -65,6 +65,33 @@ CACHE = os.path.join(_ROOT, "data", "cache")
 TILES = os.path.join(CACHE, "tiles")
 MODELS = os.path.join(_HERE, "models")
 CKPT = os.path.join(MODELS, "unet.pt")
+
+
+def _cache_convention(prefix):
+    """-> {"norm_mode":..., "land_mask":...} read from the cache's OWN manifest.
+
+    This used to be ("sea" if prefix.endswith("sea") else "median"), a filename
+    heuristic standing in for data that the manifest records explicitly. It broke
+    the moment a third cache appeared: P12seanl is sea-normalised but does not end
+    in "sea", so the run stamped norm_mode="median" onto a sea-trained model and
+    inference would have median-normalised it. Nothing would have errored; the
+    scene-level score would simply have been wrong, which is the same failure mode
+    that already cost a full train+eval cycle.
+    """
+    f = os.path.join(_ROOT, "data", "cache", "manifest_%s.json" % prefix)
+    conv = {"norm_mode": "median", "land_mode": "full"}
+    try:
+        m = json.loads(open(f, encoding="utf-8").read())
+        conv["norm_mode"] = m.get("norm_mode") or "median"
+        lmode = m.get("land_mode")
+        if lmode:
+            conv["land_mode"] = lmode
+        else:
+            lm = m.get("land_mask")
+            conv["land_mode"] = "full" if (lm is None or lm) else "none"
+    except Exception as exc:
+        print("  [WARN] cannot read %s (%s) - assuming %s" % (f, exc, conv))
+    return conv
 META = os.path.join(MODELS, "unet_meta.json")
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -280,7 +307,7 @@ def main():
     ap.add_argument("--xpol-channel", type=int, default=1, choices=(0, 1),
                     help="which channel the cross-pol dropout corrupts. DEFAULT 1 IS THE "
                          "BUG: cache channel 1 is read(2), the CO-POL channel, verified "
-                         "from the manifest where channel 0 runs 12.7 dB darker in 99.9% "
+                         "from the manifest where channel 0 runs 12.7 dB darker in 99.9%% "
                          "of 2565 scenes. Channel 0 is the real cross-pol. Kept as the "
                          "default so a plain run still reproduces the shipped model.")
     ap.add_argument("--xpol-p", type=float, default=0.25,
@@ -289,26 +316,44 @@ def main():
                          "the only informative channel replaced by noise.")
     ap.add_argument("--split", choices=("legacy", "stratified"), default="legacy",
                     help="legacy = train_test_split(uniq, 0.15, seed 42), which put 8 of "
-                         "the 9 >=30%-coverage scenes into TRAINING. stratified = "
+                         "the 9 >=30%%-coverage scenes into TRAINING. stratified = "
                          "split.py, coverage-stratified with a 3-fold rotation on that "
                          "band. Comparisons across runs must use the same one.")
     ap.add_argument("--fold", type=int, default=0, help="stratified split fold")
+    ap.add_argument("--cache", default="P12",
+                    help="tile-cache prefix: P12 (median, baseline) or P12sea (E2, "
+                         "sea-referenced). Both carry the corrected channel order; a "
+                         "checkpoint from one is NOT loadable against the other.")
     ap.add_argument("--tag", default="", help="suffix for the output files, so ablation "
                                               "runs do not overwrite each other")
     ap.add_argument("--no-domain-aug", action="store_true",
                     help="geometric augmentation only — the run that overfitted by epoch 3")
     ap.add_argument("--weight-decay", type=float, default=1e-4)
+    ap.add_argument("--seed", type=int, default=42,
+                    help="TRAINING seed only - weight init, shuffling, augmentation. "
+                         "The split is NOT affected: split.py uses its own generator at "
+                         "a fixed seed, so --seed re-rolls the model and holds the data "
+                         "constant. That is what makes it a measurement of training "
+                         "variance. Needed because one val scene swung IoU 0.82 -> 0.00 "
+                         "between runs on BIT-IDENTICAL input, so the noise floor is "
+                         "unknown and no change under it can be called an improvement.")
     a = ap.parse_args()
 
     os.makedirs(MODELS, exist_ok=True)
-    torch.manual_seed(42); np.random.seed(42)
+    torch.manual_seed(a.seed); np.random.seed(a.seed)
     amp = (not a.no_amp) and DEVICE.type == "cuda"
 
     print("=" * 72)
     print(f"  LAYER 2 — U-Net   device={DEVICE}  depth={a.depth}  amp={amp}")
     print("=" * 72)
 
-    store = TileStore("P12")
+    # The cache prefix decides which NORMALISATION the model is trained on:
+    #   P12     median-referenced, the baseline
+    #   P12sea  sea-referenced (plan E2)
+    # This was hardcoded, so an E2 run would have silently trained on the baseline
+    # cache and produced a meaningless null. Comparisons must differ ONLY in this.
+    store = TileStore(a.cache)
+    print(f"  cache : {a.cache}")
     scenes = np.array([m["scene_id"] for m in store.meta[:store.n]])
     oilfrac = np.array([m["oil_frac"] for m in store.meta[:store.n]])
     kinds = np.array([m["kind"] for m in store.meta[:store.n]])
@@ -430,8 +475,18 @@ def main():
                    "val_iou_at_threshold": round(best_t_iou, 4),
                    "val_iou_at_0.5": round(best_iou, 4),
                    "n_train_tiles": int(len(tr_idx)), "n_val_tiles": int(len(va_idx)),
-                   "trained_on": "Zenodo Parts I+II tiles, split by scene"}, fh, indent=2)
-    print(f"\n  saved {CKPT}\n  saved {META}")
+                   "trained_on": "Zenodo Parts I+II tiles, split by scene",
+                   # PROVENANCE. A checkpoint that does not say which convention it
+                   # needs is how the channels got transposed at inference and both
+                   # E2 models scored ~0.000 at scene level while training fine on
+                   # tiles. nets.py reads these to build the input correctly.
+                   "cache": a.cache,
+                   "channel_order": ("vv_first" if a.cache != "P12legacy" else "band_order"),
+                   **_cache_convention(a.cache),
+                   "seed": a.seed,
+                   "split": a.split, "fold": a.fold,
+                   "xpol_channel": a.xpol_channel, "xpol_p": a.xpol_p}, fh, indent=2)
+    print(f"\n  saved {ckpt_path}\n  saved {meta_path}")
     print(f"  best validation IoU {best_t_iou:.4f} at threshold {best_t}")
     print("\n  Part III IoU — gated and ungated — is evaluate_unet.py, not this file.")
 

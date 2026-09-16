@@ -474,7 +474,8 @@ def check_particles(d, box, meta, fname="particles.json", expect="backward", req
             "particles must never be added or dropped mid-run")
     span_h = (p["n_steps"] - 1) * p["timestep_minutes"] / 60
     if not 6 <= span_h <= 72:
-        warn(f"{fname}: run spans {span_h:.1f} h; the demo is scoped to ~24 h")
+        warn(f"{fname}: run spans {span_h:.1f} h; Stage 2 is scoped to at most 72 h "
+             f"(the rewind horizon, raised from 24 h on 16 Sept 2026)")
     if box:
         for si in (0, len(pos) // 2, len(pos) - 1):
             for pt in pos[si][::max(1, len(pos[si]) // 50)]:
@@ -486,13 +487,30 @@ def check_particles(d, box, meta, fname="particles.json", expect="backward", req
         dx = (b[0] - a[0]) * 111.32 * math.cos(mlat)
         dy = (b[1] - a[1]) * 111.32
         dist = math.hypot(dx, dy)
-        if dist > 400:
+        # DERIVE THE CEILING FROM THE SPAN, do not hardcode it.
+        #
+        # This used to be a flat `dist > 400`, which was right for the only span that existed
+        # when it was written (24 h). At the 72 h horizon Jacksonville travels ~443 km at a
+        # perfectly plausible 1.7 m/s, so the flat number would have ERRORED on the hero case --
+        # the exact failure step.py's own assert_displacement_plausible docstring describes:
+        # "the guard was calibrated on the first case in the library and then met the second".
+        #
+        # MAX_PLAUSIBLE_SPEED_MS = 3.0 is step.py's, kept in sync by hand because this script is
+        # deliberately stdlib-only so CI installs nothing. The warn threshold is the same speed
+        # bound at a more ordinary 1.9 m/s.
+        max_speed_ms = 3.0
+        ceiling_km = max_speed_ms * 3.6 * span_h
+        warn_km = 1.9 * 3.6 * span_h
+        if dist > ceiling_km:
             err(f"{fname}: particle 0 travelled {dist:.0f} km in {span_h:.0f} h "
+                f"= {dist / max(span_h, 1e-9) / 3.6:.2f} m/s, past the {max_speed_ms} m/s "
+                f"ceiling ({ceiling_km:.0f} km over this span) "
                 "— check current units (HYCOM on GEE is int x 0.001 m/s: divide by 1000)")
         elif dist < 0.5:
             err(f"{fname}: particle 0 barely moved ({dist:.2f} km) — fields may be zero")
-        elif dist > 250:
-            warn(f"{fname}: particle 0 travelled {dist:.0f} km — high but not impossible")
+        elif dist > warn_km:
+            warn(f"{fname}: particle 0 travelled {dist:.0f} km in {span_h:.0f} h "
+                 f"= {dist / max(span_h, 1e-9) / 3.6:.2f} m/s — high but not impossible")
     except (IndexError, TypeError):
         err(f"{fname}/positions: malformed coordinate arrays")
     return p
@@ -506,6 +524,119 @@ def check_particles_forward(d, box, meta, backward):
     if fwd and backward and fwd.get("positions") == backward.get("positions"):
         err("particles_forward.json: positions are identical to particles.json — the forward "
             "prediction was never integrated, only relabelled")
+
+
+def check_forward_impact(d, box, meta, backward):
+    """forward_impact.json (Master 6.10) — optional, and only meaningful with a 'trace' act.
+
+    The mirror of origin.json: same 50-member cloud, pushed forward from t0 instead of rewound.
+    The checks that earn their place here are the ones that catch a forecast which LOOKS fine:
+    a stranding curve that goes down (physically impossible — beaching is sticky), a landfall
+    hour reported as 0 when nothing actually beached (Rule 4), and a [lat, lon] centroid.
+    """
+    f = load(d / "forward_impact.json")
+    if f is None:
+        return None
+    if not need_keys(f, ["t0", "direction", "horizon_hours", "ensemble_runs", "envelope",
+                         "first_landfall_hours", "stranded_fraction_at_horizon",
+                         "coast_segments", "assets_at_risk"], "forward_impact.json"):
+        return None
+
+    if f["direction"] != "forward":
+        err(f"forward_impact.json/direction is {f['direction']!r}, must be 'forward' — a forward "
+            "forecast is a second integration, not a relabelled rewind (Master 6.10)")
+
+    t0 = parse_ts(f["t0"], "forward_impact.json/t0")
+    if t0 and backward and backward.get("t0"):
+        bt0 = parse_ts(backward["t0"], "particles.json/t0")
+        if bt0 and abs((t0 - bt0).total_seconds()) > 60:
+            err(f"forward_impact.json/t0 ({f['t0']}) does not match particles.json/t0 "
+                f"({backward['t0']}) — forward and backward must start from the same cloud")
+
+    runs = f["ensemble_runs"]
+    if not isinstance(runs, int) or runs < 1:
+        err(f"forward_impact.json/ensemble_runs: {runs!r} — must be a positive integer")
+
+    env = f["envelope"]
+    if not isinstance(env, list) or not env:
+        err("forward_impact.json/envelope: must be a non-empty list, one row per hour")
+        return None
+
+    prev_hours, prev_stranded = None, None
+    for i, row in enumerate(env):
+        where = f"forward_impact.json/envelope[{i}]"
+        if not need_keys(row, ["hours", "radius_50_km", "radius_90_km", "centroid",
+                               "stranded_fraction"], where):
+            continue
+        h = row["hours"]
+        if i == 0 and h != 0:
+            err(f"{where}/hours is {h}, must start at 0 — row 0 is the slick at t0")
+        if prev_hours is not None and h <= prev_hours:
+            err(f"{where}/hours {h} does not increase on {prev_hours} — one row per hour, "
+                "strictly increasing")
+        prev_hours = h
+
+        r50, r90 = row["radius_50_km"], row["radius_90_km"]
+        for name, r in (("radius_50_km", r50), ("radius_90_km", r90)):
+            if not isinstance(r, (int, float)) or r < 0:
+                err(f"{where}/{name}: {r!r} — must be a non-negative number in km")
+        if isinstance(r50, (int, float)) and isinstance(r90, (int, float)) and r90 < r50:
+            err(f"{where}: radius_90_km {r90} < radius_50_km {r50} — 90% of the ensemble cannot "
+                "sit inside a tighter circle than 50%")
+
+        c = row["centroid"]
+        if not isinstance(c, list) or len(c) != 2:
+            err(f"{where}/centroid: must be [lon, lat]")
+        elif box:
+            box.check(c[0], c[1], f"{where}/centroid")
+
+        sf = row["stranded_fraction"]
+        if not isinstance(sf, (int, float)) or not (0.0 <= sf <= 1.0):
+            err(f"{where}/stranded_fraction: {sf!r} — must be a fraction in [0, 1], never a percent")
+        elif prev_stranded is not None and sf < prev_stranded - 1e-9:
+            err(f"{where}/stranded_fraction drops {prev_stranded} -> {sf} — stranding is sticky, "
+                "so the curve can only rise or hold. A particle cannot un-beach.")
+        if isinstance(sf, (int, float)):
+            prev_stranded = sf
+
+    horizon = f["horizon_hours"]
+    if isinstance(horizon, (int, float)) and prev_hours is not None and prev_hours != horizon:
+        err(f"forward_impact.json: horizon_hours is {horizon} but the last envelope row is "
+            f"hour {prev_hours} — the forecast does not reach its stated horizon")
+
+    # Rule 4, both directions. This is the check the whole file exists for: "no landfall" and
+    # "landfall at t0" are opposite claims and a 0 here would silently make the second one.
+    at_h = f["stranded_fraction_at_horizon"]
+    first = f["first_landfall_hours"]
+    if isinstance(at_h, (int, float)) and at_h == 0 and first is not None:
+        err(f"forward_impact.json: stranded_fraction_at_horizon is 0 but first_landfall_hours is "
+            f"{first!r} — with nothing ashore, landfall was never observed and the honest value "
+            "is null, not a number (Rule 4)")
+    if first is None and isinstance(at_h, (int, float)) and at_h > 0:
+        err(f"forward_impact.json: stranded_fraction_at_horizon is {at_h} but first_landfall_hours "
+            "is null — something beached, so there is a first time it happened")
+    if first is not None:
+        if not isinstance(first, (int, float)) or first < 0:
+            err(f"forward_impact.json/first_landfall_hours: {first!r} — must be null or a "
+                "non-negative number of hours")
+        elif isinstance(horizon, (int, float)) and first > horizon:
+            err(f"forward_impact.json/first_landfall_hours {first} is beyond the "
+                f"{horizon} h horizon — nothing can beach after the run ends")
+
+    if isinstance(at_h, (int, float)) and prev_stranded is not None:
+        if abs(at_h - prev_stranded) > 1e-6:
+            err(f"forward_impact.json: stranded_fraction_at_horizon {at_h} disagrees with the "
+                f"last envelope row ({prev_stranded})")
+
+    # null means "not measured"; [] would claim "measured, and there are none" (Master 6.10)
+    for key in ("coast_segments", "assets_at_risk"):
+        v = f[key]
+        if v is not None and not isinstance(v, list):
+            err(f"forward_impact.json/{key}: {v!r} — must be null (not measured) or a list")
+        if v == []:
+            err(f"forward_impact.json/{key} is [] — an empty list claims the search ran and found "
+                "nothing. It has not run: no gazetteer, no cited asset layer. Use null (Rule 4).")
+    return f
 
 
 def check_origin(d, box):
@@ -926,6 +1057,7 @@ def _run_bundle(d, strict=False):
     if "trace" in acts:
         backward = check_particles(d, trace_box, meta)
         check_particles_forward(d, trace_box, meta, backward)
+        check_forward_impact(d, trace_box, meta, backward)
         origin = check_origin(d, trace_box)
     else:
         origin = None

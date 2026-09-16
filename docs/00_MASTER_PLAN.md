@@ -669,6 +669,59 @@ turned three PASSes into FAILs over a field, not a wrong number. Re-score to cle
 Order is presentation order, strongest first. **The frontend never hardcodes a case list.**
 A case directory that is not listed here is not in the demo. `cases/_archive/` is skipped entirely.
 
+## 6.10 `forward_impact.json`
+*Optional. Present only on cases whose `acts_available` includes `trace`. Added 16 Sept 2026 (D44)
+— this is the one schema addition since the freeze, and it was Akshat's call, not a stage owner's.*
+```json
+{ "t0": "2024-07-30T23:21:29Z",
+  "direction": "forward",
+  "horizon_hours": 24,
+  "horizon_note": "field cache covers ~24-26 h past t0; 48 h and 72 h need a wider fetch ...",
+  "ensemble_runs": 50,
+  "particles_per_run": 3000,
+  "wind_coeff": "stratified U(0.025, 0.035), same draws as the backward ensemble",
+  "envelope": [
+    {"hours": 0, "radius_50_km": 8.873, "radius_90_km": 15.651,
+     "centroid": [-79.6306, 29.11723], "stranded_fraction": 0.0},
+    {"hours": 1, "...": "..."}
+  ],
+  "first_landfall_hours": null,
+  "stranded_fraction_at_horizon": 0.0,
+  "seeded_ashore_fraction": 0.0,
+  "centroid_displacement_km": 137.04,
+  "edge_margin_km": 97.5,
+  "coast_segments": null,
+  "assets_at_risk": null,
+  "source": "re-run of run.py seeding for case-..., 50-member ensemble forward, GSHHG stranding on"
+}
+```
+**The mirror of `origin.json`, not a second copy of it.** `origin.json` rewinds to where the oil came
+from; this pushes the same 50-member ensemble forward from `t0` to where it goes. `t0` must equal
+`particles.json`'s `t0` — same cloud, opposite direction — and `direction` is always `"forward"`.
+
+**`envelope` is one row per hour, `hours` starting at 0 and strictly increasing.** Row 0 is the slick
+at `t0` and is identical in both directions by construction. `radius_50_km ≤ radius_90_km`; both are
+**ensemble precision, not accuracy** — where the members agree the oil goes, not a guarantee it goes
+there. `centroid` is `[lon, lat]`, 5 dp, like every other coordinate in the contract.
+
+**`stranded_fraction` is sticky and therefore non-decreasing** — a particle that beaches stays
+beached. The validator fails on a curve that goes down.
+
+**`first_landfall_hours` is `null` when nothing beached, never `0`** (Rule 4). A `0` claims landfall
+at the moment of detection. The two fields are cross-checked both ways: `stranded_fraction_at_horizon
+== 0` forces `first_landfall_hours: null`, and a non-null `first_landfall_hours` forces a non-zero
+stranded fraction. `seeded_ashore_fraction` counts particles that were ON LAND at `t0` — a Stage 1
+polygon-quality signal, excluded from landfall statistics because they never made landfall.
+
+**`coast_segments` and `assets_at_risk` are `null`, not `[]`.** Naming a threatened stretch needs a
+coastline gazetteer; listing an asset needs a citable source with a URL and retrieval date. Neither
+has been fetched. `[]` would claim "measured, and there are none", which on a case with no landfall
+is a different and stronger statement than "not measured". Both stay `null` until a cited layer lands.
+
+Produced by `pipeline/drift/forward_impact.py`, which shares `eval_forward.compute()` with the
+Stage 2 evidence file — so the bundle and `docs/evaluation/figures/stage2/data/forward_<case>.json`
+cannot drift into two sets of numbers. Never hand-edited.
+
 ---
 
 # PART 7 — OWNERSHIP
@@ -781,6 +834,7 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 | D41 | **Stage 3 thresholds are per AIS sampling regime; `noaa_dense` is unchanged** | Three values tuned for NOAA's ~69 s reporting were applied as-is to GFW's one-fix-per-hour data, which is why Mumbai and Jamnagar returned no suspect: the GFW search box was padded by `2 × r90` (~7 km, under an hour of travel), `MIN_POINTS = 5` then meant five *hours* of presence and dropped 7 of 9 / 6 of 8 vessels, and the 30-minute interpolation ceiling was shorter than the sampling interval, so a ship crossing a 3.7 km cloud between two fixes could never be "in" it. Now (`tracks.REGIME`): `gfw_hourly` uses `min_points 2`, a 75-minute interpolation ceiling (joins consecutive fixes, never bridges a missing hour), and `ingest_gfw.py` floors the pad at 30 km (one hour at ~16 kn). **Derived from the sampling interval, not tuned on any case; no weight moved (D39).** Measured on the injected-offender curve, hourly condition, 300 trials, same seed: offender never plausible 137 → 83, top-3 0.695 → 0.793, top-1 0.535 → 0.486 (CIs overlap — more real competitors now reach the plausible set too). Live results after re-scoring: Jamnagar 38 → 22 → 1 → 1 (one suspect, 2 of 7 components live); Mumbai 42 → 29 → 0 → 0 and Gulf of Alaska 13 → 9 → 0 → 0 still abstain, now as searched negatives with named nearest candidates. NOAA bundles re-scored byte-identical on suspects and funnel. Also: an empty GFW extract (`--allow-empty`) abstains as "searched and found empty", distinct from `--no-ais`. **Gulf of Alaska moves to `ais_source: gfw_hourly` and gains `attribute`** — NOAA has no data above ~50 N; GFW is global. 15 Sept. |
 | D42 | **The radar-versus-AIS cross-check is built; `dark_vessels[]` is no longer hard-coded empty** | `pipeline/attribute/dark.py`, called by `score.py --scene-parquet`. A contact (top-level `ship_detections`, D34) is matched if an AIS vessel interpolates to within 1 km of it at acquisition time, or if it lies inside that vessel's space-time prism between its fixes either side (speed bounded by the pace the vessel actually kept ×1.5, floor 6 kn, cap 25 kn). A first version used a flat 25 kn circle around any fix within 90 min; in a 30 km box that contains everything, so every contact "matched" and the check said nothing — replaced before any result was used. Unmatched contacts are **listed only if near the slick or inside the origin grid**, capped at 5, `mmsi: null`, with a single-pass caveat on every card. No AIS searched at scene time → darkness is null and nothing is listed. **Gulf of Alaska:** our detector finds no contact, so the check runs on GFW's independent Sentinel-1 vessel detections (`ingest_gfw_sar.py`), labelled on every card as GFW's, with GFW's own identity match discarded; Cerulean's contact is never used. Results: Jacksonville 2 contacts, 2 unmatched and listed (no AIS vessel within 14 km at acquisition); Huntington 43/43, Mumbai 21/21, Jamnagar 3/3, Alaska (GFW) 2/2 matched. No schema field added (§6.7 shape). 15 Sept. |
 | D43 | **Verify ships on all six traced cases; the assessment prose was drafted by Claude, once, and is Akshat's to own** | Every case dead-ended at "Try another case" because `verify` was in no `acts_available`, and it could not be added while `assessment` (and, on five files, `official_finding.caveat`) still said TODO. With the demo the next day, Akshat asked for the prose to be drafted rather than left blank — a deliberate, one-time relaxation of §6.8 ("HUMAN-WRITTEN PROSE. Never generated."), made by the owner of that rule and recorded here rather than done quietly. Conditions held: `docs/ANSWERS.md` was never opened (both sides of each comparison were already in the file); every verdict rests on a measurement taken first, read-only, and named in the text; and no weight, threshold or bundle was touched, so nothing was tuned toward an answer (D21). Verdicts: Jacksonville **miss** (Cerulean's vessel is in our own scene-time extract but was 112.3 km from the origin peak at grid probability 0.0000 and held no position in the searched box during the release window); Farallones **miss** (14.3 km from the peak, inside the origin bounds about eight hours after the window closed); Huntington **partial** as D38 predicted (abstained correctly, but the origin peak is 6.74 km from NTSB's coordinate with r90 2.46 km); Mumbai **partial**; Alaska **partial**; Jamnagar **not_applicable**. Two defects fixed on the way: `scaffold_verification.py --publish` never checked `caveat`, which VerifyScreen renders, so a publish would have put "TODO, HUMAN PROSE" on the demo screen — it now refuses on a TODO anywhere in the document; and the right-hand column was headed "What the investigation found" for all four Cerulean cases, which calls another algorithm's output an investigation, so the heading now follows `source_type`. Akshat edits the prose freely and re-runs `--publish`. 15 Sept. |
+| D44 | **The forward-drift deferral is LIFTED: `forward_impact.json` enters the contract (§6.10)** | Forward drift shipped on 16 Sept as "Version A" — the published 50-member ensemble run forward 24 h with GSHHG stranding, measured and figure'd (F2.9), but deliberately in **no bundle**, because adding a file to a frozen schema is not a stage owner's decision to make. Anushka wrote the numbers to `docs/evaluation/.../forward_<case>.json` and stopped there, correctly. Akshat lifted the deferral the same day so the demo map can carry a forward slick layer, and §6.10 is the resulting contract — **the only schema addition since the freeze.** Nothing was recomputed when the deferral lifted and nothing may be: `pipeline/drift/forward_impact.py` shares `eval_forward.compute()` with the evidence file, so the bundle and the figure are written from one run and cannot diverge. **Shipped on the three indexed traced cases** — Jacksonville (+24 h r50 16.2 / r90 35.5 km), Farallones (5.7 / 9.1), Jamnagar (2.3 / 4.9); the three detect-only cases have no slick to push forward and correctly carry no file. **0% stranded and no landfall within 24 h on all three**, with `first_landfall_hours: null` rather than `0` (Rule 4), and the stranding tracker was verified against a synthetic coastline rather than assumed. `coast_segments` and `assets_at_risk` stay `null`: a gazetteer and a cited asset layer are post-demo, and `[]` would claim a measured absence. Horizon is 24 h because `assert_field_covers` refuses to extrapolate through a frozen last snapshot — not because 24 h was chosen. 16 Sept. |
 
 ---
 

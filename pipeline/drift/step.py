@@ -17,6 +17,8 @@ THE RULE THAT MATTERS
 Positions are always an array of shape [n, 2]: column 0 = longitude, column 1 = latitude,
 degrees, WGS84.  (docs/TRAPS.md #1)
 """
+import math
+
 import numpy as np
 
 from fields import MAX_PLAUSIBLE_SPEED_MS, require_aware, speed
@@ -29,6 +31,28 @@ M_PER_DEG_LAT = 111320.0
 # the single empirical constant in Stage 2. Phase 3's ensemble perturbs it over U(0.025, 0.035);
 # that spread IS the uncertainty we show.
 WIND_COEFF = 0.03
+
+# Horizontal turbulent diffusivity, m^2/s. THE DEFAULT IS 0.0 AND THAT IS LOAD-BEARING.
+#
+# Stage 2's production answer is a deterministic advection whose uncertainty comes from the
+# ensemble, not from a random walk. Every known-answer test in tests.py asserts an EXACT
+# displacement (0.5 m/s east for 10 h -> 18.0 km east, to 2%), and test 2 asserts a forward-then-
+# backward round trip closes to within 0.5 km. A non-zero default would make all of those
+# stochastic. So diffusion is opt-in, per call, and only one caller opts in.
+#
+# WHO TURNS IT ON, AND WHY IT EXISTS AT ALL
+#   `age._curve_with_wind` only. The shear-dispersion age estimator (age.py C3.1) dates a slick
+#   by finding the age whose MODELLED extent matches the observed one. With advection alone the
+#   modelled major axis on real HYCOM reaches 0.8-1.3 km (decision brief section 4) against
+#   observed slicks of 2.3-10.1 km, so the inversion has no bracket and the estimator refuses on
+#   every case in the library. That ceiling is a missing PROCESS, not a coding limit: a 9 km
+#   daily cell cannot resolve the sub-grid turbulence that actually spreads a slick. This term is
+#   that process, parameterised.
+#
+# DIFFUSIVITY_RANGE_M2S is the Okubo shelf-scale band. It is an ASSUMPTION with a range, like
+# every other constant in this stage, and the ensemble draws across it rather than picking one.
+HORIZONTAL_DIFFUSIVITY_M2S = 0.0
+DIFFUSIVITY_RANGE_M2S = (10.0, 100.0)
 
 # cos(lat) -> 0 at the poles and the metre->degree conversion blows up. We are working in the
 # tropics, but a guard costs nothing and turns a silent infinity into a bounded number.
@@ -86,15 +110,41 @@ def drift_velocity(positions, when, field, wind_coeff=WIND_COEFF, guard=True):
     return u, v
 
 
-def rk2_step(positions, when, dt_seconds, field, wind_coeff=WIND_COEFF, guard=True):
+def rk2_step(positions, when, dt_seconds, field, wind_coeff=WIND_COEFF, guard=True,
+             diffusivity=HORIZONTAL_DIFFUSIVITY_M2S, rng=None):
     """One midpoint (RK2) step. `dt_seconds` is SIGNED: negative runs time backwards.
 
     Note that the midpoint is evaluated at `when + dt/2`, so a backward step samples the
     field half a step into the past. Same field, negative dt.
+
+    `diffusivity` (m^2/s, default 0.0) adds an isotropic random-walk DISPLACEMENT on top of the
+    deterministic step, with per-component sigma = sqrt(2 K |dt|). Three things about it:
+
+      IT IS A DISPLACEMENT, NEVER A VELOCITY. `drift_velocity` is untouched, so
+      `assert_speed_plausible` keeps measuring real water speed and does not start rejecting
+      runs because the random walk briefly looks fast over one short step. It also means the
+      3% wind rule and the reported drift decomposition still describe the physics they claim to.
+
+      |dt|, NOT dt. Variance grows with ELAPSED time in both directions, so a backward random
+      walk is not the reverse of a forward one -- reversing dt cannot un-draw a random number.
+      That is correct physics (diffusion is irreversible) and it is exactly why the round-trip
+      test must keep K = 0: with K > 0 a forward-then-backward run legitimately does NOT close.
+
+      K > 0 WITH rng=None RAISES. An unseeded stochastic model is unreproducible, and a silent
+      default seed would make two runs of the same case disagree with no way to tell why. Every
+      other refusal in this file is loud; so is this one.
     """
     require_aware(when)
     pos = as_positions(positions)
     dt = float(dt_seconds)
+    K = float(diffusivity)
+    if K < 0.0:
+        raise ValueError(f"diffusivity must be >= 0, got {K}")
+    if K > 0.0 and rng is None:
+        raise ValueError(
+            "rk2_step: diffusivity > 0 needs an explicit rng — an unseeded random walk is not "
+            "reproducible, and two runs of the same case would disagree with nothing to point "
+            "at. Pass np.random.default_rng(seed).")
 
     u1, v1 = drift_velocity(pos, when, field, wind_coeff, guard)
     dlon1, dlat1 = m_to_deg(u1 * dt, v1 * dt, pos[:, 1])
@@ -110,11 +160,23 @@ def rk2_step(positions, when, dt_seconds, field, wind_coeff=WIND_COEFF, guard=Tr
     out = np.empty_like(pos)
     out[:, 0] = wrap_lon(pos[:, 0] + dlon2)
     out[:, 1] = np.clip(pos[:, 1] + dlat2, -90.0, 90.0)
+
+    if K > 0.0:
+        # sqrt(2 K |dt|) per component is the standard 2-D random-walk step for diffusivity K.
+        # Converted to degrees at the POST-step latitude, so the cos(lat) matches where the
+        # particle actually is -- the same convention the deterministic term uses above.
+        sigma_m = math.sqrt(2.0 * K * abs(dt))
+        jx = rng.normal(0.0, sigma_m, size=pos.shape[0])
+        jy = rng.normal(0.0, sigma_m, size=pos.shape[0])
+        jlon, jlat = m_to_deg(jx, jy, out[:, 1])
+        out[:, 0] = wrap_lon(out[:, 0] + jlon)
+        out[:, 1] = np.clip(out[:, 1] + jlat, -90.0, 90.0)
     return out
 
 
 def integrate(positions, t0, field, n_steps, timestep_minutes=15, direction="backward",
-              wind_coeff=WIND_COEFF, guard=True):
+              wind_coeff=WIND_COEFF, guard=True,
+              diffusivity=HORIZONTAL_DIFFUSIVITY_M2S, rng=None):
     """Advect every particle for `n_steps`, recording the state BEFORE each step.
 
     Returns (history, times):
@@ -125,6 +187,9 @@ def integrate(positions, t0, field, n_steps, timestep_minutes=15, direction="bac
     backward RK2 steps leaves N + 1 stored positions. Duration is therefore always
     (n_steps - 1) x timestep_minutes -- so n_steps=97 at 15 min is exactly 24.0 h.
     Never hardcode a frame count anywhere. (docs/CONTRACTS.md 5, commit 278f463)
+
+    `diffusivity`/`rng` are passed straight through to rk2_step and default to OFF, so every
+    existing caller integrates exactly the deterministic physics it did before.
     """
     from datetime import timedelta
 
@@ -144,7 +209,7 @@ def integrate(positions, t0, field, n_steps, timestep_minutes=15, direction="bac
     for k in range(n_steps):
         history[k] = pos
         times.append(t)
-        pos = rk2_step(pos, t, dt, field, wind_coeff, guard)
+        pos = rk2_step(pos, t, dt, field, wind_coeff, guard, diffusivity, rng)
         t = t + timedelta(seconds=dt)
 
     return history, times
@@ -152,7 +217,8 @@ def integrate(positions, t0, field, n_steps, timestep_minutes=15, direction="bac
 
 def integrate_stranding(positions, t0, field, n_steps, timestep_minutes=15,
                         direction="backward", wind_coeff=WIND_COEFF, guard=True,
-                        is_land=None, return_strand_step=False):
+                        is_land=None, return_strand_step=False,
+                        diffusivity=HORIZONTAL_DIFFUSIVITY_M2S, rng=None):
     """integrate(), but particles that reach land STRAND: frozen in place and flagged.
 
     Returns (history, times, stranded) where `stranded` is a bool array [n].
@@ -196,7 +262,7 @@ def integrate_stranding(positions, t0, field, n_steps, timestep_minutes=15,
         times.append(t)
         if k == n_steps - 1:
             break
-        moved = rk2_step(pos, t, dt, field, wind_coeff, guard)
+        moved = rk2_step(pos, t, dt, field, wind_coeff, guard, diffusivity, rng)
         if is_land is not None:
             newly = is_land(moved[:, 0], moved[:, 1]) & ~stranded
             strand_step[newly] = k + 1
@@ -348,7 +414,7 @@ def assert_field_covers(field, t_start, t_end, label="run", tol_frac=0.05, tol_m
           f"({overhang / span_h * 100:.0f}% of a {span_h:.1f} h span)\n"
         + f"  Past the axis the field is CLAMPED, not modelled -- every step re-uses the edge\n"
           f"  snapshot and the output looks entirely normal. Refetch a wider window:\n"
-          f"    python pipeline/drift/fetch_fields.py --case <id> --hours 30 "
+          f"    python pipeline/drift/fetch_fields.py --case <id> --hours 78 "
           f"--forward-hours {max(24.0, short_after):.0f} --force")
 
 

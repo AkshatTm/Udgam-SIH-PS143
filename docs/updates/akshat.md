@@ -2,6 +2,67 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-16 13:30] Integration — three branches merged to main, forward slick shipped (D44)
+
+**Done:** Merged `anushka`, `soum` and `stage2-age-opendrift` into `main` (all three conflict-free)
+and built the forward slick end to end. **Lifted my own 16 Sept deferral of `forward_impact.json`**
+and wrote it into the contract as Master §6.10 + D44 — the only schema addition since the freeze.
+The forecast now ships in three bundles and draws on the map as a "Forward slick" layer: one r90
+ring per hour fading into the future, the +24 h r50 ring emphasised, and the centroid's 24 h track.
+Case library trimmed to six; CLAUDE.md count updated to match.
+
+**The numbers did not move when the deferral lifted, by construction.** The physics lives in
+`eval_forward.compute()`, and both the evidence file and the bundle are written from that one
+return value, so `docs/evaluation/.../forward_<case>.json` and `cases/<id>/forward_impact.json`
+cannot drift into two sets of numbers. Shipped: Jacksonville +24 h r50 16.2 / r90 35.5 km,
+Farallones 5.7 / 9.1, Jamnagar 2.3 / 4.9 — identical to Anushka's published table.
+
+**Validator hardened, and the checks were proven to fire.** Eight defect classes were injected into
+a scratch copy and every one was caught: `first_landfall_hours: 0` with nothing ashore (Rule 4), a
+stranding curve that decreases, a `[lat, lon]` centroid, `coast_segments: []` instead of `null`,
+`r90 < r50`, an envelope short of its stated horizon, a `direction` relabelled `backward`, and a
+`stranded_fraction_at_horizon` disagreeing with the last row.
+
+**Files touched:** `pipeline/drift/forward_impact.py` (new) · `pipeline/drift/eval_forward.py`
+(refactored — `compute()`/`summarise()` extracted, CLI unchanged) · `scripts/validate_case.py`
+(new `check_forward_impact`) · `pipeline/export/build_case.py` (gathers the new optional file) ·
+`web/lib/forward.ts` (new) · `web/lib/store.ts` · `web/components/LayerToggles.tsx` ·
+`web/components/MapView.tsx` · `docs/00_MASTER_PLAN.md` (§6.10, D44) · `CLAUDE.md` ·
+`cases/case-{jacksonville-2024,farallones-2023,jamnagar-2024}/forward_impact.json` (output)
+
+**Run command:**
+```bash
+python pipeline/drift/forward_impact.py --all --from-evidence
+python scripts/sync_web_cases.py --clean
+python scripts/validate_case.py cases/case-jacksonville-2024
+```
+Expected output: three `[forward] wrote ...` lines, a 54-file sync, then `PASS`.
+
+**Checkpoint artefact:** 6/6 cases PASS · drift suite 11/11 (84/84 assertions) · `tsc --noEmit`
+clean · `next build` green on all six cases · `next lint` clean · dev server serves
+`forward_impact.json` 200 on the three traced cases and 404 on the three detect-only ones, which
+the loader resolves to `null` rather than an error banner.
+
+**Open issues:**
+- **`--from-evidence` was used, not a fresh run.** This laptop's `data/fields/` cache ends ~21.7 h
+  past Jacksonville's t0, so `assert_field_covers` correctly refused a 24 h forward ensemble. The
+  numbers written are Anushka's measured 50 x 3000 run from the laptop that has the wider cache.
+  Nothing was extrapolated or invented — but a plain `--all` will refuse here until someone re-runs
+  `fetch_fields.py --hours 78 --forward-hours 24 --force`.
+- **The forward layer is off by default and does not move with the time slider.** The slider runs
+  T-24h -> T-0 (the rewind); the forecast lives on the far side of t0. Rather than overload one
+  slider with two time domains the day before the demo, the whole 24 h cone draws at once with
+  opacity carrying the hour. If we want a scrubbable forecast, that is a deliberate time-model
+  change and Harshita's call.
+- `coast_segments` and `assets_at_risk` are `null` on all three — still no gazetteer and no cited
+  asset layer. Unchanged from Anushka's Version A.
+- Three de-indexed cases (huntington-2021, gulf-alaska-2023, mumbai-2023) still have directories on
+  disk and are still referenced by Stage 1/2 figures and several docs. They are not validated and
+  not in the gallery.
+
+**Next:** decide whether the forward layer needs a scrubbable horizon for the demo, or whether the
+static cone is the stronger read.
+
 ## [2026-09-14 21:15] UI/UX QA sweep — all nine cases green, one DATA bug found
 
 **Done:** Finished the verification pass the UI/UX work needed. All nine cases walk their full

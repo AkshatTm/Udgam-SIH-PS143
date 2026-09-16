@@ -1,0 +1,270 @@
+{
+  "t0": "2024-07-30T23:21:29Z",
+  "direction": "forward",
+  "horizon_hours": 24,
+  "horizon_note": "field cache covers ~24-26 h past t0; 48 h and 72 h need a wider fetch and are not extrapolated",
+  "ensemble_runs": 50,
+  "particles_per_run": 3000,
+  "wind_coeff": "stratified U(0.025, 0.035), same draws as the backward ensemble",
+  "envelope": [
+    {
+      "hours": 0,
+      "radius_50_km": 8.873,
+      "radius_90_km": 15.651,
+      "centroid": [
+        -79.6306,
+        30.35086
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 1,
+      "radius_50_km": 9.035,
+      "radius_90_km": 15.981,
+      "centroid": [
+        -79.60773,
+        30.40412
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 2,
+      "radius_50_km": 9.218,
+      "radius_90_km": 16.45,
+      "centroid": [
+        -79.58356,
+        30.457
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 3,
+      "radius_50_km": 9.411,
+      "radius_90_km": 17.075,
+      "centroid": [
+        -79.55816,
+        30.50967
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 4,
+      "radius_50_km": 9.622,
+      "radius_90_km": 17.85,
+      "centroid": [
+        -79.53176,
+        30.56229
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 5,
+      "radius_50_km": 9.842,
+      "radius_90_km": 18.699,
+      "centroid": [
+        -79.50444,
+        30.61484
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 6,
+      "radius_50_km": 10.079,
+      "radius_90_km": 19.62,
+      "centroid": [
+        -79.47559,
+        30.6671
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 7,
+      "radius_50_km": 10.355,
+      "radius_90_km": 20.575,
+      "centroid": [
+        -79.44422,
+        30.7187
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 8,
+      "radius_50_km": 10.655,
+      "radius_90_km": 21.578,
+      "centroid": [
+        -79.40986,
+        30.7687
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 9,
+      "radius_50_km": 10.961,
+      "radius_90_km": 22.55,
+      "centroid": [
+        -79.37261,
+        30.81646
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 10,
+      "radius_50_km": 11.305,
+      "radius_90_km": 23.53,
+      "centroid": [
+        -79.3332,
+        30.86195
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 11,
+      "radius_50_km": 11.664,
+      "radius_90_km": 24.5,
+      "centroid": [
+        -79.29332,
+        30.90591
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 12,
+      "radius_50_km": 12.032,
+      "radius_90_km": 25.453,
+      "centroid": [
+        -79.25133,
+        30.94797
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 13,
+      "radius_50_km": 12.431,
+      "radius_90_km": 26.436,
+      "centroid": [
+        -79.20687,
+        30.98723
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 14,
+      "radius_50_km": 12.824,
+      "radius_90_km": 27.432,
+      "centroid": [
+        -79.16069,
+        31.02343
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 15,
+      "radius_50_km": 13.203,
+      "radius_90_km": 28.443,
+      "centroid": [
+        -79.11332,
+        31.05709
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 16,
+      "radius_50_km": 13.596,
+      "radius_90_km": 29.378,
+      "centroid": [
+        -79.06473,
+        31.08817
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 17,
+      "radius_50_km": 13.996,
+      "radius_90_km": 30.276,
+      "centroid": [
+        -79.01601,
+        31.11716
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 18,
+      "radius_50_km": 14.388,
+      "radius_90_km": 31.147,
+      "centroid": [
+        -78.96763,
+        31.14472
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 19,
+      "radius_50_km": 14.723,
+      "radius_90_km": 32.004,
+      "centroid": [
+        -78.91931,
+        31.17114
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 20,
+      "radius_50_km": 15.027,
+      "radius_90_km": 32.825,
+      "centroid": [
+        -78.87172,
+        31.19594
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 21,
+      "radius_50_km": 15.322,
+      "radius_90_km": 33.55,
+      "centroid": [
+        -78.8254,
+        31.21891
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 22,
+      "radius_50_km": 15.62,
+      "radius_90_km": 34.219,
+      "centroid": [
+        -78.78055,
+        31.24038
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 23,
+      "radius_50_km": 15.907,
+      "radius_90_km": 34.838,
+      "centroid": [
+        -78.73795,
+        31.2612
+      ],
+      "stranded_fraction": 0.0
+    },
+    {
+      "hours": 24,
+      "radius_50_km": 16.201,
+      "radius_90_km": 35.472,
+      "centroid": [
+        -78.6967,
+        31.28144
+      ],
+      "stranded_fraction": 0.0
+    }
+  ],
+  "first_landfall_hours": null,
+  "stranded_fraction_at_horizon": 0.0,
+  "seeded_ashore_fraction": 0.0,
+  "centroid_displacement_km": 137.04,
+  "edge_margin_km": 97.5,
+  "coast_segments": null,
+  "assets_at_risk": null,
+  "unmeasured_note": "coast_segments needs a coastline gazetteer and assets_at_risk needs a cited asset layer (WDPA or equivalent) with a URL and retrieval date. Neither has been fetched, so both are null -- not measured, as distinct from measured and empty.",
+  "source": "re-run of run.py seeding for case-jacksonville-2024, 50-member ensemble forward, GSHHG stranding on"
+}

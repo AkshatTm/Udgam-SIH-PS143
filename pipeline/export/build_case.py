@@ -30,7 +30,8 @@ REPO = HERE.parents[1]
 SOURCES = [
     ("detect",    REPO / "pipeline" / "detect" / "out",    ["detections.geojson"], []),
     ("trace",     REPO / "pipeline" / "drift" / "out",     ["particles.json", "origin.json"],
-                                                           ["particles_forward.json"]),
+                                                           ["particles_forward.json",
+                                                            "forward_impact.json"]),
     ("attribute", REPO / "pipeline" / "attribute" / "out", ["vessels.geojson", "suspects.json"], []),
     ("verify",    REPO / "verification",                   ["{case}.json"], []),
 ]

@@ -101,6 +101,14 @@ def run(check):
     # A constant 0.8 m/s rewinding OFFSHORE (so stranding does not collapse the cloud) with a
     # widened current-scale band. Deliberately synthetic: the point is that the bundle is
     # written by run.py, because CLAUDE.md forbids fixing a bundle by hand.
+    #
+    # 97 STEPS IS PINNED HERE ON PURPOSE -- do not follow run.py's default up to 289 (16 Sept
+    # 2026). 10c/10d are a matched pair whose whole content is that abstain is EARNED: the same
+    # case trips it at an inflated current_sigma and does not trip it at the honest one. Both
+    # sides are calibrated against the 40 km threshold, and at 289 steps this constant 0.8 m/s
+    # field carries the cloud three times as far, so 10d would fail on the span rather than on
+    # the sigma and the pair would stop testing what it is named for. The rewind horizon is
+    # run.py's business; this fixture's business is the threshold.
     cfield = ConstantField(current=(-0.8, 0.0), wind=(6.0, -4.0))
     seed = R.seed_particles(_blob_feature(), 400, random.Random(143))
     endpoints, conv_idx, members = ens.run_ensemble(
