@@ -29,7 +29,8 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { BitmapLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { BitmapLayer, IconLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { PathStyleExtension, type PathStyleExtensionProps } from "@deck.gl/extensions";
 import { RUN_DURATION_MS, useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
 import { buildOriginImage, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
@@ -216,6 +217,45 @@ const VESSEL_WIDTH_SUSPECT = 1.8;
 const VESSEL_WIDTH_TOP_SUSPECT = 3;
 const VESSEL_WIDTH_EXCLUDED = 1;
 
+// Attribution lines render dashed at rest. In `widths` units (PathStyleExtension's default,
+// relative to HALF the stroke width) a plain 1.2px-wide track works out to ~1px dashes with
+// ~0.7px gaps — below one pixel, that anti-aliases into a row of dots, not dashes. `dashUnits:
+// "pixels"` below fixes the dash/gap length in real screen pixels instead, independent of line
+// width and zoom, so every attribution line reads as clearly dashed. The hovered suspect's own
+// line switches to plain solid — [0, 0] is PathStyleExtension's own "no dash" default.
+const VESSEL_DASH_ARRAY: [number, number] = [6, 4];
+const VESSEL_DASH_SOLID: [number, number] = [0, 0];
+const VESSEL_HOVER_WIDTH_BOOST_PX = 2.5;
+// Instantiated once at module scope: a LayerExtension instance is meant to be a stable
+// reference reused across renders/layers, never rebuilt per render like the layers themselves.
+// `dashMode: "path"` (not the default "segment") matters here: an AIS track is made of many
+// closely-spaced vertices (71-second pings), and "segment" mode restarts the dash pattern at
+// zero on every one of those short segments — which, once justified to fit, renders as a
+// solid line. "path" carries the dash phase continuously across vertices instead.
+const VESSEL_DASH_EXTENSION = new PathStyleExtension({ dash: true, dashMode: "path" });
+
+// Ship tracker — a live-position marker that travels along the hovered suspect's own track
+// (Phase 3.3's hover-to-highlight, extended). A heading arrow rather than a beacon: no pulse,
+// just a single IconLayer instance whose rotation follows the track's own bearing at that point,
+// so it reads as "this is the ship, and this is which way it was moving" rather than "look here."
+// Colours are baked into the SVG rather than tinted via getColor (mask off): white so it reads
+// against dark AND light basemap alike, with a dark outline so it never disappears into a line
+// of the same teal/cyan family as the vessel tracks it sits on top of.
+const SHIP_TRACKER_ARROW_SVG =
+  "data:image/svg+xml;charset=UTF-8," +
+  encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'>" +
+      "<path d='M32 6 L54 54 L32 42 L10 54 Z' fill='#fff' stroke='#0b1624' stroke-width='4' stroke-linejoin='round'/>" +
+      "</svg>",
+  );
+const SHIP_TRACKER_ICON_MAPPING = {
+  arrow: { x: 0, y: 0, width: 64, height: 64, anchorX: 32, anchorY: 32 },
+};
+const SHIP_TRACKER_ICON_SIZE_PX = 28;
+// One lap of the suspect's own track per SHIP_TRACKER_PATH_LOOP_MS — the only motion left once
+// the pulse is gone.
+const SHIP_TRACKER_PATH_LOOP_MS = 4000;
+
 // docs/team/harshita-frontend.md Phase 3.5 — dark vessels (Master §6.7). A radar contact with no AIS at all: a point,
 // never a track, never linked to `vessels.geojson`. Deliberately its own colour family (rose),
 // unused everywhere else in this app (blue = vessel, amber = particle/origin, red = oil,
@@ -284,6 +324,51 @@ const vesselTrackWidth = (d: VesselMapItem): number => {
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const u = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
   return u * u * (3 - 2 * u);
+}
+
+// Interpolates a position a fraction of the way along a polyline's own length (not along the
+// index of its points), so the ship tracker moves at a constant speed over an unevenly-sampled
+// AIS track instead of lingering on long segments and skipping short ones. Plain lon/lat
+// Euclidean distance, same precision tradeoff the forward-track lead marker above already makes.
+interface PathPoint {
+  position: LonLat;
+  /** Compass bearing (degrees clockwise from north) of the segment this point sits on. */
+  headingDeg: number;
+}
+
+// Interpolates a position (and the bearing of travel at that point) a fraction of the way along
+// a polyline's own length (not along the index of its points), so the ship tracker moves at a
+// constant speed over an unevenly-sampled AIS track instead of lingering on long segments and
+// skipping short ones. Plain lon/lat Euclidean distance and bearing, same precision tradeoff the
+// forward-track lead marker above already makes.
+function pointAlongPath(path: LonLat[], frac: number): PathPoint | null {
+  if (path.length < 2) return null;
+  const segmentLengths: number[] = [];
+  let total = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const len = Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+    segmentLengths.push(len);
+    total += len;
+  }
+  const headingOf = (a: LonLat, b: LonLat): number =>
+    (Math.atan2(b[0] - a[0], b[1] - a[1]) * 180) / Math.PI;
+  if (total === 0) return { position: path[0], headingDeg: headingOf(path[0], path[1]) };
+  let remaining = Math.min(Math.max(frac, 0), 1) * total;
+  for (let i = 0; i < segmentLengths.length; i++) {
+    const len = segmentLengths[i];
+    const a = path[i];
+    const b = path[i + 1];
+    if (remaining <= len || i === segmentLengths.length - 1) {
+      const t = len > 0 ? Math.min(1, remaining / len) : 0;
+      return {
+        position: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+        headingDeg: headingOf(a, b),
+      };
+    }
+    remaining -= len;
+  }
+  const last = path.length - 1;
+  return { position: path[last], headingDeg: headingOf(path[last - 1], path[last]) };
 }
 
 function unionGeo(a: GeoBounds, b: GeoBounds): GeoBounds {
@@ -487,22 +572,78 @@ export default function MapView() {
     const getWidth = (d: VesselMapItem): number => {
       const w = vesselTrackWidth(d);
       if (!hoveredMmsiValid) return w;
-      return d.mmsi === hoveredMmsi ? w + 2 : Math.max(0.6, w * 0.6);
+      return d.mmsi === hoveredMmsi ? w + VESSEL_HOVER_WIDTH_BOOST_PX : Math.max(0.6, w * 0.6);
     };
-    return new PathLayer<VesselMapItem>({
+    // Dashed at rest; the hovered suspect's own line turns plain solid — [0, 0] is
+    // PathStyleExtension's own "no dash" default, so this costs nothing extra in the shader.
+    const getDashArray = (d: VesselMapItem): [number, number] =>
+      hoveredMmsiValid && d.mmsi === hoveredMmsi ? VESSEL_DASH_SOLID : VESSEL_DASH_ARRAY;
+    return new PathLayer<VesselMapItem, PathStyleExtensionProps<VesselMapItem>>({
       id: "vessels",
       data: vesselItems,
       getPath: vesselTrackPath,
       getColor,
       getWidth,
+      getDashArray,
+      dashUnits: "pixels",
+      extensions: [VESSEL_DASH_EXTENSION],
       widthUnits: "pixels",
       widthMinPixels: 1,
       capRounded: true,
       jointRounded: true,
       pickable: true,
-      updateTriggers: { getColor: [hoveredMmsi], getWidth: [hoveredMmsi] },
+      updateTriggers: {
+        getColor: [hoveredMmsi],
+        getWidth: [hoveredMmsi],
+        getDashArray: [hoveredMmsi],
+      },
     });
   }, [vesselItems, vesselsVisible, hoveredMmsi, attributeRevealed]);
+
+  // Ship tracker (hover-to-highlight, extended). A single elapsed-time RAF drives the arrow's
+  // position along the hovered suspect's own track, the same pattern as the Run-detection scan
+  // line's RAF above. Runs only while a suspect is hovered — cancelled, and the marker gone, the
+  // instant the pointer leaves the row/track.
+  const [trackerElapsedMs, setTrackerElapsedMs] = useState(0);
+  useEffect(() => {
+    if (hoveredMmsi === null) return;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      setTrackerElapsedMs(now - start);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [hoveredMmsi]);
+
+  const hoveredVessel = useMemo(
+    () => (hoveredMmsi ? (vesselItems.find((v) => v.mmsi === hoveredMmsi) ?? null) : null),
+    [vesselItems, hoveredMmsi],
+  );
+
+  const shipTrackerLayers = useMemo(() => {
+    if (!attributeRevealed || !vesselsVisible || !hoveredVessel) return [];
+    const pathFrac = (trackerElapsedMs % SHIP_TRACKER_PATH_LOOP_MS) / SHIP_TRACKER_PATH_LOOP_MS;
+    const point = pointAlongPath(hoveredVessel.path, pathFrac);
+    if (!point) return [];
+    return [
+      new IconLayer({
+        id: "ship-tracker-arrow",
+        data: [point],
+        getPosition: (d: PathPoint) => d.position,
+        // IconLayer rotates counter-clockwise on screen, the opposite sense of a compass
+        // bearing (measured clockwise from north) — negate to point the arrow the right way.
+        getAngle: (d: PathPoint) => -d.headingDeg,
+        iconAtlas: SHIP_TRACKER_ARROW_SVG,
+        iconMapping: SHIP_TRACKER_ICON_MAPPING,
+        getIcon: () => "arrow",
+        getSize: SHIP_TRACKER_ICON_SIZE_PX,
+        sizeUnits: "pixels",
+        pickable: false,
+      }),
+    ];
+  }, [attributeRevealed, vesselsVisible, hoveredVessel, trackerElapsedMs]);
 
   // docs/team/harshita-frontend.md Phase 3.5 — dark-vessel markers. Independent of `vesselsVisible` on purpose: the
   // whole point of the AIS-off reveal (docs/team/harshita-integration.md §3.3) is that toggling the AIS track layer off
@@ -1026,6 +1167,9 @@ export default function MapView() {
         // it sits exactly on a teal contact marker and must be drawn over it.
         darkVesselLayer,
         ...scanLayers,
+        // Ship tracker drawn topmost of all — a beacon on the currently-hovered suspect must
+        // never be hidden under any other marker or track.
+        ...shipTrackerLayers,
       ],
     });
   }, [
@@ -1037,6 +1181,7 @@ export default function MapView() {
     infrastructureLayer,
     shipDetectionLayer,
     scanLayers,
+    shipTrackerLayers,
   ]);
 
   // SAR source follows the active case / bounds.
