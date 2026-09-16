@@ -313,3 +313,21 @@ slack; do not displace anything for it.
 **Checkpoint artefact for the group:** the four-case validation table cannot exist yet. What can be
 posted now is §4 — the measured 0.8–1.3 km reachability ceiling on real HYCOM, and the fact that
 every estimator refuses on case-000 for a different correct reason.
+
+---
+
+## Addendum — 17 Sept 2026: age engine v2 (D45). The ratified text above is left as written.
+
+Several statements above are now out of date. They are superseded here rather than edited in place:
+
+| Above | Now |
+|---|---|
+| §4: C3.1 reaches only 0.8–1.3 km of major axis; "all four estimators return none" | Horizontal diffusion (Phase 1), Okubo scale-dependent K and a release-size nuisance let the shape model reach real slicks. Three of six cases carry a measured age. |
+| §5 C4: intersection when bands overlap, union when they disagree | Replaced by a posterior on one hourly grid (`age_posterior.py`). Bands survive as diagnostics in `age_estimators`. |
+| D-A: match on major axis only | Matches length, width **and** bearing, as a likelihood marginalised over the ensemble. |
+| C3.1 gated to `acute`; `chronic` refused | `chronic` is dated by width along the track (new E4); `unknown` averages the patch and track readings. |
+| C3.4: `unknown` until Stage 1 ships centre/edge contrast | Stage 2 measures it from the bundle's own `sar_vv_vh.tif` (display flag only). |
+| A5: N = 1 on Huntington "if C3.1 fires" | C3.1 fired uncalibrated ([0.5, 29.5] h, containing 2.8 h). **The calibrated engine refuses Huntington.** The N = 1 claim is withdrawn again, and the accuracy claim now rests on 144 synthetic twins: held-out 80 % coverage 0.81. |
+
+A3 (Fay is a regime verdict, never a band) and A4 (no uncited Fay number in the deck) stand unchanged.
+Full account: `docs/evaluation/stage2-age-engine.md`.

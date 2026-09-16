@@ -92,7 +92,68 @@ exactly as the plan's gate requires.
 
 ## 5. The real cases
 
-*Filled after the Phase 8 regeneration (§5 table).*
+Regenerated 17 Sept 2026 with `publish_all.py --age drive --pool`. "Before" is `main` at `fafcfe2`
+(24 h rewind, final-step origin). All six validate PASS.
+
+| Case | Before: r90 km, window, age | Age 80 % (method) | Window (UTC), method | r50 / r90 km | Abstain | Models apart |
+|---|---|---|---|---|---|---|
+| Jacksonville | 31.1, convergence, none | **0.5–13.5 h** (combined) | 07-30 09:51 → 22:51, **age** | 14.7 / 33.9 | no | 0.46 km |
+| Farallones | 8.8, bounded, none | **0.5–18.5 h** (combined) | 03-16 19:54 → 03-17 13:54, **age** | 5.5 / 12.4 | no | 1.47 km |
+| Gulf of Alaska | 2.6, convergence, none | **0.5–11.5 h** (combined) | 05-16 04:27 → 15:27, **age** | 1.3 / 2.9 | no | 0.91 km |
+| Huntington | 2.5, convergence, none | refused (gain 0.007) | 10-01 17:41 → 19:58, convergence | 3.8 / 7.1 | no | 7.67 km |
+| Jamnagar | 3.7, bounded, none | refused (gain 0.005) | 48 h bracket, bounded | 14.1 / 21.3 | no | 27.34 km |
+| Mumbai | 3.7, bounded, none | refused (gain 0.007) | 48 h bracket, bounded | 7.3 / 11.1 | no | 13.23 km |
+
+**Reading it:**
+- **Three of six cases now carry a measured age**, all three ship tracks (`chronic`), all young. The
+  window replaces a fixed bracket with an interval that says *this slick is less than about half a day
+  old*.
+- **Without the engine, the 72 h rewind would have forced the hero case to abstain.** Jacksonville's
+  final-step origin at 72 h has r90 97 km. Pooled over the calibrated posterior it was still 108 km,
+  because an 11 % tail of old ages lies hundreds of kilometres up the Gulf Stream. Pooled over the
+  stated 80 % window only, it is 33.9 km. §2 records why pooling over the window is the consistent
+  choice, not a tuning.
+- **Where both models pool over an age, they agree to within 1.5 km.** Where no age exists they are
+  compared at the full horizon, and they part by 8–27 km. That is the horizon speaking, not the
+  models, and it is the clearest argument for the age engine in the table.
+- **Huntington, the only real slick with a known release time (2.8 h), is refused.** Before
+  calibration the engine gave [0.5, 29.5] h, which contained the truth. The calibrated error terms are
+  wider, and the evidence no longer clears the refusal threshold. The honest N = 1 statement is
+  therefore *"on the one real slick with a documented release time, the calibrated engine declined to
+  give an age."* It is not a hit.
+- **The three refused cases keep the old behaviour**, a final-step origin at the rewind horizon, which
+  is exactly what the plan specified for "no age". That is now a 72 h horizon, so their clouds are
+  wider than the published 24 h ones (r90 3.7 → 11–21 km). Whether a refused case should pool over the
+  prior instead is an open question for Akshat.
+
+### Stage 3 re-scored on the new origins (`scripts/run_attribute_all.py --refresh`)
+
+No Stage 3 weight or threshold changed. Only the origin grid and window it reads did.
+
+| Case | Before (main) | After |
+|---|---|---|
+| Jacksonville | NAGOYA EXPRESS 0.69, GALVESTON 0.65 | STENA PROSPEROUS 0.73, MENUETT 0.59, PATRIOT 0.57 · funnel 32 → 22 → 3 → 3 |
+| Farallones | HORIZON 0.62, OVERSEAS BOSTON 0.35, AURORA SB 0.05 | abstains: top two within a few percent · 11 → 8 → 3 → 0 |
+| Gulf of Alaska | abstains | two MMSI-941 contacts, 0.27 / 0.23 · 14 → 12 → 2 → 2 |
+| Huntington | abstains | GOOD JU JU 0.58, MORNING CONDUCTOR 0.50, KENNETH CARL 0.42 · 596 → 514 → 7 → 3 |
+| Jamnagar | MELODY 5 0.61 | abstains · 111 → 102 → 21 → 0 |
+| Mumbai | abstains | OLYMPUS 0.89, LISA 0.78, MSC MADELEINE 0.78 · 74 → 66 → 28 → 3 |
+
+- **The age window changes which vessels are even in the AIS extract.** On the two age-dated cases
+  with a Cerulean attribution, the extract now contains vessels it previously did not. What that means
+  for the verdicts is assessed against `docs/ANSWERS.md` by Akshat, not here.
+- **Temporality now scores on age windows** (Jacksonville's suspects carry temporality 0.11 / 0.17 /
+  0.96). The `score.py` gate change is doing its job.
+- **The three refused-age cases (Huntington, Jamnagar, Mumbai) move the most**, because their origins
+  fall back to the 72 h final step and a 48 h bracket. **Open decision (Akshat):** keep that fallback,
+  or pool refused cases over the log-uniform prior with a `bounded` window. It is deliberately not
+  changed here: the effect on these verdicts has been seen, so choosing between the two now would be
+  tuning against the answers (D21).
+- The two Gulf of Alaska suspects carry MMSIs starting 941 with voltage-like names, which usually
+  indicates fishing-gear buoys rather than vessels. That is a Stage 3 filtering question for Jaiveer.
+- `cases/*/verification.json` assessment prose predates this re-score and still describes the old
+  suspects. It is Akshat's to rewrite; `scaffold_verification.py --update --all` refreshes the
+  mechanical `udgam_result` in the checkout that holds `verification/`.
 
 ## 6. What to say, and what not to say
 

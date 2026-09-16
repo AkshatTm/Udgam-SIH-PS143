@@ -1,34 +1,150 @@
 {
   "funnel": {
-    "in_region": 106,
-    "in_window": 75,
-    "plausible": 5,
-    "scored": 0,
-    "dropped_short_track": 6
+    "in_region": 596,
+    "in_window": 514,
+    "plausible": 7,
+    "scored": 3,
+    "dropped_short_track": 12
   },
-  "suspects": [],
+  "suspects": [
+    {
+      "source_type": "vessel",
+      "mmsi": "368117160",
+      "name": "GOOD JU JU",
+      "vessel_type": "other",
+      "score": 0.58,
+      "components": {
+        "proximity": 0.795,
+        "parity": null,
+        "temporality": 0.527,
+        "trajectory": 1.0,
+        "gap": 0.0,
+        "slowdown": 0.0,
+        "type_prior": 0.5
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "closest approach 0.5 h from the centre of the release window",
+        "trajectory": "on approach 8 km out, course 43 deg against 38 deg toward the origin (5 deg off)",
+        "gap": "longest silence overlapping the window: 16 minutes",
+        "slowdown": "15.4 kn at closest approach against an under-way median of 14.3 kn",
+        "type_prior": "vessel type other"
+      },
+      "weight_live": 0.85,
+      "components_available": 6,
+      "components_total": 7,
+      "closest_km": 1.09,
+      "closest_time": "2021-10-01T18:17:51Z",
+      "grid_probability": 0.795,
+      "heading_consistent": true,
+      "ais_gap_minutes": 15.9,
+      "edge_truncated": false,
+      "reasons": [
+        "inside the high-probability region of the reconstructed origin during the release window",
+        "other on a course consistent with the origin"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "372914000",
+      "name": "MORNING CONDUCTOR",
+      "vessel_type": "cargo",
+      "score": 0.497,
+      "components": {
+        "proximity": 0.276,
+        "parity": null,
+        "temporality": 0.432,
+        "trajectory": 1.0,
+        "gap": null,
+        "slowdown": 0.0,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "closest approach 0.6 h from the centre of the release window",
+        "trajectory": "on approach 8 km out, course 165 deg against 127 deg toward the origin (39 deg off)",
+        "gap": "237-minute silence begins on the search-box boundary \u2014 the vessel left the search area and returned, which is not a transponder gap",
+        "slowdown": "9.8 kn at closest approach against an under-way median of 9.8 kn",
+        "type_prior": "vessel type cargo"
+      },
+      "weight_live": 0.7,
+      "components_available": 5,
+      "components_total": 7,
+      "closest_km": 2.04,
+      "closest_time": "2021-10-01T19:28:51Z",
+      "grid_probability": 0.276,
+      "heading_consistent": true,
+      "ais_gap_minutes": 237.0,
+      "edge_truncated": false,
+      "reasons": [
+        "on the edge of the reconstructed origin during the release window",
+        "cargo on a course consistent with the origin"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "367492920",
+      "name": "KENNETH CARL",
+      "vessel_type": "other",
+      "score": 0.415,
+      "components": {
+        "proximity": 0.219,
+        "parity": null,
+        "temporality": 0.002,
+        "trajectory": 1.0,
+        "gap": null,
+        "slowdown": 1.0,
+        "type_prior": 0.5
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "closest approach 1.1 h from the centre of the release window",
+        "trajectory": "on approach 7 km out, course 151 deg against 174 deg toward the origin (23 deg off)",
+        "gap": "2-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
+        "slowdown": "1.1 kn at closest approach against an under-way median of 10.4 kn",
+        "type_prior": "vessel type other"
+      },
+      "weight_live": 0.7,
+      "components_available": 5,
+      "components_total": 7,
+      "closest_km": 9.96,
+      "closest_time": "2021-10-01T17:41:58Z",
+      "grid_probability": 0.219,
+      "heading_consistent": true,
+      "ais_gap_minutes": 1.5,
+      "edge_truncated": false,
+      "reasons": [
+        "on the edge of the reconstructed origin during the release window",
+        "other on a course consistent with the origin",
+        "unusual slowdown at closest approach"
+      ]
+    }
+  ],
   "dark_vessels": [],
   "infrastructure": [],
   "excluded": [
     {
-      "mmsi": "368117160",
-      "name": "GOOD JU JU",
-      "closest_km": 1.28,
-      "reason": "plausible candidate \u2014 score 0.73 on 5 of 7 components, peak grid probability 0.64 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
-    },
-    {
-      "mmsi": "636018276",
-      "name": "MSC GAYANE",
-      "closest_km": 1.19,
-      "reason": "plausible candidate \u2014 score 0.73 on 3 of 7 components, peak grid probability 0.57 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
-    },
-    {
       "mmsi": "338120738",
       "name": "PER AMORE",
-      "closest_km": 0.63,
-      "reason": "plausible candidate \u2014 score 0.62 on 6 of 7 components, peak grid probability 0.87 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
+      "closest_km": 12.61,
+      "reason": "heading away from the origin throughout the window"
+    },
+    {
+      "mmsi": "368014440",
+      "name": "MONTE CARLO",
+      "closest_km": 8.33,
+      "reason": "no transponder gap and continuous coverage through the window"
+    },
+    {
+      "mmsi": "367393270",
+      "name": "NICHOLAS L",
+      "closest_km": 10.18,
+      "reason": "heading away from the origin throughout the window"
     }
   ],
-  "abstained": true,
-  "abstain_reason": "the top two vessels score within a few percent of each other and cannot be separated on this evidence"
+  "abstained": false,
+  "abstain_reason": null
 }

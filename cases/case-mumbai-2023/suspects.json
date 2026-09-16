@@ -1,34 +1,146 @@
 {
   "funnel": {
-    "in_region": 42,
-    "in_window": 29,
-    "plausible": 0,
-    "scored": 0,
-    "dropped_short_track": 5
+    "in_region": 74,
+    "in_window": 66,
+    "plausible": 28,
+    "scored": 3,
+    "dropped_short_track": 3
   },
-  "suspects": [],
+  "suspects": [
+    {
+      "source_type": "vessel",
+      "mmsi": "419001555",
+      "name": "OLYMPUS",
+      "vessel_type": "other",
+      "score": 0.888,
+      "components": {
+        "proximity": 0.953,
+        "parity": null,
+        "temporality": null,
+        "trajectory": null,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 0.5
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach \u2014 position between two hourly fixes, linearly interpolated; the vessel's actual path between fixes is not observed",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
+        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
+        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "type_prior": "vessel type other"
+      },
+      "weight_live": 0.35,
+      "components_available": 2,
+      "components_total": 7,
+      "closest_km": 1.4,
+      "closest_time": "2023-09-01T10:34:00Z",
+      "grid_probability": 0.953,
+      "heading_consistent": false,
+      "ais_gap_minutes": 60.0,
+      "edge_truncated": false,
+      "reasons": [
+        "inside the high-probability region of the reconstructed origin during the release window"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "636019523",
+      "name": "LISA",
+      "vessel_type": "cargo",
+      "score": 0.781,
+      "components": {
+        "proximity": 0.745,
+        "parity": null,
+        "temporality": null,
+        "trajectory": null,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach \u2014 position between two hourly fixes, linearly interpolated; the vessel's actual path between fixes is not observed",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
+        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
+        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "type_prior": "vessel type cargo"
+      },
+      "weight_live": 0.35,
+      "components_available": 2,
+      "components_total": 7,
+      "closest_km": 13.37,
+      "closest_time": "2023-09-01T20:01:00Z",
+      "grid_probability": 0.745,
+      "heading_consistent": false,
+      "ais_gap_minutes": 60.0,
+      "edge_truncated": false,
+      "reasons": [
+        "inside the high-probability region of the reconstructed origin during the release window"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "353728000",
+      "name": "MSC MADELEINE",
+      "vessel_type": "cargo",
+      "score": 0.781,
+      "components": {
+        "proximity": 0.745,
+        "parity": null,
+        "temporality": null,
+        "trajectory": null,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach \u2014 position between two hourly fixes, linearly interpolated; the vessel's actual path between fixes is not observed",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
+        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
+        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "type_prior": "vessel type cargo"
+      },
+      "weight_live": 0.35,
+      "components_available": 2,
+      "components_total": 7,
+      "closest_km": 13.25,
+      "closest_time": "2023-09-01T11:04:00Z",
+      "grid_probability": 0.745,
+      "heading_consistent": false,
+      "ais_gap_minutes": 420.0,
+      "edge_truncated": false,
+      "reasons": [
+        "inside the high-probability region of the reconstructed origin during the release window"
+      ]
+    }
+  ],
   "dark_vessels": [],
   "infrastructure": [],
   "excluded": [
     {
-      "mmsi": "419001523",
-      "name": "OFFSHORE MONARCH",
-      "closest_km": 8.35,
-      "reason": "5 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 8.3 km from the peak, at zero grid probability throughout"
+      "mmsi": "419001628",
+      "name": "SAGAR ENERGY",
+      "closest_km": 12.5,
+      "reason": "never entered the high-probability region of the origin (peak grid probability 0.13)"
     },
     {
-      "mmsi": "419767000",
-      "name": "GREATSHIP AHALYA",
-      "closest_km": 8.64,
-      "reason": "16 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 8.6 km from the peak, at zero grid probability throughout"
+      "mmsi": "419001116",
+      "name": "OCEAN TURQUOISE",
+      "closest_km": 9.06,
+      "reason": "never entered the high-probability region of the origin (peak grid probability 0.08)"
     },
     {
-      "mmsi": "419026700",
-      "name": "MALAVIYA EIGHTEEN",
-      "closest_km": 11.32,
-      "reason": "13 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 11.3 km from the peak, at zero grid probability throughout"
+      "mmsi": "419663000",
+      "name": "KAMET",
+      "closest_km": 13.24,
+      "reason": "never entered the high-probability region of the origin (peak grid probability 0.06)"
     }
   ],
-  "abstained": true,
-  "abstain_reason": "no vessel entered the reconstructed origin during the window"
+  "abstained": false,
+  "abstain_reason": null
 }

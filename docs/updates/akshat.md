@@ -2,6 +2,52 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-17 02:45] Stage 2 — age engine v2 (D45): calibrated age posterior, OpenDrift as second model, age drives the origin
+
+**Done:** Slick age is now a posterior on an hourly grid to 72 h. Shape evidence comes from our RK2
+mixed with OpenDrift OpenOil; track width dates ship tracks; SAR contrast is read from the bundle's
+own raster. `run.py --age drive` pools the origin over the stated 80 % age window, and OceanDrift is
+pooled in at equal weight (`model_mix`). Calibrated on 144 synthetic twins through the six real
+fields, cross-model and leave-one-field-out: **held-out 80 % coverage 0.81**. The learned surrogate
+was tested and rejected (coverage 0.55). All six bundles were regenerated and Stage 3 re-scored;
+everything validates PASS. Schema in lockstep: Master §6.5/§4.4 + D45, CONTRACTS mirror, validator
+(+4 mutations), `contracts.ts`/`origin.ts`/ContextPanel, and the `score.py` temporality gate
+accepts `age`. OpenDrift members run in parallel (3 workers, ~1.5 GB each).
+
+**Files touched:** `pipeline/drift/{age_posterior,age_twins,age_surrogate,opendrift_age,opendrift_origin,opendrift_twins,pool_models,posterior_tests}.py` (new) ·
+`pipeline/drift/{age,ensemble,run,step,publish_all,tests}.py` · `pipeline/drift/age_calibration.json` (new) ·
+`scripts/{validate_case,test_validator}.py` · `pipeline/attribute/{score,tests}.py` · `web/lib/{contracts,origin}.ts` ·
+`web/components/ContextPanel.tsx` · `docs/00_MASTER_PLAN.md` · `docs/CONTRACTS.md` · `docs/evaluation/stage2-age-engine.md` (new) ·
+`docs/evaluation/stage2-age-decision-brief.md` (dated addendum) · `cases/*/{origin,particles,suspects,vessels}.json` (outputs)
+
+**Run command:**
+```bash
+bash pipeline/drift/run_opendrift_all.sh 3                          # odenv; ~30 min for six cases
+venv/Scripts/python pipeline/drift/publish_all.py --age drive --pool
+venv/Scripts/python scripts/run_attribute_all.py --refresh
+venv/Scripts/python scripts/validate_case.py cases/
+```
+Expected output: `PASS cases/index.json + all listed cases`.
+
+**Checkpoint artefact:** `docs/evaluation/figures/stage2/F2.10_age_calibration.png`;
+`docs/evaluation/stage2-age-engine.md` §4–5. Drift 12/12 (101), validator 30/30, Stage 3 116 OK.
+
+**Open issues:**
+- **Decision:** the fallback for refused ages (Huntington, Jamnagar, Mumbai) is the 72 h final-step
+  origin, and it moves those three verdicts most (Huntington now names 3 transiting vessels). Keep it,
+  or pool over the prior. Not changed, because the answers have been seen (D21).
+- **Huntington (N = 1) is refused** by the calibrated engine. Uncalibrated it contained 2.8 h. No real
+  hit to quote.
+- Old slicks are dated too young (medians level off at 3–15 h). Quote intervals, never medians.
+- `verification.json` assessment prose predates the re-score and the corrected Cerulean MMSIs
+  (Jacksonville 563082600, Farallones 212656000). Yours to rewrite.
+- Gulf of Alaska suspects look like fishing-gear buoys (MMSI 941…): Jaiveer.
+- Frontend not checked in a browser: `tsc` and lint are clean, and the ContextPanel caption for
+  `age` is untested visually.
+- `data/ais/*.parquet` were refreshed to the new windows (gitignored, shared via the local data dir).
+
+**Next:** Akshat rules on the refused-age fallback, then re-scores Stage 3 once more if it changes.
+
 ## [2026-09-16 13:30] Integration — three branches merged to main, forward slick shipped (D44)
 
 **Done:** Merged `anushka`, `soum` and `stage2-age-opendrift` into `main` (all three conflict-free)
