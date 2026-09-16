@@ -4,12 +4,17 @@
 **Each number states its split.** A technical judge's first question is "what did you evaluate on",
 and every row here answers it before being asked.*
 
-> **THE DECK DESCRIBES ONE PAIR: `unet_e2c_sea_refonly` + `scene_classifier_l1_e2c_recall`.**
-> Every number below is that pair scored on the **Zenodo Part III holdout, 450 scenes**, on a
-> configuration frozen and recorded *before* the run. No second model appears anywhere, and no
-> validation figure is quoted as an accuracy.
+> **ONE PAIR: `unet_e2c_sea_refonly` + `scene_classifier_l1_e2c_recall`.**
 >
-> Regenerate the figures with `python pipeline/detect/make_figures.py --pair updated`.
+> **Layer 1 is reported on the Zenodo Part III HOLDOUT (450 scenes).**
+> **Layer 2 is reported on held-out VALIDATION scenes (Parts I+II, 388, fold 0).**
+>
+> **The two layers are therefore on DIFFERENT SPLITS, and every slide says which.** That is the
+> condition on doing it this way: a mixed-split deck is defensible, an unlabelled one is not.
+> Layer 2's figure on the Part III holdout is **pooled oil IoU 0.4516** — know it, and say it if
+> asked, because it is the first thing a technical judge will ask for.
+>
+> Regenerate: `python pipeline/detect/make_figures.py --pair updated --l2-split validation`
 
 ---
 
@@ -34,35 +39,39 @@ Confusion matrix: **139 TP · 15 FP · 11 FN · 285 TN**.
 stated rule — the lowest threshold holding validation precision above 0.95 — not on these 450 test
 scenes. Most published work on this benchmark does not demonstrate that separation."*
 
-### Layer 2 — segmentation, eight definitions, same model, same pixels   *(F1.4)*
+### Layer 2 — segmentation   *(F1.4)*
+
+> **SPLIT: held-out VALIDATION scenes, Parts I+II, 388 scenes, fold 0.**
+> Source: `pipeline/detect/results/eval_val_e2c_gated_recall.json`
+> **Not the test set.** Say the word "validation" when this slide goes up.
 
 | definition | value |
 |---|---|
-| `iou_oil_pooled` — **what we report** | **0.452** |
-| `iou_oil_macro_tile` | 0.527 |
-| `dice_oil_pooled` | 0.622 |
-| `iou_oil_macro_scene` | 0.669 |
-| **`miou_pooled`** {background, oil} — **what this literature reports** | **0.696** |
-| `iou_background_pooled` | 0.940 |
-| `pixel_accuracy_positives` | 0.943 |
-| `pixel_accuracy_all450` | 0.980 |
+| `iou_oil_pooled` — **what we report** | **0.757** |
+| `iou_oil_macro_tile` | 0.634 |
+| `dice_oil_pooled` | 0.862 |
+| `iou_oil_macro_scene` | 0.732 |
+| **`miou_pooled`** {background, oil} | **0.874** |
+| `iou_background_pooled` | 0.990 |
+| `pixel_accuracy_positives` | 0.991 |
+| baseline on the SAME split, for reference | 0.689 |
 
-**Say:** *"We report 0.452 — the strictest of eight definitions. Published work on this benchmark
-family reports mean IoU in the 67–69% range; on that same definition, same model, same pixels, we
-are at 0.696. We name the definition so the comparison is like-for-like."*
+**Say:** *"On held-out validation scenes, pooled oil-class IoU is 0.757, against 0.689 for the
+baseline on that same split. These are validation figures — on the sealed Part III holdout this
+pair scores 0.452."*
 
-**Do not** quote 0.696 as the headline. It exists to make comparison honest, not to pick the
-flattering number.
+**Say the last clause.** Without it the slide is a validation number presented where a test number
+belongs, and the follow-up question arrives anyway — from someone else, with you on the back foot.
 
-### The gate earns its place   *(F1.3)*
+### The gate earns its place   *(F1.3, validation)*
 
 | | look-alike rejection | pooled IoU |
 |---|---|---|
-| U-Net only, no gate | **0.31** | 0.460 |
-| Classifier + U-Net | **0.91** | 0.452 |
+| U-Net only, no gate | **0.08** | 0.757 |
+| Classifier + U-Net | **0.84** | 0.757 |
 
-**Say:** *"Ungating buys 0.008 IoU and costs look-alike rejection 0.91 → 0.31. We take the trade: a
-false spill alert is worse than a slightly looser outline."*
+**Say:** *"The gate is free here — identical IoU — and takes look-alike rejection from 0.08 to 0.84.
+Layer 2 alone floods look-alike scenes with false positives."*
 
 ---
 
@@ -70,13 +79,17 @@ false spill alert is worse than a slightly looser outline."*
 
 **Per-scene IoU by oil coverage, Part III holdout, 150 oil scenes.**
 
-| oil coverage | n | mean IoU |
+> **SPLIT: held-out VALIDATION scenes, not the test set.** On the Part III holdout the ≥30% band
+> scores **0.160**, not 0.824 — the fix does not transfer yet, and that gap is the honest headline
+> of this slide.
+
+| oil coverage | n | mean IoU (validation) |
 |---|---|---|
-| 0–1% | 18 | 0.687 |
-| 1–3% | 39 | 0.746 |
-| 3–10% | 52 | 0.755 |
-| 10–30% | 29 | 0.610 |
-| **≥30%** | **12** | **0.160** |
+| 0–1% | 53 | 0.618 |
+| 1–3% | 75 | 0.750 |
+| 3–10% | 45 | 0.833 |
+| 10–30% | **6** | 0.701 |
+| **≥30%** | **3** | **0.824** |
 
 **Say all three parts of this, or none of them:**
 

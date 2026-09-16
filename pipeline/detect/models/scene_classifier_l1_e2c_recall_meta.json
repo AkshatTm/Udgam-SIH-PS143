@@ -16,23 +16,23 @@
   "tested_on": "Zenodo Part III",
   "n_parameters": 63873,
   "validation": {
-    "threshold": 0.4896,
-    "scene_accuracy": 0.9845,
-    "oil_recall": 0.9889,
-    "lookalike_rejection": 0.9592,
+    "threshold": 0.128,
+    "scene_accuracy": 0.9741,
+    "oil_recall": 0.9944,
+    "lookalike_rejection": 0.9082,
     "cleanocean_rejection": 1.0,
-    "tp": 178,
-    "fp": 4,
-    "fn": 2,
-    "tn": 202,
+    "tp": 179,
+    "fp": 9,
+    "fn": 1,
+    "tn": 197,
     "per_class": {
       "Oil": {
         "n": 180,
-        "recall": 0.9888888888888889
+        "recall": 0.9944444444444445
       },
       "Lookalike": {
         "n": 98,
-        "rejection": 0.9591836734693877
+        "rejection": 0.9081632653061225
       },
       "No oil": {
         "n": 108,
@@ -169,5 +169,6 @@
   },
   "retrained": false,
   "threshold_prev": 0.4895855486392975,
-  "note": "SAME WEIGHTS as scene_classifier_l1_e2c.pt - only the threshold differs. No retraining, so this carries no model-change confound, unlike the r95 run."
+  "note": "SAME WEIGHTS as scene_classifier_l1_e2c.pt - only the threshold differs. No retraining, so this carries no model-change confound, unlike the r95 run.",
+  "validation_note": "recomputed at the adopted threshold 0.1280; the block written at save time was left over from the max-F1 threshold 0.4896 and was inconsistent with the part3 block beside it."
 }

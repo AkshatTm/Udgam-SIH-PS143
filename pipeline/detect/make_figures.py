@@ -78,6 +78,59 @@ PAIRS = {
 }
 PAIR = PAIRS["updated"]
 
+# Layer 2 can be reported on either split. Layer 1 is ALWAYS the Part III holdout.
+#
+# Drawing Layer 2 on validation is legitimate only while it is LABELLED, so every
+# affected figure stamps the split into its title as well as its caption. The
+# holdout figure is printed alongside wherever the validation one appears, so the
+# validation number can never read as the test number by omission.
+L2_SPLITS = {
+    "holdout": {
+        "file": None,                       # falls through to PAIR["part3"]
+        "tag": "Zenodo Part III HOLDOUT, 450 scenes",
+        "short": "HOLDOUT",
+    },
+    "validation": {
+        "file": "eval_val_e2c_gated_recall.json",
+        "baseline": os.path.join(_ROOT, "scratch", "eval_val_base_median_ungated.json"),
+        "tag": "held-out VALIDATION scenes (Parts I+II), 388 scenes, fold 0",
+        "short": "VALIDATION",
+    },
+}
+L2 = L2_SPLITS["holdout"]
+
+
+def _l2():
+    """-> the gated Layer 2 row for the selected split."""
+    if L2["file"] is None:
+        return {r["model"]: r for r in _rows(_part3())}["Classifier + U-Net"]
+    d = _load(os.path.join(RESULTS, L2["file"]))
+    return d["folds"]["0"]
+
+
+def _l2_title(base):
+    if L2["short"] == "HOLDOUT":
+        return base
+    return base + "   [%s]" % L2["short"]
+
+
+def _l2_src():
+    """-> the caption prefix for a LAYER 2 figure: real source file, real split.
+
+    This exists because the first build of the mixed set stamped [VALIDATION] into
+    the title while the caption underneath still read "Split: Zenodo Part III
+    holdout, 450 scenes" — the source path and the split were hardcoded to the
+    holdout. A caption that asserts the wrong split is worse than no caption: it
+    is a checkable claim that is false, on the one line of the figure whose entire
+    job is to be checkable.
+    """
+    if L2["file"] is None:
+        return ("Source: pipeline/detect/results/%s  ·  Split: %s, gated (Classifier + U-Net)."
+                % (PAIR["part3"], L2["tag"]))
+    return ("Source: pipeline/detect/results/%s  ·  Split: %s, gated (Classifier + U-Net). "
+            "THIS IS A VALIDATION FIGURE, NOT A TEST FIGURE — for this same pair the Part III "
+            "holdout figure is pooled oil IoU 0.4516." % (L2["file"], L2["tag"]))
+
 
 def _part3():
     return _load(os.path.join(RESULTS, PAIR["part3"]))
@@ -254,6 +307,17 @@ def f1_2():
 def f1_3():
     rows = {r["model"]: r for r in _rows(_part3())}
     ung, gat = rows["U-Net only (no gate)"], rows["Classifier + U-Net"]
+    if L2["file"]:
+        d = _load(os.path.join(RESULTS, L2["file"]))["folds"]["0"]
+        u = _load(os.path.join(RESULTS, "eval_val_e2c.json"))["folds"]["0"]
+        gat = dict(gat, lookalike_rejection=d["lookalike_rejection"],
+                   cleanocean_rejection=d.get("cleanocean_rejection") or 0.0,
+                   oil_recall=d["oil_recall"],
+                   iou_positives=d["metric_decomposition"]["iou_oil_pooled"]["value"])
+        ung = dict(ung, lookalike_rejection=u["lookalike_rejection"],
+                   cleanocean_rejection=u.get("cleanocean_rejection") or 0.0,
+                   oil_recall=u["oil_recall"],
+                   iou_positives=u["metric_decomposition"]["iou_oil_pooled"]["value"])
     labels = ["look-alike\nrejection", "clean-ocean\nrejection", "oil recall", "pooled oil IoU"]
     a = [ung["lookalike_rejection"], ung["cleanocean_rejection"], ung["oil_recall"], ung["iou_positives"]]
     b = [gat["lookalike_rejection"], gat["cleanocean_rejection"], gat["oil_recall"], gat["iou_positives"]]
@@ -273,14 +337,14 @@ def f1_3():
     ax.text(3, (a[3] + b[3]) / 2, "  −0.014", color=RED, fontsize=9, fontweight="bold")
     ax.set_xticks(x); ax.set_xticklabels(labels)
     ax.set_ylim(0, 1.08); ax.set_ylabel("score")
-    ax.set_title("The gate costs 0.014 IoU and buys 0.48 look-alike rejection", fontsize=10)
+    ax.set_title(_l2_title("The gate costs %.3f IoU and buys %.2f look-alike rejection"
+                           % (a[3] - b[3], b[0] - a[0])), fontsize=10)
     ax.legend(fontsize=8, frameon=False, loc="lower right")
     ax.grid(axis="y", alpha=0.3, color=GRID)
-    _caption(fig, "Source: pipeline/detect/results/%s  ·  Split: Zenodo Part III holdout, "
-                  "450 scenes (150 oil / 150 look-alike / 150 clean ocean).  Ungating buys "
-                  "%+.3f pooled IoU and costs look-alike rejection %.2f → %.2f. We take the "
-                  "trade: a false spill alert is worse than a slightly looser outline.  %s"
-                  % (PAIR["part3"], a[3] - b[3], b[0], a[0], _prov()))
+    _caption(fig, "%s  Ungating buys %+.3f pooled IoU and costs look-alike rejection "
+                  "%.2f → %.2f. We take the trade: a false spill alert is worse than a "
+                  "slightly looser outline.  %s"
+                  % (_l2_src(), a[3] - b[3], b[0], a[0], _prov()))
     fig.subplots_adjust(bottom=0.24)
     _save(fig, "F1.3_gate_ablation.png")
 
@@ -289,7 +353,7 @@ def f1_3():
 # F1.4 — the eight IoU definitions   (the strongest figure in the set)
 # ---------------------------------------------------------------------------
 def f1_4():
-    g = {r["model"]: r for r in _rows(_part3())}["Classifier + U-Net"]
+    g = _l2()
     md = g["metric_decomposition"]
     order = [("iou_oil_pooled", "oil-class IoU, pooled\n← WHAT WE REPORT"),
              ("iou_oil_macro_tile", "oil-class IoU, mean over tiles"),
@@ -316,13 +380,12 @@ def f1_4():
             fontsize=7.5, color=GREEN, ha="center")
     ax.set_yticks(yy); ax.set_yticklabels(labs, fontsize=8)
     ax.set_xlim(0, 1.06); ax.set_xlabel("value")
-    ax.set_title("Eight definitions. Same model, same pixels, same 450 scenes.", fontsize=10)
+    ax.set_title(_l2_title("Eight definitions. Same model, same pixels, same scenes."),
+                 fontsize=10)
     ax.grid(axis="x", alpha=0.3, color=GRID)
-    _caption(fig, "Source: pipeline/detect/results/%s  ·  Split: Zenodo Part III holdout, "
-                  "450 scenes, gated (Classifier + U-Net).  We report %.4f — the STRICTEST of "
-                  "the eight. The others are printed so a comparison against any published "
-                  "number is like-for-like, not so we can pick the flattering one.  %s"
-                  % (PAIR["part3"], vals[0], _prov()))
+    _caption(fig, "%s  We report %.4f — the STRICTEST of the eight. The others are printed "
+                  "so a comparison against any published number is like-for-like, not so we "
+                  "can pick the flattering one.  %s" % (_l2_src(), vals[0], _prov()))
     fig.subplots_adjust(bottom=0.22)
     _save(fig, "F1.4_eight_iou_definitions.png")
 
@@ -331,7 +394,7 @@ def f1_4():
 # F1.5 — the coverage cliff
 # ---------------------------------------------------------------------------
 def f1_5():
-    g = {r["model"]: r for r in _rows(_part3())}["Classifier + U-Net"]
+    g = _l2()
     bands = g["metric_decomposition"]["iou_by_slick_size"]["value"]
     order = ["0-1% oil", "1-3% oil", "3-10% oil", "10-30% oil", "30-101% oil"]
     labs = ["0–1%", "1–3%", "3–10%", "10–30%", "≥30%"]
@@ -350,7 +413,7 @@ def f1_5():
     ax.set_xlabel("oil coverage of the scene")
     ax.set_ylabel("mean per-scene IoU")
     ax.set_ylim(0, 1.0)
-    ax.set_title("The failure is one narrow class of scene, not the model", fontsize=10)
+    ax.set_title(_l2_title("Per-scene IoU by oil coverage"), fontsize=10)
     ax.grid(axis="y", alpha=0.3, color=GRID)
 
     # our own demo library, measured — every case sits far left of the cliff
@@ -361,13 +424,11 @@ def f1_5():
         ax2.plot([xx], [0.93], marker="v", color=GREEN, ms=7, clip_on=False)
     ax2.text(0.28, 0.965, "▼ our nine demo cases — measured coverage %.2f–%.2f%%"
              % (min(cov), max(cov)), color=GREEN, fontsize=7.5)
-    _caption(fig, "Sources: pipeline/detect/results/%s (bands) and cases/*/detections.geojson "
-                  "(demo coverage)  ·  Split: Zenodo Part III holdout, 150 oil scenes.  The "
-                  "four bands below 30%% coverage score %.2f–%.2f. Pooled IoU collapses because "
-                  "the 12 scenes above 30%% hold ~38%% of all oil pixels and pooling weights a "
-                  "scene by its slick size. NO CASE IN THE DEMO LIBRARY SITS IN THAT BAND — "
-                  "measured, not assumed.  %s"
-                  % (PAIR["part3"], min(vals[:4]), max(vals[:4]), _prov()))
+    _caption(fig, "%s  Demo coverage from cases/*/detections.geojson.  The four bands below "
+                  "30%% coverage score %.2f–%.2f; pooled IoU is dragged by the ≥30%% band, which "
+                  "holds ~38%% of all oil pixels because pooling weights a scene by its slick "
+                  "size. NO CASE IN THE DEMO LIBRARY SITS IN THAT BAND — measured, not "
+                  "assumed.  %s" % (_l2_src(), min(vals[:4]), max(vals[:4]), _prov()))
     fig.subplots_adjust(bottom=0.26)
     _save(fig, "F1.5_coverage_cliff.png")
 
@@ -530,7 +591,7 @@ def f1_8():
 # ---------------------------------------------------------------------------
 def f1_9():
     o = _load(os.path.join(RESULTS, "oracle_ceiling.json"))
-    g = {r["model"]: r for r in _rows(_part3())}["Classifier + U-Net"]
+    g = _l2()
     bands = g["metric_decomposition"]["iou_by_slick_size"]["value"]
     key = {"0-1%": "0-1% oil", "1-3%": "1-3% oil", "3-10%": "3-10% oil",
            "10-30%": "10-30% oil", ">=30%": "30-101% oil"}
@@ -542,7 +603,8 @@ def f1_9():
     x = np.arange(len(labs)); w = 0.36
     fig, ax = plt.subplots(figsize=(7.6, 4.4))
     b1 = ax.bar(x - w/2, orc, w, color=AMBER, label="ORACLE — handed the sea reference")
-    b2 = ax.bar(x + w/2, ours, w, color=BLUE, label="ours (Part III, gated)")
+    b2 = ax.bar(x + w/2, ours, w, color=BLUE,
+                label="ours (%s, gated)" % L2["short"].lower())
     for r_ in list(b1) + list(b2):
         ax.text(r_.get_x() + r_.get_width()/2, r_.get_height() + 0.015,
                 "%.2f" % r_.get_height(), ha="center", fontsize=7.5)
@@ -558,12 +620,12 @@ def f1_9():
                  fontsize=9.5)
     ax.legend(fontsize=8, frameon=False, loc="upper left")
     ax.grid(axis="y", alpha=0.3, color=GRID)
-    _caption(fig, "Sources: pipeline/detect/results/oracle_ceiling.json and %s  ·  " % PAIR["part3"] +
-                  "Oracle measured on 228 Parts I+II oil scenes — NO PART III PIXEL IS READ by "
-                  "it; the ceiling is re-weighted by Part III band oil-mass to be comparable.  "
-                  "The oracle CHEATS in exactly one way: it takes the sea reference from the "
-                  "ground-truth mask, then uses one band, one blur and one global threshold. It "
-                  "bounds how much of the remaining gap is model quality versus normalisation.")
+    _caption(fig, "Oracle source: pipeline/detect/results/oracle_ceiling.json.  Ours — %s  "
+                  "Oracle measured on 228 Parts I+II oil scenes; the ceiling is re-weighted by "
+                  "Part III band oil-mass to be comparable.  The oracle CHEATS in exactly one "
+                  "way: it takes the sea reference from the ground-truth mask, then uses one "
+                  "band, one blur and one global threshold. It bounds how much of the remaining "
+                  "gap is model quality versus normalisation.  %s" % (_l2_src(), _prov()))
     fig.subplots_adjust(bottom=0.28)
     _save(fig, "F1.9_oracle_ceiling.png")
 
@@ -580,10 +642,21 @@ def main():
                     help="which model pair the evidence set describes. Both are scored on the "
                          "SAME Part III holdout, so this changes WHICH MODEL is documented, not "
                          "what a caption may claim.")
+    ap.add_argument("--l2-split", choices=sorted(L2_SPLITS), default="holdout",
+                    help="which split the LAYER 2 figures report. Layer 1 is always the Part III "
+                         "holdout. 'validation' stamps the split into every affected title as "
+                         "well as its caption - a validation number must never be able to read "
+                         "as a test number by omission.")
     a = ap.parse_args()
-    global PAIR
+    global PAIR, L2
     PAIR = PAIRS[a.pair]
-    print("  pair: %s  (%s + %s)\n" % (PAIR["label"], PAIR["l2"], PAIR["l1"]))
+    L2 = L2_SPLITS[a.l2_split]
+    print("  pair   : %s  (%s + %s)" % (PAIR["label"], PAIR["l2"], PAIR["l1"]))
+    print("  Layer 1: Zenodo Part III HOLDOUT (always)")
+    print("  Layer 2: %s\n" % L2["tag"])
+    if L2["file"]:
+        print("  [!] Layer 2 figures are VALIDATION. Every affected title says so.")
+        print("      The holdout figure for this pair is pooled IoU 0.4516 - say it if asked.\n")
     want = a.only or sorted(FIGS)
     print("Stage 1 evidence set -> %s\n" % os.path.relpath(OUT, _ROOT))
     for n in want:
