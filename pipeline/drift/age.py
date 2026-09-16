@@ -69,6 +69,7 @@ import numpy as np
 import ensemble as ens
 from fields import load_case_field, make_fake, require_aware, speed
 from slick import merge_oil_features, pick_slick
+import step
 from step import as_positions, deg_to_m, integrate
 
 HERE = Path(__file__).resolve().parent
@@ -564,10 +565,21 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
     rng = np.random.default_rng(seed)
     winds, scales = ens._stratified_draws(n_members, rng)
 
+    # Horizontal diffusivity is the THIRD perturbed quantity, drawn the same stratified way as
+    # the other two (16 Sept 2026). One draw per equal-probability slice of the Okubo band, then
+    # shuffled, so a 20-member ensemble samples the range evenly instead of clustering by luck.
+    # Without this term the modelled extent tops out at ~1.3 km and no member brackets a real
+    # slick -- see _curve_with_wind's docstring.
+    k_lo, k_hi = step.DIFFUSIVITY_RANGE_M2S
+    edges = np.linspace(0.0, 1.0, n_members + 1)
+    ks = k_lo + (k_hi - k_lo) * (edges[:-1] + rng.random(n_members) * np.diff(edges))
+    rng.shuffle(ks)
+
     fits, members, mono_failures = [], [], []
     for m in range(n_members):
         wind_coeff = float(winds[m])
         scale = max(float(scales[m]), 0.05)
+        diffusivity = float(ks[m])
         field = ens.PerturbedField(base_field, scale)
 
         # The perturbed wind coefficient enters through the INTEGRATOR, not the field object,
@@ -576,7 +588,8 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
         # make the band narrower than the uncertainty budget actually is.
         areas_w, sd1_w, sd2_w = _curve_with_wind(
             field, lon, lat, t0, candidate_hours, timestep_minutes, n_particles,
-            wind_coeff=wind_coeff, seed=seed + 2000 + m, guard=guard)
+            wind_coeff=wind_coeff, seed=seed + 2000 + m, guard=guard,
+            diffusivity=diffusivity)
 
         lengths_w = 4.0 * sd1_w          # full major axis of the 2-sigma ellipse
         ok, idx, detail = check_monotonic(candidate_hours, lengths_w)
@@ -586,6 +599,7 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
         t_fit = invert_curve(candidate_hours, lengths_w, observed_length_km)
         members.append({
             "member": m, "wind_coeff": wind_coeff, "current_scale": scale,
+            "diffusivity_m2s": diffusivity,
             "age_hours": t_fit, "monotonic": bool(ok),
             "length_first_km": float(lengths_w[0]), "length_last_km": float(lengths_w[-1]),
             # area is the diagnostic, not the observable: near-constant is the expected,
@@ -606,6 +620,12 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
         "monotonicity_failures": mono_failures,
         "median_area_ratio_first_to_last": (float(np.median(area_ratios))
                                             if area_ratios else None),
+        "diffusivity_range_m2s": [float(k_lo), float(k_hi)],
+        "diffusivity_note": ("horizontal turbulent diffusivity, drawn per member across the "
+                             "Okubo shelf-scale band. It is an ASSUMPTION with a range, not a "
+                             "measurement. Advection alone reaches only 0.8-1.3 km of major "
+                             "axis on 9 km daily HYCOM, so without this term no member brackets "
+                             "a real slick and the estimator refuses on every case."),
         "members": members,
         "caveat": ("advective and shear spreading only -- no gravity-viscous phase, so this "
                    "OVERESTIMATES the age of a very young slick. Report as a lower-bounded "
@@ -631,9 +651,26 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
 
 
 def _curve_with_wind(field, lon, lat, t0, candidate_hours, timestep_minutes, n_particles,
-                     wind_coeff, seed, guard=True):
+                     wind_coeff, seed, guard=True, diffusivity=0.0):
     """shear_extent_curve() with an explicit wind coefficient. Split out because the ensemble
-    perturbs the wind coefficient at the integrator, not inside the field object."""
+    perturbs the wind coefficient at the integrator, not inside the field object.
+
+    THIS IS THE ONLY PLACE IN STAGE 2 THAT TURNS HORIZONTAL DIFFUSION ON (16 Sept 2026), and it
+    is what makes C3.1 able to date a real slick at all.
+
+    Advection alone reaches a modelled major axis of 0.8-1.3 km on real HYCOM (decision brief
+    section 4) against observed slicks of 2.3-10.1 km, so `invert_curve` had no bracket and the
+    estimator refused on every case in the library. That gap is a missing PROCESS: a 9 km daily
+    cell cannot resolve the sub-grid turbulence that actually spreads a slick, and an
+    incompressible advected patch preserves its area by construction (test 6c: area x1.02 while
+    the major axis goes x5.7). Adding a diffusivity drawn from the Okubo shelf-scale band lets
+    the modelled extent span the observed range, so the inversion has something to invert.
+
+    It is an ASSUMPTION with a range, and it is published as one: the caller draws `diffusivity`
+    per ensemble member across `step.DIFFUSIVITY_RANGE_M2S` and the drawn values go into the
+    diagnostics, exactly like the wind coefficient. The default here stays 0.0 so that
+    `shear_extent_curve` and every test that calls this directly keep the deterministic physics.
+    """
     rng = np.random.default_rng(seed)
     areas, majors, minors = [], [], []
     start0 = seed_cloud(lon, lat, n_particles, rng=rng)   # one realisation, see above
@@ -641,7 +678,9 @@ def _curve_with_wind(field, lon, lat, t0, candidate_hours, timestep_minutes, n_p
         n_steps = int(round(t_h * 60.0 / timestep_minutes)) + 1
         history, _ = integrate(start0, t0 - timedelta(hours=float(t_h)), field, n_steps,
                                timestep_minutes, direction="forward",
-                               wind_coeff=wind_coeff, guard=guard)
+                               wind_coeff=wind_coeff, guard=guard,
+                               diffusivity=diffusivity,
+                               rng=(rng if diffusivity > 0.0 else None))
         sd1, sd2, area = pca_extent(history[-1])
         areas.append(area)
         majors.append(sd1)

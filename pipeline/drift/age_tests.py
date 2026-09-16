@@ -21,12 +21,14 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from age import (combine_bands, deformation_rate_s, elongation_age, fay_age,
+from age import (SEED_SIGMA_M, _curve_with_wind, combine_bands, deformation_rate_s, elongation_age,
+                 fay_age,
                  fay_predicted_area_km2, fay_radius_km, invert_curve, observed_major_axis_km,
                  polygon_major_axis_km, slick_major_axis_km,
                  pca_extent, seed_cloud, shear_dispersion_age, shear_extent_curve,
                  weathering_flag)
-from step import integrate
+import step
+from step import integrate, rk2_step
 
 T0 = datetime(2017, 1, 29, 0, 14, 0, tzinfo=timezone.utc)
 ENNORE = [80.35, 13.25]
@@ -328,5 +330,86 @@ def run(check):
                 out_of_range is None and abs(length - 11.38) < 0.05,
                 f"target 99 against a 1-3 curve -> {out_of_range}; and area 12.4 km2 with "
                 f"elongation 8.2 -> major axis {length:.2f} km")
+
+    # === Phase 1, 16 Sept 2026: horizontal diffusion ===================================
+    # These four exist because diffusion is the one term in this stage that is STOCHASTIC and
+    # OFF BY DEFAULT. Both properties are load-bearing and both are easy to break silently.
+
+    shear_field = LinearShearField(ENNORE[1])
+
+    # --- 6v  K=0 reproduces the deterministic curve EXACTLY (the regression pin) --------
+    base = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [6.0, 12.0], 15, 400,
+                            wind_coeff=0.03, seed=143)
+    again = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [6.0, 12.0], 15, 400,
+                             wind_coeff=0.03, seed=143, diffusivity=0.0)
+    ok &= check("6v  diffusivity=0 is bit-identical to the deterministic curve",
+                np.array_equal(base[1], again[1]),
+                f"major axes {base[1].round(4).tolist()} both ways. The default must never "
+                f"perturb the advection-only physics every other test asserts exactly")
+
+    # --- 6w  K>0 grows the cloud by the analytic TAYLOR-DISPERSION amount --------------
+    #
+    # THE OBVIOUS EXPECTATION IS WRONG HERE, and getting it wrong first is what makes this test
+    # worth having. Adding a random walk of sigma = sqrt(2KT) in quadrature with the advective
+    # axis predicts 2.14 km; the model produces 3.67 km. That is not a bug, it is SHEAR-DIFFUSION
+    # COUPLING: a particle that diffuses across-stream lands in water moving at a different
+    # speed and is then carried differentially downstream. For simple shear u = S*y the
+    # along-stream variance is
+    #
+    #     sigma_xx^2(t) = sigma_0^2 (1 + S^2 t^2)  +  2 K t  +  (2/3) S^2 K t^3
+    #                     \_ pure shear _/            \_ walk _/   \_ Taylor _/
+    #
+    # and at K = 50, S = 5e-5, t = 12 h the t^3 term alone is 60% of the total variance.
+    #
+    # That is the whole reason Phase 1 unblocks C3.1. Plain diffusion would add ~2 km to a
+    # 0.5 km axis; diffusion THROUGH A SHEARED FIELD adds enough to reach the 2.3-10.1 km slicks
+    # the library actually contains. The estimator is measuring the real ocean's dispersion, and
+    # this closed form is the only place it can be checked against something known exactly.
+    K = 50.0
+    T_h = 12.0
+    n_p = 2000
+    wet = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [T_h], 15, n_p,
+                           wind_coeff=0.03, seed=143, diffusivity=K)
+    dry = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [T_h], 15, n_p,
+                           wind_coeff=0.03, seed=143, diffusivity=0.0)
+    t_s = T_h * 3600.0
+    s0 = SEED_SIGMA_M
+    var_shear = s0 * s0 * (1.0 + (TEST_SHEAR_S * t_s) ** 2)
+    var_walk = 2.0 * K * t_s
+    var_taylor = (2.0 / 3.0) * TEST_SHEAR_S ** 2 * K * t_s ** 3
+    predicted = math.sqrt(var_shear + var_walk + var_taylor) / 1000.0
+    naive = math.hypot(float(dry[1][0]), math.sqrt(var_walk) / 1000.0)
+    measured = float(wet[1][0])
+    ok &= check("6w  K>0 spreads the cloud by the analytic Taylor-dispersion amount",
+                abs(measured - predicted) / predicted < 0.12,
+                f"K={K:g} m2/s over {T_h:g} h: major-axis sigma {measured:.3f} km against the "
+                f"closed form {predicted:.3f} km. The naive no-coupling guess is {naive:.3f} km "
+                f"-- the (2/3)S^2Kt^3 Taylor term is "
+                f"{100 * var_taylor / (var_shear + var_walk + var_taylor):.0f}% of the variance. "
+                f"Advection alone gives {float(dry[1][0]):.3f} km, which is why C3.1 stalled at "
+                f"~1.3 km on real HYCOM and refused on every case")
+
+    # --- 6x  the random walk is SEEDED: same seed, same answer -------------------------
+    r1 = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [6.0], 15, 300,
+                          wind_coeff=0.03, seed=77, diffusivity=40.0)
+    r2 = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [6.0], 15, 300,
+                          wind_coeff=0.03, seed=77, diffusivity=40.0)
+    r3 = _curve_with_wind(shear_field, ENNORE[0], ENNORE[1], T0, [6.0], 15, 300,
+                          wind_coeff=0.03, seed=78, diffusivity=40.0)
+    ok &= check("6x  a seeded diffusive run is reproducible, and a different seed differs",
+                np.array_equal(r1[1], r2[1]) and not np.array_equal(r1[1], r3[1]),
+                f"seed 77 twice -> {float(r1[1][0]):.5f} km both times; seed 78 -> "
+                f"{float(r3[1][0]):.5f} km. A stochastic model nobody can re-run is not a model")
+
+    # --- 6y  K>0 with no rng REFUSES rather than silently seeding itself ---------------
+    raised = False
+    try:
+        rk2_step(np.array([[80.35, 13.25]]), T0, 900.0, shear_field, diffusivity=25.0, rng=None)
+    except ValueError as exc:
+        raised = "rng" in str(exc)
+    ok &= check("6y  diffusivity>0 without an rng raises, never quietly picks a seed",
+                raised,
+                "an unseeded random walk makes two runs of the same case disagree with nothing "
+                "to point at, so rk2_step refuses -- loudly, like every other guard in step.py")
 
     return ok
