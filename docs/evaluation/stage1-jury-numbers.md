@@ -108,8 +108,8 @@ oil coverage across the nine cases runs **0.00% to 2.25%**.
 
 > **Against Cerulean (SkyTruth's operational detector), four real incidents.**
 > Source: `pipeline/detect/results/iou_cerulean.json`
-> `case-gulf-alaska-2023` carries a reference polygon but is **not presented in this deck**, so it
-> is excluded here. The figure states that on its face.
+> A fifth case carries a reference polygon but is **not presented in this deck**, so it is
+> excluded here. The figure states the count (4 of 5) without naming the case.
 
 | | value |
 |---|---|

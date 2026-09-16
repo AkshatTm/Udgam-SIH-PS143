@@ -535,11 +535,18 @@ def f1_6():
     ax.set_title("Agreement with Cerulean on %d real incidents" % len(rows), fontsize=10)
     ax.legend(fontsize=8, frameon=False, ncol=3, loc="upper left")
     ax.grid(axis="y", alpha=0.3, color=GRID)
+    # The excluded case is NOT named here, by request. The COUNT stays: a figure
+    # drawn from a file of 5 while showing 4 has made a selection, and the reader
+    # is entitled to know a selection happened even if not which one. Dropping the
+    # count as well would leave the median reading as all available evidence when
+    # it is not — and the case removed was the lowest-scoring, so the omission
+    # would move the headline in our favour. That is the line.
     excl = ""
     if dropped:
-        excl = ("  %d of the %d cases carrying a reference polygon are shown; %s excluded (%s)."
-                % (len(rows), n_all, ", ".join(d.replace("case-", "") for d in dropped),
-                   CERULEAN_EXCLUDE[dropped[0]]))
+        n_left = n_all - len(rows)
+        excl = ("  %d of the %d cases carrying a reference polygon are shown; the other %s not "
+                "presented in this deck."
+                % (len(rows), n_all, "is" if n_left == 1 else "%d are" % n_left))
     _caption(fig, "Source: pipeline/detect/results/iou_cerulean.json  ·  Real incidents with a "
                   "Cerulean reference polygon.%s  Recall is high and uniform (%.3f–%.3f): we "
                   "find the slick in every case and draw it LARGER — IoU here is limited by "
