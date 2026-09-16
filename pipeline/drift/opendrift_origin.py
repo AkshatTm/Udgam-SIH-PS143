@@ -37,6 +37,39 @@ PHYSICS = ["stokes_drift(tabularised)", "vertical_mixing", "horizontal_diffusivi
            "wind_drift_factor U(0.025,0.035) per element", "gshhg_stranding", "rk4"]
 
 
+def _origin_member(job):
+    """One OceanDrift member, backward. Module-level for Windows spawn workers."""
+    import logging
+    from opendrift.models.oceandrift import OceanDrift
+    from opendrift_age import _worker_readers
+    (case, t0, seed, K, seedseq, n_el, hours) = job
+    logging.getLogger("py.warnings").setLevel(logging.ERROR)
+    rng = np.random.default_rng(seedseq)
+    o = OceanDrift(loglevel=50)
+    o.add_reader(_worker_readers(case))
+    for k, v in (("drift:stokes_drift", True), ("drift:use_tabularised_stokes_drift", True),
+                 ("drift:vertical_mixing", True), ("general:use_auto_landmask", True),
+                 ("general:coastline_action", "stranding"),
+                 ("drift:advection_scheme", "runge-kutta4"),
+                 ("environment:constant:horizontal_diffusivity", float(K))):
+        o.set_config(k, v)
+    for k in ("x_sea_water_velocity", "y_sea_water_velocity", "x_wind", "y_wind"):
+        o.set_config(f"environment:fallback:{k}", None)
+    o.seed_elements(lon=seed[:, 0], lat=seed[:, 1], z=0, time=t0, number=n_el,
+                    wind_drift_factor=rng.uniform(0.025, 0.035, n_el))
+    o.run(duration=dt.timedelta(hours=hours), time_step=-900, time_step_output=-3600)
+    r = o.result
+    lon = np.asarray(r["lon"].values, dtype=float)       # (elements, times)
+    lat = np.asarray(r["lat"].values, dtype=float)
+    st = np.asarray(r["status"].values, dtype=float)
+    # a stranded element is held where it beached, as ours are
+    for arr in (lon, lat):
+        for j in range(1, arr.shape[1]):
+            bad = ~np.isfinite(arr[:, j])
+            arr[bad, j] = arr[bad, j - 1]
+    return np.stack([lon.T, lat.T], axis=-1), float(np.mean(np.nanmax(st, axis=1) == 1))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--case", required=True)
@@ -45,16 +78,13 @@ def main(argv=None):
     ap.add_argument("--elements", type=int, default=2000, help="per member")
     ap.add_argument("--seed", type=int, default=143)
     ap.add_argument("--out", default=str(HERE / "out"))
+    ap.add_argument("--jobs", type=int, default=4, help="members in parallel; 1 = serial")
     a = ap.parse_args(argv)
 
-    import logging
     import opendrift
-    from opendrift.models.oceandrift import OceanDrift
     import age
     from slick import merge_oil_features, seed_particles
-    from opendrift_age import build_readers
 
-    logging.getLogger("py.warnings").setLevel(logging.ERROR)
     cdir = REPO / "cases" / a.case
     meta = json.loads((cdir / "meta.json").read_text())
     t0 = dt.datetime.fromisoformat(meta["detection_time"].replace("Z", "+00:00")).replace(
@@ -63,40 +93,23 @@ def main(argv=None):
     if feat is None:
         raise SystemExit("no oil detection -- nothing to rewind")
     scale = age.slick_scale_m(feat) or 1000.0
-    readers = build_readers(a.case)
     rng = np.random.default_rng(a.seed)
     ks = age.okubo_member_ks(scale, a.members, rng)
 
-    frames, stranded = [], []
     tic = time.time()
-    for m, K in enumerate(ks):
-        seed = np.asarray(seed_particles(feat, a.elements, random.Random(a.seed + m)))
-        o = OceanDrift(loglevel=50)
-        o.add_reader(readers)
-        for k, v in (("drift:stokes_drift", True), ("drift:use_tabularised_stokes_drift", True),
-                     ("drift:vertical_mixing", True), ("general:use_auto_landmask", True),
-                     ("general:coastline_action", "stranding"),
-                     ("drift:advection_scheme", "runge-kutta4"),
-                     ("environment:constant:horizontal_diffusivity", float(K))):
-            o.set_config(k, v)
-        for k in ("x_sea_water_velocity", "y_sea_water_velocity", "x_wind", "y_wind"):
-            o.set_config(f"environment:fallback:{k}", None)
-        o.seed_elements(lon=seed[:, 0], lat=seed[:, 1], z=0, time=t0, number=a.elements,
-                        wind_drift_factor=rng.uniform(0.025, 0.035, a.elements))
-        o.run(duration=dt.timedelta(hours=a.hours), time_step=-900, time_step_output=-3600)
-        r = o.result
-        lon = np.asarray(r["lon"].values, dtype=float)       # (elements, times)
-        lat = np.asarray(r["lat"].values, dtype=float)
-        st = np.asarray(r["status"].values, dtype=float)
-        # a stranded element is held where it beached, as ours are
-        for arr in (lon, lat):
-            for j in range(1, arr.shape[1]):
-                bad = ~np.isfinite(arr[:, j])
-                arr[bad, j] = arr[bad, j - 1]
-        frames.append(np.stack([lon.T, lat.T], axis=-1))      # (times, elements, 2)
-        stranded.append(float(np.mean(np.nanmax(st, axis=1) == 1)))
-        print(f"  member {m}  K {K:6.2f} m2/s  stranded {stranded[-1]:.2%}  "
-              f"[{time.time() - tic:.0f} s]", flush=True)
+    seeds = np.random.SeedSequence(a.seed).spawn(len(ks))
+    jobs = [(a.case, t0,
+             np.asarray(seed_particles(feat, a.elements, random.Random(a.seed + m))),
+             float(K), seeds[m], a.elements, a.hours) for m, K in enumerate(ks)]
+
+    def report(i, res, secs):
+        print(f"  member {i}  K {ks[i]:6.2f} m2/s  stranded {res[1]:.2%}  [{secs:.0f} s]",
+              flush=True)
+
+    from opendrift_age import run_members
+    results = run_members(jobs, a.jobs, report, fn=_origin_member)
+    frames = [r[0] for r in results]                          # (times, elements, 2) each
+    stranded = [r[1] for r in results]
 
     pos = np.concatenate(frames, axis=1)                        # (times, members*elements, 2)
     hours = np.arange(pos.shape[0], dtype=float)                # hourly output, 0 = t0

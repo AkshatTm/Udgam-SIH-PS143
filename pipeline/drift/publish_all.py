@@ -185,6 +185,8 @@ def main():
     ap.add_argument("--opendrift", action="store_true",
                     help="also run OpenOil (age) and OceanDrift (origin) from odenv/ and pool "
                          "them. Off the demo path; absent odenv -> our model alone")
+    ap.add_argument("--od-jobs", type=int, default=4,
+                    help="OpenDrift members in parallel (4 = physical cores on the build laptop)")
     ap.add_argument("--notes-only", action="store_true",
                     help="only write the D35 seed note into meta.notes; runs no drift")
     a = ap.parse_args()
@@ -216,9 +218,13 @@ def main():
             else:
                 sh([py, drift / "age.py", "--case", case, "--real", "--request-only"],
                    "age request", a.dry_run)
-                sh([odpy, "-W", "ignore", drift / "opendrift_age.py", "--case", case],
+                # members run in parallel inside each script (plan Part C); never run this
+                # alongside age_twins.py score, which already holds 5 processes
+                sh([odpy, "-W", "ignore", drift / "opendrift_age.py", "--case", case,
+                    "--jobs", str(a.od_jobs)],
                    "OpenOil age curves", a.dry_run)          # failure -> structural fallback
-                sh([odpy, "-W", "ignore", drift / "opendrift_origin.py", "--case", case],
+                sh([odpy, "-W", "ignore", drift / "opendrift_origin.py", "--case", case,
+                    "--jobs", str(a.od_jobs)],
                    "OceanDrift origin frames", a.dry_run)
 
         # The age now runs INSIDE run.py (before the ensemble, which needs to know which

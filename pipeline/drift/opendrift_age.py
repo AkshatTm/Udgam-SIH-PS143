@@ -72,6 +72,9 @@ def parse_args(argv=None):
     ap.add_argument("--timestep-minutes", type=int, default=15)
     ap.add_argument("--field-case", default=None,
                     help="use this case's cached field (default: --case)")
+    ap.add_argument("--jobs", type=int, default=4,
+                    help="members run in parallel (4 = this machine's physical cores). "
+                         "1 = serial, for debugging")
     ap.add_argument("--batch", action="store_true",
                     help="twin mode: read out/twins/<case>/age_batch_request.json "
                          "(age_twins.py prepare) and write opendrift_age_batch.npz there. "
@@ -173,6 +176,73 @@ def run_member(readers, t0, candidate_hours, release_points, oil_type, diffusivi
     return {"L": L, "W": W, "B": B, "SF": SF, "N": N}
 
 
+# ---------------------------------------------------------------------------------------
+# Parallel members (plan Part C, 17 Sept 2026)
+#
+# One OpenOil member is ~60 s of single-threaded work and members are independent, so they
+# run in a process pool. Two things make that safe rather than merely fast:
+#   * each member owns its RNG (a spawned SeedSequence), so its elements and wind factors do
+#     not depend on which worker ran it or in what order -- a shared sequential generator
+#     would make results depend on scheduling;
+#   * numpy/BLAS threads are pinned to 1 in the workers, or 4 processes x N threads would
+#     fight over 4 physical cores and run slower than serial.
+# Results come back in job order, so every saved array keeps the serial layout.
+# ---------------------------------------------------------------------------------------
+
+THREAD_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+               "NUMEXPR_NUM_THREADS")
+_WORKER_READERS = {}
+
+
+def _worker_readers(field_case):
+    """Readers built once per worker process (each worker writes its own NetCDF copies)."""
+    if field_case not in _WORKER_READERS:
+        _WORKER_READERS[field_case] = build_readers(field_case)
+    return _WORKER_READERS[field_case]
+
+
+def _member_job(job):
+    """Module-level so a Windows spawn worker can import it."""
+    (field_case, t0, hours, rel, oil, K, sigma, seedseq, n_el, dt_min) = job
+    rng = np.random.default_rng(seedseq)
+    return run_member(_worker_readers(field_case), t0, hours, rel, oil, K, rng, n_el, dt_min,
+                      sigma_m=sigma)
+
+
+def run_members(jobs, n_workers, report=None, fn=None):
+    """Run member jobs with `fn` (default: an OpenOil member); results in job order.
+    n_workers <= 1 is the plain serial path. `fn` must be a module-level function."""
+    import os
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+    fn = fn or _member_job
+    tic = time.time()
+    out = [None] * len(jobs)
+    if n_workers <= 1 or len(jobs) <= 1:
+        for i, job in enumerate(jobs):
+            out[i] = fn(job)
+            if report:
+                report(i, out[i], time.time() - tic)
+        return out
+    saved = {v: os.environ.get(v) for v in THREAD_VARS}
+    for v in THREAD_VARS:
+        os.environ[v] = "1"            # inherited by spawned workers before numpy loads
+    try:
+        with ProcessPoolExecutor(max_workers=min(n_workers, len(jobs))) as ex:
+            futs = {ex.submit(fn, job): i for i, job in enumerate(jobs)}
+            for f in as_completed(futs):
+                i = futs[f]
+                out[i] = f.result()    # a failed member raises here: loud, no partial file
+                if report:
+                    report(i, out[i], time.time() - tic)
+    finally:
+        for v, old in saved.items():
+            if old is None:
+                os.environ.pop(v, None)
+            else:
+                os.environ[v] = old
+    return out
+
+
 def main_batch(a):
     """Twin mode: E2/E3 curves for every twin in out/twins/<case>/age_batch_request.json."""
     import opendrift
@@ -188,10 +258,10 @@ def main_batch(a):
     # twins are grouped into scale terciles and each group gets its own K draws.
     scales = np.array([float(b.get("okubo_scale_m") or 1000.0) for b in req["batch"]])
     groups = [g for g in np.array_split(np.argsort(scales), min(3, nt)) if len(g)]
-    readers = build_readers(a.case)
     rng = np.random.default_rng(a.seed)
     per = {k: [[] for _ in range(nt)] for k in ("L", "W", "B", "SF")}
     tic = time.time()
+    jobs, meta = [], []
     for oil in a.oil_types:
         for g in groups:
             scale = float(np.exp(np.mean(np.log(scales[g]))))
@@ -201,14 +271,23 @@ def main_batch(a):
                 gp += [tuple(p) for p in req["batch"][i]["release_points"]]
             sig = step.stratified_loguniform(a.members, *_age.RELEASE_SIGMA_RANGE_M, rng)
             for K, s0 in zip(_age.okubo_member_ks(scale, a.members, rng), sig):
-                res = run_member(readers, t0, gh, gp, oil, K, rng, a.elements,
-                                 a.timestep_minutes, sigma_m=float(s0))
-                for k in per:
-                    blk = np.asarray(res[k], dtype=float).reshape(len(g), nc)
-                    for r, i in enumerate(g):
-                        per[k][i].append(blk[r])
-                print(f"  batch {oil:<34} scale {scale:7.0f} m  K {K:6.2f}  {len(g)} twins  "
-                      f"[{time.time() - tic:.0f} s]", flush=True)
+                jobs.append([a.case, t0, gh, gp, oil, float(K), float(s0), None, a.elements,
+                             a.timestep_minutes])
+                meta.append((oil, scale, float(K), g))
+    for job, ss in zip(jobs, np.random.SeedSequence(a.seed).spawn(len(jobs))):
+        job[7] = ss
+
+    def report(i, res, secs):
+        oil, scale, K, g = meta[i]
+        print(f"  batch {oil:<34} scale {scale:7.0f} m  K {K:6.2f}  {len(g)} twins  "
+              f"[{secs:.0f} s]", flush=True)
+
+    results = run_members([tuple(j) for j in jobs], a.jobs, report)
+    for (oil, scale, K, g), res in zip(meta, results):
+        for k in per:
+            blk = np.asarray(res[k], dtype=float).reshape(len(g), nc)
+            for r, i in enumerate(g):
+                per[k][i].append(blk[r])
     # -> (twins, members, cands)
     arr = {k: np.asarray(v, dtype=float) for k, v in per.items()}
     gone = ~np.isfinite(arr["L"])
@@ -240,12 +319,12 @@ def main(argv=None):
     t0 = dt.datetime.fromisoformat(req["t0"].replace("Z", "+00:00")).replace(tzinfo=None)
     hours = [float(h) for h in req["candidate_hours"]]
     rel = [tuple(p) for p in req["release_points"]]
-    readers = build_readers(a.field_case or a.case)
+    field_case = a.field_case or a.case
 
     rng = np.random.default_rng(a.seed)
     k_lo, k_hi = step.DIFFUSIVITY_RANGE_M2S
     rows = {"L": [], "W": [], "B": [], "SF": [], "N": []}
-    meta = []
+    meta, jobs = [], []
     tic = time.time()
     import age as _age
     for oil in a.oil_types:
@@ -257,16 +336,21 @@ def main(argv=None):
         # the release's initial size is a nuisance parameter here exactly as in E1
         sig = step.stratified_loguniform(a.members, *_age.RELEASE_SIGMA_RANGE_M, rng)
         for m, K in enumerate(ks):
-            res = run_member(readers, t0, hours, rel, oil, K, rng, a.elements,
-                             a.timestep_minutes, sigma_m=float(sig[m]))
-            for k in rows:
-                rows[k].append(res[k])
+            jobs.append((field_case, t0, hours, rel, oil, float(K), float(sig[m])))
             meta.append({"oil_type": oil, "diffusivity_m2s": round(float(K), 2),
                          "release_sigma_m": round(float(sig[m]), 1)})
-            print(f"  {oil:<36} K {K:6.1f}  visible/candidate "
-                  f"{min(res['N'])}-{max(res['N'])}  surface frac "
-                  f"{res['SF'][0]:.2f} (1st) -> {res['SF'][-1]:.2f} (last)   "
-                  f"[{time.time() - tic:.0f} s]", flush=True)
+    seeds = np.random.SeedSequence(a.seed).spawn(len(jobs))
+    jobs = [j + (ss, a.elements, a.timestep_minutes) for j, ss in zip(jobs, seeds)]
+
+    def report(i, res, secs):
+        print(f"  {meta[i]['oil_type']:<36} K {meta[i]['diffusivity_m2s']:6.1f}  "
+              f"visible/candidate {min(res['N'])}-{max(res['N'])}  surface frac "
+              f"{res['SF'][0]:.2f} (1st) -> {res['SF'][-1]:.2f} (last)   [{secs:.0f} s]",
+              flush=True)
+
+    for res in run_members(jobs, a.jobs, report):
+        for k in rows:
+            rows[k].append(res[k])
 
     # A member/candidate with too few visible elements has no shape. Its likelihood is taken
     # as "this age produces no visible slick": L = W = a tiny value, so it scores ~0 in E2 --

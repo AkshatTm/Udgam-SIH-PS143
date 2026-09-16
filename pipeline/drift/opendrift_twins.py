@@ -30,24 +30,75 @@ sys.path.insert(0, str(HERE))
 K_BIN_EDGES = (0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 200.0)
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--field", required=True)
-    ap.add_argument("--elements", type=int, default=1500)
-    a = ap.parse_args(argv)
-
+def _truth_group(job):
+    """One (oil type, K bin) OpenOil simulation holding several truths. Module-level so a
+    Windows spawn worker can import it. Each truth seeds from its own `seed`, so the result
+    does not depend on which worker ran the group."""
     import logging
     from opendrift.models.openoil import OpenOil
     import age
     import age_twins as T
-    from opendrift_age import build_readers, SURFACE_Z_M
+    from opendrift_age import SURFACE_Z_M, _worker_readers
+
+    field, t0, oil, K, members, n = job
+    logging.getLogger("py.warnings").setLevel(logging.ERROR)
+    o = OpenOil(loglevel=50, weathering_model="noaa")
+    o.add_reader(_worker_readers(field))
+    for k, v in (("processes:evaporation", True), ("processes:emulsification", True),
+                 ("processes:dispersion", True), ("processes:update_oilfilm_thickness", True),
+                 ("drift:vertical_mixing", True), ("drift:stokes_drift", True),
+                 ("drift:use_tabularised_stokes_drift", True),
+                 ("general:use_auto_landmask", True),
+                 ("general:coastline_action", "stranding"),
+                 ("drift:advection_scheme", "runge-kutta4"),
+                 ("environment:constant:horizontal_diffusivity", K)):
+        o.set_config(k, v)
+    for k in ("x_sea_water_velocity", "y_sea_water_velocity", "x_wind", "y_wind"):
+        o.set_config(f"environment:fallback:{k}", None)
+    for i, t in members:
+        rng = np.random.default_rng(t["seed"])
+        wdf = np.full(n, t["wind_coeff"])          # the truth's own coefficient
+        if t["kind"] == "patch":
+            c = age.seed_cloud(t["release"][0], t["release"][1], n, sigma_m=t["sigma0_m"],
+                               rng=rng)
+            o.seed_elements(lon=c[:, 0], lat=c[:, 1], z=0, number=n,
+                            time=t0 - dt.timedelta(hours=t["age_h"]), oil_type=oil,
+                            origin_marker=i, wind_drift_factor=wdf)
+        else:
+            lon, lat, hb = T.track_seed(t, n, rng, t0)
+            # OpenDrift seeds one time per call: 12 slices of the discharge, as ours does
+            sl = np.linspace(hb.min(), hb.max() + 1e-9, 13)
+            for s0, s1 in zip(sl[:-1], sl[1:]):
+                sel = (hb >= s0) & (hb < s1)
+                if sel.any():
+                    o.seed_elements(lon=lon[sel], lat=lat[sel], z=0, number=int(sel.sum()),
+                                    time=t0 - dt.timedelta(hours=float((s0 + s1) / 2)),
+                                    oil_type=oil, origin_marker=i,
+                                    wind_drift_factor=wdf[sel])
+    o.run(end_time=t0, time_step=900, time_step_output=3600)
+    r = o.result
+    om = np.asarray(r["origin_marker"].values, dtype=float)
+    marker = np.nanmax(om, axis=1).astype(int)
+    lon = np.asarray(r["lon"].values[:, -1], dtype=float)
+    lat = np.asarray(r["lat"].values[:, -1], dtype=float)
+    vis = (np.isfinite(lon) & (np.asarray(r["status"].values[:, -1]) == 0)
+           & (np.asarray(r["z"].values[:, -1]) > SURFACE_Z_M))
+    return [(i, lon[vis & (marker == i)], lat[vis & (marker == i)]) for i, _ in members]
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--field", required=True)
+    ap.add_argument("--elements", type=int, default=1500)
+    ap.add_argument("--jobs", type=int, default=4, help="groups in parallel; 1 = serial")
+    a = ap.parse_args(argv)
+
+    from opendrift_age import run_members
 
     d = HERE / "out" / "twins" / a.field
     req = json.loads((d / "openoil_truth_request.json").read_text())
     t0 = dt.datetime.fromisoformat(req["t0"].replace("Z", "+00:00")).replace(tzinfo=None)
     truths = req["truths"]
-    readers = build_readers(a.field)
-    logging.getLogger("py.warnings").setLevel(logging.ERROR)
 
     edges = np.asarray(K_BIN_EDGES)
     groups = {}
@@ -55,61 +106,26 @@ def main(argv=None):
         b = int(np.clip(np.searchsorted(edges, t["K_m2s"]) - 1, 0, len(edges) - 2))
         groups.setdefault((t["oil_type"], b), []).append(i)
 
-    out_lon, out_lat, owner, k_used = [], [], [], {}
-    tic = time.time()
-    for (oil, b), idx in groups.items():
+    keys = list(groups)
+    jobs, k_used = [], {}
+    for oil, b in keys:
         K = float(np.sqrt(edges[b] * edges[b + 1]))
-        o = OpenOil(loglevel=50, weathering_model="noaa")
-        o.add_reader(readers)
-        for k, v in (("processes:evaporation", True), ("processes:emulsification", True),
-                     ("processes:dispersion", True), ("processes:update_oilfilm_thickness", True),
-                     ("drift:vertical_mixing", True), ("drift:stokes_drift", True),
-                     ("drift:use_tabularised_stokes_drift", True),
-                     ("general:use_auto_landmask", True),
-                     ("general:coastline_action", "stranding"),
-                     ("drift:advection_scheme", "runge-kutta4"),
-                     ("environment:constant:horizontal_diffusivity", K)):
-            o.set_config(k, v)
-        for k in ("x_sea_water_velocity", "y_sea_water_velocity", "x_wind", "y_wind"):
-            o.set_config(f"environment:fallback:{k}", None)
+        idx = groups[(oil, b)]
+        jobs.append((a.field, t0, oil, K, [(i, truths[i]) for i in idx], a.elements))
         for i in idx:
-            t = truths[i]
-            rng = np.random.default_rng(t["seed"])
-            n = a.elements
-            wdf = np.full(n, t["wind_coeff"])          # the truth's own coefficient
-            if t["kind"] == "patch":
-                c = age.seed_cloud(t["release"][0], t["release"][1], n, sigma_m=t["sigma0_m"],
-                                   rng=rng)
-                o.seed_elements(lon=c[:, 0], lat=c[:, 1], z=0, number=n,
-                                time=t0 - dt.timedelta(hours=t["age_h"]), oil_type=oil,
-                                origin_marker=i, wind_drift_factor=wdf)
-            else:
-                lon, lat, hb = T.track_seed(t, n, rng, t0)
-                # OpenDrift seeds one time per call: 12 slices of the discharge, as ours does
-                sl = np.linspace(hb.min(), hb.max() + 1e-9, 13)
-                for s0, s1 in zip(sl[:-1], sl[1:]):
-                    sel = (hb >= s0) & (hb < s1)
-                    if sel.any():
-                        o.seed_elements(lon=lon[sel], lat=lat[sel], z=0, number=int(sel.sum()),
-                                        time=t0 - dt.timedelta(hours=float((s0 + s1) / 2)),
-                                        oil_type=oil, origin_marker=i,
-                                        wind_drift_factor=wdf[sel])
-            k_used[t["id"]] = K
-        o.run(end_time=t0, time_step=900, time_step_output=3600)
-        r = o.result
-        om = np.asarray(r["origin_marker"].values, dtype=float)
-        marker = np.nanmax(om, axis=1).astype(int)
-        lon = np.asarray(r["lon"].values[:, -1], dtype=float)
-        lat = np.asarray(r["lat"].values[:, -1], dtype=float)
-        vis = (np.isfinite(lon) & (np.asarray(r["status"].values[:, -1]) == 0)
-               & (np.asarray(r["z"].values[:, -1]) > SURFACE_Z_M))
-        for i in idx:
-            sel = vis & (marker == i)
-            out_lon.append(lon[sel])
-            out_lat.append(lat[sel])
-            owner.append(np.full(int(sel.sum()), i))     # index into truths == index into ids
-        print(f"  {oil:<34} K {K:6.2f}  {len(idx)} truths  [{time.time() - tic:.0f} s]",
+            k_used[truths[i]["id"]] = K
+
+    def report(j, res, secs):
+        print(f"  {jobs[j][2]:<34} K {jobs[j][3]:6.2f}  {len(jobs[j][4])} truths  [{secs:.0f} s]",
               flush=True)
+
+    tic = time.time()
+    out_lon, out_lat, owner = [], [], []
+    for res in run_members(jobs, a.jobs, report, fn=_truth_group):
+        for i, lo, la in res:
+            out_lon.append(lo)
+            out_lat.append(la)
+            owner.append(np.full(len(lo), i))     # index into truths == index into ids
 
     ids = [t["id"] for t in truths]
     np.savez_compressed(d / "openoil_truths.npz", ids=np.array(ids),
