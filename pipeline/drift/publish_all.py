@@ -18,8 +18,9 @@ WHY THIS EXISTS AND NOT A SHELL LOOP
     "run everything, then publish everything".
 
 WHAT IT DOES PER CASE
-    1  backward ensemble        run.py --real --particles 3000 --runs 50
-    2  age                      age.py --real   (+ --volume-m3 where an official figure exists)
+    0  (--opendrift only)       age.py --request-only; odenv: opendrift_age.py, opendrift_origin.py
+    1  age + backward ensemble  run.py --real --age drive  (+ --volume-m3 where published)
+    2  (--opendrift only)       pool_models.py -> model_mix
     3  forward drift            run.py --real --forward
     4  acts_available           adds "trace" to cases/<id>/meta.json if absent, and says so
     5  publish                  pipeline/export/build_case.py --case <id> --stage trace
@@ -178,6 +179,12 @@ def main():
     ap.add_argument("--runs", type=int, default=50)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--skip-forward", action="store_true")
+    ap.add_argument("--age", choices=["off", "report", "drive"], default="drive",
+                    help="run.py's age mode (age engine v2, D45). drive: the origin is pooled "
+                         "over the age posterior and the window is method 'age'")
+    ap.add_argument("--opendrift", action="store_true",
+                    help="also run OpenOil (age) and OceanDrift (origin) from odenv/ and pool "
+                         "them. Off the demo path; absent odenv -> our model alone")
     ap.add_argument("--notes-only", action="store_true",
                     help="only write the D35 seed note into meta.notes; runs no drift")
     a = ap.parse_args()
@@ -199,18 +206,35 @@ def main():
         print(f"  {case}")
         print("=" * 78)
 
-        rc = sh([py, drift / "run.py", "--case", case, "--real",
-                 "--particles", str(a.particles), "--runs", str(a.runs)], "backward", a.dry_run)
-        if rc != 0:
-            summary.append((case, "FAILED at the backward run", False))
-            continue
+        # ---- age engine v2: OpenDrift's two models first, in their own venv (optional) ----
+        if a.opendrift:
+            odpy = REPO / "odenv" / "Scripts" / "python.exe"
+            if not odpy.exists():
+                odpy = REPO / "odenv" / "bin" / "python"
+            if not odpy.exists():
+                print("  !! --opendrift given but no odenv/ -- continuing with our model only")
+            else:
+                sh([py, drift / "age.py", "--case", case, "--real", "--request-only"],
+                   "age request", a.dry_run)
+                sh([odpy, "-W", "ignore", drift / "opendrift_age.py", "--case", case],
+                   "OpenOil age curves", a.dry_run)          # failure -> structural fallback
+                sh([odpy, "-W", "ignore", drift / "opendrift_origin.py", "--case", case],
+                   "OceanDrift origin frames", a.dry_run)
 
-        age_cmd = [py, drift / "age.py", "--case", case, "--real"]
+        # The age now runs INSIDE run.py (before the ensemble, which needs to know which
+        # steps to keep), so there is one writer of origin.json and no separate age step.
+        cmd = [py, drift / "run.py", "--case", case, "--real", "--particles", str(a.particles),
+               "--runs", str(a.runs), "--age", a.age]
         if case in VOLUMES_M3:
             vol, cite = VOLUMES_M3[case]
             print(f"\n  using an independently reported volume: {vol} m3 ({cite})")
-            age_cmd += ["--volume-m3", str(vol)]
-        sh(age_cmd, "age", a.dry_run)          # age never blocks the bundle; it may report none
+            cmd += ["--volume-m3", str(vol)]
+        rc = sh(cmd, "backward + age", a.dry_run)
+        if rc != 0:
+            summary.append((case, "FAILED at the backward run", False))
+            continue
+        if a.opendrift:
+            sh([py, drift / "pool_models.py", "--case", case], "pool models", a.dry_run)
 
         if not a.skip_forward:
             sh([py, drift / "run.py", "--case", case, "--real", "--forward"],

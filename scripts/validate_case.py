@@ -703,15 +703,27 @@ def check_origin(d, box):
     if twm is None:
         warn("origin.json: no time_window_method — the frontend cannot tell a measured window "
              "from a search bracket and will render a bracket as a measurement (D12)")
-    elif twm not in ("bounded", "convergence"):
-        err(f"origin.json/time_window_method: must be bounded|convergence, got {twm!r}")
+    elif twm not in ("bounded", "convergence", "age"):
+        err(f"origin.json/time_window_method: must be bounded|convergence|age, got {twm!r}")
 
     # Optional v3/v4 blocks (Master §6.5). Absence hides a UI row; it must never throw.
     am = o.get("age_method")
-    if am is not None and am not in ("shear", "fay", "elongation", "combined",
+    if am is not None and am not in ("shear", "fay", "elongation", "track", "combined",
                                      "disagreement", "none"):
-        err(f"origin.json/age_method: must be shear|fay|elongation|combined|disagreement|none, "
-            f"got {am!r}")
+        err(f"origin.json/age_method: must be shear|fay|elongation|track|combined|disagreement|"
+            f"none, got {am!r}")
+
+    # age_posterior (age engine v2, Master §6.5, 16 Sept 2026). A window that claims to be
+    # MEASURED FROM AGE must carry the posterior it came from, and must agree with it.
+    ap_ = o.get("age_posterior")
+    if twm == "age" and ap_ is None:
+        err("origin.json: time_window_method is 'age' but there is no age_posterior — a window "
+            "cannot claim to be measured from an age it does not carry")
+    if ap_ is not None:
+        check_age_posterior(o, ap_)
+    mm = o.get("model_mix")
+    if mm is not None:
+        check_model_mix(mm)
     aw = o.get("age_weathering")
     if aw is not None and aw not in ("fresh", "weathered", "unknown"):
         err(f"origin.json/age_weathering: must be fresh|weathered|unknown, got {aw!r}")
@@ -754,6 +766,77 @@ def check_origin(d, box):
             if isinstance(r, (int, float)) and r <= 0:
                 err(f"origin.json/opendrift_comparison.r90_ratio: must be positive, got {r}")
     return o
+
+
+def check_age_posterior(o, ap_):
+    """age_posterior: {hours_grid, prob, hpd80, median, hypotheses, evidence, models, ...}."""
+    where = "origin.json/age_posterior"
+    if not isinstance(ap_, dict):
+        err(f"{where}: must be an object")
+        return
+    need_keys(ap_, ["hours_grid", "prob", "hpd80", "median"], where)
+    g, p = ap_.get("hours_grid"), ap_.get("prob")
+    if not (isinstance(g, list) and isinstance(p, list)):
+        return
+    if len(g) != len(p) or not g:
+        err(f"{where}: hours_grid ({len(g)}) and prob ({len(p)}) must be the same non-zero length")
+        return
+    if len(g) > 200:
+        err(f"{where}: {len(g)} grid points — the posterior is a summary, not a raw sample dump")
+    if any(b <= a for a, b in zip(g, g[1:])):
+        err(f"{where}/hours_grid: must be strictly ascending")
+    if any(x < 0 for x in g):
+        err(f"{where}/hours_grid: ages cannot be negative")
+    if any((not isinstance(x, (int, float))) or x < 0 for x in p):
+        err(f"{where}/prob: every value must be a non-negative number")
+    elif abs(sum(p) - 1.0) > 1e-3:
+        err(f"{where}/prob: must sum to 1 (got {sum(p):.5f}) — a probability, not a density")
+    h = ap_.get("hpd80")
+    if not (isinstance(h, list) and len(h) == 2 and h[0] <= h[1]):
+        err(f"{where}/hpd80: must be [low, high]")
+        return
+    half = (g[1] - g[0]) / 2 if len(g) > 1 else 0.5
+    if h[0] < g[0] - half - 1e-6 or h[1] > g[-1] + half + 1e-6:
+        err(f"{where}/hpd80: {h} lies outside the grid {g[0]}..{g[-1]} h")
+    m = ap_.get("median")
+    if isinstance(m, (int, float)) and not (g[0] - half <= m <= g[-1] + half):
+        err(f"{where}/median: {m} h lies outside the grid")
+    ah = o.get("age_hours")
+    if ah is not None and isinstance(ah, list) and len(ah) == 2 and \
+            (abs(ah[0] - h[0]) > 0.051 or abs(ah[1] - h[1]) > 0.051):
+        err(f"origin.json/age_hours {ah} disagrees with age_posterior.hpd80 {h} — one number, "
+            f"shown twice, must not say two things")
+    tw = o.get("time_window")
+    if o.get("time_window_method") == "age" and isinstance(tw, list) and len(tw) == 2:
+        try:
+            t0s = datetime.fromisoformat(tw[0].replace("Z", "+00:00"))
+            t1s = datetime.fromisoformat(tw[1].replace("Z", "+00:00"))
+            span_h = (t1s - t0s).total_seconds() / 3600.0
+            if abs(span_h - (h[1] - h[0])) > 0.26 and span_h > 0.26:
+                err(f"origin.json/time_window spans {span_h:.2f} h but the age HPD it claims to "
+                    f"come from spans {h[1] - h[0]:.2f} h")
+        except Exception:                          # parse errors are reported elsewhere
+            pass
+
+
+def check_model_mix(mm):
+    where = "origin.json/model_mix"
+    if not isinstance(mm, dict) or not isinstance(mm.get("models"), list) or not mm["models"]:
+        err(f"{where}: must be an object with a non-empty models list")
+        return
+    tot = 0.0
+    for i, m in enumerate(mm["models"]):
+        need_keys(m, ["name", "weight", "points"], f"{where}/models[{i}]")
+        w = m.get("weight")
+        if not isinstance(w, (int, float)) or w < 0:
+            err(f"{where}/models[{i}].weight: must be a non-negative number, got {w!r}")
+            continue
+        tot += w
+        sf = m.get("stranded_fraction")
+        if sf is not None and not (isinstance(sf, (int, float)) and 0 <= sf <= 1):
+            err(f"{where}/models[{i}].stranded_fraction: must be a 0-1 fraction, got {sf!r}")
+    if abs(tot - 1.0) > 1e-6:
+        err(f"{where}: model weights sum to {tot}, not 1")
 
 
 def check_vessels(d, box):

@@ -215,27 +215,42 @@ validator compares the two and rejects identical position arrays.
   "age_hours": [8, 16],
   "age_method": "combined",
   "age_weathering": "fresh",
-  "age_estimators": {"shear": [7,18], "fay": [9,15], "elongation": null},
+  "age_estimators": {"shear": [7,18], "fay": null, "elongation": null, "track": [5,20]},
+  "age_posterior": {"hours_grid": [1, 2, "... 72"], "prob": ["... sums to 1"],
+                    "hpd80": [8.5, 16.5], "median": 11.2, "hypotheses": ["patch", "track"],
+                    "evidence": ["shape", "track"], "models": ["udgam_rk2", "opendrift_openoil"],
+                    "calibration_coverage": 0.81},
 
   "stranded_fraction": 0.03,
-  "opendrift_comparison": {"centroid_separation_km": 2.4, "r90_ratio": 1.08}
+  "wind_share": 0.37,
+  "opendrift_comparison": {"centroid_separation_km": 2.4, "r90_ratio": 1.08},
+  "model_mix": {"models": [{"name": "udgam_rk2", "weight": 0.5, "points": 1080000},
+                           {"name": "opendrift_oceandrift", "weight": 0.5, "points": 730000}]}
 }
 ```
 
 **`shape` is `[rows, cols]` and row 0 is NORTH.** `values` length must equal `rows × cols`, is
 never negative, and is normalised to peak 1.0.
 
-`time_window_method` ∈ `bounded | convergence`. **`bounded` means a SEARCH BRACKET, not a measured
+`time_window_method` ∈ `bounded | convergence | age`. **`bounded` means a SEARCH BRACKET, not a measured
 release time — the frontend must render the two differently** (**D12**). This is a claim we have
-to defend, which is why it is in the contract rather than in someone's head.
+to defend, which is why it is in the contract rather than in someone's head. **`age` (D45)** means
+the window is the 80 % interval of this slick's age posterior and the origin is the ensemble
+pooled over it. It requires `age_posterior`, and `age_hours` must equal `age_posterior.hpd80`.
 
-`age_method` ∈ `shear | fay | elongation | combined | disagreement | none` ·
+`age_method` ∈ `shear | fay | elongation | track | combined | disagreement | none` ·
 `age_weathering` ∈ `fresh | weathered | unknown` · an `age_estimators` entry is `[low, high]`
 **or `null`** where that estimator did not apply.
 
+`age_posterior` (D45, optional): hourly grid, `prob` summing to 1, `hpd80`, `median`, which
+hypotheses and models contributed, and the held-out synthetic-twin coverage (or `null`). Absent
+when no age was measured. `model_mix` (D45, optional): the models pooled into the origin grid,
+weights summing to 1. A different claim from `opendrift_comparison`; never merge them.
+
 `abstain: true` forces Stage 3 to return zero suspects. Agreed trigger: `radius_90_km > 40`.
 
-The last four blocks are **optional** — absence hides a UI row, it does not throw.
+The age, posterior, stranding, wind, comparison and model-mix blocks are **optional** — absence
+hides a UI row, it does not throw.
 
 **Score the grid, not the `radius_50_km` circle (D8).** The real cloud measured 4.38:1 aspect with
 44.7% of high-probability mass outside r50. The radii stay as the one-number summary for the UI;

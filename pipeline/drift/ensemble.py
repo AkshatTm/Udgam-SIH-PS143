@@ -172,12 +172,19 @@ def _stratified_draws(n, rng, current_sigma=None):
 
 def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=50,
                  rng=None, progress=None, is_land=None, current_sigma=None,
-                 diffusivity=0.0):
+                 diffusivity=0.0, collect_steps=None, collect_particles=300):
     """The 50 runs. Returns (endpoints [n_runs*n, 2], conv_idx [n_runs], members).
 
     `endpoints` is every final position from every member pooled together -- 150,000 points
     for a 50 x 3000 ensemble. That pool IS the origin probability cloud; the histogram in
     origin_grid() is only how we hand it to a frontend.
+
+    AGE ENGINE v2: with `collect_steps` (step indices), a FOURTH value is returned --
+    {step: positions [n_runs * collect_particles, 2]} -- the cloud at each of those steps, so the
+    origin can be pooled over the age posterior instead of read off the last step. A fixed
+    random subset of `collect_particles` per member is kept (the same subset at every step):
+    72 frames x 50 members x 3000 particles would be 10.8 M points for a KDE whose bandwidth is
+    far wider than the particle spacing. With `collect_steps=None` nothing changes.
     """
     rng = rng if rng is not None else np.random.default_rng(143)
     seed_pos = as_positions(seed_pos)
@@ -187,6 +194,13 @@ def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=
     endpoints = []
     conv_idx = []
     members = []
+    steps = None if collect_steps is None else sorted({int(k) for k in collect_steps
+                                                       if 0 <= int(k) < n_steps})
+    collected = {} if steps is None else {k: [] for k in steps}
+    n_seed = seed_pos.shape[0]
+    keep = (None if steps is None else
+            np.random.default_rng(777).choice(n_seed, min(collect_particles, n_seed),
+                                              replace=False))
 
     for r in range(n_runs):
         wind_coeff = float(winds[r])
@@ -196,11 +210,16 @@ def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=
         field = PerturbedField(base_field, scale)
         start = jitter_seed(seed_pos, rng)
 
-        final, spread, _, _ = run_once(start, t0, field, n_steps, timestep_minutes,
-                                       wind_coeff=wind_coeff, is_land=is_land,
-                                       diffusivity=diffusivity,
-                                       rng=(np.random.default_rng(4000 + r)
-                                            if diffusivity > 0.0 else None))
+        final, spread, hist, _ = run_once(start, t0, field, n_steps, timestep_minutes,
+                                          wind_coeff=wind_coeff, is_land=is_land,
+                                          diffusivity=diffusivity,
+                                          keep_history=steps is not None,
+                                          rng=(np.random.default_rng(4000 + r)
+                                               if diffusivity > 0.0 else None))
+        if steps is not None:
+            for k in steps:
+                collected[k].append(hist[k][keep])
+            del hist
         stranded_frac = (float(np.mean(LAST_STRANDED))
                          if LAST_STRANDED is not None and is_land is not None else 0.0)
         endpoints.append(final)
@@ -214,21 +233,65 @@ def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=
         if progress:
             progress(r + 1, n_runs)
 
+    if steps is not None:
+        return (np.vstack(endpoints), np.asarray(conv_idx), members,
+                {k: np.vstack(v) for k, v in collected.items()})
     return np.vstack(endpoints), np.asarray(conv_idx), members
 
 
-def radii_km(points, centroid=None):
+def age_weighted_pool(collected, posterior_hours, posterior_prob, timestep_minutes,
+                      min_prob=1e-4):
+    """(points, weights) pooling the collected frames by the age posterior.
+
+    Each grid age t maps to step round(t * 60 / dt). A frame gets the posterior mass of its
+    age, spread evenly over its points, so a frame's total weight is its probability whatever
+    its particle count. Ages with < `min_prob` mass are dropped (they would add points, not
+    information). Weights sum to 1.
+    """
+    pts, wts = [], []
+    for t, p in zip(posterior_hours, posterior_prob):
+        if p < min_prob:
+            continue
+        k = int(round(float(t) * 60.0 / timestep_minutes))
+        frame = collected.get(k)
+        if frame is None or len(frame) == 0:
+            continue
+        pts.append(frame)
+        wts.append(np.full(len(frame), float(p) / len(frame)))
+    if not pts:
+        return None, None
+    w = np.concatenate(wts)
+    return np.vstack(pts), w / w.sum()
+
+
+def _weighted_percentile(x, w, q):
+    order = np.argsort(x)
+    cw = np.cumsum(w[order])
+    return float(np.interp(q / 100.0 * cw[-1], cw, x[order]))
+
+
+def radii_km(points, centroid=None, weights=None):
     """(centroid, r50, r90): radii of the circles around the centroid containing 50% and 90%
     of the ensemble endpoints. Percentiles of distance, not standard deviations -- a real
-    cloud is not gaussian and we should not quote it as if it were."""
+    cloud is not gaussian and we should not quote it as if it were.
+
+    `weights` (v2): percentiles and centroid of the WEIGHTED pool -- the age-posterior pool,
+    where a point's weight is the probability of the age it was sampled at."""
     p = as_positions(points)
+    w = None if weights is None else np.asarray(weights, dtype=np.float64)
     if centroid is None:
-        clon, clat = float(p[:, 0].mean()), float(p[:, 1].mean())
+        if w is None:
+            clon, clat = float(p[:, 0].mean()), float(p[:, 1].mean())
+        else:
+            clon = float(np.average(p[:, 0], weights=w))
+            clat = float(np.average(p[:, 1], weights=w))
     else:
         clon, clat = float(centroid[0]), float(centroid[1])
     dx, dy = deg_to_m(p[:, 0] - clon, p[:, 1] - clat, p[:, 1])
     d = np.hypot(dx, dy) / 1000.0
-    return (clon, clat), float(np.percentile(d, 50)), float(np.percentile(d, 90))
+    if w is None:
+        return (clon, clat), float(np.percentile(d, 50)), float(np.percentile(d, 90))
+    return (clon, clat), _weighted_percentile(d, w, 50), _weighted_percentile(d, w, 90)
 
 
 def _gaussian_blur(grid, sigma):
@@ -248,7 +311,7 @@ def _gaussian_blur(grid, sigma):
     return out
 
 
-def origin_grid(points, rows=120, cols=120, pad_frac=0.05, bandwidth_frac=0.10):
+def origin_grid(points, rows=120, cols=120, pad_frac=0.05, bandwidth_frac=0.10, weights=None):
     """2D histogram of the ensemble endpoints -> a normalised probability grid.
 
     Row 0 is NORTH (row-major from the top-left), matching bounds.json's pixel convention so
@@ -282,12 +345,15 @@ def origin_grid(points, rows=120, cols=120, pad_frac=0.05, bandwidth_frac=0.10):
     south, north = south - pady, north + pady
 
     # np.histogram2d gives row = x-bin; we want row = lat, descending north-first.
+    # `weights` (v2): the age-posterior pool, where each point carries the probability of the
+    # age it was sampled at. The box still spans every point -- a low-weight point is still a
+    # place the oil could have come from -- only the density changes.
     H, _, _ = np.histogram2d(lat, lon, bins=[rows, cols],
-                             range=[[south, north], [west, east]])
+                             range=[[south, north], [west, east]], weights=weights)
     H = H[::-1, :]                        # flip so row 0 = north
 
     # Bandwidth from the cloud's own scale: a tenth of r50, expressed in grid cells.
-    _, r50, _ = radii_km(p)
+    _, r50, _ = radii_km(p, weights=weights)
     cell_km = ((north - south) / rows) * KM_PER_DEG_LAT
     sigma_cells = max(1.0, (bandwidth_frac * r50) / max(cell_km, 1e-9))
     sigma_cells = min(sigma_cells, rows / 8.0)          # never blur away the cloud itself
@@ -304,8 +370,13 @@ def origin_grid(points, rows=120, cols=120, pad_frac=0.05, bandwidth_frac=0.10):
 
 
 def time_window(conv_idx, spreads_start, spreads_min, t0, timestep_minutes, n_steps,
-                dip_ratio=0.90):
+                dip_ratio=0.90, age_band=None):
     """When did the oil enter the water?
+
+    AGE ENGINE v2, tried FIRST: `age_band` = (lo_h, hi_h), the age posterior's 80 % HPD. The
+    window is then [t0 - hi, t0 - lo] and the method is "age" -- a measurement of THIS slick,
+    stronger than "convergence" (a property of the ensemble) and far stronger than "bounded"
+    (a property of the rewind length). With age_band=None the behaviour below is unchanged.
 
     Preferred method: each member's cloud is tightest at some step; take the 10th-90th
     percentile of those times across the ensemble. That is only meaningful if the tightening
@@ -322,6 +393,11 @@ def time_window(conv_idx, spreads_start, spreads_min, t0, timestep_minutes, n_st
     Returns (start_dt, end_dt, method).
     """
     span_h = (n_steps - 1) * timestep_minutes / 60.0
+    if age_band is not None:
+        lo_h, hi_h = max(float(age_band[0]), 0.0), min(float(age_band[1]), span_h)
+        # a zero-width window is not a window: at least one timestep wide
+        hi_h = max(hi_h, lo_h + timestep_minutes / 60.0)
+        return (t0 - timedelta(hours=hi_h), t0 - timedelta(hours=lo_h), "age")
     bounded = (t0 - timedelta(hours=span_h), t0 - timedelta(hours=span_h / 3.0), "bounded")
 
     conv_idx = np.asarray(conv_idx, dtype=float)

@@ -313,7 +313,11 @@ def component_temporality(track, when, grid):
     Phase 2 replaces this with Cerulean's version: the timestamp of the broadcast
     spatially nearest the *head* of the slick. That needs Soumirya's polygon.
     """
-    if grid.time_window_method != "convergence":
+    # "age" (Stage 2 age engine v2, Master 6.5, 16 Sept 2026) is a MEASURED window too -- the
+    # 80 % interval of the slick's own age posterior -- and a stronger claim than
+    # "convergence". Leaving it out of this set would silently drop temporality on every
+    # case the age engine dates.
+    if grid.time_window_method not in ("convergence", "age"):
         return Component.not_applicable(
             f"origin time window is a search bracket, not a measured release time "
             f"(time_window_method={grid.time_window_method!r})")

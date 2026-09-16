@@ -49,10 +49,26 @@ WIND_COEFF = 0.03
 #   daily cell cannot resolve the sub-grid turbulence that actually spreads a slick. This term is
 #   that process, parameterised.
 #
-# DIFFUSIVITY_RANGE_M2S is the Okubo shelf-scale band. It is an ASSUMPTION with a range, like
-# every other constant in this stage, and the ensemble draws across it rather than picking one.
+# DIFFUSIVITY_RANGE_M2S is an ASSUMPTION with a range, like every other constant in this stage,
+# and the ensemble draws across it rather than picking one -- LOG-UNIFORMLY (age engine v2).
+#
+# WIDENED 16 SEPT 2026 from (10, 100), on a measurement. The old band is Okubo's value for
+# 10-100 km patches. A 1-4 km slick sits at Okubo 0.6-3 m^2/s, and Huntington -- 2.8 h old and
+# 1.38 km wide -- implies K ~ 6 m^2/s. At K = 47 both our model and OpenOil put a ONE-hour-old
+# slick at 2.4 km wide, so no age in the band could reproduce the observed width. The band now
+# spans Okubo's 100 m scale through the old ceiling; the engine marginalises over it.
 HORIZONTAL_DIFFUSIVITY_M2S = 0.0
-DIFFUSIVITY_RANGE_M2S = (10.0, 100.0)
+DIFFUSIVITY_RANGE_M2S = (0.05, 100.0)
+
+
+def stratified_loguniform(n, lo, hi, rng):
+    """n draws, one per equal-probability slice of log-uniform [lo, hi], shuffled."""
+    import numpy as _np
+    edges = _np.linspace(0.0, 1.0, n + 1)
+    u = edges[:-1] + rng.random(n) * _np.diff(edges)
+    out = _np.exp(_np.log(lo) + u * (_np.log(hi) - _np.log(lo)))
+    rng.shuffle(out)
+    return out
 
 # cos(lat) -> 0 at the poles and the metre->degree conversion blows up. We are working in the
 # tropics, but a guard costs nothing and turns a silent infinity into a bounded number.

@@ -166,13 +166,48 @@ export interface RawOriginBundle {
   time_window: string[]; // [start, end] — UTC ISO 8601, trailing Z
   /** "bounded" is a SEARCH BRACKET, not a measured release time. The two must not be
    *  rendered the same way — that is the entire reason this field is in the contract (D12). */
-  time_window_method?: "bounded" | "convergence";
+  /** "age" (Stage 2 age engine v2): the window IS the 80 % interval of the slick's own age
+   *  posterior — a measurement, and a stronger one than "convergence". */
+  time_window_method?: "bounded" | "convergence" | "age";
   ensemble_runs: number;
   abstain: boolean;
 
   // Optional blocks. Absence hides a UI row; it must never throw (Master §6.5).
   age_hours?: [number, number];
-  age_method?: "shear" | "fay" | "elongation" | "combined" | "disagreement" | "none";
+  age_method?:
+    | "shear"
+    | "fay"
+    | "elongation"
+    | "track"
+    | "combined"
+    | "disagreement"
+    | "none";
+  /** Age engine v2 (Master §6.5): the posterior over age, hourly. Absent when no age was measured. */
+  age_posterior?: {
+    hours_grid: number[];
+    prob: number[]; // sums to 1
+    hpd80: [number, number]; // == age_hours
+    median: number;
+    hypotheses?: string[]; // "patch" | "track"
+    evidence?: string[];
+    models?: string[]; // "udgam_rk2" | "opendrift_openoil"
+    calibration_coverage?: number | null; // held-out 80 % coverage on synthetic twins
+  };
+  /** Stage 2 origin pooled from more than one drift model, equal weight (decision C). */
+  model_mix?: {
+    models: {
+      name: string;
+      weight: number;
+      points: number;
+      pooled_over?: string;
+      radius_90_km?: number;
+      stranded_fraction?: number | null;
+      version?: string;
+      physics?: string[];
+    }[];
+    centroid_separation_km?: number;
+    weighting?: string;
+  };
   age_weathering?: "fresh" | "weathered" | "unknown";
   /** Per-estimator band, or null where that estimator did not apply — never a zero band. */
   age_estimators?: Record<string, [number, number] | null>;
