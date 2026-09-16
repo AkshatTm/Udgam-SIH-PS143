@@ -1,0 +1,65 @@
+name: deploy
+
+# Builds the static export and ships it to the S3 bucket serving it as a static website
+# (CloudFront is blocked by an AWS account verification hold — see docs/updates/harshita.md,
+# this is the escape-hatch path: plain HTTP straight from S3, no CDN in front). Runs on every
+# push to main that touches the frontend or the case bundles it renders, plus workflow_dispatch
+# for an on-demand redeploy (e.g. at freeze).
+#
+# Requires these repo secrets (Settings -> Secrets and variables -> Actions), set once after
+# the S3 bucket exists and static website hosting is enabled on it:
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY  -- an IAM user scoped to just this one bucket
+#   AWS_REGION          -- e.g. ap-south-1
+#   S3_BUCKET_NAME       -- the frontend bucket name
+#
+# No cache invalidation step: S3 website hosting serves objects directly, there is no CDN
+# layer caching stale copies the way CloudFront would.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "cases/**"
+      - "scripts/sync_web_cases.py"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sync case bundles into web/public/cases
+        run: python scripts/sync_web_cases.py --clean
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: web
+        run: npm ci
+
+      - name: Build static export
+        working-directory: web
+        run: npm run build
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Sync to S3
+        run: aws s3 sync web/out s3://${{ secrets.S3_BUCKET_NAME }} --delete
