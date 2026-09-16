@@ -4,7 +4,7 @@
 The narrative and the reasoning live in `docs/updates/soumirya.md`; this is the one-screen answer to
 "where is it".*
 
-**Last updated: 2026-09-16 05:00** — **first END-TO-END gated number: 0.7566** on validation. Layer 1 retrained; the gate is essentially free. Previously — — **noise floor MEASURED at 3 seeds.** Pooled sd **0.0267**. Only the ≥30% result survives it. Previously — — **E2c MEASURED and the normalisation work is DONE.** E2c is the shippable configuration. The "band regressions" turn out to be training variance, not normalisation — see *What the normalisation actually touches*.
+**Last updated: 2026-09-16 10:30** — **`--min-recall 0.95` FAILED** (recall 0.873 → 0.853) and Layer 1 training is **nondeterministic**. One rejected large slick costs **−0.046 pooled**. Programme frozen per Akshat's final-day brief. Previously — — **first END-TO-END gated number: 0.7566** on validation. Layer 1 retrained; the gate is essentially free. Previously — — **noise floor MEASURED at 3 seeds.** Pooled sd **0.0267**. Only the ≥30% result survives it. Previously — — **E2c MEASURED and the normalisation work is DONE.** E2c is the shippable configuration. The "band regressions" turn out to be training variance, not normalisation — see *What the normalisation actually touches*.
 
 ---
 
@@ -372,6 +372,71 @@ from Parts I+II, which the classifier trained on. The gate will be lossier on th
 **These two are still not comparable** — different scene populations. They are now at least the same
 KIND of measurement (gated, end-to-end), which they were not before tonight. Closing the gap
 honestly requires running Part III, **which stays sealed** until a final configuration is chosen.
+
+---
+
+## ❌ `--min-recall 0.95` — a NEGATIVE result, and two things worth keeping
+
+Run at Soum's request before Akshat's final-day brief arrived. **It did the opposite of its
+intent**, and the reason is instructive.
+
+| Part III | shipped | r90 | **r95** |
+|---|---|---|---|
+| scene accuracy | 0.951 | 0.940 | **0.931** |
+| **oil recall** | 0.927 | 0.873 | **0.853** |
+| look-alike rejection | 0.940 | 0.960 | 0.953 |
+| threshold | 0.1427 | 0.4896 | **0.4709** |
+| variant selected | `both32` | `both32` | **`both_wide`** |
+
+### Why it failed: the floor does not bind where it matters
+
+The recall floor is applied on the **validation** split, where Layer 1 already reaches **0.989**
+recall. A 0.95 floor is **slack** there — it constrains nothing, which is why the threshold moved
+only 0.4896 → 0.4709. Part III recall (0.87) is a different population and the floor never touches
+it. **To bind at all, the floor would have to sit near 0.99.** That is a new experiment, not a
+30-minute fix.
+
+### Layer 1 training is NONDETERMINISTIC — `torch.manual_seed(42)` is not enough
+
+Same seed, same data, same config, two runs:
+
+| variant | r90 `val_loss` | r95 `val_loss` |
+|---|---|---|
+| `both32` | **0.0560** ← selected | 0.0633 |
+| `both_wide` | 0.0628 | **0.0619** ← selected |
+| `paper_avg32` | 0.0645 | 0.0673 |
+| `max32` | 0.0767 | 0.0703 |
+
+cuDNN autotuning and non-deterministic atomics leave real run-to-run variation. Consequences:
+
+1. **The r90/r95 comparison is confounded** — the threshold changed AND the model changed.
+2. **Variant selection is effectively a coin flip.** The `val_loss` gap between the top two
+   (0.001–0.007) is smaller than the run-to-run variation (~0.007). In this run `paper_avg32`
+   scored Part III 0.944 / 0.887 / 0.960 — better than the selected `both_wide` on every axis — but
+   selecting on that would be tuning on the holdout.
+3. **The shipped 0.951 vs our 0.940 is very likely noise**, not a regression.
+
+### ❗ The finding worth keeping: one rejected large slick costs −0.046 pooled
+
+Gated validation, r90 vs r95 — **four bands byte-identical, only `≥30%` moves**:
+
+| band | r90 gated | r95 gated |
+|---|---|---|
+| 0-1% / 1-3% / 3-10% / 10-30% | identical | identical |
+| **≥30%** | **0.8238** | **0.6087** |
+| **pooled** | **0.7566** | **0.7110** |
+
+The r95 classifier rejected **one** ≥30% scene (IoU ≈ 0.645 → 0). That single Layer 1 false negative
+cost **−0.0456 pooled IoU** — larger than the entire measured baseline→E2c effect (+0.055).
+
+**So Layer 1's recall on LARGE slicks specifically is worth far more than its headline accuracy.**
+A classifier that is 1% more accurate overall but drops one big slick is a net loss. Any future
+Layer 1 work should be selected on large-slick recall, not scene accuracy — and the shipped model's
+much lower threshold (0.1427, recall 0.927) looks better-placed for this than either retrain.
+
+**Status: frozen.** Akshat's final-day brief (16 Sept) freezes model work, and this result supports
+that call — Layer 1 changes are inside the noise. All artefacts are tagged; the shipped pair is
+untouched.
 
 ---
 
