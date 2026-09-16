@@ -55,13 +55,18 @@ import json
 import math
 import datetime as dt
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-WORK = Path("/tmp/claude-0")
+# Scratch space for the CF NetCDF files OpenDrift reads. This was a hardcoded "/tmp/claude-0",
+# which does not exist on Windows -- where the demo machine lives -- so write_cf_netcdf() failed
+# before OpenDrift was ever reached. mkdtemp() is per-run and platform-correct; --work overrides
+# it when you want to keep the intermediates around to inspect them.
+WORK = Path(tempfile.mkdtemp(prefix="udgam-od-"))
 KM_PER_DEG = 111.32
 
 
@@ -145,7 +150,7 @@ def seed_from_case(case_dir, n=3000, seed=0):
     two different seedings. Falls back to the bounds centre when there is no detection."""
     import json as _json
     import random as _random
-    # run.py's seed_particles() uses the STDLIB Random API (rng.gauss), not numpy's Generator.
+    # slick.seed_particles() uses the STDLIB Random API (rng.gauss), not numpy's Generator.
     # Passing the wrong one raises AttributeError -- and passing a numpy Generator that happened
     # to have a .gauss would have silently produced a different seeding than run.py's, which is
     # the failure that actually matters here: the comparison would be of two different clouds.
@@ -153,7 +158,7 @@ def seed_from_case(case_dir, n=3000, seed=0):
     det = case_dir / "detections.geojson"
     if det.exists():
         sys.path.insert(0, str(HERE))
-        from run import pick_slick, seed_particles
+        from slick import pick_slick, seed_particles
         feat = pick_slick(_json.loads(det.read_text()))
         if feat is not None:
             return np.asarray(seed_particles(feat, n, rng), dtype=np.float64)

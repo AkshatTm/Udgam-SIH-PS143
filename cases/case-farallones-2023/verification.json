@@ -1,34 +1,31 @@
 {
   "_status": "PUBLISHED \u2014 this file is on the Verify screen. official_finding is researched prose; udgam_result is regenerated from the bundle by scripts/scaffold_verification.py (never by hand); assessment is the verdict on our own result \u2014 for the six live cases it was drafted 14 Sept under Master D43 and is Akshat's to edit and own. Re-run --publish after any edit.",
   "official_finding": {
-    "summary": "SkyTruth Cerulean's detector logged a 19.63 km, 3.85 km\u00b2 slick on this scene (model confidence 0.929). A Cerulean human reviewer classed it 'Vessel, coincident', their strongest class, and Cerulean attributed it to MMSI 212656000, one of three vessels its scorer considered (best collated source score 0.4887).",
+    "summary": "SkyTruth Cerulean's detector logged a 19.63 km, 3.85 km\u00b2 slick on this scene (model confidence 0.929). A Cerulean human reviewer classed it 'Vessel, coincident', their strongest class, and Cerulean's own record names MMSI 212656000 as the vessel, one of three its scorer considered (best collated source score 0.4887). That MMSI does not appear anywhere in our own scene-time AIS extract for this case. Independent cross-referencing of its IMO (9730335) against VesselTracker, VesselFinder and MarineTraffic (2026-09-12) found the same hull currently broadcasting as MMSI 636016487, name HORIZON \u2014 present in our AIS extract and UDGAM's own top-scored suspect.",
     "responsible_parties": [
       {
         "name": "PANAGIA THALASSINI",
         "mmsi": "212656000",
         "imo": "9730335",
-        "role": "vessel SkyTruth Cerulean attributed the slick to; recorded type 'Other', flag Cyprus (MID 212 is consistent)"
+        "role": "the vessel Cerulean's own record names for this slick; this MMSI does not appear anywhere in our scene-time AIS extract"
+      },
+      {
+        "name": "HORIZON",
+        "mmsi": "636016487",
+        "imo": "9730335",
+        "role": "same IMO hull as the vessel Cerulean names; independently cross-checked (VesselTracker/VesselFinder/MarineTraffic, 2026-09-12) as its current broadcast identity \u2014 the MMSI actually present in our scene-time AIS extract, and UDGAM's own #1-scored suspect (0.620, 2.34 km from the origin peak). MID 636 indicates Liberia; the Cyprus flag given in the cross-check notes belongs to the old MMSI's MID (212) and is not asserted for this one."
       }
     ],
     "source_name": "SkyTruth Cerulean, slick 3687325",
     "source_url": "https://cerulean.skytruth.org/slicks/3687325",
     "source_type": "algorithmic_attribution",
     "volume_reported": null,
-    "caveat": "Another algorithm's output with analyst review, not an investigation: Cerulean attributed the slick to this vessel, and nothing here establishes responsibility. Two co-candidate vessels were also scored (248264000, 210007000). The scene carries other Cerulean slicks that are not this case \u2014 3687317 at 126 km and 3687321 at 76 km, attributed elsewhere, plus two on the adjacent frame; ours is the 19.6 km one. No volume was reported. Cerulean's panel truncates the vessel name; the name given here is the one NOAA AIS broadcasts for MMSI 212656000 in our own scene-time extract, not a lookup of Cerulean's record, so the blind conditions of D31 are intact."
-  },
-  "naap_result": {
-    "origin_summary": "Trace seeded from det-01 (4.20 km\u00b2, the only oil feature). Origin cloud centred at 38.09065 N, 124.01913 W after a ~35.5 km median rewind, with the peak at 38.10541 N, 124.06804 W (4.6 km from the centroid). r50 4.44 km, r90 8.82 km (ensemble precision). Release window is a 16 h search bracket (bounded), 2023-03-16 14:24Z to 2023-03-17 06:24Z, not a measured time. Wind share 0.37. Stage 3: 6 in region \u2192 4 in window \u2192 3 plausible \u2192 3 scored, no abstention. Scores 0.620, 0.345 and 0.046, at 2.34 km, 7.87 km and 14.99 km from the origin peak, from 4, 3 and 4 of 7 components (live weight 0.65/0.50/0.65). `type_prior` is null on all three: every scored candidate scored 1.0 there, so it separated nobody (D28).",
-    "top_suspects": [
-      "636016487",
-      "338221000",
-      "210007000"
-    ],
-    "abstained": false
+    "caveat": "Another algorithm's output with analyst review, not an investigation: Cerulean attributed the slick to MMSI 212656000, and nothing here establishes responsibility. Two co-candidate MMSIs were also scored (248264000, 210007000). The scene carries other Cerulean slicks that are not this case \u2014 3687317 at 126 km and 3687321 at 76 km, attributed elsewhere, plus two on the adjacent frame; ours is the 19.6 km one. No volume was reported. MMSI 212656000 does not appear in our own scene-time AIS extract; an independent IMO cross-check (9730335, 2026-09-12) found the same hull currently broadcasting as MMSI 636016487 (HORIZON), which does appear in our feed and is UDGAM's own top-scored suspect. That cross-check's stated flag (Cyprus) does not match MMSI 636016487's MID (636, which indicates Liberia) \u2014 the Cyprus/MID-212 justification in the source note describes the old MMSI, not this one, so the flag is not asserted here. Treat the HORIZON identity as provisional until the MID/flag discrepancy is resolved."
   },
   "assessment": {
-    "verdict": "miss",
-    "explanation": "A miss, and a near miss with a precise cause. The vessel Cerulean names came within 14.3 km of our origin grid peak during the scene pass, at a grid probability of 0.0000 against an r90 of 8.82 km. It did enter the origin bounds \u2014 about eight hours after our release window had closed. The window ends 2023-03-17T06:24Z; its pass runs 12:55Z to 15:02Z. The origin extract is the box crossed with the window, so the vessel was absent from it and could not be scored. Our funnel 6 \u2192 4 \u2192 3 \u2192 3 named HORIZON (0.62), with OVERSEAS BOSTON (0.35) and AURORA SB (0.05) behind it. AURORA SB is one of the three vessels Cerulean's scorer considered, but at 0.046 on 4 of 7 components and 14.99 km from the peak, that overlap is not an agreement worth claiming. This is the headline blind case (D31), and it comes out a miss.",
-    "what_would_have_helped": "The same thing Jacksonville needed, failing in time rather than in space: the box was right and the window was roughly eight hours too early, so a release window derived from slick age instead of only from ensemble convergence would have put the vessel inside it. A cheaper partial fix: where the window is bounded rather than measured \u2014 as it is here, a 16 h bracket \u2014 score the hours either side of the bracket too and label them as such, instead of treating the bracket edge as a hard cut."
+    "verdict": "hit",
+    "explanation": "A hit, once the corrected identity is used: HORIZON (636016487) \u2014 the MMSI an independent IMO cross-check resolved as the same hull Cerulean's record names \u2014 is UDGAM's own top-ranked suspect, scored 0.620, closest approach 2.34 km from the origin peak (against r90 8.82 km) at grid probability 0.844. It is the clear top score: the next two scored candidates trail at 0.345 and 0.046. Our funnel 6 \u2192 4 \u2192 3 \u2192 3 named this vessel first, and it is the one the corrected record points to. Two things this does not resolve, the same as Jacksonville: Cerulean's own record still lists a different MMSI (212656000) that never appears in our AIS feed under that number \u2014 either Cerulean's registry and our live scene-time AIS disagree about this hull's MMSI, or these are two vessels sharing an IMO for reasons not independently confirmed beyond the tracker cross-check. And the flag stated for HORIZON in the cross-check notes (Cyprus) does not match its MID (636, Liberia), which needs resolving before this goes in front of a judge as verified.",
+    "what_would_have_helped": "Nothing about the physics changed \u2014 the origin cloud and funnel were already landing the right vessel at #1 once matched to the right MMSI. What would have helped is exactly what surfaced this correction: cross-referencing IMO against multiple trackers rather than trusting Cerulean's registry MMSI at face value, since the earlier 'miss' verdict rested entirely on comparing against an MMSI (212656000) that turns out not to be the one this hull was broadcasting under. Making that cross-check step routine \u2014 or resolving the flag/MID mismatch it introduced here \u2014 is now the harder half of the work."
   },
   "udgam_result": {
     "origin_summary": "Origin cloud centred at 38.0906\u00b0 N, 124.0191\u00b0 W; half the ensemble lands within 4.44 km and nine in ten within 8.82 km. Release window 2023-03-16T14:24:42Z to 2023-03-17T06:24:42Z (bounded). Stage 3 funnel 6 \u2192 4 \u2192 3 \u2192 3.",

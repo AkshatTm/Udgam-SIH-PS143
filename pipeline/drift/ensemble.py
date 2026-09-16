@@ -92,11 +92,18 @@ def jitter_seed(seed_pos, rng, jitter_km=SEED_JITTER_KM):
 
 
 def run_once(seed_pos, t0, field, n_steps, timestep_minutes=15, wind_coeff=0.03,
-             direction="backward", keep_history=False, is_land=None):
+             direction="backward", keep_history=False, is_land=None,
+             diffusivity=0.0, rng=None):
     """One member. Returns (final_positions, spread_curve, history_or_None).
 
     `n_steps` counts STORED POSITIONS: 97 at 15 min is exactly 24.0 h, because the seed state
     is one of them and only 96 intervals separate them. (docs/CONTRACTS.md 5)
+
+    `diffusivity`/`rng` reach rk2_step and DEFAULT TO OFF. The capability is here so the origin
+    ensemble can be given a random walk later, but turning it on changes `spread_km` -- and so
+    `conv_idx`, the convergence time window, radius_50/90_km and the abstain decision -- all at
+    once. It is deliberately left at 0.0 until that can be measured on its own rather than
+    tangled with the age-band pooling landing in the same change.
     """
     if n_steps < 1:
         raise ValueError("n_steps must be at least 1")
@@ -121,7 +128,8 @@ def run_once(seed_pos, t0, field, n_steps, timestep_minutes=15, wind_coeff=0.03,
         spread[k] = spread_km(pos)
         if k == n_steps - 1:
             break
-        moved = rk2_step(pos, t, dt, field, wind_coeff=wind_coeff)
+        moved = rk2_step(pos, t, dt, field, wind_coeff=wind_coeff,
+                         diffusivity=diffusivity, rng=rng)
         if is_land is not None:
             stranded |= is_land(moved[:, 0], moved[:, 1])
             moved[stranded] = pos[stranded]        # hold at the last wet position
@@ -163,7 +171,8 @@ def _stratified_draws(n, rng, current_sigma=None):
 
 
 def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=50,
-                 rng=None, progress=None, is_land=None, current_sigma=None):
+                 rng=None, progress=None, is_land=None, current_sigma=None,
+                 diffusivity=0.0):
     """The 50 runs. Returns (endpoints [n_runs*n, 2], conv_idx [n_runs], members).
 
     `endpoints` is every final position from every member pooled together -- 150,000 points
@@ -188,7 +197,10 @@ def run_ensemble(seed_pos, t0, base_field, n_steps, timestep_minutes=15, n_runs=
         start = jitter_seed(seed_pos, rng)
 
         final, spread, _, _ = run_once(start, t0, field, n_steps, timestep_minutes,
-                                       wind_coeff=wind_coeff, is_land=is_land)
+                                       wind_coeff=wind_coeff, is_land=is_land,
+                                       diffusivity=diffusivity,
+                                       rng=(np.random.default_rng(4000 + r)
+                                            if diffusivity > 0.0 else None))
         stranded_frac = (float(np.mean(LAST_STRANDED))
                          if LAST_STRANDED is not None and is_land is not None else 0.0)
         endpoints.append(final)

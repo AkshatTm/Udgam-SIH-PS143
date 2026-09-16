@@ -66,6 +66,25 @@ def _feature(discharge, shape, area_km2=12.4, elong=8.2):
                            "centroid": ENNORE}}
 
 
+def _truncate_to_t0(field, t0):
+    """A shallow copy of `field` whose time axes stop at or before `t0`.
+
+    Used by 9c/9d to build the past-only cache the frozen-field guard is meant to catch, rather
+    than depending on how `fetch_fields.py --forward-hours` happened to be set when somebody last
+    populated `data/fields/`. Copies the object so the shared cached field is not mutated.
+    """
+    import copy
+    f = copy.copy(field)
+    cut = int(t0.timestamp())
+    ci = field.ctime <= cut
+    wi = field.wtime <= cut
+    if ci.sum() < 2 or wi.sum() < 2:
+        raise AssertionError("truncating at t0 left fewer than two snapshots to interpolate")
+    f.ctime, f.cu, f.cv = field.ctime[ci], field.cu[ci], field.cv[ci]
+    f.wtime, f.wu, f.wv = field.wtime[wi], field.wu[wi], field.wv[wi]
+    return f
+
+
 def _aspect(points):
     """Aspect ratio of a seeded cloud, in km-space."""
     p = np.asarray(points, dtype=np.float64)
@@ -105,23 +124,36 @@ def run(check):
                 f"acute {a_point:.2f}:1 (isotropic around the centroid)")
 
     # --- 9c  the frozen-field bug: a forward run on a past-only cache must refuse -------
+    #
+    # THIS TEST BUILDS ITS OWN PAST-ONLY FIELD, and that is the point (fixed 16 Sept 2026).
+    # It used to load `data/fields/case-000.npz` and assert that the cache ended at t0 -- true
+    # only while `fetch_fields.py --forward-hours` defaulted to 0. The default is now 24, so the
+    # cache legitimately extends past t0, the guard correctly did NOT fire, and the test failed
+    # for a DATA reason with nothing to do with the guard it exists to check. A test that asserts
+    # a property of a gitignored file it does not build is a test of whoever ran the fetch last.
+    #
+    # Truncating the time axis here makes the fixture explicit, so this keeps testing the guard
+    # under any fetch settings -- including the 72 h rewind window.
     from pathlib import Path
     field = load_case_field("case-000", repo_root=Path(__file__).resolve().parents[2])
+    past_only = _truncate_to_t0(field, T0)
     refused = False
     try:
-        assert_field_covers(field, T0, T0 + timedelta(hours=24), "forward run")
+        assert_field_covers(past_only, T0, T0 + timedelta(hours=24), "forward run")
     except FieldTimeSpan as exc:
         refused = "CLAMPED" in str(exc)
     ok &= check("9c  a forward run past the end of the cached field is REFUSED",
                 refused,
-                f"case-000's cache ends at the detection time, so 24 h forward is 101% "
-                f"outside it. Unguarded, GriddedField clamps and every step re-uses the last "
-                f"snapshot -- verified bit-identical at t0, +6 h, +12 h, +24 h")
+                f"on a cache truncated at the detection time, 24 h forward is wholly outside it. "
+                f"Unguarded, GriddedField clamps and every step re-uses the last snapshot -- "
+                f"bit-identical at t0, +6 h, +12 h, +24 h")
 
     # --- 9d  ...but the routine 14-minute overhang is tolerated, and reported -----------
-    cov = assert_field_covers(field, T0, T0 - timedelta(hours=24), "backward run")
+    # Same truncated field: t0 is a satellite acquisition instant and HYCOM snapshots are on the
+    # hour, so truncating at t0 leaves the real sub-hour overhang this tolerance exists for.
+    cov = assert_field_covers(past_only, T0, T0 - timedelta(hours=24), "backward run")
     ok &= check("9d  a backward run passes, with its small overhang reported not hidden",
-                cov is not None and 0.0 < cov[2] < 1.0,
+                cov is not None and 0.0 <= cov[2] < 1.0,
                 f"overhang {cov[2]:.2f} h -- t0 is a satellite acquisition instant and HYCOM "
                 f"snapshots are on the hour, so t0 sits minutes past the last one. Tolerance "
                 f"is max(1 h, 5% of span); refusing a 24 h run over a 1% clamp would be useless")

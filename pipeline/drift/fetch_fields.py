@@ -25,6 +25,7 @@ from a projection transform. Coordinate order is the trap this component dies on
 this way there is nothing to get backwards.
 """
 import argparse
+import math
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -36,6 +37,7 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 from check_gee import (CURRENTS, CURRENT_BANDS, WINDS, WIND_BANDS, LOOKBACK_HOURS,
+                       REWIND_HOURS,
                        DEFAULT_PROJECT, load_case_window, required_pad_km,
                        pad_degrees, DEFAULT_VMAX_MS)
 
@@ -51,8 +53,60 @@ MAX_PLAUSIBLE_SPEED_MS = 3.0
 HYCOM_ARCHIVE_END = datetime(2024, 9, 5, tzinfo=timezone.utc)
 
 
+def _get_region_rows(ee, coll_id, bands, region, bbox, start, end, scale, label, chunk_hours):
+    """getRegion().getInfo() over [start, end), split into `chunk_hours` sub-windows.
+
+    WHY THIS IS CHUNKED (16 Sept 2026, for the 72 h rewind). `getRegion` materialises ONE ROW
+    PER CELL PER TIMESTEP and `getInfo` ships the lot in a single response; both have hard
+    ceilings. The 24 h window this used to pull was comfortably inside them. The 72 h one is not:
+    the pad scales with the rewind (required_pad_km), so the box grows as well as the window, and
+    ERA5 at 78 hourly steps over a Gulf-Stream-sized box runs to a few hundred thousand rows.
+
+    The failure would be a GEE-side error rather than a wrong number, so it is loud -- but it
+    would stop the refetch dead halfway through six cases, so it is cheaper to split the request
+    than to discover the ceiling one case at a time.
+
+    Rows from each chunk are concatenated; the caller uniques the time axis, so the shared
+    boundary instant between consecutive chunks is harmless.
+    """
+    total_h = (end - start).total_seconds() / 3600.0
+    n_chunks = max(1, math.ceil(total_h / float(chunk_hours)))
+    if n_chunks == 1:
+        print(f"  {label}: requesting {coll_id} at {scale} m ...", flush=True)
+    else:
+        print(f"  {label}: requesting {coll_id} at {scale} m, "
+              f"{total_h:.0f} h in {n_chunks} x {chunk_hours:g} h chunks ...", flush=True)
+
+    head, body = None, []
+    for c in range(n_chunks):
+        cs = start + timedelta(hours=c * float(chunk_hours))
+        ce = min(cs + timedelta(hours=float(chunk_hours)), end)
+        if ce <= cs:
+            continue
+        coll = (ee.ImageCollection(coll_id)
+                .filterBounds(region)
+                .filterDate(cs.strftime("%Y-%m-%dT%H:%M:%S"), ce.strftime("%Y-%m-%dT%H:%M:%S"))
+                .select(bands))
+        rows = coll.getRegion(region, scale).getInfo()
+        if not rows:
+            continue
+        if head is None:
+            head = rows[0]
+        elif rows[0] != head:
+            raise SystemExit(f"{coll_id}: chunk {c} returned a different column order — "
+                             f"refusing to concatenate misaligned rows")
+        body.extend(rows[1:])
+        if n_chunks > 1:
+            print(f"      chunk {c + 1}/{n_chunks}  {cs:%Y-%m-%d %H:%MZ} -> "
+                  f"{ce:%Y-%m-%d %H:%MZ}  {len(rows) - 1} rows", flush=True)
+
+    if head is None or not body:
+        raise SystemExit(f"{coll_id} returned no samples over {bbox}. Widen the window.")
+    return head, body
+
+
 def pull(ee, coll_id, bands, bbox, t0, hours, scale, label, divide_by=1.0,
-         forward_hours=0.0):
+         forward_hours=0.0, chunk_hours=24.0):
     """One collection -> (lons, lats, times_utc, a, b) with a/b shaped [time, lat, lon].
 
     `forward_hours` extends the window PAST t0. Phase 2 needs it: forward drift from the slick
@@ -65,20 +119,10 @@ def pull(ee, coll_id, bands, bbox, t0, hours, scale, label, divide_by=1.0,
     region = ee.Geometry.Rectangle(bbox)
     start = t0 - timedelta(hours=hours)
     end = t0 + timedelta(hours=float(forward_hours))
-    coll = (ee.ImageCollection(coll_id)
-            .filterBounds(region)
-            .filterDate(start.strftime("%Y-%m-%dT%H:%M:%S"), end.strftime("%Y-%m-%dT%H:%M:%S"))
-            .select(bands))
-
-    print(f"  {label}: requesting {coll_id} at {scale} m ...", flush=True)
-    rows = coll.getRegion(region, scale).getInfo()
-    if len(rows) < 2:
-        raise SystemExit(f"{coll_id} returned no samples over {bbox}. Widen the window.")
-
-    head = rows[0]
+    head, body = _get_region_rows(ee, coll_id, bands, region, bbox, start, end, scale, label,
+                                  chunk_hours)
     ix = {name: head.index(name) for name in ("longitude", "latitude", "time")}
     ib = [head.index(b) for b in bands]
-    body = rows[1:]
 
     # Round before uniquing: GEE returns float coords with tail jitter, and np.unique on raw
     # floats would invent hundreds of one-sample "grid lines".
@@ -134,7 +178,11 @@ def main():
     ap.add_argument("--hours", type=int, default=LOOKBACK_HOURS)
     ap.add_argument("--out", default=None, help="default data/fields/<case>.npz")
     ap.add_argument("--force", action="store_true", help="refetch even if the cache exists")
-    ap.add_argument("--rewind-hours", type=float, default=24.0,
+    ap.add_argument("--chunk-hours", type=float, default=24.0,
+                    help="split each GEE getRegion request into sub-windows of this many hours. "
+                         "getRegion returns one row per cell per timestep and getInfo ships them "
+                         "in one response; at 78 h over a padded box that exceeds GEE's ceiling.")
+    ap.add_argument("--rewind-hours", type=float, default=REWIND_HOURS,
                     help="how far back run.py will rewind; the pad is sized from this")
     ap.add_argument("--vmax-ms", type=float, default=DEFAULT_VMAX_MS,
                     help="worst-case surface current for the pad. Use 2.0 for the Gulf Stream "
@@ -186,10 +234,12 @@ def main():
     # HYCOM arrives as int * 0.001 m/s. This division is the only place it happens.
     clon, clat, ctime, cu, cv = pull(ee, CURRENTS, CURRENT_BANDS, bbox, t0, a.hours,
                                      SCALE_CURRENTS_M, "currents", divide_by=1000.0,
-                                     forward_hours=a.forward_hours)
+                                     forward_hours=a.forward_hours,
+                                     chunk_hours=a.chunk_hours)
     wlon, wlat, wtime, wu, wv = pull(ee, WINDS, WIND_BANDS, bbox, t0, a.hours,
                                      SCALE_WINDS_M, "winds", divide_by=1.0,
-                                     forward_hours=a.forward_hours)
+                                     forward_hours=a.forward_hours,
+                                     chunk_hours=a.chunk_hours)
 
     c_med, c_p99, c_max = describe("current", cu, cv)
     describe("wind", wu, wv)

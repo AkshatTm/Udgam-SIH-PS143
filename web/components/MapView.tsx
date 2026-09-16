@@ -96,18 +96,11 @@ const OCEAN_STYLE: StyleSpecification = {
       id: "ocean-tiles",
       type: "raster",
       source: "ocean",
-      // Same source, same offline-first behaviour — only re-tinted. Esri ships one ocean
-      // basemap and it is a pale daylight one; desaturating and crushing its highlights here
-      // is what puts the map in the same night as the rest of the app. Doing it in the raster
-      // paint (rather than swapping in a dark tile service) keeps the "wifi drops and the
-      // offline land layer shows through" property exactly as it was, and adds no new
-      // network dependency.
+      // Esri's natural-colour World Ocean Base, shown as-is. Same offline-first behaviour as
+      // before — if the venue wifi drops, the tiles simply fail to load and the offline land/sea
+      // base (layer 1 above) shows through.
       paint: {
-        "raster-opacity": 0.42,
-        "raster-saturation": -0.72,
-        "raster-brightness-max": 0.26,
-        "raster-contrast": 0.18,
-        "raster-hue-rotate": 15,
+        "raster-opacity": 1,
         "raster-fade-duration": 150,
       },
     },

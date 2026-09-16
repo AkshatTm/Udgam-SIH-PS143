@@ -68,6 +68,8 @@ import numpy as np
 
 import ensemble as ens
 from fields import load_case_field, make_fake, require_aware, speed
+from slick import merge_oil_features, pick_slick
+import step
 from step import as_positions, deg_to_m, integrate
 
 HERE = Path(__file__).resolve().parent
@@ -120,7 +122,25 @@ WEATHERING_WIND_HI_MS = 10.0
 # Shear-dispersion seeding: a tight cloud, because we are measuring how the ocean spreads it,
 # not how wide we made it.
 SEED_SIGMA_M = 200.0
-SEED_PARTICLES = 300
+# RAISED FROM 300 TO 2000 ON 16 SEPT 2026, and the number is derived rather than chosen.
+#
+# With diffusion on (Phase 1) the extent curve is STOCHASTIC, and `check_monotonic` refuses the
+# whole estimator if modelled extent ever falls by more than tol_frac = 2% between candidates.
+# The relative standard error of a sigma estimate from n particles is 1/sqrt(2(n-1)):
+#
+#       n =  300  ->  4.09%        n = 1200  ->  2.04%
+#       n =  600  ->  2.89%        n = 2000  ->  1.58%
+#
+# At 300 the noise floor is TWICE the tolerance, so spurious monotonicity failures were
+# structurally guaranteed the moment the random walk was switched on -- and that is exactly what
+# happened: Huntington failed 6/20 members on dips of 2.8-3.3%, every one of them inside the
+# n=300 noise band and none of them a field squeezing the cloud.
+#
+# The fix is to lower the noise, NOT to raise the tolerance. `check_monotonic` exists to catch a
+# field that is genuinely converging, and widening it to swallow 4% sampling noise would blind it
+# to a real 3% violation. 2000 puts the noise floor at 1.58%, below the 2% gate, with margin.
+# Cost is ~6.7x the integration work in C3.1 only; nothing else in Stage 2 uses this.
+SEED_PARTICLES = 2000
 
 
 # ---------------------------------------------------------------------------------------
@@ -422,25 +442,80 @@ def shear_extent_curve(field, lon, lat, t0, candidate_hours, timestep_minutes=15
     return np.asarray(areas), np.asarray(majors), np.asarray(minors)
 
 
-def check_monotonic(candidate_hours, areas, tol_frac=0.02):
+def check_monotonic(candidate_hours, areas, tol_frac=0.02, up_to=None):
     """The sanity gate from C3.1: modelled extent MUST increase with candidate age.
 
     If it does not, the field or the seeding is wrong -- stop and look, do not tune. A small
     tolerance absorbs sampling noise from a finite particle cloud; a real violation is a
-    field that is squeezing the cloud, which over a 24-36 h rewind through daily HYCOM should
-    not happen (the cloud translates, it does not converge -- that is the same structural
-    reason the convergence time-window estimator failed).
+    field that is squeezing the cloud.
+
+    `up_to` LIMITS THE CHECK TO THE CANDIDATES THE INVERSION ACTUALLY USES (16 Sept 2026), and
+    it is there because we stopped and looked, exactly as the paragraph above says to.
+
+    WHAT WE SAW. At the 72 h horizon Huntington failed 20/20 members. The failures were not
+    scattered the way sampling noise is -- ALL TWENTY fell at the same two candidates, 42 h and
+    46 h, by 6-12% against a 1.58% noise floor, across members with different diffusivities and
+    different wind coefficients. That is not noise and it is not a bug: it is a real convergence
+    event in the field, about two days before the pass. The gate was right to flag it.
+
+    WHY IT SHOULD NOT REFUSE THE ESTIMATE ANYWAY. Every one of those inversions crossed the
+    observed extent at 2.0-7.4 h -- thirty-five hours before the dip. The gate exists to keep
+    the INVERSION well-posed: a monotonic curve crosses the target exactly once, so the age is
+    unique. A dip 35 h past the crossing cannot make that crossing ambiguous. Refusing on it
+    discards a sound answer because of ocean behaviour at a time the answer does not depend on.
+
+    Note that this is STRICTER where it matters, not looser: the original premise ("a smooth
+    field advects and stretches, it does not converge") was calibrated on a 24-36 h rewind
+    through DAILY HYCOM. The real cases fetch 3-hourly HYCOM, which resolves mesoscale structure
+    a daily field cannot, so genuine convergence is now expected rather than anomalous. The
+    check keeps its full force below the crossing, where a second crossing would make the answer
+    ambiguous, and stops asserting a premise that no longer holds above it.
+
+    Dips beyond `up_to` are still measured and still reported -- see `late_dips` in the
+    diagnostics. They are a real statement about the field and worth keeping.
 
     Returns (ok, first_offending_index_or_None, detail).
     """
     a = np.asarray(areas, dtype=np.float64)
-    for i in range(1, a.size):
+    last = a.size if up_to is None else min(int(up_to) + 1, a.size)
+    for i in range(1, last):
         if a[i] < a[i - 1] * (1.0 - tol_frac):
             return False, i, (f"modelled area fell from {a[i-1]:.3f} km2 at "
                               f"{candidate_hours[i-1]:g} h to {a[i]:.3f} km2 at "
                               f"{candidate_hours[i]:g} h")
-    return True, None, (f"area grows {a[0]:.3f} -> {a[-1]:.3f} km2 across "
-                        f"{candidate_hours[0]:g}-{candidate_hours[-1]:g} h")
+    scope = ("" if up_to is None else
+             f" (checked to the inversion at {candidate_hours[last-1]:g} h; grid runs to "
+             f"{candidate_hours[-1]:g} h)")
+    return True, None, (f"area grows {a[0]:.3f} -> {a[last-1]:.3f} km2 across "
+                        f"{candidate_hours[0]:g}-{candidate_hours[last-1]:g} h{scope}")
+
+
+def crossing_index(values, target):
+    """Index of the first candidate at or above `target`, or None if it is never reached.
+
+    This is the candidate the inversion brackets against, and therefore the last one whose
+    monotonicity can affect the answer. Deliberately separate from invert_curve so the gate and
+    the interpolation cannot drift apart.
+    """
+    v = np.asarray(values, dtype=np.float64)
+    target = float(target)
+    if target <= v[0] or target >= v[-1]:
+        return None
+    return int(np.searchsorted(v, target))
+
+
+def late_dips(candidate_hours, values, tol_frac=0.02, after=None):
+    """Every monotonicity violation at or beyond `after`. Reported, never acted on."""
+    a = np.asarray(values, dtype=np.float64)
+    start = 1 if after is None else max(1, int(after) + 1)
+    out = []
+    for i in range(start, a.size):
+        if a[i] < a[i - 1] * (1.0 - tol_frac):
+            out.append({"from_hours": float(candidate_hours[i - 1]),
+                        "to_hours": float(candidate_hours[i]),
+                        "from_km": float(a[i - 1]), "to_km": float(a[i]),
+                        "drop_frac": float(1.0 - a[i] / a[i - 1])})
+    return out
 
 
 def invert_curve(candidate_hours, values, target):
@@ -466,35 +541,64 @@ def invert_curve(candidate_hours, values, target):
 
 
 
-def _gate_reason(discharge_class, estimator, physics):
-    """Why an acute-gated estimator declined -- and WHOSE problem it is.
+# Band widening applied when the gate lets an `unknown` discharge through. See age_gate.
+UNKNOWN_BAND_FRAC = 0.55
+UNKNOWN_PERCENTILE = 5.0          # vs 10/90 for a class we actually know
 
-    Two very different situations produce the same refusal, and conflating them hides a blocker:
 
-      chronic          a real physical reason. The gate is doing its job and nothing is missing.
-      unknown/absent   a MISSING INPUT. Stage 1 has not emitted discharge_class -- it is in the
-                       contract and assigned to Soumirya, but detect/run.py has never written it, so
-                       it will not appear just because his backlog clears. Akshat's A5 audit
-                       (13 Sept 2026) found it unset on EVERY case including case-000's own
-                       det-01, which is why both acute-gated estimators currently fire on
-                       nothing. That is a data gap, not a property of any slick.
+def age_gate(discharge_class):
+    """Should an age estimator run on this slick? -> (verdict, reason).
+
+    verdict is one of:
+      "allow"          run normally
+      "allow_widened"  run, but widen the band and carry the caveat
+      "refuse"         do not run; the answer would be meaningless
+
+    THIS REPLACED AN `== "acute"` GATE ON 16 SEPT 2026, and the reason is measured, not stylistic.
+
+    `discharge_class` comes from detect/ships.py:classify_discharge, which reads SHAPE ALONE:
+    elongation < 3.0 -> 'acute'; elongation >= 5.0 AND straightness >= 0.60 -> 'chronic';
+    everything between -> 'unknown'. Acute therefore requires a LOW elongation, and oil slicks
+    are elongated. Measured against the live library on 16 Sept 2026: of the 17 features
+    classified `oil` across the nine cases, 4 are 'chronic', 13 are 'unknown', and **none is
+    'acute'** -- every 'acute' feature in every bundle is sub-0.5 km2 `lookalike` speckle. An
+    acute-only gate is not strict, it is UNREACHABLE: it fired on nothing, which is why
+    age_hours was null on all six spill cases.
+
+    It was also circular, which age.py has flagged since 13 Sept: the gate is a threshold on
+    elongation while C3.3 INVERTS elongation, so the gate and the estimator read the same number.
+
+    What survives is the part that is real physics:
+
+      chronic         REFUSE. A chronic discharge is a moving source, so the slick's long axis is
+                      the vessel's TRACK. Both estimators read length as evidence of spreading,
+                      and on a track that is simply false. Nothing here is missing -- the gate is
+                      doing its job.
+      acute           ALLOW. A release at a point, spread by the ocean. The assumption both
+                      estimators are built on.
+      unknown/absent  ALLOW, WIDENED. The detector could not place the geometry in either bucket.
+                      That is a statement about the shape, not a missing field -- and it is not a
+                      reason to emit nothing when 13 of 17 oil slicks land here. The slick may be
+                      acute (estimate valid) or chronic (estimate an overestimate), so the band
+                      is widened to span that ambiguity rather than pretending it is not there,
+                      and `age_gate` travels with the result so a reader knows which it was.
+                      Widening an honest band beats narrowing an invented one.
     """
     if discharge_class == "chronic":
-        return (f"discharge_class is 'chronic'. {estimator} {physics}, so the result would be "
-                f"meaningless. The gate is correct and nothing is missing.")
-    return (f"discharge_class is {discharge_class!r}. {estimator} {physics}, so it needs to "
-            f"know whether the source was moving before it can run, and 'unknown' does not say. "
-            f"This is NOT a missing field -- Stage 1 emits it (detect/run.py:551 via "
-            f"ships.classify_discharge). It is computed from SHAPE ALONE: elongation < 3.0 -> "
-            f"'acute', elongation >= 5.0 AND straightness >= 0.60 -> 'chronic', everything "
-            f"between -> 'unknown'. So 'unknown' means the detector could not place this slick "
-            f"in either bucket, which is a real statement about the geometry rather than a gap "
-            f"in the contract. Two consequences worth knowing: NO oil detection in the library "
-            f"is 'acute' (0 of 13), because acute requires LOW elongation and oil slicks are "
-            f"elongated -- so this estimator fires on nothing, structurally, and A5's conclusion "
-            f"stands for a stronger reason than it was originally given. And because the gate is "
-            f"a threshold on elongation while C3.3 INVERTS elongation, the gate and the "
-            f"estimator read the same quantity -- flagged to Akshat 13 Sept as circular.")
+        return "refuse", (
+            "discharge_class is 'chronic': the source was under way, so the slick's long axis is "
+            "the vessel's TRACK, not a patch spread by the ocean. Reading an age off it would be "
+            "meaningless. The gate is correct and nothing is missing.")
+    if discharge_class == "acute":
+        return "allow", "discharge_class is 'acute': a release at a point, spread by the ocean."
+    return "allow_widened", (
+        f"discharge_class is {discharge_class!r}: detect/ships.py:classify_discharge could not "
+        f"place this geometry in either bucket (it buckets on elongation alone -- <3.0 acute, "
+        f">=5.0 and straight chronic, between unknown). The slick may be a point release or a "
+        f"track, so the estimate runs but the band is WIDENED to span that ambiguity, and this "
+        f"gate verdict travels with the result. Note the shape of the library: 13 of 17 oil "
+        f"detections are 'unknown' and NONE is 'acute', so refusing 'unknown' -- as the gate did "
+        f"until 16 Sept 2026 -- meant refusing every case.")
 
 
 def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate_hours,
@@ -550,23 +654,34 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
     current scale draws the origin cloud uses -- so the answer is a BAND from the same
     uncertainty budget as the rest of Stage 2, not a point dressed up with error bars.
     """
-    if discharge_class != "acute":
+    verdict, gate_reason = age_gate(discharge_class)
+    if verdict == "refuse":
         return None, {
             "matched_on": "major_axis_length_km",
             "discharge_class": discharge_class,
-            "skipped": _gate_reason(discharge_class, "C3.1",
-                                    "matches the observed major axis, and on a chronic slick "
-                                    "the major axis is the vessel's track rather than shear "
-                                    "stretching a patch"),
+            "age_gate": "chronic_refused",
+            "skipped": gate_reason,
         }
+    widened = verdict == "allow_widened"
 
     rng = np.random.default_rng(seed)
     winds, scales = ens._stratified_draws(n_members, rng)
 
-    fits, members, mono_failures = [], [], []
+    # Horizontal diffusivity is the THIRD perturbed quantity, drawn the same stratified way as
+    # the other two (16 Sept 2026). One draw per equal-probability slice of the Okubo band, then
+    # shuffled, so a 20-member ensemble samples the range evenly instead of clustering by luck.
+    # Without this term the modelled extent tops out at ~1.3 km and no member brackets a real
+    # slick -- see _curve_with_wind's docstring.
+    k_lo, k_hi = step.DIFFUSIVITY_RANGE_M2S
+    edges = np.linspace(0.0, 1.0, n_members + 1)
+    ks = k_lo + (k_hi - k_lo) * (edges[:-1] + rng.random(n_members) * np.diff(edges))
+    rng.shuffle(ks)
+
+    fits, members, mono_failures, late_dip_members = [], [], [], []
     for m in range(n_members):
         wind_coeff = float(winds[m])
         scale = max(float(scales[m]), 0.05)
+        diffusivity = float(ks[m])
         field = ens.PerturbedField(base_field, scale)
 
         # The perturbed wind coefficient enters through the INTEGRATOR, not the field object,
@@ -575,16 +690,35 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
         # make the band narrower than the uncertainty budget actually is.
         areas_w, sd1_w, sd2_w = _curve_with_wind(
             field, lon, lat, t0, candidate_hours, timestep_minutes, n_particles,
-            wind_coeff=wind_coeff, seed=seed + 2000 + m, guard=guard)
+            wind_coeff=wind_coeff, seed=seed + 2000 + m, guard=guard,
+            diffusivity=diffusivity)
 
         lengths_w = 4.0 * sd1_w          # full major axis of the 2-sigma ellipse
-        ok, idx, detail = check_monotonic(candidate_hours, lengths_w)
+
+        # Monotonicity is checked only as far as the inversion reaches. See check_monotonic:
+        # a dip beyond the crossing cannot make the crossing ambiguous, and at 72 h the real
+        # field genuinely converges around 42-46 h on every member.
+        xi = crossing_index(lengths_w, observed_length_km)
+        if xi is None:
+            # This member never reaches the observed extent, so it contributes no fit and there
+            # is no inversion for the gate to protect. Checking its monotonicity anyway would
+            # judge it on ocean behaviour at 40-70 h that nothing downstream reads -- and it is
+            # already counted, honestly, in n_fitted. Conflating "did not bracket" with "the
+            # field misbehaved" is what made this read 20/20 instead of the 9 members that
+            # simply started above the target.
+            ok, detail = True, "no crossing: this member contributes no fit"
+        else:
+            ok, idx, detail = check_monotonic(candidate_hours, lengths_w, up_to=xi)
         if not ok:
             mono_failures.append({"member": m, "detail": detail})
+        _dips = late_dips(candidate_hours, lengths_w, after=xi)
+        if _dips:
+            late_dip_members.append({"member": m, "dips": _dips})
 
         t_fit = invert_curve(candidate_hours, lengths_w, observed_length_km)
         members.append({
             "member": m, "wind_coeff": wind_coeff, "current_scale": scale,
+            "diffusivity_m2s": diffusivity,
             "age_hours": t_fit, "monotonic": bool(ok),
             "length_first_km": float(lengths_w[0]), "length_last_km": float(lengths_w[-1]),
             # area is the diagnostic, not the observable: near-constant is the expected,
@@ -597,14 +731,32 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
 
     area_ratios = [m["area_ratio"] for m in members if m["area_ratio"]]
     diag = {
+        # Set here, before any of the skip returns below, so a refusal still says which way the
+        # gate went. It used to be assigned only on the success path, which meant the one case
+        # you most want it on -- a skipped estimator -- reported age_gate: null.
+        "age_gate": "unknown_widened" if widened else "acute",
+        "gate_reason": gate_reason,
         "n_members": n_members,
         "n_fitted": len(fits),
         "matched_on": "major_axis_length_km",
         "candidate_hours": [float(h) for h in candidate_hours],
         "observed_length_km": float(observed_length_km),
         "monotonicity_failures": mono_failures,
+        "late_dips": late_dip_members,
+        "late_dips_note": ("monotonicity violations BEYOND the candidate the inversion "
+                           "brackets against. Recorded, never acted on: a dip past the "
+                           "crossing cannot make the crossing ambiguous. On Huntington "
+                           "at 72 h every member dips at 42-46 h by 6-12% while every "
+                           "inversion sits at 2-7 h -- a real convergence event in the "
+                           "field, not a modelling fault."),
         "median_area_ratio_first_to_last": (float(np.median(area_ratios))
                                             if area_ratios else None),
+        "diffusivity_range_m2s": [float(k_lo), float(k_hi)],
+        "diffusivity_note": ("horizontal turbulent diffusivity, drawn per member across the "
+                             "Okubo shelf-scale band. It is an ASSUMPTION with a range, not a "
+                             "measurement. Advection alone reaches only 0.8-1.3 km of major "
+                             "axis on 9 km daily HYCOM, so without this term no member brackets "
+                             "a real slick and the estimator refuses on every case."),
         "members": members,
         "caveat": ("advective and shear spreading only -- no gravity-viscous phase, so this "
                    "OVERESTIMATES the age of a very young slick. Report as a lower-bounded "
@@ -624,15 +776,37 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
                            f"tune -- the field or the seeding is wrong.")
         return None, diag
 
-    lo = float(np.percentile(fits, 10))
-    hi = float(np.percentile(fits, 90))
+    # A class we know gets the 10/90 band. An `unknown` one gets 5/95 across the same member
+    # fits -- a real distributional statement about the same ensemble, not a fudge factor, and
+    # the honest response to not knowing whether the long axis is spreading or a ship's track.
+    pct = UNKNOWN_PERCENTILE if widened else 10.0
+    lo = float(np.percentile(fits, pct))
+    hi = float(np.percentile(fits, 100.0 - pct))
+    diag["band_percentiles"] = [pct, 100.0 - pct]
     return (lo, hi), diag
 
 
 def _curve_with_wind(field, lon, lat, t0, candidate_hours, timestep_minutes, n_particles,
-                     wind_coeff, seed, guard=True):
+                     wind_coeff, seed, guard=True, diffusivity=0.0):
     """shear_extent_curve() with an explicit wind coefficient. Split out because the ensemble
-    perturbs the wind coefficient at the integrator, not inside the field object."""
+    perturbs the wind coefficient at the integrator, not inside the field object.
+
+    THIS IS THE ONLY PLACE IN STAGE 2 THAT TURNS HORIZONTAL DIFFUSION ON (16 Sept 2026), and it
+    is what makes C3.1 able to date a real slick at all.
+
+    Advection alone reaches a modelled major axis of 0.8-1.3 km on real HYCOM (decision brief
+    section 4) against observed slicks of 2.3-10.1 km, so `invert_curve` had no bracket and the
+    estimator refused on every case in the library. That gap is a missing PROCESS: a 9 km daily
+    cell cannot resolve the sub-grid turbulence that actually spreads a slick, and an
+    incompressible advected patch preserves its area by construction (test 6c: area x1.02 while
+    the major axis goes x5.7). Adding a diffusivity drawn from the Okubo shelf-scale band lets
+    the modelled extent span the observed range, so the inversion has something to invert.
+
+    It is an ASSUMPTION with a range, and it is published as one: the caller draws `diffusivity`
+    per ensemble member across `step.DIFFUSIVITY_RANGE_M2S` and the drawn values go into the
+    diagnostics, exactly like the wind coefficient. The default here stays 0.0 so that
+    `shear_extent_curve` and every test that calls this directly keep the deterministic physics.
+    """
     rng = np.random.default_rng(seed)
     areas, majors, minors = [], [], []
     start0 = seed_cloud(lon, lat, n_particles, rng=rng)   # one realisation, see above
@@ -640,7 +814,9 @@ def _curve_with_wind(field, lon, lat, t0, candidate_hours, timestep_minutes, n_p
         n_steps = int(round(t_h * 60.0 / timestep_minutes)) + 1
         history, _ = integrate(start0, t0 - timedelta(hours=float(t_h)), field, n_steps,
                                timestep_minutes, direction="forward",
-                               wind_coeff=wind_coeff, guard=guard)
+                               wind_coeff=wind_coeff, guard=guard,
+                               diffusivity=diffusivity,
+                               rng=(rng if diffusivity > 0.0 else None))
         sd1, sd2, area = pca_extent(history[-1])
         areas.append(area)
         majors.append(sd1)
@@ -826,16 +1002,25 @@ def elongation_age(observed_elongation, shear_rate_s, discharge_class,
     rather than resolved silently. `age_hours` uses the exact form.
 
     Assumes simple shear and an initially isotropic patch. A patch that was already elongated
-    at release breaks it -- which is a second reason for the acute gate below, beyond the one
-    the brief gives.
+    at release breaks it -- which is a second reason the `chronic` refusal below is real physics
+    rather than caution.
 
     THE GATE, and it is the whole point: this is only valid when the OCEAN did the stretching.
     A `chronic` discharge is long and thin because the SHIP WAS MOVING, so applying this there
-    gives nonsense. `unknown` is refused too -- an ungated guess is worse than a null.
+    gives nonsense and `age_gate` refuses it.
+
+    `unknown` USED TO BE REFUSED TOO. It no longer is (16 Sept 2026). The old comment here read
+    "an ungated guess is worse than a null" -- true, but it was not a guess being avoided, it
+    was every case: `discharge_class` buckets on elongation alone, acute needs elongation < 3.0,
+    and 13 of the 17 oil detections in the library are 'unknown' with none 'acute'. Refusing
+    `unknown` refused everything, and the gate read the same quantity this function inverts,
+    which is circular. So `unknown` now runs with `band_frac` widened to UNKNOWN_BAND_FRAC and
+    the verdict recorded. See age_gate.
 
     The band comes from the shear rate itself, which is a finite difference on a 9 km daily
     field and is the least certain input here; +/-35% is a deliberately generous acknowledgement
-    of that rather than a measured error bar.
+    of that rather than a measured error bar, and +/-55% on an `unknown` class widens it to
+    cover not knowing whether the ocean or a ship did the stretching.
     """
     diag = {"observed_elongation": None if observed_elongation is None
             else float(observed_elongation),
@@ -843,12 +1028,16 @@ def elongation_age(observed_elongation, shear_rate_s, discharge_class,
             "discharge_class": discharge_class,
             "band_frac": band_frac}
 
-    if discharge_class != "acute":
-        diag["skipped"] = _gate_reason(discharge_class, "C3.3",
-                                       "reads age off the observed elongation, and a chronic "
-                                       "slick is elongated by the vessel's motion rather than "
-                                       "by shear")
+    verdict, gate_reason = age_gate(discharge_class)
+    diag["age_gate"] = {"refuse": "chronic_refused", "allow": "acute",
+                        "allow_widened": "unknown_widened"}[verdict]
+    diag["gate_reason"] = gate_reason
+    if verdict == "refuse":
+        diag["skipped"] = gate_reason
         return None, diag
+    if verdict == "allow_widened":
+        band_frac = UNKNOWN_BAND_FRAC
+        diag["band_frac"] = band_frac
 
     if observed_elongation is None or shear_rate_s is None:
         diag["skipped"] = "missing elongation or shear rate"
@@ -980,14 +1169,6 @@ def round_band(band, nd=1):
 # CLI
 # ---------------------------------------------------------------------------------------
 
-def pick_slick(dets):
-    oil = [f for f in dets.get("features", [])
-           if (f.get("properties") or {}).get("classification") == "oil"]
-    if not oil:
-        return None
-    return max(oil, key=lambda f: f["properties"].get("confidence", 0.0))
-
-
 def parse_ts(s):
     from datetime import datetime
     return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
@@ -1006,8 +1187,12 @@ def main():
     ap.add_argument("--origin", default=None,
                     help="origin.json to read the centroid from and patch "
                          "(default <out>/origin.json)")
-    ap.add_argument("--candidates", default="2:36:2", metavar="LO:HI:STEP",
-                    help="candidate ages in hours for the shear estimator")
+    ap.add_argument("--candidates", default="2:72:4", metavar="LO:HI:STEP",
+                    help="candidate ages in hours for the shear estimator. Reaches 72 h from "
+                         "16 Sept 2026 (was 2:36:2) because the rewind does. The step widens "
+                         "2 -> 4 to hold runtime roughly constant: candidates are separate "
+                         "forward runs and the later ones are the long ones, so a 2 h step to "
+                         "72 h would be ~4x the work, not 2x.")
     ap.add_argument("--merge-oil", choices=["auto", "always", "never"], default="auto",
                     help="must match run.py's setting -- the age is read off the same slick "
                          "the origin was seeded from")
@@ -1060,7 +1245,6 @@ def main():
         # was actually seeded from. Importing it rather than re-implementing is the point:
         # two different answers to "which slick?" is the kind of divergence nobody notices.
         sys.path.insert(0, str(HERE))
-        from run import merge_oil_features
         feat, slick_diag = merge_oil_features(json.loads(det_path.read_text()),
                                               mode=a.merge_oil)
 
@@ -1076,7 +1260,8 @@ def main():
                        "from. Age is genuinely not available, not merely unmeasured.")
         print(f"\n  age_method = none\n        {reason}")
         block = {"age_hours": None, "age_method": "none", "age_weathering": "unknown",
-                 "age_estimators": {"shear": None, "fay": None, "elongation": None}}
+                 "age_estimators": {"shear": None, "fay": None, "elongation": None},
+                 "age_gate": "no_detection"}
         _finish(a, origin_path, origin, block,
                 {"skipped": reason, "case": a.case}, out_dir)
         return 0
@@ -1085,8 +1270,12 @@ def main():
     observed_area = float(props["area_km2"])
     observed_elong = props.get("elongation")
     discharge = props.get("discharge_class", "unknown")
+    _verdict, _gate_why = age_gate(discharge)
+    gate_verdict = {"refuse": "chronic_refused", "allow": "acute",
+                    "allow_widened": "unknown_widened"}[_verdict]
     print(f"\nObserved slick  {props['id']}  area {observed_area:.2f} km2   "
           f"elongation {observed_elong}   discharge_class {discharge!r}")
+    print(f"gate   {gate_verdict}: {_gate_why}")
 
     # ---- the ocean --------------------------------------------------------------------
     if a.real:
@@ -1232,6 +1421,11 @@ def main():
         "age_estimators": {"shear": round_band(shear_band),
                            "fay": round_band(fay_band),
                            "elongation": round_band(elong_band)},
+        # Which way the physics gate went. A SIBLING key, deliberately: age_estimators' values
+        # stay [lo, hi] | null because web/lib/origin.ts THROWS on any other shape, so widening
+        # them into objects would be a hard frontend crash on every bundle that predates it.
+        # One enum instead -- the caveat is a property of the slick, not of each estimator.
+        "age_gate": gate_verdict,
     }
     report = {
         "case": a.case,

@@ -258,6 +258,29 @@ def load_case_field(case_id, repo_root=None, **kw):
                 f"detection_time is {t0:%Y-%m-%dT%H:%MZ}.\n"
                 f"  This cache is a different ocean than the case needs. Refetch:\n"
                 f"  python pipeline/drift/fetch_fields.py --case {case_id} --force")
+
+        # HOW FAR BACK DOES THIS CACHE ACTUALLY REACH? Added 16 Sept 2026 with the 72 h rewind.
+        #
+        # The checks above catch a cache for the wrong PLACE or the wrong INSTANT. Neither
+        # notices a cache for the right case fetched under the old 30 h lookback -- it loads
+        # cleanly and then dies 200 lines later inside assert_field_covers, mid-run, after the
+        # seeding and the first integration. Worse, the message there is about a run that is
+        # "outside the field" rather than about a stale file, so the obvious reading is that
+        # --steps is wrong rather than that the cache needs refetching.
+        #
+        # Refusing at LOAD time, with the refetch command, costs nothing and puts the error next
+        # to its cause. This warns rather than raises: a deliberately short run on an old cache
+        # is legitimate, and assert_field_covers is still the hard gate for the run that happens.
+        from check_gee import REWIND_HOURS as _REWIND_H
+        reach_h = (cached_t0 - datetime.fromtimestamp(int(z["current_times"].min()),
+                                                      tz=timezone.utc)).total_seconds() / 3600.0
+        if reach_h + 1e-6 < _REWIND_H:
+            print(f"[fields] WARNING  {path.name} reaches only {reach_h:.1f} h before t0, but "
+                  f"the rewind horizon is {_REWIND_H:.0f} h.")
+            print(f"[fields]          A run longer than {reach_h:.1f} h will be REFUSED by "
+                  f"assert_field_covers. This cache predates the 72 h window.")
+            print(f"[fields]          Refetch:  python pipeline/drift/fetch_fields.py "
+                  f"--case {case_id} --force")
         if bounds_path.exists():
             b = json.loads(bounds_path.read_text())
             bb = z["bbox"]
