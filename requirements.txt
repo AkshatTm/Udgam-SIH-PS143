@@ -1,13 +1,20 @@
 # UDGAM — pinned Python dependencies.
 #
-#   py -3.11 -m venv venv
+#   py -3.13 -m venv venv
 #   venv\Scripts\activate          # Windows
 #   source venv/bin/activate       # macOS/Linux
 #   pip install -r requirements.txt
 #
-# Python 3.11 (Master section 3.5). 3.10 or 3.12 will work — but say so in the group, so a
-# version-specific bug stays diagnosable. Versions below are what was installed and verified
-# on 2026-09-06.
+# Python 3.13 — AMENDED 2026-09-16, Akshat's ruling on Frozen Convention 8.
+#
+# The docs said 3.11. Every model in this repo was in fact TRAINED and is SERVED on 3.13.5 with
+# torch 2.6.0+cu124 — so the documentation was describing an environment nobody was running.
+# Moving the models to 3.11 the day before the demo is the riskier of the two options, so the
+# documentation moved instead. The exact resolved environment is recorded in docs/receipts.md,
+# so the deployment container and a developer laptop are provably the same thing.
+#
+# Say it in the group if you run anything else — a version-specific bug stays diagnosable only
+# if we know who is on what. Versions below are installed and verified on 2026-09-16.
 #
 # A new dependency goes in PINNED, with its justification written next to it, and is announced
 # to the group. Unannounced, six laptops silently disagree at the worst possible moment.
