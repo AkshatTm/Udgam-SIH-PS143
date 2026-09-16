@@ -153,11 +153,28 @@ def run(check):
                   f"by dividing by 3.2 -- it has to be recomputed. At Jacksonville's aspect "
                   f"~168 the factor is ~13x")
 
-    # --- 6f  the acute gate actually gates ----------------------------------------------
+    # --- 6f  the gate is three-way: refuse chronic, allow acute, widen unknown ----------
+    # REWRITTEN 16 Sept 2026, when the gate stopped being `== "acute"`. The old assertion only
+    # checked that chronic was refused, which an unreachable gate also satisfies. This one pins
+    # all three branches AND the ordering between them, so a gate that refuses everything (the
+    # bug we actually had) fails here instead of looking strict.
     chronic_band, chronic_diag = elongation_age(8.2, 1.0e-5, "chronic")
-    ok &= check("6f  a chronic discharge is refused, not estimated",
-                chronic_band is None and "chronic" in chronic_diag.get("skipped", ""),
-                f"discharge_class='chronic' -> None. {chronic_diag.get('skipped')}")
+    acute_band, acute_diag = elongation_age(8.2, 1.0e-5, "acute")
+    unk_band, unk_diag = elongation_age(8.2, 1.0e-5, "unknown")
+    acute_w = (acute_band[1] - acute_band[0]) if acute_band else None
+    unk_w = (unk_band[1] - unk_band[0]) if unk_band else None
+    ok &= check("6f  chronic is refused, acute runs, unknown runs WIDER -- not refused",
+                chronic_band is None and "'chronic'" in chronic_diag.get("skipped", "")
+                and acute_band is not None and unk_band is not None
+                and unk_w > acute_w
+                and acute_diag["age_gate"] == "acute"
+                and unk_diag["age_gate"] == "unknown_widened",
+                f"chronic -> None ({chronic_diag['age_gate']}); acute -> "
+                f"[{acute_band[0]:.1f}, {acute_band[1]:.1f}] h, width {acute_w:.1f} h; "
+                f"unknown -> [{unk_band[0]:.1f}, {unk_band[1]:.1f}] h, width {unk_w:.1f} h "
+                f"(x{unk_w / acute_w:.2f} wider). Refusing 'unknown', as the gate did until "
+                f"16 Sept, refused 13 of the 17 oil detections in the library -- every case"
+)
 
     # --- 6g  Fay's exponent -------------------------------------------------------------
     r1 = fay_radius_km(1.0, 1000.0, 1.3, 900.0)
@@ -235,43 +252,39 @@ def run(check):
                 f"centre -12 dB vs edge -8 dB = {wdiag['gradient_db']:.1f} dB gradient "
                 f"-> {flag}")
 
-    # --- 6r  C3.1 carries the SAME acute gate as C3.3 ----------------------------------
+    # --- 6r  C3.1 carries the SAME three-way gate as C3.3 ------------------------------
     # On a chronic discharge the major axis is the vessel's track, not shear stretching a
     # patch: case-jacksonville-2024 is a 31.17 km ribbon of 4.55 km2, aspect ~170, width
     # ~190 m. No ocean does that in 36 h; a ship at transit speed does. So an estimator that
     # matches the major axis must refuse there, or it returns a confident wrong number.
+    #
+    # THIS ASSERTION HAS NOW CHANGED TWICE, and both times because it pinned a CLAIM rather than
+    # a BEHAVIOUR. It first required the words "MISSING INPUT" on the 'unknown' branch, which
+    # went false when Soumirya's detections landed. It was then rewritten to require "SHAPE
+    # ALONE" and "0 of 13" -- and "0 of 13" went stale too (the library holds 17 oil detections
+    # now, still none acute), while "NOT a missing field" described a gate that has since been
+    # removed for being unreachable.
+    #
+    # So it no longer asserts any sentence. It asserts what the gate DOES: chronic refuses,
+    # acute runs, unknown runs. A message can be reworded without breaking this; a gate that
+    # goes back to refusing every real slick cannot.
     gated, gdiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
                                         n_members=2, discharge_class="chronic")
     open_gate, odiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
                                             n_members=2, discharge_class="acute")
-    # The refusal must also say WHOSE problem it is, and WHAT IT IS.
-    #
-    # THIS ASSERTION CHANGED ON 13 SEPT, AND THE REASON MATTERS. It used to require the word
-    # "MISSING INPUT" in the 'unknown' message, because A5 had found discharge_class unset on
-    # every case and absent from every detections.geojson. Soumirya's detections then landed for all
-    # seven live cases and discharge_class IS emitted on every feature -- so the old wording was
-    # asserting something factually false, and a test that pins a false claim is worse than no
-    # test. The claim it replaces is stronger, not weaker: classify_discharge() reads SHAPE
-    # ALONE (elongation < 3 -> acute, >= 5 and straight -> chronic, else unknown), so 0 of the
-    # 13 oil detections in the library are acute and none ever can be. A5's conclusion survives
-    # structurally; only its stated cause was wrong.
     unset, udiag = shear_dispersion_age(field, ENNORE[0], ENNORE[1], T0, 31.17, [2.0, 4.0],
                                         n_members=2, discharge_class="unknown")
-    ok &= check("6r  C3.1 refuses a chronic slick, runs on an acute one, and names the cause",
-                gated is None and "'chronic'" in gdiag.get("skipped", "")
-                and "nothing is missing" in gdiag.get("skipped", "")
-                and unset is None
-                and "NOT a missing field" in udiag.get("skipped", "")
-                and "SHAPE ALONE" in udiag.get("skipped", "")
-                and "0 of 13" in udiag.get("skipped", "")
-                and "members" in odiag,
-                f"chronic -> None, and the reason says the gate is correct and nothing is "
-                f"missing. unknown -> None, and the reason says it is NOT a missing field -- "
-                f"discharge_class IS emitted, it is computed from SHAPE ALONE, and 0 of 13 oil "
-                f"detections can ever be acute. "
-                f"acute -> ran {odiag.get('n_members')} members, {odiag.get('n_fitted')} fits "
-                f"against a 31.17 km axis. Those are three different situations and the "
-                f"diagnostics now distinguish them")
+    ok &= check("6r  C3.1 refuses only chronic; acute and unknown both reach the integrator",
+                gated is None
+                and gdiag.get("age_gate") == "chronic_refused"
+                and "'chronic'" in gdiag.get("skipped", "")
+                and "members" in odiag and odiag.get("age_gate") != "chronic_refused"
+                and "members" in udiag and udiag.get("age_gate") != "chronic_refused",
+                f"chronic -> None, gate {gdiag['age_gate']!r}, and the reason is the vessel's "
+                f"track rather than a missing field. acute -> ran "
+                f"{odiag.get('n_members')} members; unknown -> ran {udiag.get('n_members')} "
+                f"members. Both reach the integrator against a 31.17 km axis, which is the "
+                f"whole point: the old gate let neither of them run on any case in the library")
 
     # --- 6s  the major axis is MEASURED off the polygon, not inferred from an ellipse --
     # A1 made C3.1 match the observed major axis. Deriving that axis from area x elongation

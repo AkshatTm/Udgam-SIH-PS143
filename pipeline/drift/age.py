@@ -468,35 +468,64 @@ def invert_curve(candidate_hours, values, target):
 
 
 
-def _gate_reason(discharge_class, estimator, physics):
-    """Why an acute-gated estimator declined -- and WHOSE problem it is.
+# Band widening applied when the gate lets an `unknown` discharge through. See age_gate.
+UNKNOWN_BAND_FRAC = 0.55
+UNKNOWN_PERCENTILE = 5.0          # vs 10/90 for a class we actually know
 
-    Two very different situations produce the same refusal, and conflating them hides a blocker:
 
-      chronic          a real physical reason. The gate is doing its job and nothing is missing.
-      unknown/absent   a MISSING INPUT. Stage 1 has not emitted discharge_class -- it is in the
-                       contract and assigned to Soumirya, but detect/run.py has never written it, so
-                       it will not appear just because his backlog clears. Akshat's A5 audit
-                       (13 Sept 2026) found it unset on EVERY case including case-000's own
-                       det-01, which is why both acute-gated estimators currently fire on
-                       nothing. That is a data gap, not a property of any slick.
+def age_gate(discharge_class):
+    """Should an age estimator run on this slick? -> (verdict, reason).
+
+    verdict is one of:
+      "allow"          run normally
+      "allow_widened"  run, but widen the band and carry the caveat
+      "refuse"         do not run; the answer would be meaningless
+
+    THIS REPLACED AN `== "acute"` GATE ON 16 SEPT 2026, and the reason is measured, not stylistic.
+
+    `discharge_class` comes from detect/ships.py:classify_discharge, which reads SHAPE ALONE:
+    elongation < 3.0 -> 'acute'; elongation >= 5.0 AND straightness >= 0.60 -> 'chronic';
+    everything between -> 'unknown'. Acute therefore requires a LOW elongation, and oil slicks
+    are elongated. Measured against the live library on 16 Sept 2026: of the 17 features
+    classified `oil` across the nine cases, 4 are 'chronic', 13 are 'unknown', and **none is
+    'acute'** -- every 'acute' feature in every bundle is sub-0.5 km2 `lookalike` speckle. An
+    acute-only gate is not strict, it is UNREACHABLE: it fired on nothing, which is why
+    age_hours was null on all six spill cases.
+
+    It was also circular, which age.py has flagged since 13 Sept: the gate is a threshold on
+    elongation while C3.3 INVERTS elongation, so the gate and the estimator read the same number.
+
+    What survives is the part that is real physics:
+
+      chronic         REFUSE. A chronic discharge is a moving source, so the slick's long axis is
+                      the vessel's TRACK. Both estimators read length as evidence of spreading,
+                      and on a track that is simply false. Nothing here is missing -- the gate is
+                      doing its job.
+      acute           ALLOW. A release at a point, spread by the ocean. The assumption both
+                      estimators are built on.
+      unknown/absent  ALLOW, WIDENED. The detector could not place the geometry in either bucket.
+                      That is a statement about the shape, not a missing field -- and it is not a
+                      reason to emit nothing when 13 of 17 oil slicks land here. The slick may be
+                      acute (estimate valid) or chronic (estimate an overestimate), so the band
+                      is widened to span that ambiguity rather than pretending it is not there,
+                      and `age_gate` travels with the result so a reader knows which it was.
+                      Widening an honest band beats narrowing an invented one.
     """
     if discharge_class == "chronic":
-        return (f"discharge_class is 'chronic'. {estimator} {physics}, so the result would be "
-                f"meaningless. The gate is correct and nothing is missing.")
-    return (f"discharge_class is {discharge_class!r}. {estimator} {physics}, so it needs to "
-            f"know whether the source was moving before it can run, and 'unknown' does not say. "
-            f"This is NOT a missing field -- Stage 1 emits it (detect/run.py:551 via "
-            f"ships.classify_discharge). It is computed from SHAPE ALONE: elongation < 3.0 -> "
-            f"'acute', elongation >= 5.0 AND straightness >= 0.60 -> 'chronic', everything "
-            f"between -> 'unknown'. So 'unknown' means the detector could not place this slick "
-            f"in either bucket, which is a real statement about the geometry rather than a gap "
-            f"in the contract. Two consequences worth knowing: NO oil detection in the library "
-            f"is 'acute' (0 of 13), because acute requires LOW elongation and oil slicks are "
-            f"elongated -- so this estimator fires on nothing, structurally, and A5's conclusion "
-            f"stands for a stronger reason than it was originally given. And because the gate is "
-            f"a threshold on elongation while C3.3 INVERTS elongation, the gate and the "
-            f"estimator read the same quantity -- flagged to Akshat 13 Sept as circular.")
+        return "refuse", (
+            "discharge_class is 'chronic': the source was under way, so the slick's long axis is "
+            "the vessel's TRACK, not a patch spread by the ocean. Reading an age off it would be "
+            "meaningless. The gate is correct and nothing is missing.")
+    if discharge_class == "acute":
+        return "allow", "discharge_class is 'acute': a release at a point, spread by the ocean."
+    return "allow_widened", (
+        f"discharge_class is {discharge_class!r}: detect/ships.py:classify_discharge could not "
+        f"place this geometry in either bucket (it buckets on elongation alone -- <3.0 acute, "
+        f">=5.0 and straight chronic, between unknown). The slick may be a point release or a "
+        f"track, so the estimate runs but the band is WIDENED to span that ambiguity, and this "
+        f"gate verdict travels with the result. Note the shape of the library: 13 of 17 oil "
+        f"detections are 'unknown' and NONE is 'acute', so refusing 'unknown' -- as the gate did "
+        f"until 16 Sept 2026 -- meant refusing every case.")
 
 
 def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate_hours,
@@ -552,15 +581,15 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
     current scale draws the origin cloud uses -- so the answer is a BAND from the same
     uncertainty budget as the rest of Stage 2, not a point dressed up with error bars.
     """
-    if discharge_class != "acute":
+    verdict, gate_reason = age_gate(discharge_class)
+    if verdict == "refuse":
         return None, {
             "matched_on": "major_axis_length_km",
             "discharge_class": discharge_class,
-            "skipped": _gate_reason(discharge_class, "C3.1",
-                                    "matches the observed major axis, and on a chronic slick "
-                                    "the major axis is the vessel's track rather than shear "
-                                    "stretching a patch"),
+            "age_gate": "chronic_refused",
+            "skipped": gate_reason,
         }
+    widened = verdict == "allow_widened"
 
     rng = np.random.default_rng(seed)
     winds, scales = ens._stratified_draws(n_members, rng)
@@ -645,8 +674,15 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
                            f"tune -- the field or the seeding is wrong.")
         return None, diag
 
-    lo = float(np.percentile(fits, 10))
-    hi = float(np.percentile(fits, 90))
+    # A class we know gets the 10/90 band. An `unknown` one gets 5/95 across the same member
+    # fits -- a real distributional statement about the same ensemble, not a fudge factor, and
+    # the honest response to not knowing whether the long axis is spreading or a ship's track.
+    pct = UNKNOWN_PERCENTILE if widened else 10.0
+    lo = float(np.percentile(fits, pct))
+    hi = float(np.percentile(fits, 100.0 - pct))
+    diag["age_gate"] = "unknown_widened" if widened else "acute"
+    diag["gate_reason"] = gate_reason
+    diag["band_percentiles"] = [pct, 100.0 - pct]
     return (lo, hi), diag
 
 
@@ -866,16 +902,25 @@ def elongation_age(observed_elongation, shear_rate_s, discharge_class,
     rather than resolved silently. `age_hours` uses the exact form.
 
     Assumes simple shear and an initially isotropic patch. A patch that was already elongated
-    at release breaks it -- which is a second reason for the acute gate below, beyond the one
-    the brief gives.
+    at release breaks it -- which is a second reason the `chronic` refusal below is real physics
+    rather than caution.
 
     THE GATE, and it is the whole point: this is only valid when the OCEAN did the stretching.
     A `chronic` discharge is long and thin because the SHIP WAS MOVING, so applying this there
-    gives nonsense. `unknown` is refused too -- an ungated guess is worse than a null.
+    gives nonsense and `age_gate` refuses it.
+
+    `unknown` USED TO BE REFUSED TOO. It no longer is (16 Sept 2026). The old comment here read
+    "an ungated guess is worse than a null" -- true, but it was not a guess being avoided, it
+    was every case: `discharge_class` buckets on elongation alone, acute needs elongation < 3.0,
+    and 13 of the 17 oil detections in the library are 'unknown' with none 'acute'. Refusing
+    `unknown` refused everything, and the gate read the same quantity this function inverts,
+    which is circular. So `unknown` now runs with `band_frac` widened to UNKNOWN_BAND_FRAC and
+    the verdict recorded. See age_gate.
 
     The band comes from the shear rate itself, which is a finite difference on a 9 km daily
     field and is the least certain input here; +/-35% is a deliberately generous acknowledgement
-    of that rather than a measured error bar.
+    of that rather than a measured error bar, and +/-55% on an `unknown` class widens it to
+    cover not knowing whether the ocean or a ship did the stretching.
     """
     diag = {"observed_elongation": None if observed_elongation is None
             else float(observed_elongation),
@@ -883,12 +928,16 @@ def elongation_age(observed_elongation, shear_rate_s, discharge_class,
             "discharge_class": discharge_class,
             "band_frac": band_frac}
 
-    if discharge_class != "acute":
-        diag["skipped"] = _gate_reason(discharge_class, "C3.3",
-                                       "reads age off the observed elongation, and a chronic "
-                                       "slick is elongated by the vessel's motion rather than "
-                                       "by shear")
+    verdict, gate_reason = age_gate(discharge_class)
+    diag["age_gate"] = {"refuse": "chronic_refused", "allow": "acute",
+                        "allow_widened": "unknown_widened"}[verdict]
+    diag["gate_reason"] = gate_reason
+    if verdict == "refuse":
+        diag["skipped"] = gate_reason
         return None, diag
+    if verdict == "allow_widened":
+        band_frac = UNKNOWN_BAND_FRAC
+        diag["band_frac"] = band_frac
 
     if observed_elongation is None or shear_rate_s is None:
         diag["skipped"] = "missing elongation or shear rate"
@@ -1107,7 +1156,8 @@ def main():
                        "from. Age is genuinely not available, not merely unmeasured.")
         print(f"\n  age_method = none\n        {reason}")
         block = {"age_hours": None, "age_method": "none", "age_weathering": "unknown",
-                 "age_estimators": {"shear": None, "fay": None, "elongation": None}}
+                 "age_estimators": {"shear": None, "fay": None, "elongation": None},
+                 "age_gate": "no_detection"}
         _finish(a, origin_path, origin, block,
                 {"skipped": reason, "case": a.case}, out_dir)
         return 0
@@ -1116,8 +1166,12 @@ def main():
     observed_area = float(props["area_km2"])
     observed_elong = props.get("elongation")
     discharge = props.get("discharge_class", "unknown")
+    _verdict, _gate_why = age_gate(discharge)
+    gate_verdict = {"refuse": "chronic_refused", "allow": "acute",
+                    "allow_widened": "unknown_widened"}[_verdict]
     print(f"\nObserved slick  {props['id']}  area {observed_area:.2f} km2   "
           f"elongation {observed_elong}   discharge_class {discharge!r}")
+    print(f"gate   {gate_verdict}: {_gate_why}")
 
     # ---- the ocean --------------------------------------------------------------------
     if a.real:
@@ -1263,6 +1317,11 @@ def main():
         "age_estimators": {"shear": round_band(shear_band),
                            "fay": round_band(fay_band),
                            "elongation": round_band(elong_band)},
+        # Which way the physics gate went. A SIBLING key, deliberately: age_estimators' values
+        # stay [lo, hi] | null because web/lib/origin.ts THROWS on any other shape, so widening
+        # them into objects would be a hard frontend crash on every bundle that predates it.
+        # One enum instead -- the caveat is a property of the slick, not of each estimator.
+        "age_gate": gate_verdict,
     }
     report = {
         "case": a.case,
