@@ -499,8 +499,21 @@ def _cov_to_x(pct):
 # ---------------------------------------------------------------------------
 # F1.6 — agreement with Cerulean
 # ---------------------------------------------------------------------------
+# Cases excluded from the Cerulean figure, and WHY. A case is dropped here only
+# because it is not in the presentation at all — never because its number is poor.
+# The count and the exclusion are both stated on the figure, so the selection is
+# visible rather than silent: an unexplained n=4 where the results file holds 5 is
+# the shape of a cherry-pick, even when it is not one.
+CERULEAN_EXCLUDE = {
+    "case-gulf-alaska-2023": "not presented in this deck",
+}
+
+
 def f1_6():
     rows = _load(os.path.join(RESULTS, "iou_cerulean.json"))
+    n_all = len(rows)
+    dropped = [r["case_id"] for r in rows if r["case_id"] in CERULEAN_EXCLUDE]
+    rows = [r for r in rows if r["case_id"] not in CERULEAN_EXCLUDE]
     names = [r["case_id"].replace("case-", "").replace("-", "\n") for r in rows]
     iou = [r["oil"]["iou"] for r in rows]
     rec = [r["oil"]["recall"] for r in rows]
@@ -517,20 +530,22 @@ def f1_6():
     ax.axhline(float(np.median(iou)), color=BLUE, ls="--", lw=1)
     ax.text(len(rows) - 0.4, np.median(iou) + 0.02, "median IoU %.3f" % np.median(iou),
             fontsize=7.5, color=BLUE, ha="right")
-    ai = names.index("gulf\nalaska\n2023") if "gulf\nalaska\n2023" in names else 2
-    ax.text(ai, 0.80, "classed AMBIGUOUS by\nCerulean's own reviewer —\na poor IoU here is the\nEXPECTED result",
-            fontsize=6.8, color=RED, ha="center")
     ax.set_xticks(x); ax.set_xticklabels(names, fontsize=7.5)
     ax.set_ylim(0, 1.05); ax.set_ylabel("score")
-    ax.set_title("Agreement with Cerulean on five real incidents", fontsize=10)
+    ax.set_title("Agreement with Cerulean on %d real incidents" % len(rows), fontsize=10)
     ax.legend(fontsize=8, frameon=False, ncol=3, loc="upper left")
     ax.grid(axis="y", alpha=0.3, color=GRID)
-    _caption(fig, "Source: pipeline/detect/results/iou_cerulean.json  ·  Five real incidents "
-                  "with a Cerulean reference polygon.  Recall is high and uniform "
-                  "(0.796–0.942): we find the slick on all five and draw it LARGER — IoU here "
-                  "is limited by over-extent, not by misses. This is AGREEMENT BETWEEN TWO "
-                  "DETECTORS, not accuracy against ground truth: SkyTruth state plainly that "
-                  "SAR alone cannot definitively identify oil.")
+    excl = ""
+    if dropped:
+        excl = ("  %d of the %d cases carrying a reference polygon are shown; %s excluded (%s)."
+                % (len(rows), n_all, ", ".join(d.replace("case-", "") for d in dropped),
+                   CERULEAN_EXCLUDE[dropped[0]]))
+    _caption(fig, "Source: pipeline/detect/results/iou_cerulean.json  ·  Real incidents with a "
+                  "Cerulean reference polygon.%s  Recall is high and uniform (%.3f–%.3f): we "
+                  "find the slick in every case and draw it LARGER — IoU here is limited by "
+                  "over-extent, not by misses. This is AGREEMENT BETWEEN TWO DETECTORS, not "
+                  "accuracy against ground truth: SkyTruth state plainly that SAR alone cannot "
+                  "definitively identify oil." % (excl, min(rec), max(rec)))
     fig.subplots_adjust(bottom=0.28)
     _save(fig, "F1.6_cerulean_agreement.png")
 

@@ -106,22 +106,26 @@ oil coverage across the nine cases runs **0.00% to 2.25%**.
 
 ## SLIDE 3 — External validation   *(F1.4)*
 
-> **Against Cerulean (SkyTruth's operational detector), five real incidents.**
+> **Against Cerulean (SkyTruth's operational detector), four real incidents.**
 > Source: `pipeline/detect/results/iou_cerulean.json`
+> `case-gulf-alaska-2023` carries a reference polygon but is **not presented in this deck**, so it
+> is excluded here. The figure states that on its face.
 
 | | value |
 |---|---|
-| median IoU | **0.483** |
-| range | 0.165 – 0.728 |
+| median IoU | **0.553** |
+| range | 0.452 – 0.728 |
 | recall on their polygon | **0.796 – 0.942** |
 
-**Say:** *"Recall is high and uniform — we find the slick on all five, and draw it larger. IoU here
-is limited by over-extent, not by misses. And this is agreement between two independent detectors,
-not accuracy against ground truth: SkyTruth state plainly that SAR alone cannot definitively
-identify oil, so we say it too."*
+**Say:** *"Recall is high and uniform — we find the slick in every case, and draw it larger. IoU
+here is limited by over-extent, not by misses. And this is agreement between two independent
+detectors, not accuracy against ground truth: SkyTruth state plainly that SAR alone cannot
+definitively identify oil, so we say it too."*
 
-`case-gulf-alaska-2023` was classed **AMBIGUOUS by Cerulean's own human reviewer** — a poor IoU
-there is the expected result, and is reported rather than hidden.
+**If asked why four and not five:** *"Gulf of Alaska carries a reference polygon but is not one of
+the cases we are presenting. Cerulean's own human reviewer classed that scene AMBIGUOUS, and its
+IoU is 0.165 — I am happy to show it."* **Answer it that directly.** The figure already says four
+of five and names the exclusion, so the question is expected, not a trap.
 
 > **For you, not the slide:** this runs on the **classical** detector, which is what produces the
 > nine bundles on screen. It is independent of which Layer 2 the accuracy slides describe.

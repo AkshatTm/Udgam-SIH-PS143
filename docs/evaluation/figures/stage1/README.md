@@ -25,7 +25,7 @@ caption carries its source path and its split.**
 | **F1.1** | `F1.1_layer1_scores.png` | Layer 1's numbers, with the confusion matrix behind them |
 | **F1.2** | `F1.2_layer2_scores.png` | Layer 2's numbers — all eight definitions, so a comparison is like-for-like |
 | **F1.3** | `F1.3_gate_ablation.png` | the gate earns its place — the one design decision worth a slide |
-| **F1.4** | `F1.4_cerulean_agreement.png` | an **independent** detector agrees with us on five real incidents |
+| **F1.4** | `F1.4_cerulean_agreement.png` | an **independent** detector agrees with us on four real incidents (median IoU **0.553**); `gulf-alaska` excluded as not presented, stated on the figure |
 
 Numbered in **presentation order**. That is the whole scores-and-system story.
 **F1.4 is the one competing teams cannot produce**, and it is worth more than another chart of our
