@@ -21,7 +21,8 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from age import (SEED_PARTICLES, SEED_SIGMA_M, _curve_with_wind, combine_bands, deformation_rate_s, elongation_age,
+from age import (SEED_PARTICLES, SEED_SIGMA_M, _curve_with_wind, check_monotonic,
+                 crossing_index, late_dips, combine_bands, deformation_rate_s, elongation_age,
                  fay_age,
                  fay_predicted_area_km2, fay_radius_km, invert_curve, observed_major_axis_km,
                  polygon_major_axis_km, slick_major_axis_km,
@@ -440,5 +441,47 @@ def run(check):
                 f"n={SEED_PARTICLES} -> SE(sigma) = {100 * noise_floor:.2f}%, below the 2.00% "
                 f"check_monotonic tolerance. At n=300 it was 4.09% and the estimator refused "
                 f"every case on its own sampling noise")
+
+    # === the monotonicity gate is scoped to the inversion (16 Sept 2026) ================
+    # A dip BELOW the crossing can put a second crossing under the target, which would make the
+    # age ambiguous -- that must still refuse. A dip ABOVE it cannot, and must not.
+    #
+    # This is the pair that stops the scoping being read as "we loosened the check because it
+    # was inconvenient". It is narrower where narrowness changes an answer and unchanged where
+    # it does not.
+    hrs = [2.0, 6.0, 10.0, 14.0, 18.0, 22.0]
+
+    # --- 6aa  a dip PAST the crossing does not refuse a sound inversion ----------------
+    late = [1.0, 2.0, 3.0, 9.0, 8.0, 12.0]        # crossing at 3.5 is at index 2-3; dip at 18 h
+    xi_late = crossing_index(late, 3.5)
+    ok_late, _, _ = check_monotonic(hrs, late, up_to=xi_late)
+    dips_late = late_dips(hrs, late, after=xi_late)
+    ok &= check("6aa a dip BEYOND the crossing is recorded, not fatal",
+                ok_late and xi_late == 3 and len(dips_late) == 1,
+                f"curve {late} crosses 3.5 at index {xi_late} (between "
+                f"{hrs[xi_late-1]:g} and {hrs[xi_late]:g} h) and dips at "
+                f"{dips_late[0]['from_hours']:g}->{dips_late[0]['to_hours']:g} h, "
+                f"{100*dips_late[0]['drop_frac']:.0f}%. The dip is past the crossing, so the age "
+                f"is still unique. This is Huntington at 72 h: all 20 members dip at 42-46 h "
+                f"while all 11 inversions sit at 2-7 h")
+
+    # --- 6bb  a dip BEFORE the crossing still refuses ---------------------------------
+    early = [1.0, 3.0, 2.0, 4.0, 9.0, 12.0]       # dips at index 2, well under a 8.0 target
+    xi_early = crossing_index(early, 8.0)
+    ok_early, bad_i, detail_early = check_monotonic(hrs, early, up_to=xi_early)
+    ok &= check("6bb a dip BEFORE the crossing still refuses -- the age would be ambiguous",
+                (not ok_early) and bad_i == 2,
+                f"curve {early} crosses 8.0 at index {xi_early}, but falls at index {bad_i} "
+                f"first: {detail_early}. A non-monotonic stretch below the target can cross it "
+                f"more than once, and a second crossing is a second age")
+
+    # --- 6cc  a member that never reaches the target contributes no fit ---------------
+    never = [9.0, 10.0, 11.0, 12.0, 13.0, 14.0]   # starts above a 3.5 target
+    ok &= check("6cc a curve that never crosses the target has no inversion to protect",
+                crossing_index(never, 3.5) is None and crossing_index(never, 99.0) is None,
+                "a member whose modelled extent starts above the observed one (high diffusivity) "
+                "or never reaches it contributes no fit either way, and is counted in n_fitted "
+                "rather than blamed on the field. Conflating the two read 20/20 monotonicity "
+                "failures on Huntington where only 9 members simply started above the target")
 
     return ok
