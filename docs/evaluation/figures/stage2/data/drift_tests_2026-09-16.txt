@@ -1,0 +1,180 @@
+==============================================================================
+NAAP Stage 2 (drift) - Phase 1 known-answer tests
+seed position [80.35, 13.25] (lon, lat)   t0 = 2017-01-29T00:14:00Z   dt = 15 min   RK2
+==============================================================================
+
+Test 1 - constant current, 0.5 m/s east, no wind, 10 h
+  PASS  1a  eastward displacement is 18.0 km
+        got 18.0000 km, expected 18.0 km (0.000% error, tolerance 2%)
+  PASS  1b  no northward drift (u/v not swapped)
+        north component +0.000000 km
+  PASS  1c  moved EAST not west (sign convention)
+        final lon 80.51612 vs start 80.35000; t_end = 2017-01-29T10:14:00Z
+
+Test 2 - round trip: forward 24 h, then backward 24 h, varying field
+  PASS  2a  returns to the start within 0.5 km
+        worst particle off by 0.0001 km (median 0.0001 km, n=5)
+  PASS  2b  the trip was not trivial
+        particles travelled a median 16.21 km outbound, so the field really was sampled
+  PASS  2c  time returned to t0
+        t0 2017-01-29T00:14:00Z -> forward 2017-01-30T00:14:00Z -> back 2017-01-29T00:14:00Z
+
+Test 3 - wind only, 10 m/s, no current -> 3% of wind = 0.3 m/s
+  PASS  3a  drift velocity is 0.30 m/s
+        got 0.300000 m/s from a 10 m/s wind (coefficient 0.0300)
+  PASS  3b  and the particle actually moves at that speed
+        travelled 1080.0 m in 1 h = 0.300000 m/s
+
+Test 4 - permanent plausibility guards (these also run on real GEE fields)
+  PASS  4a  a real-looking ocean passes the 48 h guard (5-200 km)
+        median displacement 8.81 km over 48 h
+  PASS  4b  a mis-scaled field (50 m/s) is rejected
+        raised as expected: drift speed 50.00 m/s exceeds the 3.0 m/s limit. A real surface current is 0-1.5 m/s. GEE serves HYCOM as an integer with scale 0.001, so the loader must DIVIDE BY 1000 -- not 100, which leaves the field 10x too fast and is what tripped this guard on 2026-09-07. (docs/TRAPS.md #2)
+  PASS  4c  a dead (all-zero) field is rejected
+        raised as expected: median displacement 0.000 km over 48.0 h is below the 5.0 km floor -- the field may be zero, or dt is wrong.
+  PASS  4d  speed guard measures the fastest particle
+        max speed 1.2369 m/s across the set
+
+Test 5 - ensemble spread, grid orientation, time window
+  PASS  5a  the ensemble is wider than one run
+        control r90 2.36 km -> ensemble r90 3.35 km (+0.99 km of honest uncertainty)
+  PASS  5b  ...but it does not move the answer
+        ensemble centroid sits 0.16 km from the control centroid (perturbations are symmetric, so this must stay small vs r90 3.35 km)
+  PASS  5c  radii are ordered and positive
+        r50 1.81 km < r90 3.35 km
+  PASS  5d  row 0 is NORTH (the heatmap is not upside down)
+        a cloud offset north puts 90.0% of the grid mass in the top half
+  PASS  5e  grid is 120x120 and normalised to peak 1.0
+        shape (120, 120), max 1.000000, bounds contain the cloud: 13.226..13.376 N
+  PASS  5f  time_window is ordered and inside the rewind
+        [2017-01-28T12:14:00Z, 2017-01-28T20:14:00Z]  method=bounded
+  PASS  5g  a real convergence dip is reported as measured, not bounded
+        synthetic tight dip -> method=convergence, window spans 2.30 h
+  PASS  5h  a flat spread curve falls back to the bounded window
+        no real tightening (spread 10.0 -> 9.9 km) -> method=bounded
+
+Test 6 - age estimation (Part C): shear dispersion, Fay, elongation, combine
+  PASS  6a  deformation rate recovers a known shear
+        built S = 5.000e-05 1/s, measured 5.000e-05 1/s (0.00% error); shear timescale 5.6 h
+  PASS  6b  modelled filament LENGTH grows monotonically with candidate age
+        major axis 0.953 -> 5.298 km across 2-36 h, strictly increasing at every step
+  PASS  6c  cloud AREA is preserved (so area carries no age signal)
+        area 0.4941 -> 0.4941 km2 over 34 h = x1.000. An incompressible flow has det F = 1: it stretches and thins, it does not inflate. Matching Soum's area_km2 against this would be fitting noise -- hence C3.1 matches the major axis instead (departure from the brief)
+  PASS  6d  elongation inversion recovers a known age in a known shear
+        cloud sheared for 6 h reached aspect 2.795 (closed form 2.811); inverted to 5.97 h, band [3.88, 8.05] h contains the true 6 h
+  PASS  6e  the brief's C3.3 error is a factor that CLIMBS, not a 3.2x constant
+        ratio sqrt(a^2-1)/sqrt(a+1/a-2) by elongation: a=2 -> x2.45 · a=8.2 -> x3.24 · a=20 -> x4.70 · a=50 -> x7.21 (worst deviation from the ruling's table 0.09%). Strictly increasing, so an age under the brief's form CANNOT be corrected by dividing by 3.2 -- it has to be recomputed. At Jacksonville's aspect ~168 the factor is ~13x
+  PASS  6f  a chronic discharge is refused, not estimated
+        discharge_class='chronic' -> None. discharge_class is 'chronic'. C3.3 reads age off the observed elongation, and a chronic slick is elongated by the vessel's motion rather than by shear, so the result would be meaningless. The gate is correct and nothing is missing.
+  PASS  6g  Fay radius grows as t^(1/4) (so area as t^(1/2))
+        r(16 h)/r(1 h) = 2.000000, expected 16^(1/4) = 2 exactly (0.3281 -> 0.6562 km)
+  PASS  6h  Fay declines without an independent volume (the brief's V=A*h is circular)
+        area 12.4 km2, no volume -> None. no independently reported release volume. Deriving V from area_km2 x a thickness class -- as the brief suggests -- is circular, because the observed area then appears on both sides of the spreading law. Pass --volume-m3 from the official finding (e.g. Huntington: 588 barrels = 93.5 m3, NTSB MIR-24-01).
+  PASS  6i  a SAR-scale slick is shear-dominated, so Fay reports no age
+        93.5 m3 spreads to only 0.508 km2 in 24 h and 0.880 km2 at the 72 h ceiling, against an observed 12.4 km2 -> regime=shear_dominated, no band. This is independent evidence that shear, not spreading, set the area
+  PASS  6j  inside the gravity-viscous regime, Fay recovers a known age
+        1000 m3 spread for 12 h -> r 0.611 km, area 1.171 km2; inverted to [5.41, 32.91] h across 4 k/density corners, containing the true 12 h
+  PASS  6k  overlapping bands -> intersection, method='combined'
+        shear [7,18] & fay [9,15] -> (9.0, 15.0) method=combined
+  PASS  6l  disagreeing bands -> UNION, method='disagreement'
+        shear [2,5] vs fay [20,30] -> (2.0, 30.0) method=disagreement. A widened honest band beats a narrow invented one
+  PASS  6m  nothing fires -> method='none', caller falls back to the bracket
+        all three null -> None method=none
+  PASS  6n  wind outside 3-10 m/s -> 'unknown', never a freshness call
+        1.5 m/s -> unknown: mean wind 1.5 m/s is outside the 3.0-10.0 m/s band where oil-sea contrast is meaningful -- below it the sea is too smooth to show damping, above it wind erases the signal
+  PASS  6o  no centre-vs-edge observable -> 'unknown', not a proxy guess
+        6 m/s but the contract has no centre-vs-edge field -> unknown. contrast_db and edge_gradient are NOT substitutes (C2's confounding). Needs contrast_centre_db + contrast_edge_db from Stage 1
+  PASS  6p  a real centre-vs-edge gradient does classify
+        centre -12 dB vs edge -8 dB = 4.0 dB gradient -> fresh
+  PASS  6r  C3.1 refuses a chronic slick, runs on an acute one, and names the cause
+        chronic -> None, and the reason says the gate is correct and nothing is missing. unknown -> None, and the reason says it is NOT a missing field -- discharge_class IS emitted, it is computed from SHAPE ALONE, and 0 of 13 oil detections can ever be acute. acute -> ran 2 members, 0 fits against a 31.17 km axis. Those are three different situations and the diagnostics now distinguish them
+  PASS  6s  polygon PCA recovers a known major axis and minor width
+        a 10.00 x 1.00 km rectangle measures 10.0000 km along its principal axis and 1.0000 km across -- peak-to-peak, because the quantity C3.1 matches is a physical end-to-end length, not a sigma
+  PASS  6t  a sinuous filament is measured, and the ellipse form underreads it
+        measured 10.00 km vs ellipse-derived 1.75 km (x5.72); mean width 60 m gives a filament aspect of 166.63 against a reported elongation of 4.0. Jacksonville's det-01 is this shape: 17.38 km measured, 6.72 km derived
+  PASS  6u  no polygon -> ellipse fallback, and the route is recorded
+        no geometry -> 11.38 km via 'ellipse (no polygon available)'. The fallback is allowed, but a band read off a derived axis is a different claim from one read off a measured axis, so the route travels with the result
+  PASS  6q  a target outside the modelled range returns None, never a clamped edge
+        target 99 against a 1-3 curve -> None; and area 12.4 km2 with elongation 8.2 -> major axis 11.38 km
+
+Test 7 - geographic conventions: negative longitude, antimeridian, high latitude
+  PASS  7a  0.5 m/s east for 10 h at -118 E lands 18.0 km east
+        got 18.0000 km, expected 18.0 km (0.000% error); lon -118.00000 -> -117.80720, still west of Greenwich
+  PASS  7b  wrap_lon folds 0-360 to -180..180 and is idempotent on -180..180
+        242.0 -> -118.00000   -118.0 -> -118.00000   180.5 -> -179.50000. A 0-360 leak would leave -118 as 242 and every field lookup would miss
+  PASS  7c  a particle crossing the antimeridian wraps to negative longitude
+        179.90000 + 10 h east -> -179.90720 (not 180.09; the wrap happens in exactly one place, step.wrap_lon)
+  PASS  7d  at 59.56 N the longitude delta matches cos(lat) analytically
+        18 km east at 59.56 N moved 0.31911 deg of longitude, analytic 0.31911 deg (0.000% error); displacement 18.0000 km
+  PASS  7e  the same 18 km costs 1.70x more longitude at Alaska than at Jacksonville
+        ratio 1.7025 against cos(30.38)/cos(59.56) = 1.7025. A missing cos(lat) cancels out of displacement_km but NOT out of this
+  PASS  7f  24 h forward then backward closes at 59.56 N in a varying field
+        worst closure 0.0004 km after a median 21.00 km outbound; backward mode is a negative dt through the same field, and it still holds where a degree of longitude is half as wide
+  PASS  7g  all seven library positions convert correctly, checked from scratch
+        worst displacement error 0.000% (ennore-lookalike), worst longitude error 0.000%; per-case: jacksonville 0.000%, farallones 0.000%, huntington 0.000%, gulf-alaska 0.000%, mumbai 0.000%, jamnagar 0.000%, ennore-lookalike 0.000%
+  PASS  7h  the pad is sized from reach, with a floor
+        0.1 m/s -> 55 km (floor holds) · 1.0 m/s -> 112 km · 2.0 m/s -> 225 km, which covers the Gulf Stream's 173 km in 24 h
+  PASS  7i  the same km pad costs 1.70x more longitude at Alaska (the brief's bug)
+        225 km -> 3.989 deg lon at Alaska vs 2.343 at Jacksonville (ratio 1.7022, expected 1.7022); latitude pad identical at 2.018 deg. Converting at 'mid-latitude' as the brief says would have halved the Alaska pad in km
+  PASS  7j  the edge guard fires inside the margin and measures in km
+        a particle 48.0 km inside passes; one 0.02 deg from the east edge raises FieldBoxEdge (1.92 km at 30.5 N). The identical 0.02 deg at 59.5 N is only 1.13 km — ratio 0.5890 vs cos ratio 0.5890, so a guard written in degrees would be wrong by that factor at Alaska
+
+Test 8 - coastline and stranding (Phase 4): a real shoreline, and beaching is flagged
+  PASS  8a  a real GSHHG shoreline is available
+        GSHHG via global-land-mask (~1 km), stranding ON
+  PASS  8b  known land, known ocean, and all seven case centres in water
+        Chennai city land=True · mid-Atlantic land=False · case centres in water: 7/7
+  PASS  8c  the argument order is [lon, lat], converted in exactly one place
+        is_land(lon=80.27, lat=13.08) = True (Chennai, land) vs is_land(lon=13.08, lat=80.27) = False (Arctic ocean, water). If both read the same the swap has leaked
+  PASS  8d  a particle driven ashore strands at its last wet position and stops
+        pushed west from 80.35: stranded=True, stopped at 80.3417 E after 3 distinct positions. Unstranded it would have reached 80.1839 E, which is inland -- the old behaviour held it there at zero velocity and reported it as an ordinary endpoint
+  PASS  8e  a particle seeded on land is stranded immediately and never moves
+        seeded at 80.20 E (inland): stranded=True, longitude moved 0.00e+00 deg over 2 h. Seeding on land is a Stage 1 problem, but Stage 2 must not quietly drift it out to sea
+  PASS  8f  mid-ocean particles strand nobody (the flag is not always-on)
+        three particles in the mid-Atlantic drifted 18 km west: stranded fraction 0.000, which is the 0-1 range the validator requires for stranded_fraction
+
+Test 9 - forward drift and seeding geometry (Phase 2, Phase 3.4)
+  PASS  9a  discharge_class decides the seeding geometry, not shape_class
+        chronic+blob -> line · acute+linear -> point · unknown+linear -> line and the reason says "discharge_class='unknown', FALLING BACK to shape_class=linear"
+  PASS  9b  a chronic slick seeds an elongated line, an acute one a compact point
+        chronic seeding aspect 15.23:1 (a line segment along the principal axis, so the backward cloud comes out elongated and implies a course) vs acute 1.06:1 (isotropic around the centroid)
+  PASS  9c  a forward run past the end of the cached field is REFUSED
+        case-000's cache ends at the detection time, so 24 h forward is 101% outside it. Unguarded, GriddedField clamps and every step re-uses the last snapshot -- verified bit-identical at t0, +6 h, +12 h, +24 h
+  PASS  9d  a backward run passes, with its small overhang reported not hidden
+        overhang 0.23 h -- t0 is a satellite acquisition instant and HYCOM snapshots are on the hour, so t0 sits minutes past the last one. Tolerance is max(1 h, 5% of span); refusing a 24 h run over a 1% clamp would be useless
+  PASS  9e  forward and backward from the same seed land in different places
+        endpoints separated by a median 6.24 km. The validator ERRORS if particles_forward.json's array equals particles.json's, so a relabelled copy is caught mechanically -- this proves there is nothing to relabel
+  PASS  9f  strand_step separates 'seeded ashore' from 'made landfall'
+        inland particle strand_step=0 (already ashore at t0) vs offshore particle strand_step=3 (= 0.75 h after t0). Both are 'stranded'; only one made landfall
+  PASS  9g  coastal_impact excludes seeded-ashore particles from landfall stats
+        seeded ashore 0.50, landfall 0.50, first landfall 0.75 h -- not 0.00 h. case-000's own polygon overlaps the coast, so this is not hypothetical
+  PASS  9h  Jacksonville's three oil features merge into one ribbon
+        3 features -> one MultiPolygon of 3 parts, 34.575 km x 1.935 km, aspect 17.87, 99% of the axis covered, largest gap 0.162 km. Seeding det-01 alone would have taken 15 km of it
+  PASS  9i  Gulf of Alaska's three do NOT merge, and every gate says why
+        aspect 2.48 and only 49% of a 7.42 km axis covered, with a 3.887 km gap -- so these are separate slicks and it seeds from det-01 alone. Jacksonville and Alaska fall on opposite sides of all four gates, which is where the thresholds come from
+  PASS  9j  a merged slick takes a defined discharge_class and drops elongation
+        parts are ['unknown', 'chronic', 'unknown'] -> 'chronic' (any part chronic (['unknown', 'chronic', 'unknown']) -> chronic), which seeds a LINE authoritatively rather than falling back to shape_class. elongation is None so age.py must measure the axis off the polygon -- inverting Soum's pixel-space fitEllipse ratio would give a 2.2 km width against 258 m measured
+
+Test 10 - the branches that had never executed (Phase 3.3): blob, no-spill, abstain
+  PASS  10a  a BLOB slick runs end to end on the real field
+        seeded 1200 particles isotropically (aspect 1.04:1, not a line) and rewound 24 h through real HYCOM + ERA5: median displacement 40.9 km, 22.2% stranded. Before this, only the `linear` branch had ever touched a real field
+  PASS  10b  a no-spill scene returns no slick, and that is a designed state
+        cases/case-000-nospill holds 2 features, all {'lookalike'}, zero oil -> pick_slick returns None. run.py then exits saying 'trace' should not be in acts_available, rather than rewinding nothing and writing an empty cloud
+  PASS  10c  a widened ensemble trips abstain=true at r90 > 40 km
+        current_sigma 0.9 instead of the honest 0.15: r50 47.8 km, r90 144.7 km -> abstain=True (trigger is r90 > 40 km). At the honest sigma this case does NOT abstain, which is the point -- refusal has to be earned
+  PASS  10d  the same case at the honest sigma does NOT abstain
+        current_sigma 0.15: r50 8.0 km, r90 22.9 km -> abstain=False. An abstain flag that fired on everything would be a bug dressed as caution
+  PASS  11a current-dominated field reports a ~3% wind share
+        current 1.688 m/s vs 0.03xwind 0.052 m/s gives share 0.0300 (exact 0.0300) — this is the Jacksonville regime, where a current atlas IS the right reference
+  PASS  11b Alaska's measured field reports ~81% and trips the >=50% flag
+        current 0.041 m/s vs 0.03xwind 0.172 m/s gives share 0.8074. Above 0.50 run.py prints the wind-dominated warning, which is the whole point: the origin is an ERA5 result, not a HYCOM one
+  PASS  11c a synthetic field returns None, never a number
+        windy lab field -> None (would have read 0.81), calm lab field -> None (would have read 0.00). Neither is a fetched ocean, so neither gets a wind_share in origin.json. CONTRACTS.md 6.5: absence hides a UI row, a plausible-looking number misinforms one
+  PASS  11d flipping the wind sign leaves the share identical but swings the origin
+        share 0.8074 -> 0.8074 (unchanged, it is built from magnitudes) while the origin bearing swings 153.2 deg against a derived 2*atan2(k*wu, cv) = 153.2 deg. Short of 180 by 27 deg because the current does not flip. So the diagnostic says WHICH field the answer rests on and can never wave away a sign error — those stay separately detectable, which is the only way this field is safe to ship
+  PASS  11e across U(0.025,0.035) Alaska's origin direction moves only a few degrees
+        origin bearing spans 2.6 deg across the ensemble's honest coefficient range. The wind term DECIDES this case (dropping it swings ~82 deg) but its CALIBRATION does not, so 81% is not a confidence problem
+
+==============================================================================
+11/11 tests passed   (76/76 individual assertions)
+==============================================================================

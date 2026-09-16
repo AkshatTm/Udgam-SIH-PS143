@@ -1,0 +1,143 @@
+{
+ "case": "case-gulf-alaska-2023",
+ "source": "cases/case-gulf-alaska-2023/origin.json (24 h end state) + re-run of run.py --real --particles 3000 --runs 50 with hourly frames kept",
+ "n_runs": 50,
+ "n_particles_per_run": 3000,
+ "n_points_per_hour": 150000,
+ "shipped": {
+  "radius_50_km": 1.36,
+  "radius_90_km": 2.64
+ },
+ "rerun_origin": {
+  "radius_50_km": 1.36,
+  "radius_90_km": 2.64
+ },
+ "reproduces_shipped": true,
+ "growth": [
+  {
+   "hours_back": 0,
+   "radius_50_km": 0.755,
+   "radius_90_km": 1.363
+  },
+  {
+   "hours_back": 1,
+   "radius_50_km": 0.753,
+   "radius_90_km": 1.356
+  },
+  {
+   "hours_back": 2,
+   "radius_50_km": 0.751,
+   "radius_90_km": 1.355
+  },
+  {
+   "hours_back": 3,
+   "radius_50_km": 0.752,
+   "radius_90_km": 1.357
+  },
+  {
+   "hours_back": 4,
+   "radius_50_km": 0.751,
+   "radius_90_km": 1.363
+  },
+  {
+   "hours_back": 5,
+   "radius_50_km": 0.752,
+   "radius_90_km": 1.373
+  },
+  {
+   "hours_back": 6,
+   "radius_50_km": 0.753,
+   "radius_90_km": 1.383
+  },
+  {
+   "hours_back": 7,
+   "radius_50_km": 0.756,
+   "radius_90_km": 1.397
+  },
+  {
+   "hours_back": 8,
+   "radius_50_km": 0.766,
+   "radius_90_km": 1.421
+  },
+  {
+   "hours_back": 9,
+   "radius_50_km": 0.784,
+   "radius_90_km": 1.461
+  },
+  {
+   "hours_back": 10,
+   "radius_50_km": 0.81,
+   "radius_90_km": 1.514
+  },
+  {
+   "hours_back": 11,
+   "radius_50_km": 0.845,
+   "radius_90_km": 1.579
+  },
+  {
+   "hours_back": 12,
+   "radius_50_km": 0.881,
+   "radius_90_km": 1.646
+  },
+  {
+   "hours_back": 13,
+   "radius_50_km": 0.92,
+   "radius_90_km": 1.715
+  },
+  {
+   "hours_back": 14,
+   "radius_50_km": 0.962,
+   "radius_90_km": 1.786
+  },
+  {
+   "hours_back": 15,
+   "radius_50_km": 1.007,
+   "radius_90_km": 1.86
+  },
+  {
+   "hours_back": 16,
+   "radius_50_km": 1.053,
+   "radius_90_km": 1.933
+  },
+  {
+   "hours_back": 17,
+   "radius_50_km": 1.093,
+   "radius_90_km": 2.003
+  },
+  {
+   "hours_back": 18,
+   "radius_50_km": 1.129,
+   "radius_90_km": 2.076
+  },
+  {
+   "hours_back": 19,
+   "radius_50_km": 1.163,
+   "radius_90_km": 2.157
+  },
+  {
+   "hours_back": 20,
+   "radius_50_km": 1.2,
+   "radius_90_km": 2.246
+  },
+  {
+   "hours_back": 21,
+   "radius_50_km": 1.237,
+   "radius_90_km": 2.339
+  },
+  {
+   "hours_back": 22,
+   "radius_50_km": 1.273,
+   "radius_90_km": 2.433
+  },
+  {
+   "hours_back": 23,
+   "radius_50_km": 1.316,
+   "radius_90_km": 2.532
+  },
+  {
+   "hours_back": 24,
+   "radius_50_km": 1.363,
+   "radius_90_km": 2.637
+  }
+ ]
+}

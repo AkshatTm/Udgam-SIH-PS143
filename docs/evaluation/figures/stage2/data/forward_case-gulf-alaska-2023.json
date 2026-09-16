@@ -1,0 +1,268 @@
+{
+ "case": "case-gulf-alaska-2023",
+ "t0": "2023-05-16T15:57:08Z",
+ "direction": "forward",
+ "horizon_hours": 24,
+ "horizon_note": "field cache covers ~24-26 h past t0; 48 h and 72 h need a wider fetch and are not extrapolated",
+ "n_runs": 50,
+ "n_particles_per_run": 3000,
+ "wind_coeff": "stratified U(0.025, 0.035), same draws as the backward ensemble",
+ "seeded_ashore_fraction": 0.0,
+ "first_landfall_hours": null,
+ "stranded_fraction_at_horizon": 0.0,
+ "centroid_displacement_km_at_horizon": 21.13,
+ "edge_margin_km": 90.8,
+ "envelope": [
+  {
+   "hours": 0,
+   "radius_50_km": 0.755,
+   "radius_90_km": 1.363,
+   "centroid": [
+    -142.72332,
+    59.5562
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 1,
+   "radius_50_km": 0.76,
+   "radius_90_km": 1.376,
+   "centroid": [
+    -142.71174,
+    59.55837
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 2,
+   "radius_50_km": 0.767,
+   "radius_90_km": 1.397,
+   "centroid": [
+    -142.69931,
+    59.56012
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 3,
+   "radius_50_km": 0.777,
+   "radius_90_km": 1.424,
+   "centroid": [
+    -142.68638,
+    59.56149
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 4,
+   "radius_50_km": 0.79,
+   "radius_90_km": 1.46,
+   "centroid": [
+    -142.67332,
+    59.56245
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 5,
+   "radius_50_km": 0.803,
+   "radius_90_km": 1.5,
+   "centroid": [
+    -142.66036,
+    59.56297
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 6,
+   "radius_50_km": 0.817,
+   "radius_90_km": 1.548,
+   "centroid": [
+    -142.64769,
+    59.56295
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 7,
+   "radius_50_km": 0.831,
+   "radius_90_km": 1.601,
+   "centroid": [
+    -142.63494,
+    59.56254
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 8,
+   "radius_50_km": 0.849,
+   "radius_90_km": 1.665,
+   "centroid": [
+    -142.62098,
+    59.56192
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 9,
+   "radius_50_km": 0.872,
+   "radius_90_km": 1.742,
+   "centroid": [
+    -142.60568,
+    59.56078
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 10,
+   "radius_50_km": 0.898,
+   "radius_90_km": 1.827,
+   "centroid": [
+    -142.59054,
+    59.55857
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 11,
+   "radius_50_km": 0.924,
+   "radius_90_km": 1.908,
+   "centroid": [
+    -142.57722,
+    59.55538
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 12,
+   "radius_50_km": 0.952,
+   "radius_90_km": 1.986,
+   "centroid": [
+    -142.5647,
+    59.55238
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 13,
+   "radius_50_km": 0.983,
+   "radius_90_km": 2.064,
+   "centroid": [
+    -142.55102,
+    59.55026
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 14,
+   "radius_50_km": 1.018,
+   "radius_90_km": 2.146,
+   "centroid": [
+    -142.53638,
+    59.54869
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 15,
+   "radius_50_km": 1.055,
+   "radius_90_km": 2.233,
+   "centroid": [
+    -142.52096,
+    59.54724
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 16,
+   "radius_50_km": 1.095,
+   "radius_90_km": 2.329,
+   "centroid": [
+    -142.50418,
+    59.54565
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 17,
+   "radius_50_km": 1.139,
+   "radius_90_km": 2.429,
+   "centroid": [
+    -142.4862,
+    59.54382
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 18,
+   "radius_50_km": 1.185,
+   "radius_90_km": 2.536,
+   "centroid": [
+    -142.46698,
+    59.54143
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 19,
+   "radius_50_km": 1.234,
+   "radius_90_km": 2.642,
+   "centroid": [
+    -142.4469,
+    59.53826
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 20,
+   "radius_50_km": 1.283,
+   "radius_90_km": 2.745,
+   "centroid": [
+    -142.42673,
+    59.5342
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 21,
+   "radius_50_km": 1.331,
+   "radius_90_km": 2.841,
+   "centroid": [
+    -142.40749,
+    59.52943
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 22,
+   "radius_50_km": 1.378,
+   "radius_90_km": 2.926,
+   "centroid": [
+    -142.38986,
+    59.52454
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 23,
+   "radius_50_km": 1.425,
+   "radius_90_km": 3.003,
+   "centroid": [
+    -142.37322,
+    59.51979
+   ],
+   "stranded_fraction": 0.0
+  },
+  {
+   "hours": 24,
+   "radius_50_km": 1.476,
+   "radius_90_km": 3.075,
+   "centroid": [
+    -142.35736,
+    59.51564
+   ],
+   "stranded_fraction": 0.0
+  }
+ ],
+ "source": "re-run of run.py seeding for case-gulf-alaska-2023, 50-member ensemble forward, GSHHG stranding on"
+}
