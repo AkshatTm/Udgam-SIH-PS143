@@ -1,136 +1,34 @@
 {
   "funnel": {
-    "in_region": 6,
-    "in_window": 4,
+    "in_region": 11,
+    "in_window": 8,
     "plausible": 3,
-    "scored": 3,
+    "scored": 0,
     "dropped_short_track": 0
   },
-  "suspects": [
-    {
-      "source_type": "vessel",
-      "mmsi": "636016487",
-      "name": "HORIZON",
-      "vessel_type": "cargo",
-      "score": 0.62,
-      "components": {
-        "proximity": 0.844,
-        "parity": null,
-        "temporality": null,
-        "trajectory": 1.0,
-        "gap": 0.0,
-        "slowdown": 0.0,
-        "type_prior": null
-      },
-      "component_notes": {
-        "proximity": "origin-grid probability at closest approach",
-        "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
-        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
-        "trajectory": "on approach 9 km out, course 340 deg against 355 deg toward the origin (15 deg off)",
-        "gap": "longest silence overlapping the window: 3 minutes",
-        "slowdown": "9.7 kn at closest approach against an under-way median of 9.8 kn",
-        "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
-      },
-      "weight_live": 0.65,
-      "components_available": 4,
-      "components_total": 7,
-      "closest_km": 2.34,
-      "closest_time": "2023-03-16T21:03:33Z",
-      "grid_probability": 0.844,
-      "heading_consistent": true,
-      "ais_gap_minutes": 3.2,
-      "edge_truncated": false,
-      "reasons": [
-        "inside the high-probability region of the reconstructed origin during the release window",
-        "cargo on a course consistent with the origin"
-      ]
-    },
-    {
-      "source_type": "vessel",
-      "mmsi": "338221000",
-      "name": "OVERSEAS BOSTON",
-      "vessel_type": "tanker",
-      "score": 0.345,
-      "components": {
-        "proximity": 0.075,
-        "parity": null,
-        "temporality": null,
-        "trajectory": 1.0,
-        "gap": null,
-        "slowdown": 0.0,
-        "type_prior": null
-      },
-      "component_notes": {
-        "proximity": "origin-grid probability at closest approach",
-        "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
-        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
-        "trajectory": "on approach 9 km out, course 137 deg against 177 deg toward the origin (40 deg off)",
-        "gap": "1-minute silence begins on the search-box boundary \u2014 the vessel left the search area and returned, which is not a transponder gap",
-        "slowdown": "14.0 kn at closest approach against an under-way median of 14.3 kn",
-        "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
-      },
-      "weight_live": 0.5,
-      "components_available": 3,
-      "components_total": 7,
-      "closest_km": 7.87,
-      "closest_time": "2023-03-17T03:19:32Z",
-      "grid_probability": 0.075,
-      "heading_consistent": true,
-      "ais_gap_minutes": 1.3,
-      "edge_truncated": false,
-      "reasons": [
-        "on the edge of the reconstructed origin during the release window",
-        "tanker on a course consistent with the origin"
-      ]
-    },
-    {
-      "source_type": "vessel",
-      "mmsi": "210007000",
-      "name": "AURORA SB",
-      "vessel_type": "cargo",
-      "score": 0.046,
-      "components": {
-        "proximity": 0.099,
-        "parity": null,
-        "temporality": null,
-        "trajectory": 0.0,
-        "gap": 0.0,
-        "slowdown": 0.0,
-        "type_prior": null
-      },
-      "component_notes": {
-        "proximity": "origin-grid probability at closest approach",
-        "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
-        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
-        "trajectory": "on approach 10 km out, course 160 deg against 302 deg toward the origin (141 deg off)",
-        "gap": "longest silence overlapping the window: 2 minutes",
-        "slowdown": "11.0 kn at closest approach against an under-way median of 11.1 kn",
-        "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
-      },
-      "weight_live": 0.65,
-      "components_available": 4,
-      "components_total": 7,
-      "closest_km": 14.99,
-      "closest_time": "2023-03-17T04:32:12Z",
-      "grid_probability": 0.099,
-      "heading_consistent": false,
-      "ais_gap_minutes": 1.5,
-      "edge_truncated": false,
-      "reasons": [
-        "on the edge of the reconstructed origin during the release window"
-      ]
-    }
-  ],
+  "suspects": [],
   "dark_vessels": [],
   "infrastructure": [],
   "excluded": [
     {
-      "mmsi": "367008770",
-      "name": "NAVAJO",
-      "closest_km": 27.82,
-      "reason": "138 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 27.8 km from the peak, at zero grid probability throughout"
+      "mmsi": "248264000",
+      "name": "TUGELA",
+      "closest_km": 7.57,
+      "reason": "no transponder gap and continuous coverage through the window"
+    },
+    {
+      "mmsi": "212656000",
+      "name": "PANAGIA THALASSINI",
+      "closest_km": 13.36,
+      "reason": "plausible candidate \u2014 score 0.35 on 5 of 7 components, peak grid probability 0.43 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
+    },
+    {
+      "mmsi": "636016487",
+      "name": "HORIZON",
+      "closest_km": 6.84,
+      "reason": "no transponder gap and continuous coverage through the window"
     }
   ],
-  "abstained": false,
-  "abstain_reason": null
+  "abstained": true,
+  "abstain_reason": "the top two vessels score within a few percent of each other and cannot be separated on this evidence"
 }

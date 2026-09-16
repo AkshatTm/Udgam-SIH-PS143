@@ -307,6 +307,54 @@ def wind_share_as_percent(d):
     return "wind_share"
 
 
+def _age_posterior(lo=4.5, hi=12.5):
+    g = [float(h) for h in range(1, 73)]
+    p = [0.0] * 72
+    for i in range(int(lo + 0.5), int(hi - 0.5) + 1):
+        p[i - 1] = 1.0
+    s = sum(p)
+    return {"hours_grid": g, "prob": [x / s for x in p], "hpd80": [lo, hi], "median": 8.0,
+            "hypotheses": ["patch"], "evidence": ["shape"], "models": ["udgam_rk2"],
+            "calibration_coverage": None}
+
+
+def age_window_without_posterior(d):
+    """time_window_method 'age' with no age_posterior behind it — a measurement with no source."""
+    o = read(d, "origin.json")
+    o["time_window_method"] = "age"
+    o.pop("age_posterior", None)
+    write(d, "origin.json", o)
+    return "age_posterior"
+
+
+def age_posterior_not_normalised(d):
+    """age_posterior.prob summing to 3 — a density shipped where a probability is contracted."""
+    o = read(d, "origin.json")
+    ap = _age_posterior()
+    ap["prob"] = [x * 3 for x in ap["prob"]]
+    o["age_posterior"] = ap
+    write(d, "origin.json", o)
+    return "sum to 1"
+
+
+def age_hours_disagrees_with_posterior(d):
+    """age_hours and age_posterior.hpd80 saying two different things about one number."""
+    o = read(d, "origin.json")
+    o["age_posterior"] = _age_posterior(4.5, 12.5)
+    o["age_hours"] = [20.0, 30.0]
+    write(d, "origin.json", o)
+    return "disagrees"
+
+
+def model_mix_weights_off(d):
+    """model_mix weights that do not sum to 1 — a pooled cloud silently favouring one model."""
+    o = read(d, "origin.json")
+    o["model_mix"] = {"models": [{"name": "udgam_rk2", "weight": 0.5, "points": 10},
+                                 {"name": "opendrift_oceandrift", "weight": 0.7, "points": 10}]}
+    write(d, "origin.json", o)
+    return "sum to"
+
+
 MUTATIONS = [
     ("detection polygon written as [lat, lon]", swap_detection_lonlat,   "swapped",  False),
     ("particles.t0 missing its trailing Z",     naive_timestamp,         "naive",    False),
@@ -338,6 +386,11 @@ MUTATIONS = [
     ("infrastructure candidate written as [lat, lon]", infrastructure_candidate_lonlat_swapped,
      "swapped", False),
     ("origin wind_share written as a percent",  wind_share_as_percent,   "wind_share", False),
+    ("age window with no posterior behind it",  age_window_without_posterior, "age_posterior", False),
+    ("age posterior that is not a probability", age_posterior_not_normalised, "sum to 1", False),
+    ("age_hours disagreeing with the posterior", age_hours_disagrees_with_posterior,
+     "disagrees", False),
+    ("model_mix weights not summing to 1",      model_mix_weights_off,   "sum to", False),
 ]
 
 

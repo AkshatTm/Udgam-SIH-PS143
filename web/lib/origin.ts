@@ -15,9 +15,25 @@ export type AgeMethod =
   | "shear"
   | "fay"
   | "elongation"
+  | "track"
   | "combined"
   | "disagreement"
   | "none";
+
+/** How the release window was obtained. "age" = the 80 % interval of the slick's age posterior. */
+export type TimeWindowMethod = "bounded" | "convergence" | "age";
+const TIME_WINDOW_METHODS: readonly TimeWindowMethod[] = ["bounded", "convergence", "age"];
+
+/** Age engine v2 posterior, parsed. */
+export interface AgePosterior {
+  hoursGrid: number[];
+  prob: number[];
+  hpd80: [number, number];
+  median: number;
+  hypotheses: string[];
+  models: string[];
+  calibrationCoverage: number | null;
+}
 
 /** origin.json after parsing. `shape` is unpacked to `rows`/`cols`; `values` is a Float32Array. */
 export interface OriginBundle {
@@ -33,7 +49,7 @@ export interface OriginBundle {
   radius50Km: number;
   radius90Km: number;
   timeWindow: [string, string]; // [start, end] — doubles as the age statement
-  timeWindowMethod: "bounded" | "convergence" | null;
+  timeWindowMethod: TimeWindowMethod | null;
   ensembleRuns: number;
   abstain: boolean;
   /** Master §6.5, docs/team/harshita-frontend.md Phase 5.3 — [min, max] hours since release. `null` when absent —
@@ -45,6 +61,10 @@ export interface OriginBundle {
   /** Master §6.5 — per-estimator [min, max] hour band, `null` where that estimator did not
    *  apply (never a zero band). `null` overall when the bundle carries no block. */
   ageEstimators: Record<string, [number, number] | null> | null;
+  /** Age engine v2 — `null` when absent (no measured age). */
+  agePosterior: AgePosterior | null;
+  /** Names of the drift models pooled into this cloud, `null` for a single-model cloud. */
+  modelMix: { name: string; weight: number }[] | null;
 }
 
 // Origin-cloud display curve. Hue is a single amber (the 50/90 % rings' family, V3 palette);
@@ -171,6 +191,7 @@ const AGE_METHODS: AgeMethod[] = [
   "shear",
   "fay",
   "elongation",
+  "track",
   "combined",
   "disagreement",
   "none",
@@ -279,12 +300,34 @@ function validate(raw: RawOriginBundle, id: string): void {
     throw new Error(`${where}: time_window start (${tw[0]}) is after end (${tw[1]})`);
   }
 
-  // time_window_method (optional) — "bounded" | "convergence"
+  // time_window_method (optional) — "bounded" | "convergence" | "age"
   if (raw.time_window_method !== undefined && raw.time_window_method !== null) {
-    if (raw.time_window_method !== "bounded" && raw.time_window_method !== "convergence") {
+    if (!TIME_WINDOW_METHODS.includes(raw.time_window_method)) {
       throw new Error(
-        `${where}: "time_window_method" must be "bounded" or "convergence" (got "${raw.time_window_method}")`,
+        `${where}: "time_window_method" must be one of ${TIME_WINDOW_METHODS.join(" | ")} (got "${raw.time_window_method}")`,
       );
+    }
+  }
+
+  // age_posterior (optional, age engine v2) — a window "measured from age" must carry one.
+  const ap = raw.age_posterior;
+  if (raw.time_window_method === "age" && (ap === undefined || ap === null)) {
+    throw new Error(`${where}: time_window_method is "age" but age_posterior is missing`);
+  }
+  if (ap !== undefined && ap !== null) {
+    if (
+      !Array.isArray(ap.hours_grid) ||
+      !Array.isArray(ap.prob) ||
+      ap.hours_grid.length !== ap.prob.length ||
+      ap.hours_grid.length === 0
+    ) {
+      throw new Error(`${where}: age_posterior.hours_grid and .prob must be equal-length arrays`);
+    }
+    if (!ap.prob.every((x) => Number.isFinite(x) && x >= 0)) {
+      throw new Error(`${where}: age_posterior.prob must be non-negative numbers`);
+    }
+    if (!Array.isArray(ap.hpd80) || ap.hpd80.length !== 2 || !(ap.hpd80[0] <= ap.hpd80[1])) {
+      throw new Error(`${where}: age_posterior.hpd80 must be [min, max]`);
     }
   }
 
@@ -366,12 +409,14 @@ export async function loadOriginBundle(id: string): Promise<OriginBundle> {
     radius50Km: raw.radius_50_km,
     radius90Km: raw.radius_90_km,
     timeWindow: [raw.time_window[0], raw.time_window[1]],
+    // Explicit set membership, not a ternary chain that quietly maps anything unrecognised to
+    // null — validate() has already thrown on an unknown value, so this can only be a member.
     timeWindowMethod:
-      raw.time_window_method === "bounded"
-        ? "bounded"
-        : raw.time_window_method === "convergence"
-          ? "convergence"
-          : null,
+      raw.time_window_method !== undefined &&
+      raw.time_window_method !== null &&
+      TIME_WINDOW_METHODS.includes(raw.time_window_method)
+        ? raw.time_window_method
+        : null,
     ensembleRuns: raw.ensemble_runs,
     abstain: raw.abstain,
     ageHours:
@@ -389,6 +434,22 @@ export async function loadOriginBundle(id: string): Promise<OriginBundle> {
               band === null ? null : ([band[0], band[1]] as [number, number]),
             ]),
           )
+        : null,
+    agePosterior:
+      raw.age_posterior !== undefined && raw.age_posterior !== null
+        ? {
+            hoursGrid: [...raw.age_posterior.hours_grid],
+            prob: [...raw.age_posterior.prob],
+            hpd80: [raw.age_posterior.hpd80[0], raw.age_posterior.hpd80[1]],
+            median: raw.age_posterior.median,
+            hypotheses: raw.age_posterior.hypotheses ?? [],
+            models: raw.age_posterior.models ?? [],
+            calibrationCoverage: raw.age_posterior.calibration_coverage ?? null,
+          }
+        : null,
+    modelMix:
+      raw.model_mix !== undefined && raw.model_mix !== null
+        ? raw.model_mix.models.map((m) => ({ name: m.name, weight: m.weight }))
         : null,
   };
 }

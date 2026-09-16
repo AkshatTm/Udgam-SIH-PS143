@@ -702,6 +702,14 @@ class TestTemporalityGate(unittest.TestCase):
         self.assertAlmostEqual(score.component_temporality(None, quarter, g).value,
                                0.5, places=6)
 
+    def test_an_age_window_scores_like_a_measured_one(self):
+        """Stage 2 age engine v2: 'age' is a measured window. Gating it out would silently drop
+        temporality on every case the engine dates."""
+        g = geo.OriginGrid(origin_doc("age"))
+        c = score.component_temporality(None, self.mid, g)
+        self.assertTrue(c.applicable)
+        self.assertAlmostEqual(c.value, 1.0, places=6)
+
     def test_an_unknown_method_is_treated_as_a_bracket(self):
         """Fail closed. A method we do not recognise is not a licence to score."""
         g = geo.OriginGrid(origin_doc("something_new"))

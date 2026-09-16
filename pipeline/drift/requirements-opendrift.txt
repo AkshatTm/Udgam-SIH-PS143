@@ -18,10 +18,19 @@
 #       upgrade that renamed or reordered schemes would quietly compare our RK2 against Euler
 #       and report a disagreement that is a config difference, not a physics one.
 #
+# SINCE 16 SEPT 2026 (D45) this venv also runs the age engine's second models, still off the demo
+# path: opendrift_age.py (OpenOil), opendrift_origin.py (OceanDrift), opendrift_twins.py. Same pin;
+# no new package. Stage 2 falls back to our model alone when their output files are absent.
+#
 # INSTALL (a throwaway venv, never the project venv)
 #   python -m venv odenv
 #   odenv/bin/pip install -r pipeline/drift/requirements-opendrift.txt
 #   odenv/bin/python pipeline/drift/compare_opendrift.py --case case-jacksonville-2024
+#
+# Windows (verified 16 Sept 2026, py 3.11.9 -- opendrift and cartopy ship 3.11 wheels):
+#   py -3.11 -m venv odenv
+#   odenv\Scripts\python -m pip install -U pip setuptools wheel
+#   odenv\Scripts\pip install -r pipeline\drift\requirements-opendrift.txt --timeout 120
 #
 # `pip install opendrift` needs a recent setuptools for the awesome-slugify transitive
 # dependency, and the wheel set is large enough that a short pip timeout will fail the download

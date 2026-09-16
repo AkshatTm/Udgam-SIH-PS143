@@ -1,0 +1,28 @@
+{
+ "sigma_L": 1.2,
+ "sigma_W": 1.4,
+ "kappa": 0.5,
+ "weights": {
+  "shape": 0.5,
+  "detect": 0.5,
+  "track": 0.25,
+  "surrogate": 0.0
+ },
+ "min_gain": 0.02,
+ "coverage80": 0.814,
+ "coverage80_cross": {
+  "cross_ours": 0.905,
+  "cross_openoil": 0.733
+ },
+ "n_twins": 144,
+ "fields": [
+  "case-farallones-2023",
+  "case-gulf-alaska-2023",
+  "case-huntington-2021",
+  "case-jacksonville-2024",
+  "case-jamnagar-2024",
+  "case-mumbai-2023"
+ ],
+ "method": "leave-one-field-out grid search; sigmas fitted on cross-model twins only",
+ "fitted": "2026-09-16T20:13:14Z"
+}

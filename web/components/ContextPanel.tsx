@@ -377,6 +377,7 @@ const AGE_METHOD_LABEL: Record<AgeMethod, string> = {
   shear: "Estimated from current shear",
   fay: "Estimated from spreading rate",
   elongation: "Estimated from slick elongation",
+  track: "Estimated from how far a ship's track has widened",
   combined: "Combined estimate",
   disagreement: "Estimators disagree — range widened",
   none: "No estimator produced a result — using the search bracket",
@@ -471,6 +472,11 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
       {origin.timeWindowMethod === "convergence" && (
         <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
           Measured estimate
+        </p>
+      )}
+      {origin.timeWindowMethod === "age" && (
+        <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
+          Measured from the slick&apos;s estimated age (80% interval)
         </p>
       )}
 

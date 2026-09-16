@@ -168,17 +168,34 @@ def wind_share_of_drift(field, history, times, wind_coeff=step.WIND_COEFF):
 
 
 def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_steps,
-                 n_runs, stranded_fraction=None, wind_share=None):
+                 n_runs, stranded_fraction=None, wind_share=None, pool=None,
+                 age_block=None, model_mix=None):
     """The real thing: a histogram of every ensemble endpoint, radii measured from the raw
-    points, and a time window that is honest about whether it was measured or bounded."""
-    (clon, clat), r50, r90 = ens.radii_km(endpoints)
-    bounds, values = ens.origin_grid(endpoints)
+    points, and a time window that is honest about whether it was measured or bounded.
 
+    AGE ENGINE v2:
+      pool       (points, weights) from ens.age_weighted_pool -- the cloud at every plausible
+                 age, weighted by that age's probability. Grid, radii and abstain all come from
+                 this ONE pool, so they cannot disagree. None -> the final-step endpoints, as
+                 before, bit for bit.
+      age_block  the age keys from age.estimate_age, written verbatim. When it carries an
+                 age_posterior AND a pool is given, the time window is the posterior's 80 % HPD
+                 (method "age"); an age reported without driving the pool leaves the window
+                 exactly as it was, so the two never contradict each other.
+      model_mix  pool_models.py's record of which models the pool came from.
+    """
+    pts, w = (endpoints, None) if pool is None else pool
+    (clon, clat), r50, r90 = ens.radii_km(pts, weights=w)
+    bounds, values = ens.origin_grid(pts, weights=w)
+
+    band = None
+    if pool is not None and age_block and age_block.get("age_posterior"):
+        band = age_block["age_hours"]
     start, end, method = ens.time_window(
         conv_idx,
         [m["spread_start_km"] for m in members],
         [m["spread_min_km"] for m in members],
-        t0, timestep_minutes, n_steps)
+        t0, timestep_minutes, n_steps, age_band=band)
 
     rows, cols = values.shape
     doc = {
@@ -207,8 +224,52 @@ def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_ste
     # Omitted, never zeroed, when the field has no wind term.
     if wind_share is not None:
         doc["wind_share"] = round(float(wind_share), 4)
+    if age_block:
+        doc.update(age_block)
+    if model_mix:
+        doc["model_mix"] = model_mix
     path.write_text(json.dumps(doc))
     return clon, clat, r50, r90, method, doc["abstain"]
+
+
+def run_age(a, meta, t0, field, feat, history, case_dir, land, span_h):
+    """Age engine v2 inside the main run. Returns the age block for origin.json.
+
+    Release points come from THIS run's control rewind (`history`), so the ages and the
+    origin cloud are built on one backward trajectory. The full diagnostic record goes to
+    out/age_<case>.json (working space, never in the bundle).
+    """
+    import age as age_engine
+    lo, hi, st = 2.0, 72.0, 4.0
+    cands = sorted({1.0, *[round(x, 6) for x in np.arange(lo, hi + 1e-9, st)]})
+    cands = [h for h in cands if h <= span_h]
+    if a.real:
+        cov = age_engine.field_time_coverage(a.case, REPO)
+        cands, dropped, _ = age_engine.clip_candidates_to_coverage(cands, t0, cov)
+    release = age_engine.release_points_from_history(history, cands, a.timestep_minutes)
+    out_dir = Path(a.out)
+    opendrift = age_engine.load_opendrift_age(out_dir, a.case)
+    c_centre, c_edge, cdiag = age_engine.sar_contrast(case_dir, feat)
+    props = feat["properties"]
+    print(f"              age  {len(cands)} candidates, OpenOil "
+          f"{'loaded' if opendrift is not None else 'absent (our model only)'}")
+    block, report = age_engine.estimate_age(
+        field, feat, t0, cands, (float(props["centroid"][0]), float(props["centroid"][1])),
+        release_points=release, volume_m3=a.volume_m3, n_members=a.age_members,
+        timestep_minutes=a.timestep_minutes, seed=a.seed, opendrift=opendrift,
+        contrast=(c_centre, c_edge), log=lambda s: print("                " + s))
+    report.update({"case": a.case, "t0": meta["detection_time"], "sar_contrast": cdiag,
+                   "release_points": [[round(x, 5), round(y, 5)] for x, y in release]})
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / f"age_{a.case}.json").write_text(
+        json.dumps(report, indent=1, default=age_engine._json_default))
+    post = report["posterior"]
+    if post["status"] == "ok":
+        print(f"              age  {block['age_hours']} h (80% HPD), median {post['median']} h, "
+              f"method {block['age_method']}, gain {post['info_gain_nats']} nats")
+    else:
+        print(f"              age  none -- {post.get('reason')}")
+    return block
 
 
 def write_particles_forward(path, t0, positions, dt_min):
@@ -412,6 +473,13 @@ def main():
                          "particles_forward.json + a coastal impact summary. Does not touch "
                          "particles.json or origin.json, and does not run the ensemble.")
     ap.add_argument("--out", default=str(OUT), help="directory for particles.json/origin.json")
+    ap.add_argument("--age", choices=["off", "report", "drive"], default="report",
+                    help="AGE ENGINE v2. off: no age. report: write the age keys, origin "
+                         "unchanged. drive: the origin cloud, radii, abstain and time_window "
+                         "come from the ensemble pooled over the age posterior.")
+    ap.add_argument("--volume-m3", type=float, default=None,
+                    help="official release volume, for the Fay regime verdict only")
+    ap.add_argument("--age-members", type=int, default=20)
     a = ap.parse_args()
 
     if not (a.real or a.fake or a.stub):
@@ -498,9 +566,41 @@ def main():
         if done == 1 or done % 10 == 0 or done == total:
             print(f"              ensemble {done}/{total}", flush=True)
 
-    endpoints, conv_idx, members = ens.run_ensemble(
+    # ---- age engine v2: how old is this slick? ----------------------------------------
+    # Runs BEFORE the ensemble because the ensemble needs to know which steps to keep. A
+    # failure here must never block the bundle: the narrow except degrades to "no age",
+    # which reproduces the pre-v2 origin exactly.
+    age_block = None
+    if a.age != "off" and not a.stub:
+        try:
+            age_block = run_age(a, meta, t0, field, feat, history, case_dir, land, span_h)
+        except Exception as exc:                                     # noqa: BLE001
+            print(f"[drift:{tag}]  !! AGE ENGINE FAILED, continuing without an age: "
+                  f"{type(exc).__name__}: {exc}")
+            age_block = None
+    post = (age_block or {}).get("age_posterior")
+    drive = a.age == "drive" and post is not None
+    collect = None
+    if drive:
+        collect = [int(round(h * 60.0 / a.timestep_minutes)) for h in post["hours_grid"]]
+
+    res = ens.run_ensemble(
         seed, t0, field, a.steps, a.timestep_minutes, n_runs=a.runs, rng=nprng, progress=tick,
-        is_land=land, current_sigma=a.current_sigma)
+        is_land=land, current_sigma=a.current_sigma, collect_steps=collect)
+    pool = None
+    if drive:
+        endpoints, conv_idx, members, collected = res
+        pool = ens.age_weighted_pool(collected, post["hours_grid"], post["prob"],
+                                     a.timestep_minutes, hpd=post["hpd80"])
+        if pool[0] is None:
+            pool = None
+        else:
+            np.savez_compressed(Path(a.out) / f"age_pool_{a.case}.npz", points=pool[0],
+                                weights=pool[1])
+            print(f"              age pool  {len(pool[0]):,} points over "
+                  f"{len(set(collect))} frames, weighted by the posterior")
+    else:
+        endpoints, conv_idx, members = res
     # the reported fraction is the ENSEMBLE's, not the control run's: origin.json describes the
     # cloud, and the cloud is the ensemble
     strand_frac = (float(np.mean([m["stranded_fraction"] for m in members]))
@@ -541,7 +641,7 @@ def main():
     clon, clat, r50, r90, method, abstain = write_origin(
         out_dir / "origin.json", endpoints, conv_idx, members,
         t0, a.timestep_minutes, a.steps, a.runs, stranded_fraction=strand_frac,
-        wind_share=wind_share)
+        wind_share=wind_share, pool=pool, age_block=age_block)
 
     # The endpoint pool, kept so plot_heatmap.py can draw the cloud without rerunning 50 runs.
     np.savez_compressed(out_dir / f"ensemble_{a.case}.npz",

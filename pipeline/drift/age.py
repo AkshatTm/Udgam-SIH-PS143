@@ -122,6 +122,8 @@ WEATHERING_WIND_HI_MS = 10.0
 # Shear-dispersion seeding: a tight cloud, because we are measuring how the ocean spreads it,
 # not how wide we made it.
 SEED_SIGMA_M = 200.0
+# Age engine v2: E1 and E2 draw the release's initial sigma per member from this range instead.
+RELEASE_SIGMA_RANGE_M = (50.0, 600.0)
 # RAISED FROM 300 TO 2000 ON 16 SEPT 2026, and the number is derived rather than chosen.
 #
 # With diffusion on (Phase 1) the extent curve is STOCHASTIC, and `check_monotonic` refuses the
@@ -226,6 +228,7 @@ def polygon_major_axis_km(ring):
         "length_km": round(length, 4),
         "bbox_width_km": round(width, 4),
         "bbox_aspect": round(length / width, 2) if width > 0 else None,
+        "orientation_deg": round(axis_bearing_deg(vt[0][0], vt[0][1]), 2),
         "mean_lat": round(lat0, 5),
         "n_vertices": int(pts.shape[0]),
         "closing_vertex_dropped": bool(closed),
@@ -302,6 +305,30 @@ def pca_extent(pos):
     sd_minor = float(math.sqrt(max(evals[0], 0.0)))
     sd_major = float(math.sqrt(max(evals[1], 0.0)))
     return sd_major, sd_minor, float(math.pi * (2.0 * sd_major) * (2.0 * sd_minor))
+
+
+def axis_bearing_deg(vx_east, vy_north):
+    """Bearing of an AXIS (not a direction), degrees clockwise from north, folded into [0, 180)."""
+    return float(math.degrees(math.atan2(vx_east, vy_north)) % 180.0)
+
+
+def pca_axes(pos):
+    """(sd_major_km, sd_minor_km, bearing_deg) for a particle cloud.
+
+    pca_extent() plus the orientation of the major axis. Orientation is the observable the old
+    engine threw away: under a rotating wind or a tidal current a young and an old release point
+    their long axes in different directions, and that separates ages that length alone cannot.
+    """
+    p = as_positions(pos)
+    if p.shape[0] < 3:
+        return 0.0, 0.0, 0.0
+    clon, clat = float(p[:, 0].mean()), float(p[:, 1].mean())
+    dx, dy = deg_to_m(p[:, 0] - clon, p[:, 1] - clat, p[:, 1])
+    xy = np.column_stack([dx, dy]) / 1000.0
+    evals, evecs = np.linalg.eigh(np.cov(xy, rowvar=False))
+    v = evecs[:, 1]
+    return (float(math.sqrt(max(evals[1], 0.0))), float(math.sqrt(max(evals[0], 0.0))),
+            axis_bearing_deg(v[0], v[1]))
 
 
 def seed_cloud(lon, lat, n=SEED_PARTICLES, sigma_m=SEED_SIGMA_M, rng=None):
@@ -603,8 +630,13 @@ def age_gate(discharge_class):
 
 def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate_hours,
                          timestep_minutes=15, n_particles=SEED_PARTICLES, n_members=20,
-                         seed=143, guard=True, discharge_class=None):
+                         seed=143, guard=True, discharge_class=None, release_points=None,
+                         observed_width_km=None, observed_bearing_deg=None):
     """C3.1. Returns (band_or_None, diagnostics).
+
+    v2 (16 Sept 2026): diagnostics also carry `loglik` -- the E1 shape likelihood on
+    age_posterior.AGE_GRID_H -- and `release_points` moves each candidate's start to where a
+    slick of that age was actually released. See shape_loglik() and _curve_with_wind().
 
     !! GATED ON discharge_class == "acute", FOR THE SAME REASON C3.3 IS. !!
 
@@ -672,28 +704,43 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
     # shuffled, so a 20-member ensemble samples the range evenly instead of clustering by luck.
     # Without this term the modelled extent tops out at ~1.3 km and no member brackets a real
     # slick -- see _curve_with_wind's docstring.
-    k_lo, k_hi = step.DIFFUSIVITY_RANGE_M2S
-    edges = np.linspace(0.0, 1.0, n_members + 1)
-    ks = k_lo + (k_hi - k_lo) * (edges[:-1] + rng.random(n_members) * np.diff(edges))
-    rng.shuffle(ks)
+    # v2: SCALE-DEPENDENT diffusivity (Okubo), not a flat band. See okubo_member_ks: with K free
+    # over three decades a young, fast-spreading slick and an old, slow one look identical and
+    # the posterior carried 0.02 nats on Huntington -- i.e. nothing.
+    if observed_length_km and observed_width_km:
+        k_scale_m = 1000.0 * math.sqrt(float(observed_length_km) * float(observed_width_km))
+    else:
+        k_scale_m = 1000.0 * float(observed_length_km)
+    ks = okubo_member_ks(k_scale_m, n_members, rng)
+    k_lo, k_hi = float(ks.min()), float(ks.max())
+    # v2: the release's initial size is unknown too -- a continuous leak or a large release is
+    # wide before the ocean touches it, and a fixed 200 m seed forced every wide slick to be old
+    # (Huntington, 2.8 h and 1.4 km wide, came out 13-58 h). Log-uniform per member.
+    sigmas = step.stratified_loguniform(n_members, *RELEASE_SIGMA_RANGE_M, rng)
 
     fits, members, mono_failures, late_dip_members = [], [], [], []
+    shape_L, shape_W, shape_B = [], [], []
     for m in range(n_members):
         wind_coeff = float(winds[m])
         scale = max(float(scales[m]), 0.05)
         diffusivity = float(ks[m])
+        seed_sigma = float(sigmas[m])
         field = ens.PerturbedField(base_field, scale)
 
         # The perturbed wind coefficient enters through the INTEGRATOR, not the field object,
         # so it has to be passed where the trajectory is computed. shear_extent_curve() uses
         # the module default and would silently drop this member's wind draw -- which would
         # make the band narrower than the uncertainty budget actually is.
-        areas_w, sd1_w, sd2_w = _curve_with_wind(
+        areas_w, sd1_w, sd2_w, brg_w = _curve_with_wind(
             field, lon, lat, t0, candidate_hours, timestep_minutes, n_particles,
             wind_coeff=wind_coeff, seed=seed + 2000 + m, guard=guard,
-            diffusivity=diffusivity)
+            diffusivity=diffusivity, starts=release_points, with_axes=True,
+            sigma_m=seed_sigma)
 
         lengths_w = 4.0 * sd1_w          # full major axis of the 2-sigma ellipse
+        shape_L.append(lengths_w)
+        shape_W.append(4.0 * sd2_w)
+        shape_B.append(brg_w)
 
         # Monotonicity is checked only as far as the inversion reaches. See check_monotonic:
         # a dip beyond the crossing cannot make the crossing ambiguous, and at 72 h the real
@@ -718,7 +765,7 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
         t_fit = invert_curve(candidate_hours, lengths_w, observed_length_km)
         members.append({
             "member": m, "wind_coeff": wind_coeff, "current_scale": scale,
-            "diffusivity_m2s": diffusivity,
+            "diffusivity_m2s": diffusivity, "release_sigma_m": seed_sigma,
             "age_hours": t_fit, "monotonic": bool(ok),
             "length_first_km": float(lengths_w[0]), "length_last_km": float(lengths_w[-1]),
             # area is the diagnostic, not the observable: near-constant is the expected,
@@ -752,11 +799,13 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
         "median_area_ratio_first_to_last": (float(np.median(area_ratios))
                                             if area_ratios else None),
         "diffusivity_range_m2s": [float(k_lo), float(k_hi)],
-        "diffusivity_note": ("horizontal turbulent diffusivity, drawn per member across the "
-                             "Okubo shelf-scale band. It is an ASSUMPTION with a range, not a "
-                             "measurement. Advection alone reaches only 0.8-1.3 km of major "
-                             "axis on 9 km daily HYCOM, so without this term no member brackets "
-                             "a real slick and the estimator refuses on every case."),
+        "diffusivity_note": ("horizontal turbulent diffusivity, drawn per member from Okubo's "
+                             "scale-dependent relation at the observed slick size "
+                             f"({k_scale_m:.0f} m), x/ {TRACK_OKUBO_SPREAD} at 1 sigma. An "
+                             "ASSUMPTION with a range, not a measurement -- and the reason the "
+                             "shape likelihood carries any age information at all (K and t are "
+                             "otherwise degenerate)."),
+        "diffusivity_scale_m": round(k_scale_m, 1),
         "members": members,
         "caveat": ("advective and shear spreading only -- no gravity-viscous phase, so this "
                    "OVERESTIMATES the age of a very young slick. Report as a lower-bounded "
@@ -764,6 +813,24 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
         "why_not_area": ("a 2D incompressible field preserves cloud area, so area carries no "
                          "age signal in this model; the major axis does. See the docstring."),
     }
+
+    # ---- v2: the shape likelihood (E1) -----------------------------------------------
+    # Computed BEFORE the band's refusal paths, because it does not share their failure modes:
+    # it needs no unique crossing, so a non-monotonic curve just becomes a multimodal
+    # likelihood, and a member that never reaches the target still says "not at this age".
+    ll = shape_loglik(candidate_hours, shape_L, shape_W, shape_B, observed_length_km,
+                      observed_width_km, observed_bearing_deg)
+    diag["loglik"] = None if ll is None else [round(float(x), 4) for x in ll]
+    diag["shape_observed"] = {"length_km": float(observed_length_km),
+                              "width_km": observed_width_km,
+                              "bearing_deg": observed_bearing_deg}
+    diag["shape_curves"] = {"L_km": np.round(np.asarray(shape_L), 4).tolist(),
+                            "W_km": np.round(np.asarray(shape_W), 4).tolist(),
+                            "bearing_deg": np.round(np.asarray(shape_B), 2).tolist()}
+    diag["release_points"] = (None if release_points is None else
+                              [None if r is None else [round(float(r[0]), 5),
+                                                       round(float(r[1]), 5)]
+                               for r in release_points])
 
     if len(fits) < max(3, n_members // 4):
         diag["skipped"] = (f"only {len(fits)}/{n_members} members bracketed the observed major "
@@ -787,7 +854,8 @@ def shear_dispersion_age(base_field, lon, lat, t0, observed_length_km, candidate
 
 
 def _curve_with_wind(field, lon, lat, t0, candidate_hours, timestep_minutes, n_particles,
-                     wind_coeff, seed, guard=True, diffusivity=0.0):
+                     wind_coeff, seed, guard=True, diffusivity=0.0, starts=None,
+                     with_axes=False, sigma_m=SEED_SIGMA_M):
     """shear_extent_curve() with an explicit wind coefficient. Split out because the ensemble
     perturbs the wind coefficient at the integrator, not inside the field object.
 
@@ -806,21 +874,40 @@ def _curve_with_wind(field, lon, lat, t0, candidate_hours, timestep_minutes, n_p
     per ensemble member across `step.DIFFUSIVITY_RANGE_M2S` and the drawn values go into the
     diagnostics, exactly like the wind coefficient. The default here stays 0.0 so that
     `shear_extent_curve` and every test that calls this directly keep the deterministic physics.
+
+    AGE ENGINE v2 ADDITIONS (16 Sept 2026), both opt-in so every existing caller is unchanged:
+
+      starts      one (lon, lat) per candidate: WHERE a slick of that age was released. For
+                  candidate age t that is where the backward control cloud was t hours before
+                  the pass, not the origin centroid -- a 6 h release and a 60 h release did not
+                  start from the same spot, and the field they spread in differs accordingly.
+                  The unit cloud is still ONE realisation, translated to each start, so
+                  adjacent candidates still differ only by elapsed time and place.
+      with_axes   also return the major-axis bearing per candidate (4-tuple).
     """
     rng = np.random.default_rng(seed)
-    areas, majors, minors = [], [], []
-    start0 = seed_cloud(lon, lat, n_particles, rng=rng)   # one realisation, see above
-    for t_h in candidate_hours:
+    areas, majors, minors, bearings = [], [], [], []
+    start0 = seed_cloud(lon, lat, n_particles, sigma_m=sigma_m, rng=rng)   # one realisation
+    for j, t_h in enumerate(candidate_hours):
+        start = start0
+        if starts is not None and starts[j] is not None:
+            start = start0 + (np.asarray(starts[j], dtype=np.float64) - np.array([lon, lat]))
         n_steps = int(round(t_h * 60.0 / timestep_minutes)) + 1
-        history, _ = integrate(start0, t0 - timedelta(hours=float(t_h)), field, n_steps,
+        history, _ = integrate(start, t0 - timedelta(hours=float(t_h)), field, n_steps,
                                timestep_minutes, direction="forward",
                                wind_coeff=wind_coeff, guard=guard,
                                diffusivity=diffusivity,
                                rng=(rng if diffusivity > 0.0 else None))
-        sd1, sd2, area = pca_extent(history[-1])
+        final = history[-1]
+        sd1, sd2, area = pca_extent(final)
         areas.append(area)
         majors.append(sd1)
         minors.append(sd2)
+        if with_axes:
+            bearings.append(pca_axes(final)[2])
+    if with_axes:
+        return (np.asarray(areas), np.asarray(majors), np.asarray(minors),
+                np.asarray(bearings))
     return np.asarray(areas), np.asarray(majors), np.asarray(minors)
 
 
@@ -1133,6 +1220,567 @@ def weathering_flag(wind_ms, contrast_centre_db=None, contrast_edge_db=None,
 
 
 # ---------------------------------------------------------------------------------------
+# AGE ENGINE v2 -- likelihoods  (plan: stateless-bouncing-cerf.md, Akshat 16 Sept 2026)
+# ---------------------------------------------------------------------------------------
+
+# E1/E2 observation errors, in natural-log units for the two lengths and a von Mises
+# concentration for the axis bearing. STARTING VALUES, recalibrated by age_twins.py and read
+# back from age_calibration.json. What they absorb is mostly not SAR noise but the mismatch
+# between "thresholded dark polygon" and "particle 2-sigma envelope" (see pca_extent).
+SHAPE_SIGMA_LOG_L = 0.30
+SHAPE_SIGMA_LOG_W = 0.50
+SHAPE_KAPPA = 1.0
+# If no member at any candidate comes within this many sigma of the observation, the slick is
+# outside what the model can produce and the likelihood is refused rather than letting the
+# nearest edge of the grid win by default.
+SHAPE_MAX_SIGMA = 3.0
+
+# E4 track estimator assumptions -- each a range, each printed.
+TRACK_WAKE_SIGMA_M = (5.0, 30.0)       # initial cross-track sigma: a ship's turbulent wake
+TRACK_WIDTH_PER_SIGMA = (2.5, 5.0)     # visible SAR width / sigma of a gaussian cross-profile
+TRACK_WIDTH_ERR_M = 15.0               # one Sentinel-1 IW GRD pixel-ish, 1 sigma
+TRACK_OKUBO_SPREAD = 3.0               # multiplicative 1-sigma spread on Okubo's K
+TRACK_MIN_ASPECT = 6.0                 # below this the shape is not a track
+TRACK_END_FRAC = 0.2                   # "an end" = the outer 20 % of the along-axis extent
+
+CALIBRATION_PATH = HERE / "age_calibration.json"
+DEFAULT_WEIGHTS = {"shape": 1.0, "detect": 0.5, "track": 1.0, "surrogate": 0.0}
+
+
+def shape_loglik(candidate_hours, L, W, B, obs_L, obs_W=None, obs_B=None,
+                 sigma_L=SHAPE_SIGMA_LOG_L, sigma_W=SHAPE_SIGMA_LOG_W, kappa=SHAPE_KAPPA,
+                 grid=None):
+    """E1/E2. Log-likelihood of the observed slick shape at every grid age, or None.
+
+    L, W, B are (members, candidates): modelled full major axis, full minor axis (both km,
+    4 sigma) and major-axis bearing. For candidate j,
+
+        lik_j = mean over members of  N(ln L_obs; ln L_mj, sigma_L)
+                                    * N(ln W_obs; ln W_mj, sigma_W)
+                                    * exp(kappa * (cos 2(B_obs - B_mj) - 1))
+
+    The MEAN over members is the point: it marginalises the wind coefficient, the current
+    scale and the diffusivity the ensemble samples, so their uncertainty is inside the
+    likelihood rather than bolted on afterwards. The bearing term uses 2*delta because an
+    axis has no sign. Constants common to every candidate are dropped.
+    """
+    import age_posterior as AP
+    grid = AP.AGE_GRID_H if grid is None else grid
+    L = np.asarray(L, dtype=np.float64)
+    if L.size == 0 or obs_L is None or float(obs_L) <= 0:
+        return None
+    L = L.reshape(-1, len(candidate_hours))
+    z = -0.5 * ((math.log(float(obs_L)) - np.log(np.maximum(L, 1e-6))) / sigma_L) ** 2
+    if obs_W is not None and float(obs_W) > 0 and W is not None:
+        Wm = np.asarray(W, dtype=np.float64).reshape(L.shape)
+        z = z - 0.5 * ((math.log(float(obs_W)) - np.log(np.maximum(Wm, 1e-6))) / sigma_W) ** 2
+    if obs_B is not None and B is not None:
+        d = np.radians(np.asarray(B, dtype=np.float64).reshape(L.shape) - float(obs_B))
+        z = z + kappa * (np.cos(2.0 * d) - 1.0)
+    if float(np.max(z)) < -0.5 * SHAPE_MAX_SIGMA ** 2 * 2.0:
+        return None
+    return AP.interp_loglik(candidate_hours, np.exp(z).mean(axis=0), grid)
+
+
+def _local_metres(coords_lonlat, lon0, lat0):
+    c = np.asarray(coords_lonlat, dtype=np.float64)[:, :2]
+    coslat = math.cos(math.radians(lat0))
+    return np.column_stack([(c[:, 0] - lon0) * coslat * KM_PER_DEG_LAT * 1000.0,
+                            (c[:, 1] - lat0) * KM_PER_DEG_LAT * 1000.0])
+
+
+def feature_mask(feature, px_m=None, max_px=2500):
+    """Rasterise a detection polygon in a local metric frame. Returns (mask, px_m) or (None, why).
+
+    Local equirectangular metres about the polygon's own centre -- the same convention as
+    polygon_major_axis_km -- which is accurate to far better than a pixel over a 30 km slick.
+    """
+    from shapely.geometry import shape as shp
+    from shapely.ops import transform as sh_transform
+    from rasterio.features import rasterize
+    from rasterio.transform import Affine
+
+    geom = (feature or {}).get("geometry")
+    if not geom:
+        return None, "no geometry"
+    g = shp(geom)
+    if g.is_empty:
+        return None, "empty geometry"
+    lon0, lat0 = g.centroid.x, g.centroid.y
+    coslat = math.cos(math.radians(lat0))
+    gm = sh_transform(lambda x, y, z=None: ((np.asarray(x) - lon0) * coslat * KM_PER_DEG_LAT * 1e3,
+                                            (np.asarray(y) - lat0) * KM_PER_DEG_LAT * 1e3), g)
+    xmin, ymin, xmax, ymax = gm.bounds
+    extent = max(xmax - xmin, ymax - ymin)
+    if px_m is None:
+        px_m = max(10.0, extent / max_px)
+    ncol = int(math.ceil((xmax - xmin) / px_m)) + 4
+    nrow = int(math.ceil((ymax - ymin) / px_m)) + 4
+    tr = Affine(px_m, 0.0, xmin - 2 * px_m, 0.0, -px_m, ymax + 2 * px_m)
+    mask = rasterize([(gm, 1)], out_shape=(nrow, ncol), transform=tr, fill=0,
+                     all_touched=False, dtype="uint8").astype(bool)
+    if mask.sum() < 10:
+        return None, f"polygon rasterises to only {int(mask.sum())} pixels at {px_m:.0f} m"
+    return mask, px_m
+
+
+def width_profile(feature, px_m=None):
+    """Visible width along the slick's medial axis. Returns (profile, diag) or (None, diag).
+
+    profile = {"along_m": [...], "width_m": [...]}, ordered along the principal axis. Width at
+    a skeleton pixel is twice its distance to the edge -- the local full width, which for a
+    sinuous filament is the width ACROSS the filament, not across the bounding box (the
+    distinction that made the ellipse route wrong by 2.6x on Jacksonville).
+    """
+    from scipy.ndimage import distance_transform_edt
+    from skimage.morphology import skeletonize
+
+    mask, px = feature_mask(feature, px_m)
+    if mask is None:
+        return None, {"skipped": px}
+    dist = distance_transform_edt(mask) * px
+    skel = skeletonize(mask)
+    rr, cc = np.nonzero(skel)
+    if rr.size < 20:
+        return None, {"skipped": f"medial axis has only {rr.size} pixels"}
+    xy = np.column_stack([cc * px, -rr * px]).astype(np.float64)
+    mr, mc = np.nonzero(mask)
+    mxy = np.column_stack([mc * px, -mr * px]).astype(np.float64)
+    centre = mxy.mean(axis=0)
+    _, _, vt = np.linalg.svd(mxy - centre, full_matrices=False)
+    along = (xy - centre) @ vt[0]
+    order = np.argsort(along)
+    width = 2.0 * dist[rr, cc]
+    area_m2 = float(mask.sum()) * px * px
+    skel_len_m = float(rr.size) * px
+    return ({"along_m": along[order], "width_m": width[order]},
+            {"px_m": round(px, 2), "skeleton_px": int(rr.size),
+             "mean_width_m": round(area_m2 / skel_len_m, 1),
+             "skeleton_length_km": round(skel_len_m / 1000.0, 3),
+             "aspect": round(skel_len_m / max(area_m2 / skel_len_m, 1e-9), 2)})
+
+
+def okubo_diffusivity_m2s(scale_m):
+    """Okubo (1971) apparent diffusivity K = 0.0103 * l^1.15 cm^2/s, l in cm. Returned in m^2/s.
+
+    Scale-DEPENDENT, which is the whole reason it is used here rather than step.py's flat
+    10-100 m^2/s band: at a 200 m slick width Okubo gives ~0.1 m^2/s, at 10 km ~8 m^2/s. The
+    flat band is sized for the kilometre-scale extent C3.1 matches; a cross-track width is two
+    orders of magnitude smaller and diffuses accordingly.
+    """
+    return 0.0103 * (max(float(scale_m), 1.0) * 100.0) ** 1.15 * 1e-4
+
+
+OKUBO_K_BOUNDS_M2S = (0.01, 200.0)
+
+
+def slick_scale_m(feature):
+    """The size Okubo's relation is evaluated at: sqrt(length x width) of the polygon, in m.
+    One definition, used by E1 and handed to OpenOil, so both models spread at the same K."""
+    L, d = slick_major_axis_km(feature)
+    if not L:
+        return None
+    W = d.get("bbox_width_km")
+    return round(1000.0 * (math.sqrt(L * W) if W else L), 1)
+
+
+def okubo_member_ks(scale_m, n, rng, spread=TRACK_OKUBO_SPREAD):
+    """n diffusivities for an ensemble: Okubo's K at this scale, times a stratified lognormal
+    with a `spread`-fold 1-sigma factor.
+
+    WHY THIS AND NOT A FLAT BAND (16 Sept 2026). Shape-based age is degenerate in K: the cloud
+    variance grows as 2 K t, so K x 10 at t / 10 gives the same width. With K log-uniform over
+    [0.05, 100] Huntington's posterior moved 0.02 nats off the prior -- nothing. Okubo's
+    diffusion diagram is the standard empirical relation between a patch's size and its
+    apparent diffusivity, and using it turns K from a free parameter into a measured-scale one
+    with a stated factor-of-3 scatter. `scale_m` is the observed slick's size.
+    """
+    from statistics import NormalDist
+    u = (np.arange(n) + rng.random(n)) / n
+    z = np.array([NormalDist().inv_cdf(float(min(max(x, 1e-9), 1 - 1e-9))) for x in u])
+    rng.shuffle(z)
+    ks = okubo_diffusivity_m2s(scale_m) * np.exp(math.log(spread) * z)
+    return np.clip(ks, *OKUBO_K_BOUNDS_M2S)
+
+
+def track_age(feature, discharge_class=None, n_mc=4000, seed=143, grid=None):
+    """E4. Age of the OLDEST visible oil in a track-shaped slick, from its cross-track width.
+
+    A moving ship lays oil along its track. Each segment then spreads sideways by turbulent
+    diffusion, sigma^2(t) = sigma_0^2 + 2 K t, so the widest end is the oldest and
+
+        age_tail = (sigma_tail^2 - sigma_0^2) / (2 K)
+
+    Every term is sampled from a stated range (wake sigma_0, width-per-sigma, Okubo K with a 3x
+    spread, a pixel of width error), and the likelihood is the KDE of the resulting ages. This
+    is what turns age_gate's `chronic` refusal into an answer: on a track the LENGTH is the
+    ship's doing, but the WIDTH is still the ocean's.
+
+    Returns (band_or_None, diag); diag["loglik"] is on age_posterior.AGE_GRID_H.
+    """
+    import age_posterior as AP
+    grid = AP.AGE_GRID_H if grid is None else grid
+    diag = {"estimator": "track_width", "discharge_class": discharge_class,
+            "assumptions": {"wake_sigma_m": list(TRACK_WAKE_SIGMA_M),
+                            "width_per_sigma": list(TRACK_WIDTH_PER_SIGMA),
+                            "width_err_m": TRACK_WIDTH_ERR_M,
+                            "okubo_spread_x": TRACK_OKUBO_SPREAD}}
+    if discharge_class == "acute":
+        diag["skipped"] = "discharge_class is 'acute': a point release, not a track"
+        return None, diag
+    prof, pdiag = width_profile(feature)
+    diag["profile"] = pdiag
+    if prof is None:
+        diag["skipped"] = pdiag["skipped"]
+        return None, diag
+    if pdiag["aspect"] < TRACK_MIN_ASPECT:
+        diag["skipped"] = (f"filament aspect {pdiag['aspect']} is below {TRACK_MIN_ASPECT}: "
+                           f"this shape is a patch, not a track")
+        return None, diag
+
+    a, w = prof["along_m"], prof["width_m"]
+    span = a.max() - a.min()
+    lo_end = w[a <= a.min() + TRACK_END_FRAC * span]
+    hi_end = w[a >= a.max() - TRACK_END_FRAC * span]
+    w_lo, w_hi = float(np.median(lo_end)), float(np.median(hi_end))
+    w_tail, w_head = max(w_lo, w_hi), min(w_lo, w_hi)
+    diag.update({"width_tail_m": round(w_tail, 1), "width_head_m": round(w_head, 1),
+                 "tail_over_head": round(w_tail / max(w_head, 1e-9), 2),
+                 "okubo_K_at_tail_m2s": round(okubo_diffusivity_m2s(w_tail), 4)})
+
+    rng = np.random.default_rng(seed)
+    wt = np.maximum(w_tail + rng.normal(0.0, TRACK_WIDTH_ERR_M, n_mc), 1.0)
+    ratio = rng.uniform(*TRACK_WIDTH_PER_SIGMA, n_mc)
+    sig = wt / ratio
+    sig0 = rng.uniform(*TRACK_WAKE_SIGMA_M, n_mc)
+    K = np.array([okubo_diffusivity_m2s(x) for x in wt]) * np.exp(
+        rng.normal(0.0, math.log(TRACK_OKUBO_SPREAD), n_mc))
+    age_h = (sig ** 2 - sig0 ** 2) / (2.0 * K) / 3600.0
+    lo_c = int(np.sum(age_h < grid[0]))
+    hi_c = int(np.sum(age_h > grid[-1]))
+    inside = age_h[(age_h >= grid[0]) & (age_h <= grid[-1])]
+    ll = AP.loglik_from_samples(inside, grid, lo_censored=lo_c, hi_censored=hi_c,
+                                lo_bound=float(grid[0]), hi_bound=float(grid[-1]))
+    diag["loglik"] = None if ll is None else [round(float(x), 4) for x in ll]
+    diag["mc"] = {"n": n_mc, "younger_than_grid": lo_c, "older_than_grid": hi_c,
+                  "median_hours": round(float(np.median(age_h)), 2),
+                  "p10_hours": round(float(np.percentile(age_h, 10)), 2),
+                  "p90_hours": round(float(np.percentile(age_h, 90)), 2)}
+    band = (max(float(np.percentile(age_h, 10)), 0.0),
+            min(float(np.percentile(age_h, 90)), float(grid[-1])))
+    if band[1] <= band[0]:
+        return None, diag
+    return band, diag
+
+
+def detectability_loglik(candidate_hours, surface_fraction, lo=0.05, hi=0.30, grid=None):
+    """E3. Soft upper bound from OpenOil's weathering: can this much oil still be on the surface?
+
+    surface_fraction is (members, candidates): the fraction of released oil still floating at
+    t0 (not evaporated, dispersed or stranded). A slick needs enough of it left to damp waves;
+    the threshold is unknown, so it is taken as uniform on [lo, hi] and the likelihood is the
+    probability the fraction clears it. An ASSUMPTION, weighted down (DEFAULT_WEIGHTS["detect"])
+    and never calibrated against OpenOil twins, which would be circular.
+    """
+    import age_posterior as AP
+    grid = AP.AGE_GRID_H if grid is None else grid
+    sf = np.asarray(surface_fraction, dtype=np.float64)
+    if sf.size == 0:
+        return None
+    sf = sf.reshape(-1, len(candidate_hours))
+    lik = np.clip((sf - lo) / (hi - lo), 0.0, 1.0).mean(axis=0)
+    return AP.interp_loglik(candidate_hours, lik, grid)
+
+
+def sar_contrast(case_dir, feature, ring_px=3):
+    """(contrast_centre_db, contrast_edge_db, diag) measured from the bundle's own SAR raster.
+
+    Stage 2 reading a file in cases/<id>/ is the architecture, not a shortcut -- it unblocks
+    C3.4 without waiting on a Stage 1 contract field. Centre = pixels deeper than `ring_px`
+    inside the polygon; edge = the `ring_px`-wide band just inside the boundary; both are the
+    median VV in dB minus the median of a same-width annulus OUTSIDE the polygon (clean sea).
+    Returns (None, None, diag) whenever the raster or geometry does not support it.
+    """
+    from pathlib import Path as _P
+    diag = {}
+    tif = _P(case_dir) / "sar_vv_vh.tif"
+    if not tif.exists():
+        diag["skipped"] = "no sar_vv_vh.tif in the bundle"
+        return None, None, diag
+    try:
+        import rasterio
+        from rasterio.features import rasterize
+        from shapely.geometry import shape as shp
+        from scipy.ndimage import binary_erosion, binary_dilation
+        with rasterio.open(tif) as src:
+            vv = src.read(1).astype(np.float64)
+            crs = src.crs
+            tr = src.transform
+            nodata = src.nodata
+            desc = src.descriptions
+        geom = shp(feature["geometry"])
+        if crs is not None and not crs.is_geographic:
+            from rasterio.warp import transform_geom
+            geom = shp(transform_geom("EPSG:4326", crs, feature["geometry"]))
+        inside = rasterize([(geom, 1)], out_shape=vv.shape, transform=tr, fill=0,
+                           dtype="uint8").astype(bool)
+        valid = np.isfinite(vv) & ((vv != nodata) if nodata is not None else True)
+        if np.nanmax(vv[valid]) > 0 and np.nanmin(vv[valid]) >= 0:
+            vv = 10.0 * np.log10(np.maximum(vv, 1e-6))      # linear power -> dB
+            diag["converted"] = "linear -> dB"
+        core = binary_erosion(inside, iterations=ring_px)
+        edge = inside & ~core
+        outer = binary_dilation(inside, iterations=ring_px * 2) & ~inside
+        n = {k: int((m & valid).sum()) for k, m in
+             (("core", core), ("edge", edge), ("sea", outer))}
+        diag.update({"pixels": n, "bands": list(desc) if desc else None})
+        if min(n.values()) < 10:
+            diag["skipped"] = f"too few pixels for a contrast: {n}"
+            return None, None, diag
+        sea = float(np.median(vv[outer & valid]))
+        c = float(np.median(vv[core & valid])) - sea
+        e = float(np.median(vv[edge & valid])) - sea
+        diag.update({"sea_db": round(sea, 2), "centre_db": round(c, 2), "edge_db": round(e, 2)})
+        return c, e, diag
+    except Exception as exc:                      # never let a raster quirk block the age
+        diag["skipped"] = f"{type(exc).__name__}: {exc}"
+        return None, None, diag
+
+
+def load_calibration(path=CALIBRATION_PATH):
+    """Weights and observation errors fitted by age_twins.py, or the defaults with a flag."""
+    cal = {"weights": dict(DEFAULT_WEIGHTS), "sigma_L": SHAPE_SIGMA_LOG_L,
+           "sigma_W": SHAPE_SIGMA_LOG_W, "kappa": SHAPE_KAPPA,
+           "min_gain": None, "coverage80": None, "source": "defaults (uncalibrated)"}
+    p = Path(path)
+    if p.exists():
+        loaded = json.loads(p.read_text())
+        cal.update({k: v for k, v in loaded.items() if k != "weights"})
+        cal["weights"].update(loaded.get("weights", {}))
+        cal["source"] = str(p.name)
+    return cal
+
+
+def control_release_points(field, feature, t0, candidate_hours, timestep_minutes=15,
+                           n=400, seed=143, is_land=None):
+    """Where a slick of each candidate age was released: the median of a backward control
+    cloud, seeded exactly as run.py seeds it, at t0 - age. One cheap run for all candidates."""
+    import random
+    from slick import seed_particles
+    from step import integrate_stranding
+    seed_pos = seed_particles(feature, n, random.Random(seed))
+    n_steps = int(round(max(candidate_hours) * 60.0 / timestep_minutes)) + 1
+    history, _, _ = integrate_stranding(seed_pos, t0, field, n_steps, timestep_minutes,
+                                        direction="backward", is_land=is_land)
+    return release_points_from_history(history, candidate_hours, timestep_minutes)
+
+
+def release_points_from_history(history, candidate_hours, timestep_minutes):
+    """Median control-cloud position at each candidate age. `history` is (steps, n, 2)."""
+    h = np.asarray(history)
+    out = []
+    for t_h in candidate_hours:
+        k = min(int(round(float(t_h) * 60.0 / timestep_minutes)), h.shape[0] - 1)
+        out.append((float(np.median(h[k, :, 0])), float(np.median(h[k, :, 1]))))
+    return out
+
+
+def load_opendrift_age(out_dir, case_id):
+    """OpenOil candidate curves written by opendrift_age.py (odenv), or None if absent."""
+    p = Path(out_dir) / f"opendrift_age_{case_id}.npz"
+    if not p.exists():
+        return None
+    z = np.load(p, allow_pickle=False)
+    if str(z["case"]) != case_id:
+        raise SystemExit(f"{p} belongs to {z['case']}, not {case_id} -- refusing to mix cases")
+    return {k: z[k] for k in z.files}
+
+
+def estimate_age(field, feature, t0, candidate_hours, origin_lonlat, *, release_points=None,
+                 volume_m3=None, n_members=20, n_particles=SEED_PARTICLES,
+                 timestep_minutes=15, seed=143, guard=True, opendrift=None,
+                 contrast=(None, None), calibration=None, log=print):
+    """THE AGE ENGINE. Pure: no file reads or writes. Returns (block, report).
+
+    `block` holds exactly the origin.json keys this stage owns: age_hours, age_method,
+    age_weathering, age_estimators, age_gate, and -- only when there is a measured age --
+    age_posterior (Master 6.5, 16 Sept 2026). `report` is the full diagnostic record.
+
+    Two hypotheses about what the slick IS, averaged as posteriors (age_posterior rule 2):
+      patch  released at a point, spread by the ocean   -> E1 our model (+) E2 OpenOil, x E3
+      track  laid by a moving ship                      -> E4 cross-track width,       x E3
+    `discharge_class` decides which are live: acute -> patch, chronic -> track, else both.
+    """
+    import age_posterior as AP
+    cal = calibration or load_calibration()
+    wts = cal["weights"]
+    grid = AP.AGE_GRID_H
+    olon, olat = origin_lonlat
+    props = feature["properties"]
+    discharge = props.get("discharge_class", "unknown")
+    area = float(props["area_km2"])
+    elong = props.get("elongation")
+
+    # ---- observables ----------------------------------------------------------------
+    length, axis_diag = slick_major_axis_km(feature)
+    width = axis_diag.get("bbox_width_km")
+    bearing = axis_diag.get("orientation_deg")
+    log(f"observed  L {length if length is None else round(length, 2)} km   "
+        f"W {width} km   bearing {bearing} deg   ({axis_diag.get('route')})")
+
+    # ---- E1 our model (+ the legacy C3.1 band) --------------------------------------
+    if length is None:
+        shear_band, shear_diag = None, {"skipped": "no observable major axis", "axis": axis_diag}
+    else:
+        shear_band, shear_diag = shear_dispersion_age(
+            field, olon, olat, t0, length, candidate_hours, timestep_minutes=timestep_minutes,
+            n_particles=n_particles, n_members=n_members, seed=seed, guard=guard,
+            discharge_class=discharge, release_points=release_points,
+            observed_width_km=width, observed_bearing_deg=bearing)
+        shear_diag["axis"] = axis_diag
+        if shear_diag.get("loglik") is not None:
+            # recompute with calibrated sigmas when they differ from the defaults
+            if (cal["sigma_L"], cal["sigma_W"], cal["kappa"]) != (
+                    SHAPE_SIGMA_LOG_L, SHAPE_SIGMA_LOG_W, SHAPE_KAPPA):
+                ll = shape_loglik(candidate_hours, shear_diag["shape_curves"]["L_km"],
+                                  shear_diag["shape_curves"]["W_km"],
+                                  shear_diag["shape_curves"]["bearing_deg"], length, width,
+                                  bearing, cal["sigma_L"], cal["sigma_W"], cal["kappa"])
+                shear_diag["loglik"] = None if ll is None else ll.tolist()
+    ll_ours = None if shear_diag.get("loglik") is None else np.asarray(shear_diag["loglik"])
+    log(f"E1 ours      {'likelihood' if ll_ours is not None else 'none'}   legacy band "
+        f"{round_band(shear_band)}")
+
+    # ---- E2 / E3 OpenOil -------------------------------------------------------------
+    ll_od, ll_det, od_diag = None, None, {"available": opendrift is not None}
+    if opendrift is not None and length is not None and discharge != "chronic":
+        ch = np.asarray(opendrift["candidate_hours"], dtype=np.float64)
+        ll_od = shape_loglik(ch, opendrift["L_km"], opendrift["W_km"],
+                             opendrift["bearing_deg"], length, width, bearing,
+                             cal["sigma_L"], cal["sigma_W"], cal["kappa"])
+        od_diag["shape_loglik"] = None if ll_od is None else [round(float(x), 4) for x in ll_od]
+    if opendrift is not None and "surface_fraction" in opendrift:
+        ll_det = detectability_loglik(np.asarray(opendrift["candidate_hours"]),
+                                      opendrift["surface_fraction"])
+        od_diag["detect_loglik"] = (None if ll_det is None
+                                    else [round(float(x), 4) for x in ll_det])
+    log(f"E2 OpenOil   {'likelihood' if ll_od is not None else 'none'}   "
+        f"E3 detectability {'likelihood' if ll_det is not None else 'none'}")
+
+    # ---- E4 track --------------------------------------------------------------------
+    track_band, track_diag = track_age(feature, discharge, seed=seed)
+    ll_track = None if track_diag.get("loglik") is None else np.asarray(track_diag["loglik"])
+    log(f"E4 track     {round_band(track_band)}   "
+        f"{track_diag.get('skipped', track_diag.get('mc', ''))}")
+
+    # ---- legacy diagnostics: Fay regime (veto only), elongation band -----------------
+    fay_band, fay_diag = fay_age(area, volume_m3=volume_m3)
+    shear_rate = deformation_rate_s(field, olon, olat, t0)
+    elong_band, elong_diag = elongation_age(elong, shear_rate, discharge)
+
+    # ---- C3.4 weathering flag, now with a measured contrast --------------------------
+    wind = mean_wind_ms(field, olon, olat, t0)
+    flag, weather_diag = weathering_flag(wind, contrast[0], contrast[1])
+
+    # ---- E8 optional surrogate (weight 0 unless calibration switched it on) -----------
+    ll_sur = None
+    if wts.get("surrogate", 0.0) > 0:
+        import age_surrogate
+        ll_sur = age_surrogate.surrogate_loglik(feature, field, t0)
+        log(f"E8 surrogate {'likelihood' if ll_sur is not None else 'none (no trained model)'}")
+
+    # ---- fuse ------------------------------------------------------------------------
+    shape_mix = AP.mix_logliks([ll_ours, ll_od])
+    sur_w = wts.get("surrogate", 0.0)
+    patch_post, patch_used = AP.fuse([("shape", shape_mix, wts["shape"]),
+                                      ("detect", ll_det, wts["detect"]),
+                                      ("surrogate", ll_sur, sur_w)])
+    track_post, track_used = AP.fuse([("track", ll_track, wts["track"]),
+                                      ("detect", ll_det, wts["detect"]),
+                                      ("surrogate", ll_sur, sur_w)])
+    # a hypothesis with no direct shape evidence (only E3 and/or the surrogate) is not a
+    # measurement of THIS slick under that hypothesis
+    if not {"shape"} & set(patch_used):
+        patch_post = None
+    if not {"track"} & set(track_used):
+        track_post = None
+    if discharge == "acute":
+        post, hyp = patch_post, ["patch"]
+    elif discharge == "chronic":
+        post, hyp = track_post, ["track"]
+    else:
+        post = AP.average_posteriors([patch_post, track_post])
+        hyp = [h for h, p in (("patch", patch_post), ("track", track_post)) if p is not None]
+    summary = AP.summarise(post, hyp,
+                           min_gain=cal.get("min_gain") or AP.MIN_INFO_GAIN_NATS)
+
+    models = []
+    if ll_ours is not None:
+        models.append("udgam_rk2")
+    if ll_od is not None or ll_det is not None:
+        models.append("opendrift_openoil")
+    evidence = []
+    if "patch" in hyp:
+        evidence += [n for n in patch_used]
+    if "track" in hyp:
+        evidence += [n for n in track_used if n not in evidence]
+
+    if summary["status"] == "ok":
+        band = tuple(summary["hpd80"])
+        if len(evidence) >= 2:
+            method = "combined"
+        else:
+            method = {"shape": "shear", "track": "track"}.get(evidence[0], "combined")
+    else:
+        band, method = None, "none"
+
+    gate = {"acute": "acute", "chronic": "chronic_track"}.get(discharge, "unknown_both")
+    block = {
+        "age_hours": round_band(band),
+        "age_method": method,
+        "age_weathering": flag,
+        "age_estimators": {"shear": round_band(shear_band), "fay": round_band(fay_band),
+                           "elongation": round_band(elong_band),
+                           "track": round_band(track_band)},
+        "age_gate": gate,
+    }
+    if summary["status"] == "ok":
+        block["age_posterior"] = {
+            "hours_grid": summary["hours_grid"],
+            "prob": summary["prob"],
+            "hpd80": summary["hpd80"],
+            "median": summary["median"],
+            "hypotheses": hyp,
+            "evidence": evidence,
+            "models": models,
+            "calibration_coverage": cal.get("coverage80"),
+        }
+    report = {
+        "engine": "age engine v2",
+        "observed": {"id": props.get("id"), "area_km2": area, "elongation": elong,
+                     "discharge_class": discharge, "length_km": length, "width_km": width,
+                     "bearing_deg": bearing},
+        "calibration": {k: cal.get(k) for k in ("source", "weights", "sigma_L", "sigma_W",
+                                                 "kappa", "min_gain", "coverage80")},
+        "posterior": summary,
+        "hypotheses": {"patch": {"used": patch_used,
+                                 "hpd80": None if patch_post is None
+                                 else list(AP.hpd(patch_post)[:2])},
+                       "track": {"used": track_used,
+                                 "hpd80": None if track_post is None
+                                 else list(AP.hpd(track_post)[:2])}},
+        "result": block,
+        "shear": shear_diag,
+        "opendrift": od_diag,
+        "track": track_diag,
+        "fay": fay_diag,
+        "elongation": elong_diag,
+        "weathering": weather_diag,
+    }
+    return block, report
+
+
+# ---------------------------------------------------------------------------------------
 # C4  combining
 # ---------------------------------------------------------------------------------------
 
@@ -1205,6 +1853,13 @@ def main():
                     help="ensemble members for the shear band")
     ap.add_argument("--timestep-minutes", type=int, default=15)
     ap.add_argument("--seed", type=int, default=143)
+    ap.add_argument("--request-only", action="store_true",
+                    help="write out/age_request_<case>.json for opendrift_age.py and stop")
+    ap.add_argument("--no-opendrift", action="store_true",
+                    help="ignore out/opendrift_age_<case>.npz even if present")
+    ap.add_argument("--patch-origin", action="store_true",
+                    help="also patch the age keys into an existing origin.json "
+                         "(run.py owns origin.json from v2 on; this is for iteration)")
     ap.add_argument("--dry-run", action="store_true",
                     help="print everything, write nothing")
     a = ap.parse_args()
@@ -1218,22 +1873,15 @@ def main():
     out_dir = Path(a.out)
     origin_path = Path(a.origin) if a.origin else out_dir / "origin.json"
 
-    if not origin_path.exists():
-        raise SystemExit(f"{origin_path} not found -- age is measured from the origin cloud.\n"
-                         f"  run: python pipeline/drift/run.py --case {a.case} "
-                         f"{'--real' if a.real else '--fake'}")
-
     meta = json.loads((case_dir / "meta.json").read_text())
-    origin = json.loads(origin_path.read_text())
     t0 = parse_ts(meta["detection_time"])
-    olon, olat = float(origin["centroid"][0]), float(origin["centroid"][1])
+    origin = json.loads(origin_path.read_text()) if origin_path.exists() else None
 
-    lo, hi, step = (float(x) for x in a.candidates.split(":"))
-    candidate_hours = [round(x, 6) for x in np.arange(lo, hi + 1e-9, step)]
+    lo, hi, step_h = (float(x) for x in a.candidates.split(":"))
+    candidate_hours = sorted({1.0, *[round(x, 6) for x in np.arange(lo, hi + 1e-9, step_h)]})
 
     print("=" * 78)
-    print(f"UDGAM Stage 2 - age estimation   case {a.case}")
-    print(f"origin centroid ({olon:.5f}, {olat:.5f})   t0 = "
+    print(f"UDGAM Stage 2 - age engine v2   case {a.case}   t0 = "
           f"{t0.isoformat().replace('+00:00', 'Z')}")
     print("=" * 78)
 
@@ -1242,224 +1890,127 @@ def main():
     feat = None
     if det_path.exists():
         # Same slick selection as run.py, so the age is measured on the geometry the origin
-        # was actually seeded from. Importing it rather than re-implementing is the point:
-        # two different answers to "which slick?" is the kind of divergence nobody notices.
-        sys.path.insert(0, str(HERE))
-        feat, slick_diag = merge_oil_features(json.loads(det_path.read_text()),
-                                              mode=a.merge_oil)
+        # was actually seeded from.
+        feat, _ = merge_oil_features(json.loads(det_path.read_text()), mode=a.merge_oil)
 
     if feat is None:
-        # D16: a known_origin case has no detection, so there is no observed area or
-        # elongation -- and every estimator here reads age OFF THE OBSERVED SLICK.
+        # D16: a known_origin case has no detection, so there is no slick to read an age off.
         reason = ("no oil detection to measure: "
                   + ("detections.geojson has zero oil features"
                      if det_path.exists() else "there is no detections.geojson"))
         if meta.get("known_origin") is not None:
-            reason += (" -- this is a known_origin case (D16), where the source is documented "
-                       "rather than detected, so slick geometry does not exist to read an age "
-                       "from. Age is genuinely not available, not merely unmeasured.")
+            reason += (" -- this is a known_origin case (D16): the source is documented rather "
+                       "than detected, so age is genuinely not available, not merely unmeasured.")
         print(f"\n  age_method = none\n        {reason}")
         block = {"age_hours": None, "age_method": "none", "age_weathering": "unknown",
-                 "age_estimators": {"shear": None, "fay": None, "elongation": None},
+                 "age_estimators": {"shear": None, "fay": None, "elongation": None,
+                                    "track": None},
                  "age_gate": "no_detection"}
-        _finish(a, origin_path, origin, block,
-                {"skipped": reason, "case": a.case}, out_dir)
+        _finish(a, origin_path, origin, block, {"skipped": reason, "case": a.case}, out_dir)
         return 0
 
-    props = feat["properties"]
-    observed_area = float(props["area_km2"])
-    observed_elong = props.get("elongation")
-    discharge = props.get("discharge_class", "unknown")
-    _verdict, _gate_why = age_gate(discharge)
-    gate_verdict = {"refuse": "chronic_refused", "allow": "acute",
-                    "allow_widened": "unknown_widened"}[_verdict]
-    print(f"\nObserved slick  {props['id']}  area {observed_area:.2f} km2   "
-          f"elongation {observed_elong}   discharge_class {discharge!r}")
-    print(f"gate   {gate_verdict}: {_gate_why}")
-
     # ---- the ocean --------------------------------------------------------------------
+    props = feat["properties"]
+    olon, olat = float(props["centroid"][0]), float(props["centroid"][1])
     if a.real:
         field = load_case_field(a.case, repo_root=REPO)
     else:
         field = make_fake(a.field, lon0=olon, lat0=olat, wind=tuple(a.wind))
     print(f"field  {field}")
 
-    # ---- the loud coverage guard ------------------------------------------------------
     coverage = field_time_coverage(a.case, REPO) if a.real else None
     candidate_hours, dropped, cov_detail = clip_candidates_to_coverage(
         candidate_hours, t0, coverage)
     if dropped:
-        print(f"\n  !! DROPPED {len(dropped)} candidate ages that fall outside the cached "
-              f"field: {', '.join(f'{h:g}' for h in dropped)} h")
-        print(f"     {cov_detail}")
-        print("     Past the last snapshot the field is CLAMPED, not modelled: the extent "
-              "curve flattens and then")
-        print("     falls, and the monotonicity gate fails for a DATA reason, not a physical "
-              "one. HYCOM is daily, so")
-        print("     a 36 h candidate needs 3 snapshots in the cache, not 2 -- refetch a wider "
-              "window to use them.")
+        print(f"  !! DROPPED {len(dropped)} candidate ages outside the cached field: "
+              f"{', '.join(f'{h:g}' for h in dropped)} h\n     {cov_detail}")
     if not candidate_hours:
-        raise SystemExit(
-            "no candidate ages left inside the cached field's time coverage.\n"
-            f"  {cov_detail}\n"
-            "  refetch a wider window, or lower --candidates.")
+        raise SystemExit(f"no candidate ages inside the cached field.\n  {cov_detail}")
 
-    # ---- C3.1 shear dispersion --------------------------------------------------------
-    # MEASURE the major axis off the polygon; fall back to the ellipse form only if there is
-    # no usable geometry. On Jacksonville's det-01 the two disagree by 2.6x (17.38 km measured
-    # against 6.72 km derived) because the slick is a sinuous filament, not an ellipse, so
-    # which route ran is printed and recorded rather than assumed.
-    observed_length, axis_diag = slick_major_axis_km(feat)
-    print(f"\nC3.1 shear dispersion  ({a.members} members x {len(candidate_hours)} candidates "
-          f"x {a.particles} particles)")
-    if observed_length is None:
-        shear_band, shear_diag = None, {
-            "skipped": ("no usable polygon and no area_km2 x elongation to fall back on, so "
-                        "there is no observed major axis to match; matching on area cannot "
-                        "work in a divergence-free field"),
-            "axis": axis_diag}
-        print(f"  -> none: {shear_diag['skipped']}")
-    else:
-        print(f"  observed major axis {observed_length:.2f} km  ({axis_diag['route']}) "
-              f"-- matching on LENGTH, not area")
-        if axis_diag.get("derived_km") is not None and axis_diag["route"].startswith("measured"):
-            print(f"     the ellipse form (area {observed_area:.2f} km2 x elongation "
-                  f"{observed_elong}) would have said {axis_diag['derived_km']:.2f} km, "
-                  f"a factor of {axis_diag.get('measured_over_derived')}")
-            if axis_diag.get("filament_aspect"):
-                print(f"     mean width {axis_diag['mean_width_m']:.0f} m over the measured "
-                      f"length -> filament aspect {axis_diag['filament_aspect']}, against a "
-                      f"reported elongation of {observed_elong}")
-        shear_band, shear_diag = shear_dispersion_age(
-            field, olon, olat, t0, observed_length, candidate_hours,
-            timestep_minutes=a.timestep_minutes, n_particles=a.particles,
-            n_members=a.members, seed=a.seed, discharge_class=discharge)
-        # How the matched length was obtained is part of the result, not trivia: a band read off
-        # a derived axis and one read off a measured axis are different claims.
-        shear_diag["axis"] = axis_diag
-    if shear_band:
-        print(f"  -> [{shear_band[0]:.1f}, {shear_band[1]:.1f}] h   "
-              f"({shear_diag['n_fitted']}/{shear_diag['n_members']} members fitted)")
-        print(f"     CAVEAT {shear_diag['caveat']}")
-    else:
-        print(f"  -> none: {shear_diag.get('skipped')}")
+    # ---- where each candidate was released --------------------------------------------
+    # Our own control rewind, seeded exactly as run.py seeds it. age.py no longer needs a
+    # previous origin.json to exist: the release point for candidate age t is where the
+    # backward cloud was t hours ago, not a single centroid shared by every candidate.
+    import coastline
+    land = coastline.is_land if coastline.available() else None
+    release = control_release_points(field, feat, t0, candidate_hours, a.timestep_minutes,
+                                     seed=a.seed, is_land=land)
+    print(f"release points  {len(release)} candidates, "
+          f"{release[0][0]:.4f},{release[0][1]:.4f} (1 h) -> "
+          f"{release[-1][0]:.4f},{release[-1][1]:.4f} ({candidate_hours[-1]:g} h)")
 
-    # ---- C3.2 Fay ---------------------------------------------------------------------
-    print("\nC3.2 Fay gravity-viscous spreading")
-    print(f"  k {FAY_K_RANGE}  rho_oil {RHO_OIL_RANGE} kg/m3  "
-          f"volume {a.volume_m3 if a.volume_m3 else 'NOT SUPPLIED'}")
-    fay_band, fay_diag = fay_age(observed_area, volume_m3=a.volume_m3)
-    if fay_diag.get("regime"):
-        print(f"  regime {fay_diag['regime']}   spreading alone reaches "
-              f"{fay_diag['max_predicted_area_km2_at_ceiling']:.3f} km2 at the ceiling")
-    if fay_band:
-        print(f"  -> [{fay_band[0]:.1f}, {fay_band[1]:.1f}] h")
-    else:
-        print(f"  -> none: {fay_diag.get('skipped')}")
-    print(f"  k: {fay_diag['k_citation']}")
+    request = {"case": a.case, "t0": meta["detection_time"],
+               "candidate_hours": candidate_hours,
+               "release_points": [[round(x, 5), round(y, 5)] for x, y in release],
+               "slick_centroid": [olon, olat],
+               "okubo_scale_m": slick_scale_m(feat),
+               "timestep_minutes": a.timestep_minutes,
+               "note": "read by opendrift_age.py (odenv). Working space, never in the bundle."}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    req_path = out_dir / f"age_request_{a.case}.json"
+    if not a.dry_run:
+        req_path.write_text(json.dumps(request, indent=1))
+        print(f"wrote  {req_path}")
+    if a.request_only:
+        print("--request-only: stopping here. Next, in odenv:\n"
+              f"  odenv\\Scripts\\python pipeline/drift/opendrift_age.py --case {a.case}")
+        return 0
 
-    # ---- C3.3 elongation under shear --------------------------------------------------
-    print("\nC3.3 elongation under shear")
-    shear_rate = deformation_rate_s(field, olon, olat, t0)
-    if shear_rate > 0:
-        print(f"  deformation rate S = {shear_rate:.3e} 1/s  "
-              f"(timescale {1.0 / shear_rate / 3600.0:.1f} h)")
-    else:
-        print("  deformation rate S = 0 -- a uniform field has no shear to read")
-    elong_band, elong_diag = elongation_age(observed_elong, shear_rate, discharge)
-    if elong_band:
-        print(f"  -> [{elong_band[0]:.1f}, {elong_band[1]:.1f}] h")
-    else:
-        print(f"  -> none: {elong_diag.get('skipped')}")
+    opendrift = None if a.no_opendrift else load_opendrift_age(out_dir, a.case)
+    print(f"OpenOil curves  {'loaded' if opendrift is not None else 'absent -- our model only'}")
 
-    # ---- C3.4 weathering --------------------------------------------------------------
-    print("\nC3.4 weathering flag (qualitative, never hours)")
-    wind = mean_wind_ms(field, olon, olat, t0)
-    flag, weather_diag = weathering_flag(
-        wind,
-        props.get("contrast_centre_db"),
-        props.get("contrast_edge_db"))
-    print(f"  mean wind {wind:.2f} m/s  ->  {flag}")
-    print(f"     {weather_diag.get('reason')}")
+    c_centre, c_edge, cdiag = sar_contrast(case_dir, feat)
+    print(f"SAR contrast    centre {c_centre}  edge {c_edge}  {cdiag.get('skipped', '')}")
 
-    # ---- C4 combine -------------------------------------------------------------------
-    bands = {"shear": shear_band, "fay": fay_band, "elongation": elong_band}
-    combined, method = combine_bands(bands)
+    block, report = estimate_age(
+        field, feat, t0, candidate_hours, (olon, olat), release_points=release,
+        volume_m3=a.volume_m3, n_members=a.members, n_particles=a.particles,
+        timestep_minutes=a.timestep_minutes, seed=a.seed, opendrift=opendrift,
+        contrast=(c_centre, c_edge), log=lambda s: print("  " + s))
+    report.update({"case": a.case, "t0": meta["detection_time"], "field": repr(field),
+                   "sar_contrast": cdiag, "release_points": request["release_points"]})
 
+    post = report["posterior"]
     print("\n" + "-" * 78)
-    print(f"C4 combine   shear {round_band(shear_band)}   fay {round_band(fay_band)}   "
-          f"elongation {round_band(elong_band)}")
-    if combined is None:
-        print(f"  age_hours = null   age_method = {method}")
-        # READ the window's method, do not assume it. This line used to say "the bounded
-        # time_window stands, and it is a BRACKET" unconditionally -- which on
-        # case-jacksonville-2024 is simply false: its HYCOM is 3-hourly, the ensemble spread
-        # really does converge, and the window is measured. Announcing our own strongest
-        # available claim as our weakest one is a bad way to lose an argument on stage.
-        tw_method = (origin or {}).get("time_window_method", "bounded")
-        if tw_method == "convergence":
-            print("  nothing fired -- but the time_window on this case is MEASURED "
-                  "(method=convergence),")
-            print("  not a bracket. The release window stands on the ensemble's own "
-                  "convergence, not on")
-            print("  the rewind span minus eight hours. Say 'measured', not 'bounded'.")
-        else:
-            print(f"  nothing fired -- the time_window stands (method={tw_method}), "
-                  f"and it is a BRACKET")
+    if post["status"] == "ok":
+        print(f"age_hours = {block['age_hours']}  (80% HPD)   median {post['median']} h   "
+              f"method {block['age_method']}   evidence {post['used']}"
+              f"{'   MULTIMODAL' if post['multimodal'] else ''}")
+        print(f"information gain {post['info_gain_nats']} nats   calibration "
+              f"{report['calibration']['source']}")
     else:
-        print(f"  age_hours = [{combined[0]:.1f}, {combined[1]:.1f}]   age_method = {method}")
-        if method == "disagreement":
-            print("  estimators DISAGREE -> union reported. This is a result, not a failure:"
-                  "\n  a widened honest band beats a narrow invented one, and the UI must "
-                  "say so.")
+        print(f"age_method = none   {post.get('reason')}")
     print("-" * 78)
-
-    block = {
-        "age_hours": round_band(combined),
-        "age_method": method,
-        "age_weathering": flag,
-        "age_estimators": {"shear": round_band(shear_band),
-                           "fay": round_band(fay_band),
-                           "elongation": round_band(elong_band)},
-        # Which way the physics gate went. A SIBLING key, deliberately: age_estimators' values
-        # stay [lo, hi] | null because web/lib/origin.ts THROWS on any other shape, so widening
-        # them into objects would be a hard frontend crash on every bundle that predates it.
-        # One enum instead -- the caveat is a property of the slick, not of each estimator.
-        "age_gate": gate_verdict,
-    }
-    report = {
-        "case": a.case,
-        "t0": meta["detection_time"],
-        "origin_centroid": [olon, olat],
-        "observed": {"id": props["id"], "area_km2": observed_area,
-                     "elongation": observed_elong, "discharge_class": discharge},
-        "field": repr(field),
-        "result": block,
-        "shear": shear_diag,
-        "fay": fay_diag,
-        "elongation": elong_diag,
-        "weathering": weather_diag,
-    }
     _finish(a, origin_path, origin, block, report, out_dir)
     return 0
 
 
 def _finish(a, origin_path, origin, block, report, out_dir):
-    """Patch the four contract keys into origin.json and drop the diagnostics sidecar."""
+    """Patch the age keys into origin.json (if one exists) and drop the diagnostics sidecar.
+
+    run.py is the primary writer of origin.json from v2 on; this path is for iteration.
+    """
     report_path = out_dir / f"age_{a.case}.json"
     if a.dry_run:
-        print(f"\n[dry-run] would patch {origin_path}")
-        print(f"[dry-run] would write {report_path}")
-        print(json.dumps(block, indent=2))
+        print(f"\n[dry-run] would write {report_path}")
+        print(json.dumps({k: v for k, v in block.items() if k != "age_posterior"}, indent=2))
         return
-
-    origin.update(block)
     out_dir.mkdir(parents=True, exist_ok=True)
-    origin_path.write_text(json.dumps(origin))
-    report_path.write_text(json.dumps(report, indent=2, default=str))
-    print(f"\n[age]  patched {origin_path}")
-    print(f"[age]  wrote   {report_path}   (working space -- not part of the bundle)")
-    print(f"[age]  next    python scripts/validate_case.py cases/{a.case}")
+    report_path.write_text(json.dumps(report, indent=1, default=_json_default))
+    print(f"\n[age]  wrote   {report_path}   (working space -- not part of the bundle)")
+    if origin is not None and a.patch_origin:
+        origin = {k: v for k, v in origin.items() if k != "age_posterior"}
+        origin.update(block)
+        origin_path.write_text(json.dumps(origin))
+        print(f"[age]  patched {origin_path}")
+
+
+def _json_default(o):
+    if isinstance(o, np.ndarray):
+        return o.tolist()
+    if isinstance(o, (np.floating, np.integer)):
+        return o.item()
+    return str(o)
 
 
 if __name__ == "__main__":
