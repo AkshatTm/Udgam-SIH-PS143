@@ -13,6 +13,7 @@ const TOGGLES: { id: LayerId; label: string; swatch: string }[] = [
   { id: "detections", label: "Detections", swatch: "var(--oil)" },
   { id: "particles", label: "Drift", swatch: "var(--drift)" },
   { id: "origin", label: "Origin", swatch: "var(--drift)" },
+  { id: "forward", label: "Forward slick", swatch: "var(--drift)" },
   { id: "vessels", label: "Ship tracks", swatch: "var(--contact)" },
 ];
 
@@ -23,6 +24,10 @@ export default function LayerToggles() {
 
   const revealed = useAppStore((s) => s.revealed);
   const traceAvailable = (meta?.acts_available.includes("trace") ?? false) && revealed.trace;
+  // Master 6.10: forward_impact.json is OPTIONAL even on a traced case. The chip stays disabled
+  // rather than hidden, so "this case has no forecast" is visible instead of silently missing.
+  const forwardBundle = useAppStore((s) => s.forward);
+  const forwardAvailable = traceAvailable && forwardBundle !== null;
   const attributeAvailable =
     (meta?.acts_available.includes("attribute") ?? false) && revealed.attribute;
 
@@ -31,10 +36,12 @@ export default function LayerToggles() {
       <span className="mr-2 t-label">Layers</span>
       {TOGGLES.map(({ id, label, swatch }) => {
         const needsTrace = id === "particles" || id === "origin";
+        const needsForward = id === "forward";
         const needsAttribute = id === "vessels";
         const enabled =
           (id !== "detections" || revealed.detect) &&
           (!needsTrace || traceAvailable) &&
+          (!needsForward || forwardAvailable) &&
           (!needsAttribute || attributeAvailable);
         const on = layers[id];
         return (
@@ -51,9 +58,13 @@ export default function LayerToggles() {
                   : `Show ${label}`
                 : needsTrace
                   ? `${label} — appears once the drift has been run`
-                  : needsAttribute
-                    ? `${label} — appears once attribution has been run`
-                    : `${label} — appears once detection has been run`
+                  : needsForward
+                    ? traceAvailable
+                      ? `${label} — Stage 2 produced no forward forecast for this case`
+                      : `${label} — appears once the drift has been run`
+                    : needsAttribute
+                      ? `${label} — appears once attribution has been run`
+                      : `${label} — appears once detection has been run`
             }
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors duration-150 ${
               !enabled

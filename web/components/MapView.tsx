@@ -33,6 +33,7 @@ import { BitmapLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl
 import { RUN_DURATION_MS, useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
 import { buildOriginImage, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
+import { buildForwardRings, buildForwardTrack, type ForwardRing } from "@/lib/forward";
 import { sceneAndVesselExtent, sceneParticleOriginExtent } from "@/lib/extent";
 import type { Bounds, GeoBounds, LonLat } from "@/lib/contracts";
 
@@ -144,6 +145,40 @@ const ORIGIN_RING_WIDTH_PX = 1.5;
 
 // Hoisted so their identity is stable across renders — the ring geometry is static, so these
 // accessors must never look like they changed (which would ask deck.gl to re-tessellate).
+// Forward slick (Master 6.10). Deliberately NOT a new hue: this is the same 50-member ensemble
+// as the origin cloud, integrated the other way, so it stays in the amber/drift family and is
+// told apart by RENDERING instead — outline-only rings (the origin cloud is a filled bitmap),
+// and opacity that decays into the future. Inventing a sixth colour here would imply a sixth
+// kind of thing on a map that already carries five (blue = vessel, amber = particle/origin,
+// red = oil, rose = dark vessel, violet = infrastructure).
+//
+// Opacity carries FORECAST HOUR, never probability or confidence. The +24 h ring is not less
+// likely than the +1 h ring; it is further away in time, and the fade is the only thing that
+// says so on a static map.
+const FORWARD_RING_NEAR: [number, number, number, number] = [251, 176, 59, 200];
+const FORWARD_RING_FAR: [number, number, number, number] = [251, 146, 60, 70];
+const FORWARD_HORIZON_R50: [number, number, number, number] = [180, 83, 9, 245];
+const FORWARD_TRACK_COLOR: [number, number, number, number] = [234, 88, 12, 225];
+const FORWARD_RING_WIDTH_PX = 1.2;
+const FORWARD_HORIZON_WIDTH_PX = 2.4;
+const FORWARD_TRACK_WIDTH_PX = 2;
+
+const forwardRingPath = (d: ForwardRing): ForwardRing["path"] => d.path;
+// r50 at the horizon is the one ring a judge should be able to point at, so it gets full
+// weight; every hourly r90 fades with `t`.
+const forwardRingColor = (d: ForwardRing): [number, number, number, number] => {
+  if (d.kind === "r50") return FORWARD_HORIZON_R50;
+  const k = Math.min(Math.max(d.t, 0), 1);
+  return [
+    Math.round(FORWARD_RING_NEAR[0] + (FORWARD_RING_FAR[0] - FORWARD_RING_NEAR[0]) * k),
+    Math.round(FORWARD_RING_NEAR[1] + (FORWARD_RING_FAR[1] - FORWARD_RING_NEAR[1]) * k),
+    Math.round(FORWARD_RING_NEAR[2] + (FORWARD_RING_FAR[2] - FORWARD_RING_NEAR[2]) * k),
+    Math.round(FORWARD_RING_NEAR[3] + (FORWARD_RING_FAR[3] - FORWARD_RING_NEAR[3]) * k),
+  ];
+};
+const forwardRingWidth = (d: ForwardRing): number =>
+  d.kind === "r50" || d.t >= 1 ? FORWARD_HORIZON_WIDTH_PX : FORWARD_RING_WIDTH_PX;
+
 const originRingPath = (d: OriginRing): OriginRing["path"] => d.path;
 const originRingColor = (d: OriginRing): [number, number, number, number] =>
   d.kind === "r50" ? ORIGIN_RING_50 : ORIGIN_RING_90;
@@ -346,6 +381,21 @@ export default function MapView() {
   const originRings = useMemo(
     () => (origin ? buildOriginRadiusRings(origin) : null),
     [origin],
+  );
+
+  // Master 6.10 forward slick. Static geometry with no timestep dependency: the existing slider
+  // runs T-24h -> T-0 (the rewind), and the forecast lives on the far side of t0. Rather than
+  // overload one slider with two time domains, the whole 24 h cone is drawn at once and the
+  // fade carries the hour. `forward` is null on a case Stage 2 produced no forecast for.
+  const forward = useAppStore((s) => s.forward);
+  const forwardVisible = useAppStore((s) => s.layers.forward);
+  const forwardRings = useMemo(
+    () => (forward ? buildForwardRings(forward) : null),
+    [forward],
+  );
+  const forwardTrack = useMemo(
+    () => (forward ? buildForwardTrack(forward) : null),
+    [forward],
   );
 
   // Phase 5 attribution. `vessels` is static geometry (no timestep dependency at all) — the
@@ -837,6 +887,38 @@ export default function MapView() {
     return list;
   }, [originImage, origin, originRings, originOpacity]);
 
+  // Forward cone + centroid track. Built once per bundle and toggled purely by visibility, so
+  // turning it on costs nothing and a scrub never touches it.
+  const forwardLayerList = useMemo(() => {
+    if (!forwardVisible || !forwardRings || !forwardTrack) return [];
+    return [
+      new PathLayer<ForwardRing>({
+        id: "forward-rings",
+        data: forwardRings,
+        getPath: forwardRingPath,
+        getColor: forwardRingColor,
+        getWidth: forwardRingWidth,
+        widthUnits: "pixels",
+        widthMinPixels: 1,
+        capRounded: true,
+        jointRounded: true,
+        pickable: false,
+      }),
+      new PathLayer<{ path: LonLat[] }>({
+        id: "forward-track",
+        data: [{ path: forwardTrack }],
+        getPath: (d) => d.path,
+        getColor: FORWARD_TRACK_COLOR,
+        getWidth: FORWARD_TRACK_WIDTH_PX,
+        widthUnits: "pixels",
+        widthMinPixels: 1,
+        capRounded: true,
+        jointRounded: true,
+        pickable: false,
+      }),
+    ];
+  }, [forwardVisible, forwardRings, forwardTrack]);
+
   // Particle cloud — one pre-built binary position frame per timestep (Phase 2). This is the
   // only deck layer that is rebuilt on every playback tick; `frames[t]` is a pre-computed view,
   // so nothing large is allocated here.
@@ -863,7 +945,8 @@ export default function MapView() {
   }, [particles, particlesVisible, t]);
 
   // Push the composed list into the deck overlay. Order is bottom→top: origin bitmap, rings,
-  // vessel tracks, particles, dark-vessel markers, infrastructure markers, ship-detection
+  // forward cone + centroid track, vessel tracks, particles, dark-vessel markers,
+  // infrastructure markers, ship-detection
   // markers (all three point layers drawn last so none is ever hidden under a track line).
   // Runs only when one of the memoised pieces actually changes — never on a bare animation
   // frame — and never re-renders the map container.
@@ -871,6 +954,7 @@ export default function MapView() {
     overlayRef.current?.setProps({
       layers: [
         ...originLayerList,
+        ...forwardLayerList,
         vesselLayer,
         particleLayer,
         infrastructureLayer,
@@ -883,6 +967,7 @@ export default function MapView() {
     });
   }, [
     originLayerList,
+    forwardLayerList,
     vesselLayer,
     particleLayer,
     darkVesselLayer,

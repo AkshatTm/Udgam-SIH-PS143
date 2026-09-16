@@ -7,11 +7,12 @@ import { cached } from "./bundleCache";
 import { loadCase } from "./loadCase";
 import { loadParticleBundle, type ParticleBundle } from "./particles";
 import { loadOriginBundle, type OriginBundle } from "./origin";
+import { loadForwardBundle, type ForwardBundle } from "./forward";
 import { loadVesselBundle, type VesselBundle } from "./vessels";
 import { loadSuspectsBundle, type SuspectsBundle } from "./suspects";
 import { loadVerificationBundle, type VerificationBundle } from "./verification";
 
-export type LayerId = "sar" | "detections" | "particles" | "origin" | "vessels";
+export type LayerId = "sar" | "detections" | "particles" | "origin" | "forward" | "vessels";
 
 export type LoadStatus = "idle" | "loading" | "ready" | "error";
 
@@ -49,6 +50,13 @@ export interface AppState {
   // consumes it: the origin HeatmapLayer + 50/90 % rings and the Trace-stage origin card are
   // both derived from this bundle.
   origin: OriginBundle | null;
+
+  // Master 6.10 forward slick. Same fetch-once discipline as origin, with one difference that
+  // matters: the file is OPTIONAL, so `forward: null` with status "ready" is the normal state
+  // for a case Stage 2 produced no forecast for. It is not an error and shows no banner.
+  forward: ForwardBundle | null;
+  forwardStatus: LoadStatus;
+  forwardError: string | null;
   originStatus: LoadStatus;
   originError: string | null;
 
@@ -94,6 +102,7 @@ export interface AppState {
   loadActiveCase: () => Promise<void>;
   loadParticles: () => Promise<void>;
   loadOrigin: () => Promise<void>;
+  loadForward: () => Promise<void>;
   loadVessels: () => Promise<void>;
   loadSuspects: () => Promise<void>;
   loadVerification: () => Promise<void>;
@@ -173,6 +182,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   origin: null,
   originStatus: "idle",
+  forward: null,
+  forwardStatus: "idle",
+  forwardError: null,
   originError: null,
 
   vessels: null,
@@ -196,6 +208,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     detections: true,
     particles: false,
     origin: false,
+    // Off until a judge asks "and where does it go now?" — the Trace reveal is already a busy
+    // moment, and the forward cone overlaps the origin cloud at t0 by construction.
+    forward: false,
     vessels: false,
   },
   tNorm: 1,
@@ -233,6 +248,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Reset the origin cloud for the incoming case.
       origin: null,
       originStatus: "idle",
+      forward: null,
+      forwardStatus: "idle",
+      forwardError: null,
       originError: null,
       // Reset attribution for the incoming case.
       vessels: null,
@@ -269,6 +287,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (meta.acts_available.includes("trace")) {
         void get().loadParticles();
         void get().loadOrigin();
+        void get().loadForward();
       }
       // Fetch the attribution bundles in the background. CONTRACTS §1: `attribute` requires
       // vessels.geojson + suspects.json (and trace, so origin.abstain is always available
@@ -329,6 +348,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (err) {
       if (get().activeCaseId !== id) return;
       set({ origin: null, originStatus: "error", originError: (err as Error).message });
+    }
+  },
+
+  loadForward: async () => {
+    const id = get().activeCaseId;
+    if (get().forwardStatus === "loading") return;
+    set({ forwardStatus: "loading", forwardError: null });
+    try {
+      const bundle = await cached(`forward:${id}`, () => loadForwardBundle(id));
+      // A different case was selected while this bundle was in flight - drop it.
+      if (get().activeCaseId !== id) return;
+      // `bundle` is null when the case carries no forward_impact.json. That is a valid,
+      // fully-loaded state (Master 6.10: the file is optional), so the status is "ready" and
+      // the Forward toggle simply stays disabled.
+      set({ forward: bundle, forwardStatus: "ready" });
+    } catch (err) {
+      if (get().activeCaseId !== id) return;
+      set({ forward: null, forwardStatus: "error", forwardError: (err as Error).message });
     }
   },
 
@@ -450,6 +487,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         detections: true,
         particles: false,
         origin: false,
+        forward: false,
         vessels: false,
       },
       playing: false,
@@ -480,6 +518,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         origin: null,
         originStatus: "idle",
         originError: null,
+        forward: null,
+        forwardStatus: "idle",
+        forwardError: null,
         vessels: null,
         vesselsStatus: "idle",
         vesselsError: null,

@@ -5,9 +5,13 @@ wind/current draws, seed 143) but FORWARD from t0, keeping hourly frames, and re
   - r50 / r90 of the pooled forward cloud (the mirror of F2.1)
   - the fraction of particles stranded on the GSHHG coastline (sticky), and first landfall
 
-Writes ONLY docs/evaluation/figures/stage2/data/forward_<case>.json. Never touches particles.json,
-particles_forward.json, origin.json or meta.json (Rule 3; forward_impact.json deferred by Akshat,
-16 Sept).
+`compute()` holds the physics and returns the result dict. Two callers share it, so the bundle and
+the evidence file can never drift apart into two sets of numbers:
+  - this module's CLI writes docs/evaluation/figures/stage2/data/forward_<case>.json (evidence)
+  - forward_impact.py writes cases/<case>/forward_impact.json (the bundle, Master 6.10)
+
+Never touches particles.json, particles_forward.json, origin.json or meta.json (Rule 3).
+The 16 Sept deferral of forward_impact.json was LIFTED by Akshat on 16 Sept; see Master 6.10.
 
 HORIZON: the cached fields cover ~24-26 h past t0 on every case, and assert_field_covers refuses
 anything longer, so the forecast is 24 h. +48 h and +72 h would need a wider GEE fetch; they are
@@ -34,10 +38,12 @@ FRAMES_PER_HOUR = 4
 HORIZON_H = 24
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--case", required=True)
-    cli = ap.parse_args()
+def compute(case):
+    """Run the 50-member forward ensemble for `case` and return the measured result dict.
+
+    The single source of the forward numbers. Both the evidence file and the bundle's
+    forward_impact.json are written from this return value, never recomputed separately.
+    """
     result = {}
 
     def forward_ensemble(a, meta, t0, field, seed, feat, out_dir):
@@ -113,16 +119,35 @@ def main():
         })
         return 0
 
+    original_run_forward = run.run_forward
+    original_argv = sys.argv
     run.run_forward = forward_ensemble
-    sys.argv = ["run.py", "--case", cli.case, "--real", "--forward", "--particles", "3000",
-                "--runs", "50", "--out", str(Path.home() / f"fwd_scratch_{cli.case}")]
-    run.main()
+    sys.argv = ["run.py", "--case", case, "--real", "--forward", "--particles", "3000",
+                "--runs", "50", "--out", str(Path.home() / f"fwd_scratch_{case}")]
+    try:
+        run.main()
+    finally:
+        run.run_forward = original_run_forward
+        sys.argv = original_argv
+    return result
+
+
+def summarise(case, result):
+    e = result["envelope"]
+    return (f"[forward] {case}: +24 h r50 {e[-1]['radius_50_km']} r90 {e[-1]['radius_90_km']}  "
+            f"stranded {result['stranded_fraction_at_horizon']}  "
+            f"first landfall {result['first_landfall_hours']}  "
+            f"edge margin {result['edge_margin_km']} km")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--case", required=True)
+    cli = ap.parse_args()
+    result = compute(cli.case)
     out = REPO / "docs/evaluation/figures/stage2/data" / f"forward_{cli.case}.json"
     out.write_text(json.dumps(result, indent=1))
-    e = result["envelope"]
-    print(f"[forward] {cli.case}: +24 h r50 {e[-1]['radius_50_km']} r90 {e[-1]['radius_90_km']}  "
-          f"stranded {result['stranded_fraction_at_horizon']}  first landfall {result['first_landfall_hours']}  "
-          f"edge margin {result['edge_margin_km']} km")
+    print(summarise(cli.case, result))
 
 
 if __name__ == "__main__":
