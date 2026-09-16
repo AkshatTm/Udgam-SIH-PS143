@@ -12,6 +12,13 @@ name: deploy
 #   AWS_REGION          -- e.g. ap-south-1
 #   S3_BUCKET_NAME       -- the frontend bucket name
 #
+# Also requires this repo VARIABLE (Settings -> Secrets and variables -> Actions -> Variables
+# tab, not Secrets -- it's a public IP baked into a static export, not sensitive):
+#   NEXT_PUBLIC_API_BASE -- e.g. http://<ec2-elastic-ip>  (plain HTTP, no domain/TLS; the P3
+#   EC2 origin is public-facing directly, not behind CloudFront -- see docs/updates/harshita.md)
+#   Without it, the build falls back to http://localhost:8000 and the Re-run/Upload buttons
+#   silently do nothing useful on the deployed site.
+#
 # No cache invalidation step: S3 website hosting serves objects directly, there is no CDN
 # layer caching stale copies the way CloudFront would.
 
@@ -53,6 +60,8 @@ jobs:
 
       - name: Build static export
         working-directory: web
+        env:
+          NEXT_PUBLIC_API_BASE: ${{ vars.NEXT_PUBLIC_API_BASE }}
         run: npm run build
 
       - uses: aws-actions/configure-aws-credentials@v4

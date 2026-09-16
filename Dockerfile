@@ -13,7 +13,8 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt requirements-detect.txt api/requirements.txt ./
+COPY requirements.txt requirements-detect.txt ./
+COPY api/requirements.txt ./api/requirements.txt
 
 # CPU-only torch, installed on its own line. --extra-index-url must be scoped to just this
 # one install, not applied to the whole requirements.txt — see requirements-detect.txt's own
@@ -28,6 +29,13 @@ RUN pip install --no-cache-dir --prefix=/install -r api/requirements.txt
 
 FROM python:3.13-slim
 WORKDIR /app
+# Runtime-only shared libs the slim base doesn't ship, needed by wheels that only dlopen
+# them (so the image builds and /api/health passes clean — only an actual pipeline run
+# throws). rasterio/GDAL needs libexpat for XML parsing; opencv-python (non-headless, it's
+# what requirements-detect.txt pins) needs the X11/GL/GLib stack for its Qt plugin even
+# though nothing here ever opens a GUI window. Caught by hitting /api/detect for real.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libexpat1 libgl1 libglib2.0-0 libxcb1 && rm -rf /var/lib/apt/lists/*
 COPY --from=build /install /usr/local
 COPY pipeline/ ./pipeline/
 COPY scripts/  ./scripts/
