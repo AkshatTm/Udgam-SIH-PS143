@@ -1551,7 +1551,7 @@ def load_calibration(path=CALIBRATION_PATH):
     """Weights and observation errors fitted by age_twins.py, or the defaults with a flag."""
     cal = {"weights": dict(DEFAULT_WEIGHTS), "sigma_L": SHAPE_SIGMA_LOG_L,
            "sigma_W": SHAPE_SIGMA_LOG_W, "kappa": SHAPE_KAPPA,
-           "coverage80": None, "source": "defaults (uncalibrated)"}
+           "min_gain": None, "coverage80": None, "source": "defaults (uncalibrated)"}
     p = Path(path)
     if p.exists():
         loaded = json.loads(p.read_text())
@@ -1682,16 +1682,27 @@ def estimate_age(field, feature, t0, candidate_hours, origin_lonlat, *, release_
     wind = mean_wind_ms(field, olon, olat, t0)
     flag, weather_diag = weathering_flag(wind, contrast[0], contrast[1])
 
+    # ---- E8 optional surrogate (weight 0 unless calibration switched it on) -----------
+    ll_sur = None
+    if wts.get("surrogate", 0.0) > 0:
+        import age_surrogate
+        ll_sur = age_surrogate.surrogate_loglik(feature, field, t0)
+        log(f"E8 surrogate {'likelihood' if ll_sur is not None else 'none (no trained model)'}")
+
     # ---- fuse ------------------------------------------------------------------------
     shape_mix = AP.mix_logliks([ll_ours, ll_od])
+    sur_w = wts.get("surrogate", 0.0)
     patch_post, patch_used = AP.fuse([("shape", shape_mix, wts["shape"]),
-                                      ("detect", ll_det, wts["detect"])])
+                                      ("detect", ll_det, wts["detect"]),
+                                      ("surrogate", ll_sur, sur_w)])
     track_post, track_used = AP.fuse([("track", ll_track, wts["track"]),
-                                      ("detect", ll_det, wts["detect"])])
-    # a hypothesis whose only evidence is E3 is not a measurement of THIS slick's shape
-    if patch_used == ["detect"]:
+                                      ("detect", ll_det, wts["detect"]),
+                                      ("surrogate", ll_sur, sur_w)])
+    # a hypothesis with no direct shape evidence (only E3 and/or the surrogate) is not a
+    # measurement of THIS slick under that hypothesis
+    if not {"shape"} & set(patch_used):
         patch_post = None
-    if track_used == ["detect"]:
+    if not {"track"} & set(track_used):
         track_post = None
     if discharge == "acute":
         post, hyp = patch_post, ["patch"]
@@ -1700,7 +1711,8 @@ def estimate_age(field, feature, t0, candidate_hours, origin_lonlat, *, release_
     else:
         post = AP.average_posteriors([patch_post, track_post])
         hyp = [h for h, p in (("patch", patch_post), ("track", track_post)) if p is not None]
-    summary = AP.summarise(post, hyp)
+    summary = AP.summarise(post, hyp,
+                           min_gain=cal.get("min_gain") or AP.MIN_INFO_GAIN_NATS)
 
     models = []
     if ll_ours is not None:
@@ -1748,8 +1760,8 @@ def estimate_age(field, feature, t0, candidate_hours, origin_lonlat, *, release_
         "observed": {"id": props.get("id"), "area_km2": area, "elongation": elong,
                      "discharge_class": discharge, "length_km": length, "width_km": width,
                      "bearing_deg": bearing},
-        "calibration": {k: cal[k] for k in ("source", "weights", "sigma_L", "sigma_W",
-                                             "kappa", "coverage80")},
+        "calibration": {k: cal.get(k) for k in ("source", "weights", "sigma_L", "sigma_W",
+                                                 "kappa", "min_gain", "coverage80")},
         "posterior": summary,
         "hypotheses": {"patch": {"used": patch_used,
                                  "hpd80": None if patch_post is None

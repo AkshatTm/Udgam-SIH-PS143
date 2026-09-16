@@ -399,6 +399,10 @@ def cmd_score(a):
 
 def load_all():
     rows = []
+    # held-out surrogate quantiles (age_surrogate.py evaluate), keyed by twin id -- present only
+    # after that step has run; each twin's quantiles come from a model that never saw its field
+    sq_path = TWINS / "surrogate_heldout.json"
+    sq = json.loads(sq_path.read_text()) if sq_path.exists() else {}
     for f in FIELDS:
         d = TWINS / f
         if not (d / "scored.json").exists():
@@ -418,6 +422,10 @@ def load_all():
             r["truth"] = truths[tid]
             r["field"] = f
             r["ch"] = req["candidate_hours"]
+            r["surrogate_q"] = sq.get(tid)
+            c = r.get("curves_ours")
+            if c:   # arrays once, not once per grid point of the search
+                r["curves_ours"] = {k: np.asarray(v, dtype=float) for k, v in c.items()}
             if od is not None and tid in od["ids"]:
                 k = od["ids"].index(tid)
                 r["curves_od"] = {"L": od["L"][k], "W": od["W"][k], "B": od["B"][k],
@@ -426,27 +434,56 @@ def load_all():
     return rows
 
 
+_LL_CACHE = {}
+
+
+def _cached_shape(r, which, p):
+    """Shape log-likelihood for one twin and model, cached per (sigma_L, sigma_W, kappa): the
+    weight and threshold search re-fuses thousands of times but only these three change it."""
+    key = (r["truth"]["id"], which, p["sigma_L"], p["sigma_W"], p["kappa"])
+    if key not in _LL_CACHE:
+        o = r["obs"]
+        if which == "ours":
+            c = r["curves_ours"]
+            _LL_CACHE[key] = age.shape_loglik(r["ch"], c["L_km"], c["W_km"], c["bearing_deg"],
+                                              o["L"], o["W"], o["B"], p["sigma_L"],
+                                              p["sigma_W"], p["kappa"])
+        else:
+            od = r["curves_od"]
+            _LL_CACHE[key] = age.shape_loglik(od["ch"], od["L"], od["W"], od["B"], o["L"],
+                                              o["W"], o["B"], p["sigma_L"], p["sigma_W"],
+                                              p["kappa"])
+    return _LL_CACHE[key]
+
+
 def posterior_for(r, setting, p):
     """Rebuild one twin's posterior from stored curves under parameters `p` and a setting."""
     ll1 = ll2 = ll3 = None
     o = r["obs"]
     c = r.get("curves_ours")
     if setting in ("mixture", "cross_ours") and c and o["L"]:
-        ll1 = age.shape_loglik(r["ch"], c["L_km"], c["W_km"], c["bearing_deg"], o["L"], o["W"],
-                               o["B"], p["sigma_L"], p["sigma_W"], p["kappa"])
+        ll1 = _cached_shape(r, "ours", p)
     od = r.get("curves_od")
     if setting in ("mixture", "cross_openoil") and od is not None and o["L"]:
-        ll2 = age.shape_loglik(od["ch"], od["L"], od["W"], od["B"], o["L"], o["W"], o["B"],
-                               p["sigma_L"], p["sigma_W"], p["kappa"])
+        ll2 = _cached_shape(r, "od", p)
         if setting == "mixture":
-            ll3 = age.detectability_loglik(od["ch"], od["SF"])
+            key = (r["truth"]["id"], "detect")
+            if key not in _LL_CACHE:
+                _LL_CACHE[key] = age.detectability_loglik(od["ch"], od["SF"])
+            ll3 = _LL_CACHE[key]
     w = p["weights"]
     llt = None if r.get("track_loglik") is None else np.asarray(r["track_loglik"])
+    lls = None
+    if w.get("surrogate", 0) > 0 and r.get("surrogate_q") is not None:
+        import age_surrogate
+        lls = age_surrogate.loglik_from_quantiles(*r["surrogate_q"])
     patch, pu = AP.fuse([("shape", AP.mix_logliks([ll1, ll2]), w["shape"]),
-                         ("detect", ll3, w["detect"])])
-    track, tu = AP.fuse([("track", llt, w["track"]), ("detect", ll3, w["detect"])])
-    patch = None if pu == ["detect"] else patch
-    track = None if tu == ["detect"] else track
+                         ("detect", ll3, w["detect"]),
+                         ("surrogate", lls, w.get("surrogate", 0))])
+    track, tu = AP.fuse([("track", llt, w["track"]), ("detect", ll3, w["detect"]),
+                         ("surrogate", lls, w.get("surrogate", 0))])
+    patch = patch if "shape" in pu else None
+    track = track if "track" in tu else None
     dc = r.get("discharge_class")
     if dc == "acute":
         post = patch
@@ -454,7 +491,7 @@ def posterior_for(r, setting, p):
         post = track
     else:
         post = AP.average_posteriors([patch, track])
-    return AP.summarise(post, []), post
+    return AP.summarise(post, [], min_gain=p.get("min_gain", AP.MIN_INFO_GAIN_NATS)), post
 
 
 def settings_for(r):
@@ -469,15 +506,20 @@ def settings_for(r):
 def evaluate(rows, p, setting):
     """Coverage, width, log score and refusal rate over `rows` under one setting."""
     cov, width, logs, pits, n_ref, n = [], [], [], [], 0, 0
+    prior = np.exp(AP.log_uniform_prior())
     for r in rows:
         if setting not in settings_for(r):
             continue
         n += 1
         summ, post = posterior_for(r, setting, p)
-        if post is None or summ["status"] != "ok":
-            n_ref += 1
-            continue
         t = r["truth"]["age_h"]
+        if post is None or summ["status"] != "ok":
+            # A refusal hands the user the prior, so it is SCORED as the prior. Leaving it out
+            # made "refuse everything" the optimum of the calibration search.
+            n_ref += 1
+            k = int(np.argmin(np.abs(AP.AGE_GRID_H - t)))
+            logs.append(math.log(max(prior[k], 1e-12)))
+            continue
         lo, hi = summ["hpd80"]
         cov.append(lo <= t <= hi)
         width.append(math.log(hi / max(lo, 0.5)))
@@ -493,23 +535,28 @@ def evaluate(rows, p, setting):
 
 def fit(rows):
     """Grid search: sigmas on the CROSS settings; weights by coverage-penalised log score."""
+    import itertools
     best = None
-    for sL in (0.2, 0.3, 0.45, 0.65, 0.9):
-        for sW in (0.35, 0.5, 0.75, 1.0):
-            for kap in (0.0, 0.5, 1.0):
-                for ws in (0.5, 0.75, 1.0):
-                    for wt in (0.25, 0.5, 1.0):
-                        p = {"sigma_L": sL, "sigma_W": sW, "kappa": kap,
-                             "weights": {"shape": ws, "detect": 0.5, "track": wt,
-                                         "surrogate": 0.0}}
-                        score, ok = 0.0, True
-                        for st in ("cross_ours", "cross_openoil"):
-                            e = evaluate(rows, p, st)
-                            if not e["answered"]:
-                                continue
-                            score += e["mean_log_score"] - 10.0 * abs(e["coverage80"] - 0.80)
-                        if best is None or score > best[0]:
-                            best = (score, p)
+    sur_grid = (0.0, 0.5) if any(r.get("surrogate_q") for r in rows) else (0.0,)
+    # sigma grids reach past the first trial's optimum (sigma_L hit the old 0.9 edge)
+    for sL, sW, kap, ws, wt, wsur, gain in itertools.product(
+            (0.3, 0.45, 0.65, 0.9, 1.2, 1.6), (0.35, 0.5, 0.75, 1.0, 1.4), (0.0, 0.5, 1.0),
+            (0.5, 0.75, 1.0), (0.25, 0.5, 1.0), sur_grid, (0.02, 0.05, 0.10)):
+        p = {"sigma_L": sL, "sigma_W": sW, "kappa": kap, "min_gain": gain,
+             "weights": {"shape": ws, "detect": 0.5, "track": wt, "surrogate": wsur}}
+        score = 0.0
+        for st in ("cross_ours", "cross_openoil"):
+            e = evaluate(rows, p, st)
+            if not e["n"]:
+                continue
+            # Mean log score over EVERY twin (a refusal scores as the prior), so an answer must
+            # beat "I don't know" to be worth giving. The coverage penalty, scaled by how much
+            # was answered, stops sharpness being bought with overconfidence.
+            frac = e["answered"] / e["n"]
+            cov_pen = 0.0 if not e["answered"] else abs(e["coverage80"] - 0.80) * frac
+            score += e["mean_log_score"] - 10.0 * cov_pen
+        if best is None or score > best[0]:
+            best = (score, p)
     return best[1]
 
 
@@ -528,7 +575,7 @@ def cmd_calibrate(a):
             e["field"] = f
             held[st].append(e)
         print(f"  held out {f}: fitted sigma_L {p['sigma_L']} sigma_W {p['sigma_W']} "
-              f"kappa {p['kappa']} w {p['weights']}")
+              f"kappa {p['kappa']} min_gain {p['min_gain']} w {p['weights']}", flush=True)
     final = fit(rows)
     summary = {}
     for st, es in held.items():
@@ -539,7 +586,7 @@ def cmd_calibrate(a):
                        "coverage80_heldout": None if not ans else round(cov / ans, 3),
                        "per_field": es}
     cal = {"sigma_L": final["sigma_L"], "sigma_W": final["sigma_W"], "kappa": final["kappa"],
-           "weights": final["weights"],
+           "weights": final["weights"], "min_gain": final["min_gain"],
            "coverage80": summary["mixture"]["coverage80_heldout"],
            "coverage80_cross": {k: summary[k]["coverage80_heldout"]
                                 for k in ("cross_ours", "cross_openoil")},
@@ -551,6 +598,68 @@ def cmd_calibrate(a):
     print(json.dumps({k: {kk: vv for kk, vv in v.items() if kk != "per_field"}
                       for k, v in summary.items()}, indent=1))
     print(f"wrote {age.CALIBRATION_PATH}")
+
+
+def cmd_report(a):
+    """Figure F2.10 + the numbers table for docs/evaluation/stage2-age-engine.md."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    rows = load_all()
+    cal = json.loads(age.CALIBRATION_PATH.read_text())
+    p = {k: cal[k] for k in ("sigma_L", "sigma_W", "kappa", "weights", "min_gain")}
+    settings = ("cross_ours", "cross_openoil", "mixture")
+    ev = {st: evaluate(rows, p, st) for st in settings}   # in-sample, for the figure only
+    rep = json.loads((TWINS / "calibration_report.json").read_text())
+
+    fig, axes = plt.subplots(1, 3, figsize=(13, 3.8))
+    for st, col in zip(settings, ("#2a6f97", "#c9832e", "#555555")):
+        axes[0].hist(ev[st]["pits"], bins=10, range=(0, 1), histtype="step", lw=2, color=col,
+                     label=f"{st} (n={ev[st]['answered']})")
+    axes[0].axhline(0, color="k", lw=0.5)
+    axes[0].set_title("PIT of the true age (flat = calibrated)")
+    axes[0].set_xlabel("posterior CDF at the true age")
+    axes[0].legend(fontsize=8)
+    truth, med, lo, hi, kind = [], [], [], [], []
+    for r in rows:
+        s, post = posterior_for(r, "mixture", p)
+        if post is None or s["status"] != "ok":
+            continue
+        truth.append(r["truth"]["age_h"])
+        med.append(s["median"])
+        lo.append(s["hpd80"][0])
+        hi.append(s["hpd80"][1])
+        kind.append(r["truth"]["kind"])
+    truth, med = np.asarray(truth), np.asarray(med)
+    for k, mk in (("patch", "o"), ("track", "^")):
+        sel = np.asarray(kind) == k
+        axes[1].errorbar(truth[sel], med[sel],
+                         yerr=[med[sel] - np.asarray(lo)[sel], np.asarray(hi)[sel] - med[sel]],
+                         fmt=mk, ms=4, alpha=0.6, elinewidth=0.6, label=k)
+    axes[1].plot([1, 72], [1, 72], "k--", lw=0.8)
+    axes[1].set_xscale("log")
+    axes[1].set_yscale("log")
+    axes[1].set_xlabel("true age (h)")
+    axes[1].set_ylabel("posterior median, 80% HPD (h)")
+    axes[1].set_title("mixture setting, all twins")
+    axes[1].legend(fontsize=8)
+    per = rep["mixture"]["per_field"]
+    names = [e["field"].replace("case-", "") for e in per]
+    axes[2].bar(range(len(per)), [e["coverage80"] or 0 for e in per], color="#2a6f97")
+    axes[2].axhline(0.8, color="k", ls="--", lw=0.8)
+    axes[2].set_xticks(range(len(per)))
+    axes[2].set_xticklabels(names, rotation=35, ha="right", fontsize=8)
+    axes[2].set_ylim(0, 1)
+    axes[2].set_title("held-out 80% coverage by field")
+    fig.tight_layout()
+    out = REPO / "docs" / "evaluation" / "figures" / "stage2" / "F2.10_age_calibration.png"
+    fig.savefig(out, dpi=130)
+    print(f"wrote {out}")
+    summary = {st: {k: v for k, v in rep[st].items() if k != "per_field"} for st in settings}
+    summary["median_abs_log2_error_mixture"] = round(float(np.median(
+        np.abs(np.log2(med / truth)))), 3) if len(truth) else None
+    (TWINS / "report_numbers.json").write_text(json.dumps(summary, indent=1))
+    print(json.dumps(summary, indent=1))
 
 
 def main(argv=None):
@@ -566,9 +675,10 @@ def main(argv=None):
     sc.add_argument("--field", required=True, choices=FIELDS)
     sc.add_argument("--jobs", type=int, default=7)
     sub.add_parser("calibrate")
+    sub.add_parser("report")
     a = ap.parse_args(argv)
     {"make": cmd_make, "prepare": cmd_prepare, "score": cmd_score,
-     "calibrate": cmd_calibrate}[a.cmd](a)
+     "calibrate": cmd_calibrate, "report": cmd_report}[a.cmd](a)
     return 0
 
 
