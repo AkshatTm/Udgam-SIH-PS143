@@ -12,6 +12,77 @@ top entry and tell me exactly where I left off and what the next step is."*
 
 ---
 
+## [2026-09-16 11:40] P1 — land-masked the ship contacts: 142 → 110
+
+**Done:** Routed the ship detector through a **real coastline** instead of the brightness-inferred
+land mask. `darkspot.prepare()` already had an `external_land` parameter for exactly this; `run.py`
+was calling it without one, so contacts were being filtered only by a brightness heuristic that
+(a) over-flags dark scenes and (b) misses a radar-dark shore entirely.
+
+| case | before | after | coastline land |
+|---|---|---|---|
+| jacksonville | 2 | 2 | 0.0% |
+| farallones | 0 | 0 | 0.0% |
+| huntington | 43 | 43 | 0.7% |
+| gulf-alaska | **0** | **0** | 0.0% |
+| mumbai | 21 | 21 | 0.0% |
+| jamnagar | 3 | 3 | 0.0% |
+| **ennore** | **72** | **41** | **26.3%** |
+| **lookalike-zenodo** | **1** | **0** | **59.0%** |
+| nospill-zenodo | 0 | 0 | 0.0% |
+| **TOTAL** | **142** | **110** | **32 land contacts removed** |
+
+**The brief's hypothesis was right for Ennore and wrong for Huntington.** I checked every export
+box against real geography before trusting the mask:
+
+- **Ennore** 80.28–80.45 E, 13.10–13.30 N → **26.3% land**, the Chennai coast. 31 contacts removed.
+- **Huntington** −118.17 to −118.05 W → **0.7% land**; the box is 99.3% water and the east edge only
+  clips the shore. **Its 43 contacts are NOT land returns.** Brightest is **+23.5 dB**, which is a
+  hard target, not a wave crest — this is a busy harbour approach.
+- **Mumbai** 72.09–72.27 E, 18.40–18.61 N → **0.0%**, ~50 km SW of the city in open sea.
+- **Jacksonville** −79.68 W, 30.2–30.6 N → **0.0%**, ~190 km offshore.
+- **Alaska stays at zero.** Unchanged, as required.
+
+**⚠ `case-lookalike-zenodo` is 59% land**, and its single contact sat on it. That is the same shape
+of problem as the farmland scene that got `nospill-zenodo` replaced. **Case selection is Akshat's —
+flagging, not acting.**
+
+**Verified before committing:** every **oil feature is byte-identical** across all nine bundles —
+only `ship_detections` changed, in 2 files. `k_sigma` unchanged at **4.0**. No bundle hand-edited.
+
+**Contact brightness after the mask** (the brief's second gate):
+
+| case | n | max dB | median | min |
+|---|---|---|---|---|
+| jacksonville | 2 | −7.34 | −7.74 | −8.13 |
+| huntington | 43 | +23.47 | +0.81 | −9.49 |
+| mumbai | 21 | +17.17 | +3.68 | −6.94 |
+| jamnagar | 3 | +8.74 | +2.63 | −2.02 |
+| ennore | 41 | +22.21 | −2.09 | −6.12 |
+
+**Files:** `pipeline/detect/run.py`, `cases/case-ennore-lookalike-2023/detections.geojson`,
+`cases/case-lookalike-zenodo/detections.geojson`
+
+**Run:**
+```bash
+python pipeline/detect/run.py --case <id> --rule-contrast -3.0 --rule-elongation 2.5
+python pipeline/export/build_case.py --case <id> --stage detect
+python scripts/validate_case.py cases/<id>     # 9/9 PASS
+```
+
+**Open — for Akshat:**
+1. **`ship_detections` has no m² field.** Per 1.3 I did **not** add one (do not extend a schema
+   unilaterally). Per-case pixel area is computed and handed to Jaiveer instead: **50.7 m²
+   (Alaska) to 97.4 m² (Ennore), 1.92× spread**; `MIN_PX=4` → **203–389 m²**. `est_length_m` stays
+   `null`.
+2. **No `detections.geojson` carries a `meta` block at all** — `meta` is `null` in all nine. So
+   `meta.provenance` is absent everywhere and D33 routes every case to `satellite`/classical. That
+   matches the brief, **but `soumirya_case_nominations.md` states the two Zenodo cases "are
+   benchmark-provenance, so run.py routes them to Layer 1 + Layer 2" — which is false as the
+   bundles stand.** Either the doc or the bundles needs correcting.
+3. **The brief's `case-nospill-zenodo` = 31 contacts is stale.** It is **0**, and has been since the
+   farmland scene was replaced with `P3_No oil_00027`.
+
 ## [2026-09-16 09:40] P0 — deck corrections from Akshat's final-day brief
 
 **Done:** Worked P0 of the final-day brief. Two of the three items were already closed by earlier
