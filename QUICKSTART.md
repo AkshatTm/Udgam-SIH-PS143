@@ -18,8 +18,11 @@ Open **http://localhost:3000**. That is the whole thing.
 The interface never calls Python. It reads static JSON out of `web/public/cases/`, so the app runs
 with **the wifi switched off** and does not need the pipeline, the venv, or a single API key.
 
-> Re-run `python scripts/sync_web_cases.py --clean` from the repo root after **any** change to
-> `cases/`. A bundle that changed in `cases/` but was not synced shows **stale data, not an error**.
+> `npm run dev` and `npm run build` copy `cases/` into `web/public/cases/` themselves (the
+> `predev`/`prebuild` hook runs `web/scripts/sync-cases.mjs`), so a fresh clone needs no Python to
+> start the app. If you change a bundle **while the dev server is running**, re-run
+> `node web/scripts/sync-cases.mjs` (or `python scripts/sync_web_cases.py --clean`) — an un-synced
+> bundle shows **stale data, not an error**.
 
 ---
 
@@ -58,8 +61,8 @@ a judge.
 ### 3. Node — the interface
 
 ```bash
-python scripts/sync_web_cases.py --clean   # from the repo root; web/public/cases/ is gitignored
-cd web
+cd web                                     # web/public/cases/ is gitignored; predev syncs it
+
 npm ci
 npm run dev
 ```

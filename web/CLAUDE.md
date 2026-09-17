@@ -51,15 +51,13 @@ Decimate to every 2nd timestep · drop to 2000 particles. Never change the schem
 ---
 
 ## Getting the bundles in front of the app
-`web/public/cases/` is gitignored — it is a copy, not a source. Refresh it from the repo root
-whenever a bundle changes:
+`web/public/cases/` is gitignored — it is a copy, not a source. `npm run dev` / `npm run build`
+refresh it automatically (`predev`/`prebuild` → `scripts/sync-cases.mjs`: `.json`/`.geojson`/`.png`
+only, no `sar_vv_vh.tif`, stale cases removed). If a bundle changes while the dev server is running:
 
-```powershell
-robocopy cases web\public\cases /MIR      # Windows
-```
 ```bash
-rsync -a --delete cases/ web/public/cases/   # macOS/Linux
+node scripts/sync-cases.mjs      # from web/
 ```
 
-Then fetch `/cases/case-000/meta.json`. The bundle shapes are frozen in `docs/CONTRACTS.md` —
+Then fetch `/cases/<id>/meta.json`. The bundle shapes are frozen in `docs/CONTRACTS.md` —
 that file, not the sample data, is the source of truth for what a field means.
