@@ -38,6 +38,10 @@ import {
 import { Divider, SectionLabel, Row, MetricRow } from "@/components/PanelAtoms";
 import { fmt, fmtLat, fmtLon, fmtDay, fmtTime } from "@/lib/format";
 import TraceCard from "@/components/trace/TraceCard";
+import { spillGroupFor } from "@/lib/spillGroups";
+import { groupColor } from "@/lib/groupColors";
+import type { SpillGroup } from "@/lib/contracts";
+import type { GroupBundle } from "@/lib/store";
 
 // Classification colours. The comment always claimed these matched the map; they did not — the
 // panel was a hair redder and a shade lighter than the polygons beside it. Both now read the
@@ -143,11 +147,45 @@ function confidenceLabel(
   return `marginal · ${db} vs ${rule}`;
 }
 
+/** D46 — [r,g,b,a] 0-255 (deck.gl convention) to a CSS rgba() string, for the swatches this
+ *  panel and MapView.tsx's deck.gl layers must agree on pixel-for-pixel. */
+function rgba([r, g, b, a]: readonly [number, number, number, number]): string {
+  return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(2)})`;
+}
+
+/** D46 — shown on `DetectionCard` only when a case has more than one independent spill group,
+ * so a single-spill case (the overwhelming majority) never grows an extra badge it has nothing
+ * to say. Names which group this specific detection belongs to (by area rank, matching the
+ * order MapView.tsx colours groups in) and, when the group merged several detections into one
+ * ribbon, which other detection ids came along with it. */
+function SpillGroupBadge({ groups, detectionId }: { groups: SpillGroup[]; detectionId: string }) {
+  const group = spillGroupFor(detectionId, groups);
+  if (!group) return null;
+  const index = groups.findIndex((g) => g.id === group.id);
+  const palette = groupColor(index);
+  const others = group.member_detection_ids.filter((id) => id !== detectionId);
+  return (
+    <div className="mt-1.5 inline-flex items-baseline gap-1.5 rounded border border-line-strong bg-white/[0.05] px-2 py-1">
+      <span
+        className="inline-block h-2 w-2 shrink-0 self-center rounded-full"
+        style={{ backgroundColor: rgba(palette.fill) }}
+      />
+      <span className="text-[12px] font-semibold text-ink">
+        Spill group {index + 1} of {groups.length}
+      </span>
+      <span className="font-mono text-[11px] text-ink-3">
+        {fmt(group.total_area_km2, 2)} km²{others.length > 0 ? ` · ribbon with ${others.join(", ")}` : ""}
+      </span>
+    </div>
+  );
+}
+
 function DetectionCard({ p }: { p: DetectionProperties }) {
   const isOil = p.classification === "oil";
   const rows = featureRows(p);
   const accentColor = isOil ? OIL_COLOR : LOOKALIKE_COLOR;
   const provenance = useAppStore((s) => s.meta?.provenance);
+  const spillGroups = useAppStore((s) => s.spillGroups);
 
   // Object number from id: "det-01" → "01"
   const objNum = p.id.replace(/^det-?/i, "").padStart(2, "0").toUpperCase();
@@ -169,6 +207,9 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
           {confidenceLabel(p, provenance)}
         </div>
         {p.discharge_class && <DischargeBadge value={p.discharge_class} />}
+        {isOil && spillGroups && spillGroups.length > 1 && (
+          <SpillGroupBadge groups={spillGroups} detectionId={p.id} />
+        )}
       </div>
 
       <Divider />
@@ -275,6 +316,58 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
 
 // TraceCard now lives in components/trace/TraceCard.tsx (redesigned Trace-stage panel — capsule
 // layout + GSAP entrance/count-up/disclosure motion). AGE_METHOD_LABEL moved there with it.
+
+/**
+ * D46 — shown above `TraceCard` (which keeps rendering the PRIMARY group only, unchanged) when
+ * a case has more than one independent spill group, so a judge sees at a glance that every
+ * simultaneously-drifting cloud on the map is accounted for and which colour is which. Each
+ * group's own origin stats stream in independently as its bundle loads — never blocked on the
+ * others, matching the map's own per-group draw-on.
+ */
+function SpillGroupsSummary({ groups, bundles }: { groups: SpillGroup[]; bundles: GroupBundle[] }) {
+  return (
+    <div className="mb-4 rounded border border-line bg-raised p-3">
+      <div className="t-label">{groups.length} independent spill groups</div>
+      <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
+        Each traced back separately — the map shows every cloud at once, one colour per group.
+      </p>
+      <div className="mt-2.5 space-y-2.5">
+        {groups.map((g, i) => {
+          const bundle = bundles.find((b) => b.id === g.id);
+          const palette = groupColor(i);
+          return (
+            <div key={g.id} className="flex items-start gap-2">
+              <span
+                className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: rgba(palette.fill) }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold leading-tight text-ink">
+                  Group {i + 1} · {fmt(g.total_area_km2, 2)} km²
+                </div>
+                <div className="font-mono text-[11px] text-ink-3">
+                  {g.member_detection_ids.join(", ")}
+                </div>
+                {bundle?.status === "ready" && bundle.origin && (
+                  <div className="mt-0.5 text-[12px] text-ink-2">
+                    r50 {fmt(bundle.origin.radius50Km, 1)} km · r90 {fmt(bundle.origin.radius90Km, 1)} km
+                    {bundle.origin.abstain ? " · abstained" : ""}
+                  </div>
+                )}
+                {(!bundle || bundle.status === "loading") && (
+                  <div className="mt-0.5 text-[12px] text-ink-3">Loading…</div>
+                )}
+                {bundle?.status === "error" && (
+                  <div className="mt-0.5 text-[12px] text-alert">{bundle.error}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // ─── Attribute stage card ──────────────────────────────────────────────────────
 
@@ -827,6 +920,8 @@ export default function ContextPanel() {
   const bounds = useAppStore((s) => s.bounds);
   const revealed = useAppStore((s) => s.revealed);
   const running = useAppStore((s) => s.running);
+  const spillGroups = useAppStore((s) => s.spillGroups);
+  const groupBundles = useAppStore((s) => s.groupBundles);
 
   const oilCount =
     detections?.features.filter((f) => f.properties.classification === "oil")
@@ -906,6 +1001,17 @@ export default function ContextPanel() {
                 <span style={{ color: OIL_COLOR }}>
                   {oilCount === 1 ? "1 is oil" : `${oilCount} are oil`}.
                 </span>
+                {/* D46 — told up front, before a judge clicks anything, that this case holds
+                    more than one independent spill (as opposed to one slick fragmented into
+                    several detections — a case with a single spill_groups entry says nothing
+                    extra here even with multiple oil detections). */}
+                {spillGroups && spillGroups.length > 1 && (
+                  <>
+                    {" "}
+                    These are {spillGroups.length} independent spill events, each traced
+                    separately in Trace.
+                  </>
+                )}
               </p>
             </div>
             {selected ? (
@@ -935,7 +1041,12 @@ export default function ContextPanel() {
             </p>
           </div>
         ) : origin ? (
-          <TraceCard origin={origin} />
+          <>
+            {spillGroups && spillGroups.length > 1 && (
+              <SpillGroupsSummary groups={spillGroups} bundles={groupBundles} />
+            )}
+            <TraceCard origin={origin} />
+          </>
         ) : (
           <p className="text-[13px] text-ink-3">Loading origin estimate…</p>
         ))}

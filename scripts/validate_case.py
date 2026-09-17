@@ -639,20 +639,89 @@ def check_forward_impact(d, box, meta, backward):
     return f
 
 
-def check_origin(d, box):
-    o = load(d / "origin.json")
+def check_spill_groups(meta, d, acts):
+    """meta.spill_groups (D46). Required whenever detect+trace are both available: every oil
+    feature in detections.geojson must seed exactly one group, no feature dropped and none
+    double-counted, exactly one group is_primary and names the canonical particles.json/
+    origin.json, every other group's named files must exist on disk."""
+    sg = meta.get("spill_groups")
+    if "trace" not in acts or "detect" not in acts:
+        if sg is not None:
+            warn("meta.json/spill_groups: present but 'trace' and 'detect' are not both "
+                 "available — this field only means something when both are")
+        return None
+    if sg is None:
+        err("meta.json/spill_groups: missing — required whenever 'detect' and 'trace' are "
+            "both available (D46)")
+        return None
+    if not isinstance(sg, list) or not sg:
+        err("meta.json/spill_groups: must be a non-empty list")
+        return None
+
+    ids_seen, det_ids_seen, n_primary = set(), set(), 0
+    for i, g in enumerate(sg):
+        w = f"meta.json/spill_groups[{i}]"
+        if not need_keys(g, ["id", "member_detection_ids", "is_primary", "particles_file",
+                             "origin_file", "total_area_km2", "merged_ribbon"], w):
+            continue
+        if g["id"] in ids_seen:
+            err(f"{w}: duplicate group id {g['id']!r}")
+        ids_seen.add(g["id"])
+        mids = g["member_detection_ids"]
+        if not isinstance(mids, list) or not mids:
+            err(f"{w}/member_detection_ids: must be a non-empty list")
+        else:
+            for mid in mids:
+                if mid in det_ids_seen:
+                    err(f"{w}/member_detection_ids: {mid!r} already claimed by another group "
+                        "— every oil id must appear in exactly one group")
+                det_ids_seen.add(mid)
+        if g["is_primary"]:
+            n_primary += 1
+            if g["particles_file"] != "particles.json" or g["origin_file"] != "origin.json":
+                err(f"{w}: is_primary=true but files are not the canonical particles.json/"
+                    "origin.json")
+        elif g["particles_file"] == "particles.json" or g["origin_file"] == "origin.json":
+            err(f"{w}: is_primary=false but claims the canonical particles.json/origin.json")
+        if not (d / g["particles_file"]).exists():
+            err(f"{w}/particles_file: {g['particles_file']} does not exist")
+        if not (d / g["origin_file"]).exists():
+            err(f"{w}/origin_file: {g['origin_file']} does not exist")
+        ta = g["total_area_km2"]
+        if not isinstance(ta, (int, float)) or isinstance(ta, bool) or ta <= 0:
+            err(f"{w}/total_area_km2: must be a positive number, got {ta!r}")
+        if not isinstance(g["merged_ribbon"], bool):
+            err(f"{w}/merged_ribbon: must be a boolean")
+    if n_primary != 1:
+        err(f"meta.json/spill_groups: exactly one group must be is_primary, found {n_primary}")
+
+    dets = load(d / "detections.geojson")
+    if dets:
+        oil_ids = {f.get("properties", {}).get("id")
+                  for f in dets.get("features", [])
+                  if (f.get("properties") or {}).get("classification") == "oil"}
+        if oil_ids != det_ids_seen:
+            err(f"meta.json/spill_groups: member_detection_ids union {sorted(det_ids_seen)} "
+                f"does not match detections.geojson's oil ids {sorted(oil_ids)}")
+    return sg
+
+
+def check_origin(d, box, fname="origin.json"):
+    """Validate one origin file. `fname` lets D46's secondary spill-group bundles
+    (origin_group-N.json) reuse every check here for free — see check_spill_groups()."""
+    o = load(d / fname)
     if o is None:
-        err("origin.json: missing (required whenever 'trace' is available)")
+        err(f"{fname}: missing (required whenever 'trace' is available)")
         return None
     if not need_keys(o, ["bounds", "shape", "values", "centroid", "radius_50_km",
                          "radius_90_km", "time_window", "ensemble_runs", "abstain"],
-                     "origin.json"):
+                     fname):
         return None
     ob = o["bounds"]
-    if not need_keys(ob, ["west", "south", "east", "north"], "origin.json/bounds"):
+    if not need_keys(ob, ["west", "south", "east", "north"], f"{fname}/bounds"):
         return None
     if ob["west"] >= ob["east"] or ob["south"] >= ob["north"]:
-        err("origin.json/bounds: west<east and south<north required (this is the grid's "
+        err(f"{fname}/bounds: west<east and south<north required (this is the grid's "
             "own rectangle, not bounds.json)")
     elif box:
         # renderability hint (Harshita's point): a PASS should say whether the frontend
@@ -663,114 +732,114 @@ def check_origin(d, box):
         overshoot = max(box.w - ob["east"], ob["west"] - box.e,
                         box.s - ob["north"], ob["south"] - box.n)
         if overshoot > 3 * max(ow, oh):
-            warn(f"origin.json/bounds sits {overshoot:.2f} deg beyond the scene on one side "
+            warn(f"{fname}/bounds sits {overshoot:.2f} deg beyond the scene on one side "
                  f"(> 3x its own {max(ow, oh):.2f} deg span) — check the rewind isn't running "
                  "the wrong direction or in the wrong longitude convention")
     sh = o["shape"]
     if not (isinstance(sh, list) and len(sh) == 2):
-        err("origin.json/shape: must be [rows, cols]")
+        err(f"{fname}/shape: must be [rows, cols]")
     elif len(o["values"]) != sh[0] * sh[1]:
-        err(f"origin.json: shape {sh} implies {sh[0]*sh[1]} values but got {len(o['values'])}")
+        err(f"{fname}: shape {sh} implies {sh[0]*sh[1]} values but got {len(o['values'])}")
     vals = o["values"]
     if vals:
         lo, hi = min(vals), max(vals)
         if lo < 0:
-            err(f"origin.json/values: negative value {lo} — the grid is a normalised probability")
+            err(f"{fname}/values: negative value {lo} — the grid is a normalised probability")
         if hi <= 0:
-            err("origin.json/values: grid is entirely zero — the ensemble produced nothing")
+            err(f"{fname}/values: grid is entirely zero — the ensemble produced nothing")
         elif abs(hi - 1.0) > 0.01:
-            warn(f"origin.json/values: max is {hi:.3f}; normalise the grid to peak at 1.0")
+            warn(f"{fname}/values: max is {hi:.3f}; normalise the grid to peak at 1.0")
     tw = o["time_window"]
     if not (isinstance(tw, list) and len(tw) == 2):
-        err("origin.json/time_window: must be [start, end]")
+        err(f"{fname}/time_window: must be [start, end]")
     else:
-        a, b = parse_ts(tw[0], "origin.json/time_window[0]"), parse_ts(tw[1], "origin.json/time_window[1]")
+        a, b = parse_ts(tw[0], f"{fname}/time_window[0]"), parse_ts(tw[1], f"{fname}/time_window[1]")
         if a and b and a >= b:
-            err("origin.json/time_window: start must be before end")
+            err(f"{fname}/time_window: start must be before end")
     if o["radius_50_km"] > o["radius_90_km"]:
-        err("origin.json: radius_50_km exceeds radius_90_km — 50% mass sits inside 90% mass")
+        err(f"{fname}: radius_50_km exceeds radius_90_km — 50% mass sits inside 90% mass")
     if o["radius_90_km"] > 40 and not o["abstain"]:
-        warn(f"origin.json: radius_90_km is {o['radius_90_km']} km but abstain is false — "
+        warn(f"{fname}: radius_90_km is {o['radius_90_km']} km but abstain is false — "
              "the agreed rule abstains above 40 km")
     if o["ensemble_runs"] < 10:
-        warn(f"origin.json: only {o['ensemble_runs']} ensemble runs; uncertainty will look fake")
+        warn(f"{fname}: only {o['ensemble_runs']} ensemble runs; uncertainty will look fake")
     if box:
-        box.check(float(o["centroid"][0]), float(o["centroid"][1]), "origin.json/centroid")
+        box.check(float(o["centroid"][0]), float(o["centroid"][1]), f"{fname}/centroid")
 
     # time_window_method (D12) — 'bounded' is a SEARCH BRACKET, not a measured release time,
     # and the frontend renders the two differently. An absent value is the dangerous case.
     twm = o.get("time_window_method")
     if twm is None:
-        warn("origin.json: no time_window_method — the frontend cannot tell a measured window "
+        warn(f"{fname}: no time_window_method — the frontend cannot tell a measured window "
              "from a search bracket and will render a bracket as a measurement (D12)")
     elif twm not in ("bounded", "convergence", "age"):
-        err(f"origin.json/time_window_method: must be bounded|convergence|age, got {twm!r}")
+        err(f"{fname}/time_window_method: must be bounded|convergence|age, got {twm!r}")
 
     # Optional v3/v4 blocks (Master §6.5). Absence hides a UI row; it must never throw.
     am = o.get("age_method")
     if am is not None and am not in ("shear", "fay", "elongation", "track", "combined",
                                      "disagreement", "none"):
-        err(f"origin.json/age_method: must be shear|fay|elongation|track|combined|disagreement|"
+        err(f"{fname}/age_method: must be shear|fay|elongation|track|combined|disagreement|"
             f"none, got {am!r}")
 
     # age_posterior (age engine v2, Master §6.5, 16 Sept 2026). A window that claims to be
     # MEASURED FROM AGE must carry the posterior it came from, and must agree with it.
     ap_ = o.get("age_posterior")
     if twm == "age" and ap_ is None:
-        err("origin.json: time_window_method is 'age' but there is no age_posterior — a window "
+        err(f"{fname}: time_window_method is 'age' but there is no age_posterior — a window "
             "cannot claim to be measured from an age it does not carry")
     if ap_ is not None:
-        check_age_posterior(o, ap_)
+        check_age_posterior(o, ap_, fname)
     mm = o.get("model_mix")
     if mm is not None:
         check_model_mix(mm)
     aw = o.get("age_weathering")
     if aw is not None and aw not in ("fresh", "weathered", "unknown"):
-        err(f"origin.json/age_weathering: must be fresh|weathered|unknown, got {aw!r}")
+        err(f"{fname}/age_weathering: must be fresh|weathered|unknown, got {aw!r}")
     ah = o.get("age_hours")
     if ah is not None:
         if not (isinstance(ah, list) and len(ah) == 2):
-            err("origin.json/age_hours: must be [low, high]")
+            err(f"{fname}/age_hours: must be [low, high]")
         elif ah[0] > ah[1]:
-            err(f"origin.json/age_hours: low {ah[0]} exceeds high {ah[1]}")
+            err(f"{fname}/age_hours: low {ah[0]} exceeds high {ah[1]}")
         elif ah[0] < 0:
-            err(f"origin.json/age_hours: negative age {ah[0]}")
+            err(f"{fname}/age_hours: negative age {ah[0]}")
     ae = o.get("age_estimators")
     if ae is not None:
         if not isinstance(ae, dict):
-            err("origin.json/age_estimators: must be an object of estimator -> [low, high] or null")
+            err(f"{fname}/age_estimators: must be an object of estimator -> [low, high] or null")
         else:
             for k, v in ae.items():
                 # null means this estimator did not apply — never render it as a zero band
                 if v is None:
                     continue
                 if not (isinstance(v, list) and len(v) == 2 and v[0] <= v[1]):
-                    err(f"origin.json/age_estimators.{k}: must be null or [low, high], got {v!r}")
+                    err(f"{fname}/age_estimators.{k}: must be null or [low, high], got {v!r}")
     sf = o.get("stranded_fraction")
     if sf is not None and not (isinstance(sf, (int, float)) and 0 <= sf <= 1):
-        err(f"origin.json/stranded_fraction: must be a fraction in 0-1, got {sf!r}")
+        err(f"{fname}/stranded_fraction: must be a fraction in 0-1, got {sf!r}")
     # wind_share (Master §6.5): share of drift displacement due to windage, a 0-1 fraction.
     # Omitted, never zeroed, when the field is synthetic, since a 0 would claim a calm we never measured.
     ws = o.get("wind_share")
     if ws is not None and not (isinstance(ws, (int, float)) and not isinstance(ws, bool)
                                and 0 <= ws <= 1):
-        err(f"origin.json/wind_share: must be a fraction in 0-1 (not a percent), got {ws!r}")
+        err(f"{fname}/wind_share: must be a fraction in 0-1 (not a percent), got {ws!r}")
     oc = o.get("opendrift_comparison")
     if oc is not None:
         if not isinstance(oc, dict):
-            err("origin.json/opendrift_comparison: must be an object")
+            err(f"{fname}/opendrift_comparison: must be an object")
         else:
             need_keys(oc, ["centroid_separation_km", "r90_ratio"],
-                      "origin.json/opendrift_comparison")
+                      f"{fname}/opendrift_comparison")
             r = oc.get("r90_ratio")
             if isinstance(r, (int, float)) and r <= 0:
-                err(f"origin.json/opendrift_comparison.r90_ratio: must be positive, got {r}")
+                err(f"{fname}/opendrift_comparison.r90_ratio: must be positive, got {r}")
     return o
 
 
-def check_age_posterior(o, ap_):
+def check_age_posterior(o, ap_, fname="origin.json"):
     """age_posterior: {hours_grid, prob, hpd80, median, hypotheses, evidence, models, ...}."""
-    where = "origin.json/age_posterior"
+    where = f"{fname}/age_posterior"
     if not isinstance(ap_, dict):
         err(f"{where}: must be an object")
         return
@@ -1142,6 +1211,15 @@ def _run_bundle(d, strict=False):
         check_particles_forward(d, trace_box, meta, backward)
         check_forward_impact(d, trace_box, meta, backward)
         origin = check_origin(d, trace_box)
+        spill_groups = check_spill_groups(meta, d, acts) if meta else None
+        if spill_groups:
+            for g in spill_groups:
+                if g.get("is_primary") or not isinstance(g.get("particles_file"), str) \
+                        or not isinstance(g.get("origin_file"), str):
+                    continue
+                check_particles(d, trace_box, meta, fname=g["particles_file"],
+                                expect="backward", required=True)
+                check_origin(d, trace_box, fname=g["origin_file"])
     else:
         origin = None
     if "attribute" in acts:

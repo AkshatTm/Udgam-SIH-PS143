@@ -27,6 +27,9 @@ WHAT IS HERE
     is_one_ribbon           those four against their gates, with reasons for BOTH outcomes
     merged_discharge_class  one class for a merged slick
     merge_oil_features      the decision, and the merged MultiPolygon feature
+    group_oil_features      D46: partitions every oil feature into independent spill groups so
+                             genuinely separate slicks (Gulf of Alaska, Mumbai) are never dropped
+                             the way merge_oil_features's single-best fallback used to
     seed_geometry           line vs point, with discharge_class as the authority
     seed_particles          the actual seed cloud
 """
@@ -287,6 +290,146 @@ def merge_oil_features(dets, mode="auto", verbose=True):
         print(f"         area is generous -- Cerulean's polygon for the same slick is "
               f"4.55 km2 against our {area:.2f} km2.")
     return merged, diag
+
+
+def _build_merged_feature(members, m):
+    """A MultiPolygon merging `members` (>=2 features already confirmed one ribbon by the
+    caller). Extracted verbatim from merge_oil_features's own merge branch above so
+    group_oil_features can build a multi-member group's seed geometry the identical way -- one
+    copy of "how a merge is built", the same rule this module's own docstring states about
+    pick_slick. merge_oil_features itself is left untouched (still builds its own copy inline)
+    so its exact behaviour -- and the tests pinned on it -- never move."""
+    order = sorted(members, key=lambda f: -(f["properties"].get("area_km2", 0.0) or 0.0))
+    coords = [[r.tolist()] for f in members for r in slick_rings(f)]
+    area = float(sum(f["properties"].get("area_km2", 0.0) or 0.0 for f in members))
+    wsum = sum((f["properties"].get("area_km2", 0.0) or 0.0) for f in members) or 1.0
+    clon = sum(f["properties"]["centroid"][0] * (f["properties"].get("area_km2") or 0.0)
+               for f in members) / wsum
+    clat = sum(f["properties"]["centroid"][1] * (f["properties"].get("area_km2") or 0.0)
+               for f in members) / wsum
+    dc, dc_why = merged_discharge_class(members)
+    ids = [f["properties"].get("id") for f in order]
+    return {
+        "type": "Feature",
+        "geometry": {"type": "MultiPolygon", "coordinates": coords},
+        "properties": {
+            "id": "+".join(ids),
+            "classification": "oil",
+            "area_km2": area,
+            "centroid": [clon, clat],
+            "discharge_class": dc,
+            "shape_class": "linear" if (m["aspect"] or 0) >= 3.0 else "blob",
+            "confidence": float(max(f["properties"].get("confidence", 0.0) for f in members)),
+            "elongation": None,
+            "merged_from": ids,
+            "merged_discharge_reason": dc_why,
+        },
+    }
+
+
+def _partitions(items):
+    """Yield every set partition of `items` (a list) as a list of lists, deterministically."""
+    if not items:
+        yield []
+        return
+    first, rest = items[0], items[1:]
+    for smaller in _partitions(rest):
+        yield [[first]] + smaller
+        for i in range(len(smaller)):
+            yield smaller[:i] + [[first] + smaller[i]] + smaller[i + 1:]
+
+
+MAX_OIL_FOR_EXHAUSTIVE_PARTITION = 8   # Bell(8)=4140, instant; refuse above rather than hang
+
+
+def group_oil_features(dets, mode="auto", verbose=True):
+    """Partition every 'oil' feature into independent spill GROUPS.
+
+    merge_oil_features() above answers "one ribbon, or the single best feature" -- adequate when
+    a scene has one slick fragmented by detector noise (Jacksonville), but on a scene with
+    several GENUINELY separate spills (case-gulf-alaska-2023, case-mumbai-2023) its fallback
+    silently drops every oil feature except the single highest-confidence one. This answers the
+    harder question instead: which features belong together, and which are independent -- no
+    feature may ever be dropped.
+
+    Reuses ribbon_metrics/is_one_ribbon UNCHANGED -- same four gates, same thresholds -- only the
+    search over WHICH subsets to test is new: merge_oil_features tests only "all of them, or
+    none"; this exhaustively searches every set partition (small n -- an operational detector
+    rarely emits more than 3-4 disjoint oil polygons) for the COARSEST partition where every
+    group of size >=2 passes is_one_ribbon on its own combined metrics.
+
+    mode: 'never' -> every feature its own singleton group. 'always' -> one group of everyone.
+    'auto' (default) -> the search above; ties (equal group count) broken by generation order of
+    _partitions() over id-sorted input, which is deterministic.
+
+    Returns (groups, diag). `groups` is ordered by descending total_area_km2:
+        [{"feature": <Feature, Polygon or MultiPolygon>,
+          "member_ids": [<detection id>, ...],
+          "ribbon": {"merged": bool, "metrics": {...}|None, "gates": [...]|None},
+          "total_area_km2": float}, ...]
+    Zero oil features -> ([], diag).
+    """
+    oil = [f for f in dets.get("features", [])
+           if (f.get("properties") or {}).get("classification") == "oil"]
+    diag = {"n_oil": len(oil), "mode": mode}
+    if not oil:
+        diag["decision"] = "no oil features"
+        return [], diag
+    oil = sorted(oil, key=lambda f: f["properties"].get("id") or "")
+
+    if len(oil) == 1 or mode == "never":
+        partition = [[f] for f in oil]
+        diag["decision"] = "singletons" if mode == "never" else "single feature"
+    elif mode == "always":
+        partition = [oil]
+        diag["decision"] = "always merged into one group"
+    else:
+        if len(oil) > MAX_OIL_FOR_EXHAUSTIVE_PARTITION:
+            raise SystemExit(
+                f"{len(oil)} oil features on one scene -- more than the "
+                f"{MAX_OIL_FOR_EXHAUSTIVE_PARTITION} this exhaustive grouping search is sized "
+                f"for. Pass --merge-oil never or always, or raise the cap deliberately.")
+        cache = {}
+
+        def _valid(g):
+            if len(g) == 1:
+                return True
+            key = frozenset(f["properties"].get("id") for f in g)
+            if key not in cache:
+                cache[key] = is_one_ribbon(ribbon_metrics(g))[0]
+            return cache[key]
+
+        best = None
+        for part in _partitions(oil):
+            if all(_valid(g) for g in part) and (best is None or len(part) < len(best)):
+                best = part
+        partition = best   # all-singletons is always valid, so best is never None
+        diag["decision"] = f"{len(oil)} oil features -> {len(partition)} group(s)"
+
+    groups = []
+    for members in partition:
+        if len(members) == 1:
+            feat, ribbon_diag = members[0], {"merged": False, "metrics": None, "gates": None}
+        else:
+            m = ribbon_metrics(members)
+            _, reasons = is_one_ribbon(m)
+            feat, ribbon_diag = _build_merged_feature(members, m), {
+                "merged": True, "metrics": m, "gates": reasons}
+        groups.append({
+            "feature": feat,
+            "member_ids": [f["properties"].get("id") for f in members],
+            "ribbon": ribbon_diag,
+            "total_area_km2": float(sum(f["properties"].get("area_km2", 0.0) or 0.0
+                                        for f in members)),
+        })
+    groups.sort(key=lambda g: -g["total_area_km2"])
+    diag["n_groups"] = len(groups)
+    if verbose:
+        print(f"[slick]  {len(oil)} oil feature(s) -> {len(groups)} independent spill group(s)")
+        for g in groups:
+            print(f"         {g['member_ids']}  area {g['total_area_km2']:.3f} km2  "
+                  f"{'MERGED ribbon' if g['ribbon']['merged'] else 'singleton'}")
+    return groups, diag
 
 
 def seed_geometry(props):

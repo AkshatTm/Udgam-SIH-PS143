@@ -111,7 +111,10 @@ export function originRewindFraction(t: number, nSteps: number): number {
  * is `MapView`, a client-only (`ssr: false`) dynamic import that memoises on the bundle
  * identity — so this runs once per case, never on a slider tick.
  */
-export function buildOriginImage(origin: OriginBundle): ImageBitmap {
+export function buildOriginImage(
+  origin: OriginBundle,
+  rgb: readonly [number, number, number] = ORIGIN_RGB,
+): ImageBitmap {
   const { rows, cols, values } = origin;
   const canvas = new OffscreenCanvas(cols, rows);
   const ctx = canvas.getContext("2d");
@@ -121,7 +124,7 @@ export function buildOriginImage(origin: OriginBundle): ImageBitmap {
     );
   }
   const img = ctx.createImageData(cols, rows);
-  const [r, g, b] = ORIGIN_RGB;
+  const [r, g, b] = rgb;
   for (let i = 0; i < values.length; i++) {
     const v = values[i];
     const o = i * 4;
@@ -209,8 +212,8 @@ const AGE_METHODS: AgeMethod[] = [
   "none",
 ];
 
-function validate(raw: RawOriginBundle, id: string): void {
-  const where = `${id}/origin.json`;
+function validate(raw: RawOriginBundle, id: string, filename: string): void {
+  const where = `${id}/${filename}`;
   if (!raw || typeof raw !== "object") {
     throw new Error(`${where}: not an object`);
   }
@@ -404,9 +407,14 @@ function validate(raw: RawOriginBundle, id: string): void {
   }
 }
 
-export async function loadOriginBundle(id: string): Promise<OriginBundle> {
-  const raw = await fetchJson<RawOriginBundle>(`/cases/${id}/origin.json`);
-  validate(raw, id);
+/** `filename` defaults to the primary bundle; a D46 secondary spill group passes its own
+ *  `origin_<id>.json` sibling so every other reader reuses this exact loader and validation. */
+export async function loadOriginBundle(
+  id: string,
+  filename = "origin.json",
+): Promise<OriginBundle> {
+  const raw = await fetchJson<RawOriginBundle>(`/cases/${id}/${filename}`);
+  validate(raw, id, filename);
   return {
     bounds: {
       west: raw.bounds.west,

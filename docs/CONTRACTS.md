@@ -74,6 +74,7 @@ These are not per-schema. Violating one is how the project dies.
 | `gallery.difficulty` | `easy \| medium \| hard` |
 | `gallery.blurb` | written as a **question** — it is the gallery card's hook |
 | `ais_source` | `noaa_dense \| gfw_hourly` — **required whenever `attribute` is available** |
+| `spill_groups` | array — **required whenever `detect` AND `trace` are both available** (D46) |
 
 **Dependency rules the validator enforces:**
 `trace` requires `detect` **or** `meta.known_origin` · `attribute` requires `trace` ·
@@ -100,6 +101,27 @@ substitutes for a detection: the bundle may carry `trace` (and `attribute`, `ver
 `detect`, and `detections.geojson` is not required. **The frontend must render such an origin as
 *seeded from a documented source*, never as a UDGAM detection.** Allowed on a normal detection case
 too, as a ground-truth pin. **No case in the current library uses this path.**
+
+**`spill_groups` (D46).**
+```json
+"spill_groups": [
+  {"id": "group-1", "member_detection_ids": ["det-02"], "is_primary": true,
+   "particles_file": "particles.json", "origin_file": "origin.json",
+   "total_area_km2": 0.596, "merged_ribbon": false},
+  {"id": "group-2", "member_detection_ids": ["det-01"], "is_primary": false,
+   "particles_file": "particles_group-2.json", "origin_file": "origin_group-2.json",
+   "total_area_km2": 0.372, "merged_ribbon": false}
+]
+```
+Which `detections.geojson` oil feature(s) seeded which drift bundle. `merge_oil_features()`
+(unchanged) still picks the ONE canonical `particles.json`/`origin.json`; every oil feature it
+does not choose now seeds its own sibling `particles_<id>.json`/`origin_<id>.json` pair instead
+of being silently dropped — see Master §6.1 for the full account. Every case with both acts gets
+≥1 entry (a "group of one" for a single-spill case), ordered by descending `total_area_km2`;
+exactly one `is_primary: true` entry, which alone may name the canonical files;
+`member_detection_ids` partitions `detections.geojson`'s oil ids exactly. **Supersedes D35** ("one
+trace per case, not per detection"). See Master §6.1 and §6.5, which are the live contract; this
+file is the mirror.
 
 ---
 

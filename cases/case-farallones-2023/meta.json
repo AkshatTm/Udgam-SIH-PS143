@@ -18,5 +18,18 @@
     "blurb": "Different ocean, different year, same pipeline. Does the method hold?",
     "difficulty": "medium"
   },
-  "notes": "Second basin \u2014 the case that proves case 1 was not a fluke, and the hero backup if offshore AIS coverage fails at Jacksonville. Target acts: detect, trace, attribute, verify. Export box -124.0113 37.7094 -123.8013 37.8895, 82% inside the scene footprint (the footprint edge cuts the east side; shifting east made it worse, so the box is tightened instead), dB clamp [-28, -14]. cerulean_slick.geojson is Cerulean slick 3687325 (19.63 km, 3.85 km2, model confidence 0.929) \u2014 comparison target, not ground truth. CARE: this Sentinel-1 scene carries at least four separate Cerulean slicks, including two much larger ones (126 km and 76 km) and another on the adjacent 14:24:17 frame. Ours is the 19.6 km feature. If Stage 1 returns a detection an order of magnitude larger, it has found a different slick, not a better one \u2014 check the geometry before assuming a segmentation bug. D35 seed: trace seeded from det-01 (merged: no, the only oil feature); n_oil=1; seed area 4.20 of 4.20 km2 of oil on the scene. One trace per spill event; selecting another detection does not re-trace."
+  "notes": "Second basin \u2014 the case that proves case 1 was not a fluke, and the hero backup if offshore AIS coverage fails at Jacksonville. Target acts: detect, trace, attribute, verify. Export box -124.0113 37.7094 -123.8013 37.8895, 82% inside the scene footprint (the footprint edge cuts the east side; shifting east made it worse, so the box is tightened instead), dB clamp [-28, -14]. cerulean_slick.geojson is Cerulean slick 3687325 (19.63 km, 3.85 km2, model confidence 0.929) \u2014 comparison target, not ground truth. CARE: this Sentinel-1 scene carries at least four separate Cerulean slicks, including two much larger ones (126 km and 76 km) and another on the adjacent 14:24:17 frame. Ours is the 19.6 km feature. If Stage 1 returns a detection an order of magnitude larger, it has found a different slick, not a better one \u2014 check the geometry before assuming a segmentation bug. D35 seed: trace seeded from det-01 (merged: no, the only oil feature); n_oil=1; seed area 4.20 of 4.20 km2 of oil on the scene. One trace per spill event; selecting another detection does not re-trace.",
+  "spill_groups": [
+    {
+      "id": "group-1",
+      "member_detection_ids": [
+        "det-01"
+      ],
+      "is_primary": true,
+      "particles_file": "particles.json",
+      "origin_file": "origin.json",
+      "total_area_km2": 4.202,
+      "merged_ribbon": false
+    }
+  ]
 }

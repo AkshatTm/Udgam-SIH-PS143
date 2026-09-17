@@ -18,5 +18,18 @@
     "blurb": "A hooked slick in the approach lanes to the largest refinery on earth. Nobody investigated it. Can we still say who?",
     "difficulty": "medium"
   },
-  "notes": "Found independently in GEE by Akshat, not taken from a case database. Slick centre 20.14617 N, 71.89911 E, hook-shaped with vessel-track geometry. Measured in GEE: inside VV -25.41 / VH -47.36 dB; clean water ~5 km away VV -17.24 / VH -33.12 dB \u2014 ~8 dB VV depression. The VH figure sits at or below Sentinel-1's noise floor, so it CORROBORATES rather than proves; VV is the primary evidence and we say so. Scene is DESCENDING, relative orbit 107, VV+VH, IW. Export box 71.8138 20.0934 71.9436 20.2359, dB clamp [-26, -13]. The box is shifted west of the slick's own centre on purpose: the scene footprint edge cuts diagonally through this area, and a symmetric pad left 40% of the raster as nodata. This box is 86% covered. Nodata is -inf and flagged in the GeoTIFF \u2014 do NOT treat it as very low backscatter. Target acts: detect, trace, attribute, verify. ais_source gfw_hourly \u2014 'gap' and 'slowdown' must be null, not 0. 14 Sept: attribute added \u2014 GFW hourly AIS gives 8 vessels, 43 vessel-hours, funnel 8 -> 2 -> 0 -> 0, abstains because no vessel entered the origin cloud (D40). FRAMING (Master D24): SkyTruth Cerulean independently logged this same slick (3477622, 0.2 km away, 0.838 confidence) and attached four candidate vessels, all scored below zero by their own scorer, with no human review. So the honest claim is 'no investigation, no named party, no enforcement' \u2014 NEVER 'no record anywhere', which a judge can disprove in ten seconds. D35 seed: trace seeded from det-01 (merged: no, the only oil feature); n_oil=1; seed area 3.12 of 3.12 km2 of oil on the scene. One trace per spill event; selecting another detection does not re-trace."
+  "notes": "Found independently in GEE by Akshat, not taken from a case database. Slick centre 20.14617 N, 71.89911 E, hook-shaped with vessel-track geometry. Measured in GEE: inside VV -25.41 / VH -47.36 dB; clean water ~5 km away VV -17.24 / VH -33.12 dB \u2014 ~8 dB VV depression. The VH figure sits at or below Sentinel-1's noise floor, so it CORROBORATES rather than proves; VV is the primary evidence and we say so. Scene is DESCENDING, relative orbit 107, VV+VH, IW. Export box 71.8138 20.0934 71.9436 20.2359, dB clamp [-26, -13]. The box is shifted west of the slick's own centre on purpose: the scene footprint edge cuts diagonally through this area, and a symmetric pad left 40% of the raster as nodata. This box is 86% covered. Nodata is -inf and flagged in the GeoTIFF \u2014 do NOT treat it as very low backscatter. Target acts: detect, trace, attribute, verify. ais_source gfw_hourly \u2014 'gap' and 'slowdown' must be null, not 0. 14 Sept: attribute added \u2014 GFW hourly AIS gives 8 vessels, 43 vessel-hours, funnel 8 -> 2 -> 0 -> 0, abstains because no vessel entered the origin cloud (D40). FRAMING (Master D24): SkyTruth Cerulean independently logged this same slick (3477622, 0.2 km away, 0.838 confidence) and attached four candidate vessels, all scored below zero by their own scorer, with no human review. So the honest claim is 'no investigation, no named party, no enforcement' \u2014 NEVER 'no record anywhere', which a judge can disprove in ten seconds. D35 seed: trace seeded from det-01 (merged: no, the only oil feature); n_oil=1; seed area 3.12 of 3.12 km2 of oil on the scene. One trace per spill event; selecting another detection does not re-trace.",
+  "spill_groups": [
+    {
+      "id": "group-1",
+      "member_detection_ids": [
+        "det-01"
+      ],
+      "is_primary": true,
+      "particles_file": "particles.json",
+      "origin_file": "origin.json",
+      "total_area_km2": 3.119,
+      "merged_ribbon": false
+    }
+  ]
 }

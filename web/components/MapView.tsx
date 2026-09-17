@@ -43,7 +43,9 @@ import {
   type OriginRing,
 } from "@/lib/origin";
 import { buildForwardRings, buildForwardTrack, forwardSpanHours, type ForwardRing } from "@/lib/forward";
-import { sceneAndVesselExtent, sceneParticleOriginExtent } from "@/lib/extent";
+import { sceneAndVesselExtent, sceneGroupsExtent } from "@/lib/extent";
+import { groupColor } from "@/lib/groupColors";
+import { groupMemberIdsFor } from "@/lib/spillGroups";
 import type { Bounds, GeoBounds, LonLat } from "@/lib/contracts";
 
 // maplibre-gl v6 loads its GeoJSON/vector tiler in a separate ESM worker. Its built-in worker
@@ -123,10 +125,9 @@ const OIL_COLOR = "#ff4d6d";
 const LOOKALIKE_COLOR = "#7a8899";
 const SCENE_OUTLINE_COLOR = "#2f5f7d";
 
-// Particle dots — warm amber with a thin dark rim, so they read over dark sea, dark land and the
-// grey SAR raster alike.
-const PARTICLE_FILL: [number, number, number, number] = [249, 115, 22, 220];
-const PARTICLE_LINE: [number, number, number, number] = [67, 20, 7, 160];
+// D46: per-group particle fill/stroke and origin-ring colours now come from lib/groupColors.ts
+// (groupColor(i)) instead of single fixed constants here — group 0's values are byte-identical
+// to what used to live in this file, so a single-spill case still renders exactly as before.
 
 // The Run-detection scan line: a translucent band sweeping west→east across the SAR footprint.
 const SCAN_FILL: [number, number, number, number] = [249, 115, 22, 70];
@@ -147,9 +148,8 @@ const ORIGIN_OPACITY_FLOOR = 0.25;
 // 50 % / 90 % origin-probability rings — warm amber-yellow outlines over the origin cloud. The
 // inner (50 %) ring is brighter; the outer (90 %) ring is softer but still readable. Both
 // complement the warm origin-cloud colour ramp rather than clashing with a white outline. V3 palette.
-// Deepened to burnt amber on 15 Sept so both rings read against the light basemap.
-const ORIGIN_RING_50: [number, number, number, number] = [180, 83, 9, 240];
-const ORIGIN_RING_90: [number, number, number, number] = [180, 83, 9, 150];
+// Deepened to burnt amber on 15 Sept so both rings read against the light basemap. Per-group
+// ring50/ring90 colours now come from lib/groupColors.ts (groupColor(i)).
 const ORIGIN_RING_WIDTH_PX = 1.5;
 
 // Hoisted so their identity is stable across renders — the ring geometry is static, so these
@@ -189,8 +189,6 @@ const forwardRingWidth = (d: ForwardRing): number =>
   d.kind === "r50" || d.t >= 1 ? FORWARD_HORIZON_WIDTH_PX : FORWARD_RING_WIDTH_PX;
 
 const originRingPath = (d: OriginRing): OriginRing["path"] => d.path;
-const originRingColor = (d: OriginRing): [number, number, number, number] =>
-  d.kind === "r50" ? ORIGIN_RING_50 : ORIGIN_RING_90;
 
 // Vessel tracks (Phase 5) — cool blue family, distinct from the amber particle/origin palette
 // and from the red/grey detection colours, so all three layers stay readable together. Role is
@@ -447,6 +445,10 @@ export default function MapView() {
   const detections = useAppStore((s) => s.detections);
   const layers = useAppStore((s) => s.layers);
   const selectedDetectionId = useAppStore((s) => s.selectedDetectionId);
+  // D46 — meta.spill_groups and every group's own particle/origin bundle. `groupBundles[i]`
+  // pairs with `groupColor(i)` for a stable colour-per-group across the whole map + panel.
+  const spillGroups = useAppStore((s) => s.spillGroups);
+  const groupBundles = useAppStore((s) => s.groupBundles);
   // Guided flow: each stage's overlays stay hidden until its Run button has been pressed.
   const detectRevealed = useAppStore((s) => s.revealed.detect);
   const attributeRevealed = useAppStore((s) => s.revealed.attribute);
@@ -470,31 +472,42 @@ export default function MapView() {
   // re-fetched.
   const origin = useAppStore((s) => s.origin);
   const originVisible = useAppStore((s) => s.layers.origin);
-  const originImage = useMemo(
-    () => (origin ? buildOriginImage(origin) : null),
-    [origin],
+  // D46 — one image/ring-set per spill group, each tinted with that group's own palette
+  // (groupColor(i).originRgb). Memoised on `groupBundles` alone (never on opacity/scrub) so the
+  // BitmapLayer's texture upload only happens when a group's bundle actually (re)loads — group
+  // 0 is byte-identical to the pre-D46 single-cloud image.
+  const originImages = useMemo(
+    () => groupBundles.map((gb, i) => (gb.origin ? buildOriginImage(gb.origin, groupColor(i).originRgb) : null)),
+    [groupBundles],
   );
-  // 50 % / 90 % rings around origin.centroid, using radius_50_km / radius_90_km. Built once
-  // per bundle — the km→degree conversion never runs on a scrub (see lib/origin.ts).
-  const originRings = useMemo(
-    () => (origin ? buildOriginRadiusRings(origin) : null),
-    [origin],
+  // 50 % / 90 % rings around each group's own centroid, using its own radius_50_km / radius_90_km.
+  // Built once per bundle — the km→degree conversion never runs on a scrub (see lib/origin.ts).
+  const originGroupRings = useMemo(
+    () => groupBundles.map((gb) => (gb.origin ? buildOriginRadiusRings(gb.origin) : null)),
+    [groupBundles],
   );
-  // One-time "draw-on": the rings start collapsed to the centroid (every vertex coincident) and
-  // transition out to their true geometry via the PathLayer's own getPath transition, once, the
-  // first time a bundle's rings appear — instead of snapping in full-size and static. Re-arms
-  // per bundle (the effect depends on `origin`), not per scrub.
-  const [ringsDrawn, setRingsDrawn] = useState(false);
+  // One-time "draw-on" PER GROUP: a group's rings start collapsed to its own centroid (every
+  // vertex coincident) and transition out to their true geometry via the PathLayer's own
+  // getPath transition, once, the first time that group's rings appear — instead of snapping in
+  // full-size and static. Groups that arrive at different times (independent fetches) draw on
+  // independently rather than all at once. Resets on a case switch so a reused group id (every
+  // case's primary group is "group-1") does not skip its own draw-on.
+  const [drawnGroupIds, setDrawnGroupIds] = useState<Set<string>>(new Set());
   useEffect(() => {
-    setRingsDrawn(false);
-    const raf = requestAnimationFrame(() => setRingsDrawn(true));
+    setDrawnGroupIds(new Set());
+  }, [activeCaseId]);
+  useEffect(() => {
+    const undrawn = groupBundles.filter((gb) => gb.origin && !drawnGroupIds.has(gb.id));
+    if (undrawn.length === 0) return;
+    const raf = requestAnimationFrame(() => {
+      setDrawnGroupIds((prev) => {
+        const next = new Set(prev);
+        for (const gb of undrawn) next.add(gb.id);
+        return next;
+      });
+    });
     return () => cancelAnimationFrame(raf);
-  }, [origin]);
-  const originRingsForDraw = useMemo(() => {
-    if (!originRings || !origin || ringsDrawn) return originRings;
-    const collapsed: LonLat = [origin.centroid[0], origin.centroid[1]];
-    return originRings.map((r) => ({ ...r, path: r.path.map(() => collapsed) }));
-  }, [originRings, origin, ringsDrawn]);
+  }, [groupBundles, drawnGroupIds]);
 
   // Master 6.10 forward slick. The ring/track geometry is still built ONCE per bundle (the
   // km→degree conversion never re-runs on a scrub — same discipline as origin). What is NEW is
@@ -1059,31 +1072,39 @@ export default function MapView() {
   // re-uploading the texture. `origin` is read for `origin.bounds` — the origin grid's own
   // rectangle, NOT bounds.json (CONTRACTS §6, Master §5.6).
   const originLayerList = useMemo(() => {
-    if (!originImage || !origin) return [] as (BitmapLayer | PathLayer<OriginRing>)[];
-    const list: (BitmapLayer | PathLayer<OriginRing>)[] = [
-      new BitmapLayer({
-        id: "origin",
-        image: originImage,
-        bounds: [
-          origin.bounds.west,
-          origin.bounds.south,
-          origin.bounds.east,
-          origin.bounds.north,
-        ],
-        opacity: originOpacity,
-        pickable: false,
-        // Smooths both the per-timestep fade (already continuous in value, but previously
-        // snapped instantly to each new value) and the discrete Origin layer-toggle case.
-        transitions: { opacity: 400 },
-      }),
-    ];
-    if (originRingsForDraw) {
+    const list: (BitmapLayer | PathLayer<OriginRing>)[] = [];
+    groupBundles.forEach((gb, i) => {
+      const image = originImages[i];
+      if (!gb.origin || !image) return;
+      const palette = groupColor(i);
+      list.push(
+        new BitmapLayer({
+          id: `origin-${gb.id}`,
+          image,
+          bounds: [
+            gb.origin.bounds.west,
+            gb.origin.bounds.south,
+            gb.origin.bounds.east,
+            gb.origin.bounds.north,
+          ],
+          opacity: originOpacity,
+          pickable: false,
+          // Smooths both the per-timestep fade (already continuous in value, but previously
+          // snapped instantly to each new value) and the discrete Origin layer-toggle case.
+          transitions: { opacity: 400 },
+        }),
+      );
+      const rings = originGroupRings[i];
+      if (!rings) return;
+      const drawn = drawnGroupIds.has(gb.id);
+      const centroid: LonLat = [gb.origin.centroid[0], gb.origin.centroid[1]];
+      const ringsForDraw = drawn ? rings : rings.map((r) => ({ ...r, path: r.path.map(() => centroid) }));
       list.push(
         new PathLayer<OriginRing>({
-          id: "origin-radii",
-          data: originRingsForDraw,
+          id: `origin-radii-${gb.id}`,
+          data: ringsForDraw,
           getPath: originRingPath,
-          getColor: originRingColor,
+          getColor: (d) => (d.kind === "r50" ? palette.ring50 : palette.ring90),
           getWidth: ORIGIN_RING_WIDTH_PX,
           widthUnits: "pixels",
           widthMinPixels: 1,
@@ -1097,9 +1118,9 @@ export default function MapView() {
           },
         }),
       );
-    }
+    });
     return list;
-  }, [originImage, origin, originRingsForDraw, originOpacity]);
+  }, [groupBundles, originImages, originGroupRings, originOpacity, drawnGroupIds]);
 
   // Forward cone + centroid track. Ring/track geometry is built once per bundle; what changes on
   // a scrub is only which prefix of that geometry is visible (`visibleForwardRings` /
@@ -1161,36 +1182,46 @@ export default function MapView() {
   // Particle cloud — one pre-built binary position frame per timestep (Phase 2). This is the
   // only deck layer that is rebuilt on every playback tick; `frames[t]` is a pre-computed view,
   // so nothing large is allocated here.
-  const particleLayer = useMemo(() => {
-    if (!particles || !particlesVisible) return null;
-    const frame = particles.frames[t] ?? particles.frames[0];
+  const particleLayers = useMemo(() => {
+    if (!particlesVisible) return [] as ScatterplotLayer[];
     // Interpolate between timesteps only while auto-advancing (play or the Trace-arrival
     // autoplay) — duration matched to that loop's own step cadence so one interpolation
     // finishes right as the next step arrives. A manual drag keeps duration 0: the cloud must
     // snap 1:1 to the dragged-to frame or it would visibly lag behind the thumb, the opposite
     // of "feels alive". deck.gl interpolates the GPU position buffer itself — no extra JS work
-    // in this component's render path either way.
+    // in this component's render path either way. Shared across every group so they all step
+    // (and ease) in lockstep.
     const stepsPerSec = autoPlaying ? AUTOPLAY_STEPS_PER_SEC : PLAYBACK_STEPS_PER_SEC;
     const transitionMs = playing ? Math.round(1000 / stepsPerSec) : 0;
-    return new ScatterplotLayer({
-      id: "particles",
-      data: {
-        length: particles.nParticles,
-        attributes: { getPosition: { value: frame, size: 2 } },
-      },
-      getFillColor: PARTICLE_FILL,
-      getLineColor: PARTICLE_LINE,
-      getRadius: 2.2,
-      radiusUnits: "pixels",
-      radiusMinPixels: 1,
-      radiusMaxPixels: 4,
-      stroked: true,
-      lineWidthUnits: "pixels",
-      getLineWidth: 0.5,
-      pickable: false,
-      transitions: transitionMs > 0 ? { getPosition: { duration: transitionMs, easing: (x: number) => x } } : undefined,
+    const layers: ScatterplotLayer[] = [];
+    groupBundles.forEach((gb, i) => {
+      if (!gb.particles) return;
+      const frame = gb.particles.frames[t] ?? gb.particles.frames[0];
+      const palette = groupColor(i);
+      layers.push(
+        new ScatterplotLayer({
+          id: `particles-${gb.id}`,
+          data: {
+            length: gb.particles.nParticles,
+            attributes: { getPosition: { value: frame, size: 2 } },
+          },
+          getFillColor: palette.fill,
+          getLineColor: palette.line,
+          getRadius: 2.2,
+          radiusUnits: "pixels",
+          radiusMinPixels: 1,
+          radiusMaxPixels: 4,
+          stroked: true,
+          lineWidthUnits: "pixels",
+          getLineWidth: 0.5,
+          pickable: false,
+          transitions:
+            transitionMs > 0 ? { getPosition: { duration: transitionMs, easing: (x: number) => x } } : undefined,
+        }),
+      );
     });
-  }, [particles, particlesVisible, t, playing, autoPlaying]);
+    return layers;
+  }, [groupBundles, particlesVisible, t, playing, autoPlaying]);
 
   // Push the composed list into the deck overlay. Order is bottom→top: origin bitmap, rings,
   // forward cone + centroid track, vessel tracks, particles, dark-vessel markers,
@@ -1204,7 +1235,7 @@ export default function MapView() {
         ...originLayerList,
         ...forwardLayerList,
         vesselLayer,
-        particleLayer,
+        ...particleLayers,
         infrastructureLayer,
         shipDetectionLayer,
         // Last among the markers: a dark vessel is one of the ship detections, cross-checked, so
@@ -1220,7 +1251,7 @@ export default function MapView() {
     originLayerList,
     forwardLayerList,
     vesselLayer,
-    particleLayer,
+    particleLayers,
     darkVesselLayer,
     infrastructureLayer,
     shipDetectionLayer,
@@ -1264,7 +1295,8 @@ export default function MapView() {
         ? // The origin cloud is what the vessels are scored against, so keep it in frame.
           sceneAndVesselExtent(origin ? unionGeo(bounds, origin.bounds) : bounds, vessels)
         : activeStage === "trace"
-          ? sceneParticleOriginExtent(bounds, particles, origin)
+          ? // D46 — every spill group's cloud, not just the primary one.
+            sceneGroupsExtent(bounds, groupBundles)
           : bounds;
     map.fitBounds(
       [
@@ -1273,7 +1305,7 @@ export default function MapView() {
       ],
       { padding: activeStage === "detect" ? 40 : 60, animate: false },
     );
-  }, [activeStage, bounds, vessels, particles, origin, mapReady]);
+  }, [activeStage, bounds, vessels, groupBundles, origin, mapReady]);
 
   // Detection features follow the store.
   useEffect(() => {
@@ -1290,12 +1322,14 @@ export default function MapView() {
     syncVisibility(map);
   }, [layers.sar, layers.detections, detectRevealed]);
 
-  // Selection highlight.
+  // Selection highlight. D46: highlights every detection in the selected one's spill GROUP, not
+  // just the clicked feature — "all the spills [in a group] selected together" — so it must
+  // also re-run when spillGroups arrives (meta loads before groupBundles resolve).
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !styleReadyRef.current) return;
     syncSelection(map);
-  }, [selectedDetectionId]);
+  }, [selectedDetectionId, spillGroups]);
 
   // `!absolute` (not plain `absolute`): maplibre-gl.css sets `.maplibregl-map { position: relative }`
   // and that chunk loads after Tailwind, so an un-forced `absolute` utility loses the cascade —
@@ -1319,12 +1353,16 @@ function syncVisibility(map: MlMap) {
 }
 
 function syncSelection(map: MlMap) {
-  const { selectedDetectionId } = useAppStore.getState();
+  const { selectedDetectionId, spillGroups } = useAppStore.getState();
+  // D46 — every detection in the selected one's spill group highlights together, not just the
+  // clicked feature. Falls back to `[selectedDetectionId]` alone when there is no grouping data
+  // yet (pre-D46 bundle, or meta arrived before spillGroups did).
+  const ids = groupMemberIdsFor(selectedDetectionId, spillGroups);
   if (map.getLayer("det-selected")) {
     map.setFilter("det-selected", [
-      "==",
+      "in",
       ["get", "id"],
-      selectedDetectionId ?? "__none__",
+      ["literal", ids.length > 0 ? ids : ["__none__"]],
     ]);
   }
 }

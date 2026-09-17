@@ -35,6 +35,26 @@ export interface CaseGallery {
   difficulty?: Difficulty;
 }
 
+/**
+ * Master §6.1, D46 — which detections.geojson oil feature(s) seeded which drift bundle.
+ * `merge_oil_features()` (pipeline/drift/slick.py, unchanged) still picks the ONE canonical
+ * primary group (particles.json/origin.json); every oil feature it does NOT choose now seeds
+ * its own sibling particles_<id>.json/origin_<id>.json pair instead of being silently dropped —
+ * the bug this field exists to fix (Gulf of Alaska, Mumbai each used to lose a genuinely
+ * separate spill to a single highest-confidence fallback). Required whenever `detect` AND
+ * `trace` are both in `acts_available`; every case gets >=1 entry, ordered by descending
+ * `total_area_km2`, with exactly one `is_primary: true`.
+ */
+export interface SpillGroup {
+  id: string;
+  member_detection_ids: string[];
+  is_primary: boolean;
+  particles_file: string;
+  origin_file: string;
+  total_area_km2: number;
+  merged_ribbon: boolean;
+}
+
 export interface CaseMeta {
   case_id: string;
   title: string;
@@ -54,6 +74,7 @@ export interface CaseMeta {
   acts_available: Act[];
   ais_source?: AisSource; // required whenever `attribute` is available
   known_origin?: KnownOrigin; // optional, D16 — already flows through loadCase untouched
+  spill_groups?: SpillGroup[]; // D46 — required whenever detect+trace are both available
   gallery?: CaseGallery;
   notes?: string;
 }
