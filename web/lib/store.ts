@@ -1,7 +1,14 @@
 // In-memory app state. NO persistence, NO localStorage/sessionStorage — Zustand only.
 
 import { create } from "zustand";
-import { ALL_ACTS, type Act, type Bounds, type CaseMeta, type DetectionCollection } from "./contracts";
+import {
+  ALL_ACTS,
+  type Act,
+  type Bounds,
+  type CaseMeta,
+  type DetectionCollection,
+  type SpillGroup,
+} from "./contracts";
 import { DEFAULT_CASE_ID } from "./cases";
 import { cached } from "./bundleCache";
 import { loadCase } from "./loadCase";
@@ -15,6 +22,18 @@ import { loadVerificationBundle, type VerificationBundle } from "./verification"
 export type LayerId = "sar" | "detections" | "particles" | "origin" | "forward" | "vessels";
 
 export type LoadStatus = "idle" | "loading" | "ready" | "error";
+
+/** D46 — one independent spill group's own particle + origin bundle, loaded alongside (never
+ *  instead of) the primary `particles`/`origin` state below. `id` mirrors `SpillGroup.id` so a
+ *  bundle can be matched back to its `meta.spill_groups` entry (member ids, colour index, etc).
+ */
+export interface GroupBundle {
+  id: string;
+  particles: ParticleBundle | null;
+  origin: OriginBundle | null;
+  status: LoadStatus;
+  error: string | null;
+}
 
 export interface AppState {
   activeCaseId: string;
@@ -50,6 +69,15 @@ export interface AppState {
   // consumes it: the origin HeatmapLayer + 50/90 % rings and the Trace-stage origin card are
   // both derived from this bundle.
   origin: OriginBundle | null;
+
+  // D46 — every independent spill group's own particle + origin bundle, alongside `particles`/
+  // `origin` above (which stay exactly the PRIMARY group's bundle, untouched, so every existing
+  // reader — TraceCard, forward playback, Attribute — needs zero changes). `spillGroups` mirrors
+  // `meta.spill_groups`; `null` before the case has loaded or on a pre-D46 bundle missing the
+  // field (treated as "nothing to group", never as an error — the primary bundle alone still
+  // renders correctly).
+  spillGroups: SpillGroup[] | null;
+  groupBundles: GroupBundle[];
 
   // Master 6.10 forward slick. Same fetch-once discipline as origin, with one difference that
   // matters: the file is OPTIONAL, so `forward: null` with status "ready" is the normal state
@@ -117,6 +145,11 @@ export interface AppState {
   loadActiveCase: () => Promise<void>;
   loadParticles: () => Promise<void>;
   loadOrigin: () => Promise<void>;
+  /** D46 — fetches every entry in `spillGroups` (particles + origin, in parallel), reusing the
+   *  SAME cache keys `loadParticles`/`loadOrigin` use for the primary group's own file names, so
+   *  the primary group's bundle is fetched exactly once regardless of call order. No-ops when
+   *  `spillGroups` has no entries (pre-D46 bundle, or not yet loaded). */
+  loadGroupBundles: () => Promise<void>;
   loadForward: () => Promise<void>;
   loadVessels: () => Promise<void>;
   loadSuspects: () => Promise<void>;
@@ -204,6 +237,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   origin: null,
   originStatus: "idle",
+  spillGroups: null,
+  groupBundles: [],
   forward: null,
   forwardStatus: "idle",
   forwardError: null,
@@ -275,6 +310,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Reset the origin cloud for the incoming case.
       origin: null,
       originStatus: "idle",
+      spillGroups: null,
+      groupBundles: [],
       forward: null,
       forwardStatus: "idle",
       forwardError: null,
@@ -308,6 +345,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         // Detect arrives with the best oil detection already selected (docs/team/harshita-frontend.md C1).
         // detections is null for a D16 known-origin case (no `detect` act) — nothing to select.
         selectedDetectionId: detections ? bestOilDetectionId(detections) : null,
+        // D46 — null on a pre-D46 bundle, treated as "nothing to group" everywhere it's read.
+        spillGroups: meta.spill_groups ?? null,
       });
       // Fetch the trace-stage bundles in the background — they must not block the map /
       // detections. Both files are required whenever the `trace` act is available (CONTRACTS §1).
@@ -315,6 +354,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         void get().loadParticles();
         void get().loadOrigin();
         void get().loadForward();
+        void get().loadGroupBundles();
       }
       // Fetch the attribution bundles in the background. CONTRACTS §1: `attribute` requires
       // vessels.geojson + suspects.json (and trace, so origin.abstain is always available
@@ -376,6 +416,59 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (get().activeCaseId !== id) return;
       set({ origin: null, originStatus: "error", originError: (err as Error).message });
     }
+  },
+
+  loadGroupBundles: async () => {
+    const id = get().activeCaseId;
+    const groups = get().spillGroups;
+    if (!groups || groups.length === 0) {
+      set({ groupBundles: [] });
+      return;
+    }
+    set({
+      groupBundles: groups.map((g) => ({
+        id: g.id,
+        particles: null,
+        origin: null,
+        status: "loading" as LoadStatus,
+        error: null,
+      })),
+    });
+    await Promise.all(
+      groups.map(async (g, i) => {
+        // Reuse the SAME cache key loadParticles()/loadOrigin() use for the primary group's own
+        // file names, so `cached()` de-dupes an in-flight fetch instead of issuing it twice.
+        const pKey =
+          g.particles_file === "particles.json" ? `particles:${id}` : `particles:${id}:${g.particles_file}`;
+        const oKey =
+          g.origin_file === "origin.json" ? `origin:${id}` : `origin:${id}:${g.origin_file}`;
+        try {
+          const [particles, origin] = await Promise.all([
+            cached(pKey, () => loadParticleBundle(id, g.particles_file)),
+            cached(oKey, () => loadOriginBundle(id, g.origin_file)),
+          ]);
+          if (get().activeCaseId !== id) return;
+          set((s) => {
+            const next = s.groupBundles.slice();
+            next[i] = { id: g.id, particles, origin, status: "ready", error: null };
+            return { groupBundles: next };
+          });
+        } catch (err) {
+          if (get().activeCaseId !== id) return;
+          set((s) => {
+            const next = s.groupBundles.slice();
+            next[i] = {
+              id: g.id,
+              particles: null,
+              origin: null,
+              status: "error",
+              error: (err as Error).message,
+            };
+            return { groupBundles: next };
+          });
+        }
+      }),
+    );
   },
 
   loadForward: async () => {
@@ -554,6 +647,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         origin: null,
         originStatus: "idle",
         originError: null,
+        spillGroups: null,
+        groupBundles: [],
         forward: null,
         forwardStatus: "idle",
         forwardError: null,

@@ -100,3 +100,26 @@ export function sceneParticleOriginExtent(
   }
   return result;
 }
+
+/**
+ * D46 — the same union as `sceneParticleOriginExtent`, but over every independent spill group's
+ * bundle at once, so the Trace camera frames every simultaneously-rendered cloud rather than
+ * just the primary one. A group whose bundle has not finished loading yet is skipped, not
+ * treated as empty space to frame — the camera catches up as each group's fetch resolves.
+ */
+export function sceneGroupsExtent(
+  scene: GeoBounds,
+  groupBundles: readonly { particles: ParticleBundle | null; origin: OriginBundle | null }[],
+): GeoBounds {
+  let result = scene;
+  for (const g of groupBundles) {
+    const pe = particleExtent(g.particles);
+    if (pe) {
+      result = unionBounds(result, pe);
+    }
+    if (g.origin) {
+      result = unionBounds(result, g.origin.bounds);
+    }
+  }
+  return result;
+}

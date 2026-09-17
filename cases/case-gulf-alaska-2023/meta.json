@@ -18,5 +18,40 @@
     "blurb": "A slick at 59.5\u00b0N that even Cerulean's human reviewer could not call. Where did it come from?",
     "difficulty": "hard"
   },
-  "notes": "15 Sept (D41/D42): NOAA Marine Cadastre has no Alaska AIS (every daily file stops near 50 N), so ais_source is gfw_hourly \u2014 Global Fishing Watch hourly AIS, which is global \u2014 and the case gains the attribute act. 'gap' and 'slowdown' are null on it (D20). Our own ship detector finds no radar contact on this scene (D34); the radar-versus-AIS cross-check therefore runs on Global Fishing Watch's independent Sentinel-1 vessel detections, and every such contact is labelled on screen as GFW's, not UDGAM's detector. Cerulean's contact is never used. The origin is an ERA5 wind-driven result (wind_share 0.73). Target acts: detect, trace, verify. Export box -142.7844 59.5021 -142.6432 59.6089, 100% inside the scene footprint, dB clamp [-29, -14]. Exported raster is 1573 x 1190 at 10 m. cerulean_slick.geojson is Cerulean slick 3630124 (2.48 km, 0.27 km2, model confidence 0.761). HONESTY FLAG, must be said before a judge says it: Cerulean's human reviewer classed this slick AMBIGUOUS \u2014 'not clear after human review if the detection is oil or some other slick'. Our claim here is the detection and the trace, not certainty that this is oil. If Stage 1 also hedges, that is a result, not a failure. HIGHEST LATITUDE IN THE LIBRARY at 59.5N: a degree of longitude here is about half as wide as at 30N, so cos(lat) errors that were invisible on the Atlantic cases will show up first here \u2014 check the exported pixel aspect ratio. D35 seed: trace seeded from det-01 (merged: no, 3 oil features do not measure as one ribbon, so the highest-confidence feature alone); n_oil=3; seed area 0.37 of 1.15 km2 of oil on the scene. One trace per spill event; selecting another detection does not re-trace."
+  "notes": "15 Sept (D41/D42): NOAA Marine Cadastre has no Alaska AIS (every daily file stops near 50 N), so ais_source is gfw_hourly \u2014 Global Fishing Watch hourly AIS, which is global \u2014 and the case gains the attribute act. 'gap' and 'slowdown' are null on it (D20). Our own ship detector finds no radar contact on this scene (D34); the radar-versus-AIS cross-check therefore runs on Global Fishing Watch's independent Sentinel-1 vessel detections, and every such contact is labelled on screen as GFW's, not UDGAM's detector. Cerulean's contact is never used. The origin is an ERA5 wind-driven result (wind_share 0.73). Target acts: detect, trace, verify. Export box -142.7844 59.5021 -142.6432 59.6089, 100% inside the scene footprint, dB clamp [-29, -14]. Exported raster is 1573 x 1190 at 10 m. cerulean_slick.geojson is Cerulean slick 3630124 (2.48 km, 0.27 km2, model confidence 0.761). HONESTY FLAG, must be said before a judge says it: Cerulean's human reviewer classed this slick AMBIGUOUS \u2014 'not clear after human review if the detection is oil or some other slick'. Our claim here is the detection and the trace, not certainty that this is oil. If Stage 1 also hedges, that is a result, not a failure. HIGHEST LATITUDE IN THE LIBRARY at 59.5N: a degree of longitude here is about half as wide as at 30N, so cos(lat) errors that were invisible on the Atlantic cases will show up first here \u2014 check the exported pixel aspect ratio. D35 seed: trace seeded from det-01 (merged: no, 3 oil features do not measure as one ribbon, so the highest-confidence feature alone); n_oil=3; seed area 0.37 of 1.15 km2 of oil on the scene. One trace per spill event; selecting another detection does not re-trace.",
+  "spill_groups": [
+    {
+      "id": "group-1",
+      "member_detection_ids": [
+        "det-02"
+      ],
+      "is_primary": false,
+      "particles_file": "particles_group-1.json",
+      "origin_file": "origin_group-1.json",
+      "total_area_km2": 0.596,
+      "merged_ribbon": false
+    },
+    {
+      "id": "group-2",
+      "member_detection_ids": [
+        "det-01"
+      ],
+      "is_primary": true,
+      "particles_file": "particles.json",
+      "origin_file": "origin.json",
+      "total_area_km2": 0.372,
+      "merged_ribbon": false
+    },
+    {
+      "id": "group-3",
+      "member_detection_ids": [
+        "det-03"
+      ],
+      "is_primary": false,
+      "particles_file": "particles_group-3.json",
+      "origin_file": "origin_group-3.json",
+      "total_area_km2": 0.184,
+      "merged_ribbon": false
+    }
+  ]
 }

@@ -221,9 +221,11 @@ cases/<case_id>/
   thumb.png                 gallery preview
   cerulean_slick.geojson    SkyTruth's polygon — IoU reference, optional, never the answer
   detections.geojson        Stage 1 → Stage 2, and → frontend
-  particles.json            Stage 2 → frontend (the rewind)
+  particles.json            Stage 2 → frontend (the rewind, primary spill group)
   particles_forward.json    Stage 2 → frontend (forward prediction)
-  origin.json               Stage 2 → Stage 3, and → frontend
+  particles_group-N.json    optional, D46 — one per NON-primary independent spill group
+  origin.json               Stage 2 → Stage 3, and → frontend (primary spill group)
+  origin_group-N.json       optional, D46 — sibling to particles_group-N.json
   vessels.geojson           Stage 3 → frontend
   suspects.json             Stage 3 → frontend
   verification.json         Stage 4 → frontend
@@ -387,6 +389,39 @@ this honest:
   scores below the 0.25 floor (outside the origin grid, 8.2 km from the nearest slick terminus). That is a
   result to report, not a coordinate to adjust.
 
+**`spill_groups` (required when both `detect` and `trace` are available, D46).** Which
+`detections.geojson` oil feature(s) seeded which drift bundle:
+```json
+"spill_groups": [
+  {"id": "group-1", "member_detection_ids": ["det-02"], "is_primary": true,
+   "particles_file": "particles.json", "origin_file": "origin.json",
+   "total_area_km2": 0.596, "merged_ribbon": false},
+  {"id": "group-2", "member_detection_ids": ["det-01"], "is_primary": false,
+   "particles_file": "particles_group-2.json", "origin_file": "origin_group-2.json",
+   "total_area_km2": 0.372, "merged_ribbon": false}
+]
+```
+It exists because `pipeline/drift/slick.py:merge_oil_features()` — the function that has always
+picked what seeds `particles.json`/`origin.json` — either merges every oil feature into one
+ribbon (a slick fragmented by detector noise, e.g. Jacksonville) or, when the features do not
+measure as one ribbon, silently keeps only the single highest-confidence one and drops every
+other oil feature. On `case-gulf-alaska-2023` and `case-mumbai-2023` that fallback discarded a
+genuinely separate, and in Mumbai's case over 5× larger, spill. `pipeline/drift/slick.py:group_oil_features()`
+fixes this by partitioning every oil feature into independent groups — no feature is ever
+dropped — and `run.py` runs the existing backward ensemble once per group.
+
+Every case with both acts gets at least one entry, even a single-spill or single-ribbon case (a
+"group of one"), so the field is uniform across the library. Ordered by descending
+`total_area_km2`. Exactly one entry carries `is_primary: true`, and **only** that entry may name
+the canonical `particles.json`/`origin.json` — every other entry names a sibling pair
+`particles_<id>.json`/`origin_<id>.json`, the same convention `particles_forward.json` (§6.4)
+already established, rather than reshaping the frozen inner schema of `particles.json`/
+`origin.json` themselves, which are unchanged by this. `member_detection_ids` partitions
+`detections.geojson`'s oil feature ids exactly — every oil id appears in exactly one group, no
+overlaps, no omissions. A secondary (non-primary) group's `origin.json` never carries
+`age_posterior`/`model_mix` — age is measured once, for the primary group only; age is a
+single-slick concept and D46 does not extend it.
+
 **`ais_source` (required when `attribute` is available).** `noaa_dense | gfw_hourly`.
 NOAA Marine Cadastre reports at a ~71-second median interval; Global Fishing Watch's AIS Vessel
 Presence gives **one position per vessel per hour** — roughly 50× sparser. At 12 knots a ship covers
@@ -536,12 +571,17 @@ Jacksonville is current-driven at 0.04, while Gulf of Alaska is wind-driven at 0
 percent. Omitted, never zeroed**, when the field is synthetic, because a `0` would claim a calm that was never
 measured. It is display-only and no Stage 3 component reads it. The validator errors outside [0, 1].
 
-**One trace per case, not per detection (D35).** A case with several `oil` features still has
-exactly one `particles.json` and one `origin.json`. Stage 2 picks the seed: every oil feature merged
-into one ribbon when `ribbon_metrics` passes every gate (Jacksonville), otherwise the single
-highest-confidence oil feature (Mumbai, Gulf of Alaska). Selecting a different detection on screen
-does **not** change the trace. Which feature(s) seeded it is written into `meta.notes`, so the
-choice is on the record rather than silent.
+**One trace per independent spill GROUP, not per detection.** *(Superseded 16 Sept 2026, D46 — see
+`meta.spill_groups`, §6.1.)* D35 originally read "one trace per case, not per detection": every
+oil feature merged into one ribbon when `ribbon_metrics` passed every gate (Jacksonville), and
+otherwise Stage 2 kept only the single highest-confidence oil feature and silently dropped every
+other one (Mumbai, Gulf of Alaska) — genuinely separate spills, not fragments of one slick, were
+losing everything but their most-confident member. `merge_oil_features()` (§6.1's `spill_groups`
+entry has the full account) is unchanged and still decides the ONE canonical
+`particles.json`/`origin.json`; what changed is that every oil feature it *would have* dropped now
+seeds its own sibling `particles_<id>.json`/`origin_<id>.json` pair instead of being discarded.
+Selecting a different detection on screen highlights that detection's whole `spill_groups` entry;
+which feature(s) seeded which bundle is now on the record in `meta.spill_groups`, not `meta.notes`.
 
 ## 6.6 `vessels.geojson`
 FeatureCollection of LineString tracks:
@@ -854,6 +894,7 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 | D43 | **Verify ships on all six traced cases; the assessment prose was drafted by Claude, once, and is Akshat's to own** | Every case dead-ended at "Try another case" because `verify` was in no `acts_available`, and it could not be added while `assessment` (and, on five files, `official_finding.caveat`) still said TODO. With the demo the next day, Akshat asked for the prose to be drafted rather than left blank — a deliberate, one-time relaxation of §6.8 ("HUMAN-WRITTEN PROSE. Never generated."), made by the owner of that rule and recorded here rather than done quietly. Conditions held: `docs/ANSWERS.md` was never opened (both sides of each comparison were already in the file); every verdict rests on a measurement taken first, read-only, and named in the text; and no weight, threshold or bundle was touched, so nothing was tuned toward an answer (D21). Verdicts: Jacksonville **miss** (Cerulean's vessel is in our own scene-time extract but was 112.3 km from the origin peak at grid probability 0.0000 and held no position in the searched box during the release window); Farallones **miss** (14.3 km from the peak, inside the origin bounds about eight hours after the window closed); Huntington **partial** as D38 predicted (abstained correctly, but the origin peak is 6.74 km from NTSB's coordinate with r90 2.46 km); Mumbai **partial**; Alaska **partial**; Jamnagar **not_applicable**. Two defects fixed on the way: `scaffold_verification.py --publish` never checked `caveat`, which VerifyScreen renders, so a publish would have put "TODO, HUMAN PROSE" on the demo screen — it now refuses on a TODO anywhere in the document; and the right-hand column was headed "What the investigation found" for all four Cerulean cases, which calls another algorithm's output an investigation, so the heading now follows `source_type`. Akshat edits the prose freely and re-runs `--publish`. 15 Sept. |
 | D44 | **The forward-drift deferral is LIFTED: `forward_impact.json` enters the contract (§6.10)** | Forward drift shipped on 16 Sept as "Version A" — the published 50-member ensemble run forward 24 h with GSHHG stranding, measured and figure'd (F2.9), but deliberately in **no bundle**, because adding a file to a frozen schema is not a stage owner's decision to make. Anushka wrote the numbers to `docs/evaluation/.../forward_<case>.json` and stopped there, correctly. Akshat lifted the deferral the same day so the demo map can carry a forward slick layer, and §6.10 is the resulting contract — **the only schema addition since the freeze.** Nothing was recomputed when the deferral lifted and nothing may be: `pipeline/drift/forward_impact.py` shares `eval_forward.compute()` with the evidence file, so the bundle and the figure are written from one run and cannot diverge. **Shipped on the three indexed traced cases** — Jacksonville (+24 h r50 16.2 / r90 35.5 km), Farallones (5.7 / 9.1), Jamnagar (2.3 / 4.9); the three detect-only cases have no slick to push forward and correctly carry no file. **0% stranded and no landfall within 24 h on all three**, with `first_landfall_hours: null` rather than `0` (Rule 4), and the stranding tracker was verified against a synthetic coastline rather than assumed. `coast_segments` and `assets_at_risk` stay `null`: a gazetteer and a cited asset layer are post-demo, and `[]` would claim a measured absence. Horizon is 24 h because `assert_field_covers` refuses to extrapolate through a frozen last snapshot — not because 24 h was chosen. 16 Sept. |
 | D45 | **Age engine v2: slick age is a calibrated posterior, and it drives the origin (`time_window_method: "age"`, `age_posterior`, `model_mix`, `age_method: "track"`)** | The rewind used to be a fixed span, and `origin.json` was the ensemble's **final step**, so a 6 h slick and a 2 day slick got the same origin and the same bracket. `age.py` computed bands (Huntington [2.1, 6.6] h vs a true 2.8 h) but nothing used them. **Now:** each estimator returns a likelihood on one hourly grid to 72 h (`age_posterior.py`). Two readings of the slick are averaged as posteriors: *patch* (length, width and bearing matched by our RK2 **mixed**, not multiplied, with OpenDrift OpenOil) and *track* (width along a ship's track). `acute` selects patch, `chronic` selects track, and `unknown` uses both, which replaces the old `chronic` refusal. `run.py --age drive` pools the ensemble over the posterior, so grid, radii and abstain come from one weighted pool and the window is the 80 % HPD. **Two priors changed on a measurement, not a preference:** with K log-uniform over [0.05, 100] m²/s, age and diffusivity are degenerate (Huntington carried 0.02 nats of information), so K now follows Okubo's scale law ×/÷3; and the release's initial size is a nuisance parameter (50–600 m), because a fixed 200 m seed forced every wide slick to be old. Accuracy is quoted **only** from held-out synthetic twins scored by *the other* model (`age_twins.py`, `docs/evaluation/stage2-age-engine.md`), plus Huntington as N = 1. OpenDrift stays off the demo path (own venv, structural fallback). Stage 3's temporality gate accepts `age` in the same commit. Owner Akshat, 16 Sept. |
+| D46 | **`meta.spill_groups` enters the contract (§6.1): a scene with multiple genuinely separate spills no longer loses every one but the highest-confidence** | Reported bug: on Trace, a multi-spill case only ever showed drift for one region, and not necessarily the one selected or the largest. Root cause: `pipeline/drift/slick.py:merge_oil_features()` — the sole function deciding what seeds `particles.json`/`origin.json` — either merges every oil feature into one ribbon (correct for a slick fragmented by detector noise, e.g. Jacksonville) or, when the features do not measure as one ribbon, keeps only `max(oil, key=confidence)` and silently drops the rest. **`case-gulf-alaska-2023`** dropped det-02 (0.596 km², larger than the kept det-01's 0.372 km²); **`case-mumbai-2023`** dropped det-02 at 7.606 km² — over 5× the kept feature — entirely. `merge_oil_features()` itself is untouched (still imported byte-identical by `age.py`/`age_twins.py`/`opendrift_origin.py`/`publish_all.py`); a new, additive `group_oil_features()` sits beside it, reusing the same `ribbon_metrics`/`is_one_ribbon` gates but searching every partition of the oil features so no feature is ever dropped, and `run.py` runs the existing backward ensemble once per resulting group, writing `particles_group-N.json`/`origin_group-N.json` siblings for every group beyond the primary one. Regenerated for real (`--real`, cached HYCOM/ERA5) on the two affected cases; every other case gets a single "group of one" `spill_groups` entry via a no-physics backfill script, so the field is uniform across the library without perturbing any already-shipped bundle. Frontend renders every group's particle cloud and origin cloud simultaneously, each in a distinct shade of the existing amber `--drift` hue, and Stage 1 selection now highlights a clicked detection's whole group. Ruled by Akshat. |
 
 ---
 

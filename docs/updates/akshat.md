@@ -2,6 +2,91 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-17 12:00] D46 — multi-spill backward drift: every independent spill now gets its own trace
+
+**Done:** Fixed the reported bug where Trace only ever showed drift for one region on a
+multi-spill scene, and not necessarily the selected or largest one. Root cause:
+`pipeline/drift/slick.py:merge_oil_features()` either merges every oil feature into one ribbon
+(correct for `case-jacksonville-2024`) or, when the features don't measure as one ribbon, keeps
+only `max(oil, key=confidence)` and silently drops the rest — `case-gulf-alaska-2023` dropped
+det-02 (0.596 km², larger than the kept det-01's 0.372 km²) and `case-mumbai-2023` dropped det-02
+at 7.606 km², over 5× the kept feature, entirely. `merge_oil_features()` is untouched (still
+imported byte-identical by `age.py`/`age_twins.py`/`opendrift_origin.py`/`publish_all.py`); added
+`group_oil_features()` beside it — an exhaustive-partition search over the same `ribbon_metrics`/
+`is_one_ribbon` gates that finds every independent spill group instead of just "merged or single
+best." `run.py` runs the existing backward ensemble once per non-primary group (new
+`run_backward_group()`), writing `particles_group-N.json`/`origin_group-N.json` siblings — the
+primary group's `particles.json`/`origin.json` are never rewritten by this path, confirmed
+byte-identical after regen (`git status` showed only new files + `meta.json`, no diff on the
+existing two). New additive `meta.spill_groups` field (D46, §6.1) records which detection ids
+seeded which bundle; every case with `detect`+`trace` gets ≥1 entry (a "group of one" for the
+four other real cases + case-000 family, backfilled with no physics rerun via the new
+`pipeline/drift/backfill_spill_groups.py`). `scripts/validate_case.py` validates the new field
+and re-runs every existing particles/origin check against every secondary group's files for free.
+Frontend: `web/lib/store.ts` gained `spillGroups`/`groupBundles`/`loadGroupBundles()` (additive —
+existing `particles`/`origin`/`loadParticles`/`loadOrigin` keep representing the primary group
+only, so `TraceCard`, forward playback and Attribute needed zero changes); `MapView.tsx` now
+renders every group's particle cloud + origin cloud simultaneously, each in its own shade of the
+existing amber `--drift` hue family (`lib/groupColors.ts`, index 0 byte-identical to the old
+single-cloud colours — the merged Stage 2 branch's opacity-fade/rings-draw-on/particle-position
+`transitions` were preserved per group, not dropped); Stage 1 click-to-select now highlights the
+clicked detection's whole spill group (`syncSelection` + `lib/spillGroups.ts`), and `ContextPanel`
+surfaces a spill-group badge on `DetectionCard` and a `SpillGroupsSummary` above `TraceCard` when
+a case has more than one group. Built on top of `origin/worktree-stage2-trace-redesign` (merged
+in first, ff-only) so this doesn't collide with or revert that already-finished work.
+
+**Files touched:** `pipeline/drift/slick.py` (modified, additive) ·
+`pipeline/drift/run.py` (modified, additive) ·
+`pipeline/drift/backfill_spill_groups.py` (new) ·
+`pipeline/drift/regen_secondary_spill_groups.py` (new, one-off) ·
+`scripts/validate_case.py` (modified) ·
+`docs/00_MASTER_PLAN.md` (§6.1 + §4.2 + D46 decision log + superseded D35 note) ·
+`docs/CONTRACTS.md` (§1 mirror) ·
+`web/lib/contracts.ts`, `web/lib/store.ts`, `web/lib/particles.ts`, `web/lib/origin.ts`,
+`web/lib/extent.ts` (modified, additive) ·
+`web/lib/spillGroups.ts`, `web/lib/groupColors.ts` (new) ·
+`web/components/MapView.tsx`, `web/components/ContextPanel.tsx` (modified) ·
+`cases/case-gulf-alaska-2023/{meta.json,particles_group-1.json,origin_group-1.json,particles_group-3.json,origin_group-3.json}`,
+`cases/case-mumbai-2023/{meta.json,particles_group-1.json,origin_group-1.json,particles_group-3.json,origin_group-3.json}` (output) ·
+`cases/{case-000,case-000-abstain,case-000-d3,case-000-gfw,case-farallones-2023,case-huntington-2021,case-jacksonville-2024,case-jamnagar-2024}/meta.json` (output, backfilled)
+
+**Run command:**
+```bash
+python pipeline/drift/run.py --case case-gulf-alaska-2023 --real     # primary bundle, unchanged behaviour
+python pipeline/drift/regen_secondary_spill_groups.py --case case-gulf-alaska-2023 --real   # secondary groups
+python pipeline/drift/backfill_spill_groups.py --case case-jacksonville-2024   # single-group cases
+python scripts/validate_case.py cases    # index-level check, all six real cases + case-000 family
+```
+Expected output: `PASS cases/index.json + all listed cases`; Gulf Alaska and Mumbai each show 3
+`spill_groups` entries, every other case shows 1.
+
+**Checkpoint artefact:** `pipeline/drift/tests.py` 93/93 individual assertions pass (11/12 test
+groups — the one failure is test 12's age-engine path throwing on a missing `rasterio` install in
+the ad-hoc verification interpreter, unrelated to this change and present before it); `npx tsc
+--noEmit`, `npx next lint`, and `npm run build` all clean; dev server on :3002 (ports 3000/3001
+were already held by other processes) serves `meta.json` with all 3 groups and both secondary
+bundle files at HTTP 200, and `/case/case-gulf-alaska-2023/trace` renders 200 with no server error
+markers. No interactive Chrome available in this session to visually confirm the three coloured
+clouds on screen — that's the one thing still worth eyeballing.
+
+**Open issues:**
+- Not visually confirmed in a real browser — only HTTP-level and build-level checks were possible
+  in this session. Load Gulf Alaska and Mumbai in Trace and confirm three distinct amber-family
+  particle clouds + origin rings render simultaneously, and that clicking any of the 3 detections
+  highlights all 3 together (only where `merged_ribbon: true`; here all three are independent
+  singletons so each highlights alone).
+- `web/lib/groupColors.ts`'s per-group RGB values are a starting proposal (documented as such in
+  the file) — Urooz should eyeball them against both basemaps before the demo, same as every
+  other colour constant in this codebase.
+- `setDetections` (Tier 1a re-run detector) does not recompute `spillGroups` client-side (the
+  frontend never calls Python) — a re-run that changes the oil feature set will leave
+  `meta.spill_groups` referring to the pre-rerun detections until the backend re-derives it. This
+  is a pre-existing class of staleness (the same is true of the primary seed pick today) and
+  wasn't introduced by this fix, but is now slightly more visible with three groups instead of one.
+
+**Next:** a visual pass on the running app (Gulf Alaska + Mumbai, Trace stage) to confirm the
+multi-colour rendering looks right, then hand to Urooz for a palette pass on `groupColors.ts`.
+
 ## [2026-09-17 03:40] Trace stage redesign — gsap/@gsap/react pinned, capsule layout, slider physicality
 
 **Done:** Redesigned the Stage 02 (Trace) panel and scrubber. `TraceCard` (was a flat

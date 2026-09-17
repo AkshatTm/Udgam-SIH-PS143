@@ -36,8 +36,8 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 }
 
-function validate(raw: RawParticleBundle, id: string): void {
-  const where = `${id}/particles.json`;
+function validate(raw: RawParticleBundle, id: string, filename: string): void {
+  const where = `${id}/${filename}`;
   if (!raw || typeof raw !== "object") {
     throw new Error(`${where}: not an object`);
   }
@@ -102,9 +102,15 @@ function flatten(raw: RawParticleBundle): Float32Array[] {
   return frames;
 }
 
-export async function loadParticleBundle(id: string): Promise<ParticleBundle> {
-  const raw = await fetchJson<RawParticleBundle>(`/cases/${id}/particles.json`);
-  validate(raw, id);
+/** `filename` defaults to the primary bundle; a D46 secondary spill group passes its own
+ *  `particles_<id>.json` sibling so every other reader (MapView, extent.ts) reuses this exact
+ *  loader and its validation. */
+export async function loadParticleBundle(
+  id: string,
+  filename = "particles.json",
+): Promise<ParticleBundle> {
+  const raw = await fetchJson<RawParticleBundle>(`/cases/${id}/${filename}`);
+  validate(raw, id, filename);
   return {
     t0: raw.t0,
     direction: raw.direction,

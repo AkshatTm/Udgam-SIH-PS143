@@ -42,9 +42,9 @@ from step import (assert_displacement_plausible, assert_field_covers,
 # Seeding and slick selection live in slick.py so that age.py can import them without a cycle
 # back through run.py (Phase 0, 16 Sept 2026). Re-exported below for callers that still reach
 # for `run.merge_oil_features`.
-from slick import (KM_PER_DEG as _SLICK_KM_PER_DEG, is_one_ribbon, merge_oil_features,
-                   merged_discharge_class, pick_slick, ribbon_metrics, seed_geometry,
-                   seed_particles, slick_rings)
+from slick import (KM_PER_DEG as _SLICK_KM_PER_DEG, group_oil_features, is_one_ribbon,
+                   merge_oil_features, merged_discharge_class, pick_slick, ribbon_metrics,
+                   seed_geometry, seed_particles, slick_rings)
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -420,6 +420,63 @@ def run_forward(a, meta, t0, field, seed, feat, out_dir):
     return 0
 
 
+def run_backward_group(a, t0, field, land, seed_feat, particles_path, origin_path,
+                       group_label, seed_offset):
+    """D46: one full backward control run + 50-member ensemble for a single independent spill
+    GROUP's seed geometry. Sibling to the primary run in main() -- same integrate_stranding, same
+    run_ensemble, same edge/plausibility guards -- with NO age engine (age is a single-slick
+    concept; age.py is not touched by this fix) so age_block/pool stay None, reproducing the
+    pre-age-engine origin.json shape. `seed_offset` keeps this group's RNG stream independent of
+    the primary run's and of every other secondary group's. Returns a small diagnostic dict for
+    the console summary and the meta.spill_groups entry.
+    """
+    rng = random.Random(a.seed + seed_offset)
+    seed = seed_particles(seed_feat, a.particles, rng)
+    span_h = (a.steps - 1) * a.timestep_minutes / 60.0
+
+    from step import FieldTimeSpan
+    try:
+        assert_field_covers(field, t0, t0 - timedelta(hours=span_h),
+                            f"backward run ({group_label})")
+    except FieldTimeSpan as exc:
+        raise SystemExit(str(exc))
+
+    history, times, stranded_ctl = integrate_stranding(
+        seed, t0, field, a.steps, a.timestep_minutes, direction="backward", is_land=land)
+    positions = np.round(history, 5).tolist()
+
+    nprng = np.random.default_rng(a.seed + seed_offset)
+    endpoints, conv_idx, members = ens.run_ensemble(
+        seed, t0, field, a.steps, a.timestep_minutes, n_runs=a.runs, rng=nprng,
+        is_land=land, current_sigma=a.current_sigma)
+    strand_frac = (float(np.mean([m["stranded_fraction"] for m in members]))
+                  if land is not None else None)
+
+    box = getattr(field, "bbox", None)
+    if box is not None:
+        assert_inside_field_box(np.vstack([history[-1], endpoints]), box, margin_km=10.0,
+                                label=f"control + ensemble endpoints ({group_label})")
+
+    ws = wind_share_of_drift(field, history, times)
+    wind_share = ws[0] if ws is not None else None
+
+    out_frames, out_dt = subsample_for_output(np.asarray(positions), a.timestep_minutes,
+                                              a.output_timestep_minutes)
+    write_particles(particles_path, t0, out_frames.tolist(), out_dt)
+    clon, clat, r50, r90, method, abstain = write_origin(
+        origin_path, endpoints, conv_idx, members, t0, a.timestep_minutes, a.steps, a.runs,
+        stranded_fraction=strand_frac, wind_share=wind_share, pool=None, age_block=None)
+    med_km = assert_displacement_plausible(history[0], history[-1], hours=span_h)
+
+    np.savez_compressed(particles_path.parent / f"ensemble_{a.case}_{group_label}.npz",
+                        endpoints=endpoints, control_final=history[-1],
+                        seed=np.asarray(seed, dtype=np.float64), conv_idx=conv_idx,
+                        wind_coeff=np.array([m["wind_coeff"] for m in members]),
+                        current_scale=np.array([m["current_scale"] for m in members]))
+    return {"r50": r50, "r90": r90, "abstain": abstain, "method": method,
+            "median_displacement_km": med_km}
+
+
 def main():
     ap = argparse.ArgumentParser(description="Stage 2 — backward drift + 50-run ensemble")
     ap.add_argument("--case", required=True)
@@ -497,8 +554,8 @@ def main():
 
     meta = json.loads((case_dir / "meta.json").read_text())
     t0 = parse_ts(meta["detection_time"])
-    feat, slick_diag = merge_oil_features(json.loads(det_path.read_text()),
-                                          mode=a.merge_oil)
+    dets_raw = json.loads(det_path.read_text())
+    feat, slick_diag = merge_oil_features(dets_raw, mode=a.merge_oil)
     if feat is None:
         raise SystemExit(
             "detections.geojson contains zero 'oil' features. That is the no-spill case — "
@@ -680,6 +737,50 @@ def main():
             print(f"              !! {strand_frac * 100:.0f}% stranded is high. Either the slick "
                   f"originated ashore or the rewind runs past a coastline -- look at the "
                   f"heatmap before believing the origin.")
+
+    # ---- D46: independent spill groups -------------------------------------------------
+    # particles.json/origin.json (above) are UNCHANGED -- still exactly merge_oil_features's
+    # pick, written before this block runs. This only adds sibling bundles for genuinely
+    # separate spills that merge_oil_features's single-best fallback used to silently drop.
+    # See slick.group_oil_features(). Unreachable when a.forward is set (early return above),
+    # so --forward is untouched; the age engine above only ever sees `feat`/`history` from the
+    # primary block, so --age is unaffected too.
+    groups, group_diag = group_oil_features(dets_raw, mode=a.merge_oil, verbose=True)
+    primary_ids = set(feat["properties"].get("merged_from") or [feat["properties"].get("id")])
+    meta_groups = []
+    for gi, g in enumerate(groups, start=1):
+        gid = f"group-{gi}"
+        is_primary = set(g["member_ids"]) == primary_ids
+        if is_primary:
+            meta_groups.append({
+                "id": gid, "member_detection_ids": g["member_ids"], "is_primary": True,
+                "particles_file": "particles.json", "origin_file": "origin.json",
+                "total_area_km2": round(g["total_area_km2"], 4),
+                "merged_ribbon": g["ribbon"]["merged"],
+            })
+            continue
+        pfile, ofile = f"particles_{gid}.json", f"origin_{gid}.json"
+        print(f"[drift:{tag}]  spill group {gid}  {g['member_ids']}  "
+              f"area {g['total_area_km2']:.3f} km2  seeding independently")
+        gdiag = run_backward_group(a, t0, field, land, g["feature"],
+                                   out_dir / pfile, out_dir / ofile,
+                                   group_label=gid, seed_offset=1000 * gi)
+        print(f"              wrote {out_dir / pfile}")
+        print(f"              wrote {out_dir / ofile}")
+        print(f"              origin r50={gdiag['r50']:.1f} km  r90={gdiag['r90']:.1f} km  "
+              f"abstain={gdiag['abstain']}")
+        meta_groups.append({
+            "id": gid, "member_detection_ids": g["member_ids"], "is_primary": False,
+            "particles_file": pfile, "origin_file": ofile,
+            "total_area_km2": round(g["total_area_km2"], 4),
+            "merged_ribbon": g["ribbon"]["merged"],
+        })
+
+    meta_path = case_dir / "meta.json"
+    meta_on_disk = json.loads(meta_path.read_text())
+    meta_on_disk["spill_groups"] = meta_groups
+    meta_path.write_text(json.dumps(meta_on_disk, indent=2))
+    print(f"[drift:{tag}]  wrote spill_groups ({len(meta_groups)} group(s)) into {meta_path}")
 
 
 if __name__ == "__main__":
