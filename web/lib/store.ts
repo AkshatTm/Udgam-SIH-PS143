@@ -87,6 +87,10 @@ export interface AppState {
   hoveredSuspectMmsi: string | null;
 
   layers: Record<LayerId, boolean>;
+  /** Bumped once by initTrace() each time Trace is (re-)entered for a case. TraceCard/TimeSlider/
+   *  MapView's entrance animations all key off this one in-memory value instead of three
+   *  independently-timed mount effects that could drift out of sync with each other. */
+  traceEntranceKey: number;
   tNorm: number; // 0..1, 1 = "T-0 detect". Bound to an integer timestep via lib/timestep.ts.
   // Forward playhead: 0 at T0, 1 at the forward forecast horizon (lib/forward.ts
   // forwardSpanHours). Independent of tNorm — the two share one visual slider (TimeSlider),
@@ -231,6 +235,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     forward: false,
     vessels: false,
   },
+  traceEntranceKey: 0,
   tNorm: 1,
   forwardNorm: 0,
   forwardPlaying: false,
@@ -468,6 +473,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (s.particlesStatus !== "ready" || s.originStatus !== "ready") return; // wait for data
     set((st) => ({
       traceInitFor: s.activeCaseId,
+      traceEntranceKey: st.traceEntranceKey + 1,
       layers: { ...st.layers, particles: true, origin: true },
       tNorm: 1, // T−0 / positions[0]
       forwardNorm: 0,

@@ -2,6 +2,88 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-17 03:40] Trace stage redesign — gsap/@gsap/react pinned, capsule layout, slider physicality
+
+**Done:** Redesigned the Stage 02 (Trace) panel and scrubber. `TraceCard` (was a flat
+Divider-separated stack in `ContextPanel.tsx`) is now two bordered capsules — Origin (hero:
+centroid + 50/90% radii as pill chips) and Timing (release window + age, grouped since age is
+derived from time-since-release) — with a GSAP entrance stagger, count-up numbers on mount
+(`AnimatedNumber`), and a one-shot "origin is now knowable" glow timed to the exact rewind
+fraction (`ORIGIN_FADE_IN_FULL`, hoisted to `lib/origin.ts`) at which `MapView.tsx`'s origin
+cloud reaches full opacity, so the panel and the map agree on the same moment instead of
+carrying two independently-tuned thresholds. The per-estimator age disclosure lost its native
+`<details>` jump-cut for a GSAP height/opacity tween (`AgeDisclosure`). `TimeSlider` gained a
+fill bar (continuous drag-weight cue), a quick press overshoot + elastic settle, a T0-crossing
+snap flash, and a pop-in on the play/pause icon swap instead of an instant cut — none of it
+touches `onScrub`/`onBackwardPlayPause`/`onForwardPlayPause` or the −1..1 dual-zone mutual
+exclusivity. `MapView.tsx`'s particle `ScatterplotLayer` now interpolates between timesteps via
+deck.gl's own `transitions.getPosition` **only while auto-advancing** (duration 0 during a
+manual drag, or the cloud would visibly lag the thumb); the origin `BitmapLayer` opacity and the
+50/90% `PathLayer` rings (one-time centroid→true-geometry "draw-on") also got deck.gl
+`transitions`. No three.js, no react-spring, no GSAP ScrollTrigger — explicitly rejected: `web/
+CLAUDE.md` states deck.gl owns the GPU on every case screen and the stack is frozen, a case
+screen never scrolls, and GSAP core/timelines already covered every micro-interaction asked for.
+`fmt*` formatters and `SectionLabel`/`Divider`/`Row`/`MetricRow` were extracted out of
+`ContextPanel.tsx` into `lib/format.ts`/`components/PanelAtoms.tsx` so `components/trace/
+TraceCard.tsx` could import them without a circular import back into `ContextPanel.tsx` (which
+itself renders `TraceCard`).
+
+Also confirmed, not redone: the "age engine" backend work (real `age_hours`/`age_method` bands
+for Jacksonville/Farallones/Gulf-Alaska; an honest `"none"` for Huntington/Jamnagar/Mumbai) was
+already completed and merged to `origin/main` moments before this session started (see the
+"Stage 2 — age engine v2" entry above and the `58e1308`/`42e2023` commits) — no pipeline rerun
+was needed; this pass only had to restyle around data that was already real.
+
+**New dependency:** `gsap@^3.15.0` + `@gsap/react@^2.1.2`, pinned in `web/package.json`.
+Justification: the only animation library approved for this task (three.js/react-spring
+explicitly declined — see above); single registration point in `web/lib/gsap.ts` so
+`registerPlugin` runs once and `prefersReducedMotion()` is checked consistently everywhere.
+
+**Files touched:** `web/lib/gsap.ts` (new) · `web/lib/format.ts` (new) ·
+`web/components/PanelAtoms.tsx` (new) · `web/components/trace/{TraceCard,AnimatedNumber,
+AgeDisclosure}.tsx` (new) · `web/components/ContextPanel.tsx` (TraceCard + shared atoms/
+formatters extracted out) · `web/components/TimeSlider.tsx` · `web/components/MapView.tsx` ·
+`web/lib/origin.ts` (hoisted `ORIGIN_FADE_IN_START`/`ORIGIN_FADE_IN_FULL`/
+`originRewindFraction`) · `web/lib/store.ts` (`traceEntranceKey`) · `web/package.json`
+
+**Run command:**
+```bash
+cd web && npm install && npx tsc --noEmit && npm run build
+```
+Expected output: clean type-check, `Compiled successfully`, all `/case/<id>/trace` routes listed
+under prerendered pages. (Confirmed on `case-jacksonville-2024` … `case-mumbai-2023`, 9 cases.)
+
+**Checkpoint artefact:** `npx tsc --noEmit` clean, `npm run build` clean (no lint/type errors),
+verified against the worktree's mirrored `cases/` bundles via `robocopy cases web\public\cases
+/MIR`.
+
+**Open issues:**
+- **Not visually verified in a browser** — this session has no Chrome extension / display
+  access. Everything above is confirmed by type-check + production build only (which does
+  prerender every `/case/<id>/trace` route, but Trace's own data-dependent render only happens
+  client-side after `loadCase.ts` fetches, so the build doesn't exercise `TraceCard` with real
+  `origin` data). Before demoing: `npm run dev`, open `case-jacksonville-2024`'s Trace stage
+  (has a real age band), drag the slider through T0 both directions, toggle play/pause and the
+  Origin layer, and confirm the full 3000-particle/97-step scrub still holds performance (`web/
+  CLAUDE.md`'s stress-test requirement) — the particle `transitions.getPosition` addition is the
+  one change here with real perf risk if the duration/gating is off.
+- deck.gl `transitions.getPath` on a `PathLayer` (used for the rings' draw-on) is a less common
+  code path than scalar/opacity transitions — worth an eye to confirm it interpolates smoothly
+  rather than no-op'ing (harmless either way: it would just mean the rings appear immediately
+  instead of drawing on, not a broken or crashing state).
+- Icon swap on the slider's play/pause buttons is a "pop-in" (React already swapped the SVG;
+  GSAP animates its arrival) rather than a literal two-SVG cross-dissolve — simpler and avoids
+  juggling two mounted icons' hover/disabled states in parallel; visually reads as "not an
+  instant cut" either way, but flagging the simplification from the original ask.
+- `MapView.tsx`'s ring "draw-on" and `TimeSlider.tsx`'s fill-bar elastic settle are not wired to
+  the new `traceEntranceKey` directly — both already fire off the same underlying moment
+  (`origin` bundle load / `initTrace()`'s `playing: true`, which flips in the same `set()` call
+  that bumps `traceEntranceKey`), so they stay in sync with `TraceCard`'s stagger without the
+  extra explicit coupling. If that ever drifts, thread `traceEntranceKey` through explicitly.
+
+**Next:** Visual pass in a real browser (dev server + Chrome) to confirm the redesign reads well
+and tune the GSAP durations/eases by eye — none of this was possible from this session.
+
 ## [2026-09-17 02:45] Stage 2 — age engine v2 (D45): calibrated age posterior, OpenDrift as second model, age drives the origin
 
 **Done:** Slick age is now a posterior on an hourly grid to 72 h. Shape evidence comes from our RK2
