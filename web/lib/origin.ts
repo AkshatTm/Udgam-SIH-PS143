@@ -79,6 +79,18 @@ const ORIGIN_RGB: readonly [number, number, number] = [251, 176, 59];
 const ORIGIN_ALPHA_GAMMA = 0.7;
 const ORIGIN_ALPHA_MAX = 0.85;
 
+// Rewind-fraction thresholds for the origin cloud's fade-in on Trace (consumed by MapView.tsx's
+// `originOpacity`). Exported so TraceCard.tsx's "origin is now knowable" entrance flourish fires
+// at the exact same slider position the map's cloud reaches full opacity, instead of the two
+// screens carrying independently-tuned magic numbers that could drift apart.
+export const ORIGIN_FADE_IN_START = 0.2; // rewind fraction at which the cloud starts to appear
+export const ORIGIN_FADE_IN_FULL = 0.9; // rewind fraction at which it reaches full opacity
+
+/** Rewind fraction: 0 at T−0 (detection time), 1 at full rewind. */
+export function originRewindFraction(t: number, nSteps: number): number {
+  return nSteps > 1 ? t / (nSteps - 1) : 0;
+}
+
 /**
  * Rasterise the row-major probability grid onto an `OffscreenCanvas` and hand back its
  * `ImageBitmap` for a deck.gl `BitmapLayer` (ruling D11 — never a `HeatmapLayer`; docs/team/harshita-frontend.md

@@ -33,7 +33,15 @@ import { BitmapLayer, IconLayer, PathLayer, PolygonLayer, ScatterplotLayer } fro
 import { PathStyleExtension, type PathStyleExtensionProps } from "@deck.gl/extensions";
 import { RUN_DURATION_MS, useAppStore } from "@/lib/store";
 import { tFromNorm } from "@/lib/timestep";
-import { buildOriginImage, buildOriginRadiusRings, type OriginRing } from "@/lib/origin";
+import { AUTOPLAY_STEPS_PER_SEC, PLAYBACK_STEPS_PER_SEC } from "@/lib/usePlayback";
+import {
+  buildOriginImage,
+  buildOriginRadiusRings,
+  ORIGIN_FADE_IN_FULL,
+  ORIGIN_FADE_IN_START,
+  originRewindFraction,
+  type OriginRing,
+} from "@/lib/origin";
 import { buildForwardRings, buildForwardTrack, forwardSpanHours, type ForwardRing } from "@/lib/forward";
 import { sceneAndVesselExtent, sceneParticleOriginExtent } from "@/lib/extent";
 import type { Bounds, GeoBounds, LonLat } from "@/lib/contracts";
@@ -130,8 +138,8 @@ const SCAN_EDGE: [number, number, number, number] = [249, 115, 22, 255];
 // This is the ONLY thing about the origin layer that changes on a scrub: a pure `opacity` prop,
 // which the BitmapLayer applies without re-uploading its texture. The colour ramp and the
 // alpha-proportional mapping live in lib/origin.ts (buildOriginImage); Urooz owns the palette.
-const ORIGIN_FADE_IN_START = 0.2; // rewind fraction at which the cloud starts to appear
-const ORIGIN_FADE_IN_FULL = 0.9; // rewind fraction at which it reaches full opacity
+// ORIGIN_FADE_IN_START / ORIGIN_FADE_IN_FULL live in lib/origin.ts — shared with TraceCard.tsx's
+// entrance flourish, which fires at the same rewind position this layer reaches full opacity.
 // 15 Sept: the cloud is never fully invisible on Trace — a floor keeps "where the oil came from"
 // on screen from the first frame, and the fade still carries the "knowable further back" story.
 const ORIGIN_OPACITY_FLOOR = 0.25;
@@ -450,6 +458,11 @@ export default function MapView() {
   const particlesVisible = useAppStore((s) => s.layers.particles);
   const tNorm = useAppStore((s) => s.tNorm);
   const t = tFromNorm(tNorm, particles?.nSteps ?? 0);
+  // Only used to decide whether/how fast the particle layer's getPosition transition runs below
+  // — a manual drag must snap 1:1 to the dragged-to frame (transitions off) or the cloud would
+  // lag visibly behind the thumb.
+  const playing = useAppStore((s) => s.playing);
+  const autoPlaying = useAppStore((s) => s.autoPlaying);
 
   // Phase 3 origin cloud. Step 1 parsed origin.json once into the store; here the row-major
   // probability grid is rasterised once into a 120×120 RGBA image (one texel per cell) and
@@ -467,6 +480,21 @@ export default function MapView() {
     () => (origin ? buildOriginRadiusRings(origin) : null),
     [origin],
   );
+  // One-time "draw-on": the rings start collapsed to the centroid (every vertex coincident) and
+  // transition out to their true geometry via the PathLayer's own getPath transition, once, the
+  // first time a bundle's rings appear — instead of snapping in full-size and static. Re-arms
+  // per bundle (the effect depends on `origin`), not per scrub.
+  const [ringsDrawn, setRingsDrawn] = useState(false);
+  useEffect(() => {
+    setRingsDrawn(false);
+    const raf = requestAnimationFrame(() => setRingsDrawn(true));
+    return () => cancelAnimationFrame(raf);
+  }, [origin]);
+  const originRingsForDraw = useMemo(() => {
+    if (!originRings || !origin || ringsDrawn) return originRings;
+    const collapsed: LonLat = [origin.centroid[0], origin.centroid[1]];
+    return originRings.map((r) => ({ ...r, path: r.path.map(() => collapsed) }));
+  }, [originRings, origin, ringsDrawn]);
 
   // Master 6.10 forward slick. The ring/track geometry is still built ONCE per bundle (the
   // km→degree conversion never re-runs on a scrub — same discipline as origin). What is NEW is
@@ -1009,7 +1037,7 @@ export default function MapView() {
     if (!originVisible) return 0;
     if (activeStage !== "trace") return 1;
     const nSteps = particles?.nSteps ?? 0;
-    const rewind = nSteps > 1 ? t / (nSteps - 1) : 0;
+    const rewind = originRewindFraction(t, nSteps);
     return (
       ORIGIN_OPACITY_FLOOR +
       (1 - ORIGIN_OPACITY_FLOOR) * smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind)
@@ -1044,13 +1072,16 @@ export default function MapView() {
         ],
         opacity: originOpacity,
         pickable: false,
+        // Smooths both the per-timestep fade (already continuous in value, but previously
+        // snapped instantly to each new value) and the discrete Origin layer-toggle case.
+        transitions: { opacity: 400 },
       }),
     ];
-    if (originRings) {
+    if (originRingsForDraw) {
       list.push(
         new PathLayer<OriginRing>({
           id: "origin-radii",
-          data: originRings,
+          data: originRingsForDraw,
           getPath: originRingPath,
           getColor: originRingColor,
           getWidth: ORIGIN_RING_WIDTH_PX,
@@ -1060,11 +1091,15 @@ export default function MapView() {
           jointRounded: true,
           opacity: originOpacity,
           pickable: false,
+          transitions: {
+            getPath: { duration: 900, easing: (x: number) => x * x * (3 - 2 * x) },
+            opacity: 400,
+          },
         }),
       );
     }
     return list;
-  }, [originImage, origin, originRings, originOpacity]);
+  }, [originImage, origin, originRingsForDraw, originOpacity]);
 
   // Forward cone + centroid track. Ring/track geometry is built once per bundle; what changes on
   // a scrub is only which prefix of that geometry is visible (`visibleForwardRings` /
@@ -1129,6 +1164,14 @@ export default function MapView() {
   const particleLayer = useMemo(() => {
     if (!particles || !particlesVisible) return null;
     const frame = particles.frames[t] ?? particles.frames[0];
+    // Interpolate between timesteps only while auto-advancing (play or the Trace-arrival
+    // autoplay) — duration matched to that loop's own step cadence so one interpolation
+    // finishes right as the next step arrives. A manual drag keeps duration 0: the cloud must
+    // snap 1:1 to the dragged-to frame or it would visibly lag behind the thumb, the opposite
+    // of "feels alive". deck.gl interpolates the GPU position buffer itself — no extra JS work
+    // in this component's render path either way.
+    const stepsPerSec = autoPlaying ? AUTOPLAY_STEPS_PER_SEC : PLAYBACK_STEPS_PER_SEC;
+    const transitionMs = playing ? Math.round(1000 / stepsPerSec) : 0;
     return new ScatterplotLayer({
       id: "particles",
       data: {
@@ -1145,8 +1188,9 @@ export default function MapView() {
       lineWidthUnits: "pixels",
       getLineWidth: 0.5,
       pickable: false,
+      transitions: transitionMs > 0 ? { getPosition: { duration: transitionMs, easing: (x: number) => x } } : undefined,
     });
-  }, [particles, particlesVisible, t]);
+  }, [particles, particlesVisible, t, playing, autoPlaying]);
 
   // Push the composed list into the deck overlay. Order is bottom→top: origin bitmap, rings,
   // forward cone + centroid track, vessel tracks, particles, dark-vessel markers,
