@@ -1176,6 +1176,37 @@ def check_verification(d):
         if not str(a["explanation"]).strip():
             err("verification.json/assessment/explanation: human-written prose, must not be empty")
 
+    # ---- does the Verify screen describe the bundle it sits in? ----------------------------
+    # This check exists because it did not. verification.json is generated FROM suspects.json by
+    # scripts/scaffold_verification.py, and Stage 3 was re-scored without re-running it -- so
+    # all six files went stale at once, with ZERO overlap between the MMSIs they claimed and the
+    # MMSIs the bundles actually held. case-farallones-2023 claimed a `hit` on a vessel ranked
+    # #1 at 0.620 while its own suspects.json named nobody at all. Every case still printed
+    # PASS, because check_verification only ever looked at shape.
+    suspects = load(d / "suspects.json")
+    if suspects is None:
+        return
+    named = {x.get("mmsi") for x in (suspects.get("suspects") or []) if x.get("mmsi")}
+    claimed = [m for m in (nr.get("top_suspects") or []) if isinstance(m, str)]
+    missing = [m for m in claimed if m not in named]
+    if missing:
+        err(f"verification.json/udgam_result/top_suspects names {missing} which suspects.json "
+            f"does not score (it names {sorted(named) or 'nobody'}) — the Verify screen would "
+            f"describe an answer this bundle never produced. Re-run "
+            f"scripts/scaffold_verification.py --update after any re-score.")
+    if bool(nr.get("abstained")) != bool(suspects.get("abstained")):
+        err(f"verification.json/udgam_result/abstained is {nr.get('abstained')} but "
+            f"suspects.json says {suspects.get('abstained')} — one fact, stated twice, "
+            f"disagreeing with itself")
+    fn = suspects.get("funnel") or {}
+    if fn:
+        live = (f"{fn.get('in_region')} → {fn.get('in_window')} → "
+                f"{fn.get('plausible')} → {fn.get('scored')}")
+        summary = str(nr.get("origin_summary") or "")
+        if "funnel" in summary.lower() and live not in summary:
+            err(f"verification.json/udgam_result/origin_summary quotes a funnel that is not "
+                f"the one in suspects.json ({live}) — regenerate it rather than editing it")
+
 
 def check_index(cases_root):
     idx = load(cases_root / "index.json")

@@ -355,6 +355,77 @@ def model_mix_weights_off(d):
     return "sum to"
 
 
+
+def verification_names_unscored_mmsi(d):
+    """The bug that put all six live verification files out of step with their bundles at once.
+
+    verification.json is generated FROM suspects.json, Stage 3 was re-scored, and
+    scaffold_verification.py --update was never re-run. Zero overlap between the MMSIs claimed
+    and the MMSIs scored, on every case -- and every case still printed PASS, because
+    check_verification only ever looked at shape.
+    """
+    v = read(d, "verification.json")
+    v["udgam_result"]["top_suspects"] = ["999888777"]
+    write(d, "verification.json", v)
+    return "does not score"
+
+
+def verification_abstained_disagrees(d):
+    """One fact, stated twice, disagreeing with itself."""
+    v = read(d, "verification.json")
+    v["udgam_result"]["abstained"] = not bool(v["udgam_result"].get("abstained"))
+    write(d, "verification.json", v)
+    return "suspects.json says"
+
+
+def abstains_with_plausible_vessels(d):
+    """The mechanical encoding of "always name suspects unless there genuinely are none".
+
+    Abstention means nobody was plausible. A tie, a thin score or a crowded box are confidence
+    statements -- they are not a licence to throw the ranking away, which is how two live
+    cases shipped naming nobody while holding three scored candidates each.
+    """
+    s_ = read(d, "suspects.json")
+    s_["abstained"] = True
+    s_["abstain_reason"] = "the top two cannot be separated"
+    s_["suspects"] = []
+    s_["funnel"]["scored"] = 0
+    write(d, "suspects.json", s_)
+    return "confidence statement"
+
+
+def confidence_level_invalid(d):
+    s_ = read(d, "suspects.json")
+    s_["ranking_confidence"] = {"level": "quite good", "separation": 0.2,
+                                "basis": ["proximity"], "note": "x"}
+    write(d, "suspects.json", s_)
+    return "high|moderate|low|indicative"
+
+
+def confidence_hedged_without_a_note(d):
+    """An unexplained hedge is exactly what this field exists to prevent."""
+    s_ = read(d, "suspects.json")
+    s_["ranking_confidence"] = {"level": "low", "separation": 0.001,
+                                "basis": ["proximity"], "note": ""}
+    write(d, "suspects.json", s_)
+    return "note"
+
+
+def age_note_on_a_measured_band(d):
+    """A note explains a refusal. Attaching one to an estimator that produced a band claims
+    the estimator both did and did not run."""
+    o = read(d, "origin.json")
+    est = o.get("age_estimators") or {}
+    named = next((k for k, v in est.items() if v is not None), None)
+    if named is None:
+        est["shear"] = [2.0, 8.0]
+        named = "shear"
+        o["age_estimators"] = est
+    o["age_estimator_notes"] = {named: "this estimator refused"}
+    write(d, "origin.json", o)
+    return "not a measurement"
+
+
 MUTATIONS = [
     ("detection polygon written as [lat, lon]", swap_detection_lonlat,   "swapped",  False),
     ("particles.t0 missing its trailing Z",     naive_timestamp,         "naive",    False),
@@ -366,6 +437,12 @@ MUTATIONS = [
     ("area_km2 disagrees with its polygon",     area_km2_wrong,          "area_km2", True),
     ("verification verdict not in the 4 values", verify_verdict_invalid, "verdict",  False),
     ("verification source_url empty",           verify_missing_source_url, "source_url", False),
+    ("verification names an unscored MMSI",     verification_names_unscored_mmsi, "does not score", False),
+    ("verification abstained disagrees",        verification_abstained_disagrees, "suspects.json says", False),
+    ("abstains while vessels were plausible",   abstains_with_plausible_vessels, "confidence statement", False),
+    ("ranking_confidence level invalid",        confidence_level_invalid, "high|moderate|low|indicative", False),
+    ("ranking_confidence hedged with no note",  confidence_hedged_without_a_note, "note", False),
+    ("age note on an estimator that ran",       age_note_on_a_measured_band, "not a measurement", False),
     ("dark vessel carries an invented MMSI",    dark_vessel_has_mmsi,    "mmsi must be null", False),
     ("trace act with no detect and no known_origin", trace_without_known_origin, "known_origin", False),
     ("meta.known_origin written as [lat, lon]", known_origin_lonlat_swapped, "swapped", False),
