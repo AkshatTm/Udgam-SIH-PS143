@@ -31,8 +31,25 @@ export interface AgePosterior {
   hpd80: [number, number];
   median: number;
   hypotheses: string[];
+  evidence: string[];
   models: string[];
   calibrationCoverage: number | null;
+}
+
+/** Which reading of the slick the age engine was allowed to use (Master §6.5, D45). */
+export type AgeGate = "acute" | "chronic_track" | "unknown_both" | "no_detection";
+export type AgeWeathering = "fresh" | "weathered" | "unknown";
+
+/** D46 — why no age is claimed. Present only on a refusal. */
+export interface AgeRefusal {
+  reason: "low_information" | "no_estimator" | "no_detection";
+  infoGainNats: number | null;
+  minGainNats: number;
+}
+
+export interface ModelMix {
+  models: { name: string; weight: number }[];
+  centroidSeparationKm: number | null;
 }
 
 /** origin.json after parsing. `shape` is unpacked to `rows`/`cols`; `values` is a Float32Array. */
@@ -63,8 +80,12 @@ export interface OriginBundle {
   ageEstimators: Record<string, [number, number] | null> | null;
   /** Age engine v2 — `null` when absent (no measured age). */
   agePosterior: AgePosterior | null;
-  /** Names of the drift models pooled into this cloud, `null` for a single-model cloud. */
-  modelMix: { name: string; weight: number }[] | null;
+  /** The drift models pooled into this cloud, `null` for a single-model cloud. */
+  modelMix: ModelMix | null;
+  ageGate: AgeGate | null;
+  ageWeathering: AgeWeathering | null;
+  /** D46 — `null` when an age was measured, or on a bundle written before D46. */
+  ageRefusal: AgeRefusal | null;
 }
 
 // Origin-cloud display curve. Hue is a single amber (the 50/90 % rings' family, V3 palette);
@@ -78,18 +99,6 @@ export interface OriginBundle {
 const ORIGIN_RGB: readonly [number, number, number] = [251, 176, 59];
 const ORIGIN_ALPHA_GAMMA = 0.7;
 const ORIGIN_ALPHA_MAX = 0.85;
-
-// Rewind-fraction thresholds for the origin cloud's fade-in on Trace (consumed by MapView.tsx's
-// `originOpacity`). Exported so TraceCard.tsx's "origin is now knowable" entrance flourish fires
-// at the exact same slider position the map's cloud reaches full opacity, instead of the two
-// screens carrying independently-tuned magic numbers that could drift apart.
-export const ORIGIN_FADE_IN_START = 0.2; // rewind fraction at which the cloud starts to appear
-export const ORIGIN_FADE_IN_FULL = 0.9; // rewind fraction at which it reaches full opacity
-
-/** Rewind fraction: 0 at T−0 (detection time), 1 at full rewind. */
-export function originRewindFraction(t: number, nSteps: number): number {
-  return nSteps > 1 ? t / (nSteps - 1) : 0;
-}
 
 /**
  * Rasterise the row-major probability grid onto an `OffscreenCanvas` and hand back its
@@ -111,10 +120,7 @@ export function originRewindFraction(t: number, nSteps: number): number {
  * is `MapView`, a client-only (`ssr: false`) dynamic import that memoises on the bundle
  * identity — so this runs once per case, never on a slider tick.
  */
-export function buildOriginImage(
-  origin: OriginBundle,
-  rgb: readonly [number, number, number] = ORIGIN_RGB,
-): ImageBitmap {
+export function buildOriginImage(origin: OriginBundle): ImageBitmap {
   const { rows, cols, values } = origin;
   const canvas = new OffscreenCanvas(cols, rows);
   const ctx = canvas.getContext("2d");
@@ -124,7 +130,7 @@ export function buildOriginImage(
     );
   }
   const img = ctx.createImageData(cols, rows);
-  const [r, g, b] = rgb;
+  const [r, g, b] = ORIGIN_RGB;
   for (let i = 0; i < values.length; i++) {
     const v = values[i];
     const o = i * 4;
@@ -211,9 +217,12 @@ const AGE_METHODS: AgeMethod[] = [
   "disagreement",
   "none",
 ];
+const AGE_GATES: AgeGate[] = ["acute", "chronic_track", "unknown_both", "no_detection"];
+const AGE_REFUSAL_REASONS: AgeRefusal["reason"][] = ["low_information", "no_estimator", "no_detection"];
+const AGE_WEATHERING: AgeWeathering[] = ["fresh", "weathered", "unknown"];
 
-function validate(raw: RawOriginBundle, id: string, filename: string): void {
-  const where = `${id}/${filename}`;
+function validate(raw: RawOriginBundle, id: string): void {
+  const where = `${id}/origin.json`;
   if (!raw || typeof raw !== "object") {
     throw new Error(`${where}: not an object`);
   }
@@ -405,16 +414,44 @@ function validate(raw: RawOriginBundle, id: string, filename: string): void {
       }
     }
   }
+
+  // age_gate / age_weathering (optional) — enums.
+  if (raw.age_gate !== undefined && raw.age_gate !== null && !AGE_GATES.includes(raw.age_gate)) {
+    throw new Error(`${where}: "age_gate" must be one of ${AGE_GATES.join(" | ")} (got "${raw.age_gate}")`);
+  }
+  if (
+    raw.age_weathering !== undefined &&
+    raw.age_weathering !== null &&
+    !AGE_WEATHERING.includes(raw.age_weathering)
+  ) {
+    throw new Error(
+      `${where}: "age_weathering" must be one of ${AGE_WEATHERING.join(" | ")} (got "${raw.age_weathering}")`,
+    );
+  }
+
+  // age_refusal (optional, D46) — only on a refusal, never beside a posterior.
+  const ar = raw.age_refusal;
+  if (ar !== undefined && ar !== null) {
+    if (typeof ar !== "object" || !AGE_REFUSAL_REASONS.includes(ar.reason)) {
+      throw new Error(
+        `${where}: age_refusal.reason must be one of ${AGE_REFUSAL_REASONS.join(" | ")}`,
+      );
+    }
+    if (ar.info_gain_nats !== null && !(Number.isFinite(ar.info_gain_nats) && ar.info_gain_nats >= 0)) {
+      throw new Error(`${where}: age_refusal.info_gain_nats must be null or a non-negative number`);
+    }
+    if (!(Number.isFinite(ar.min_gain_nats) && ar.min_gain_nats > 0)) {
+      throw new Error(`${where}: age_refusal.min_gain_nats must be a positive number`);
+    }
+    if (ap !== undefined && ap !== null) {
+      throw new Error(`${where}: carries both age_posterior and age_refusal`);
+    }
+  }
 }
 
-/** `filename` defaults to the primary bundle; a D46 secondary spill group passes its own
- *  `origin_<id>.json` sibling so every other reader reuses this exact loader and validation. */
-export async function loadOriginBundle(
-  id: string,
-  filename = "origin.json",
-): Promise<OriginBundle> {
-  const raw = await fetchJson<RawOriginBundle>(`/cases/${id}/${filename}`);
-  validate(raw, id, filename);
+export async function loadOriginBundle(id: string): Promise<OriginBundle> {
+  const raw = await fetchJson<RawOriginBundle>(`/cases/${id}/origin.json`);
+  validate(raw, id);
   return {
     bounds: {
       west: raw.bounds.west,
@@ -463,13 +500,27 @@ export async function loadOriginBundle(
             hpd80: [raw.age_posterior.hpd80[0], raw.age_posterior.hpd80[1]],
             median: raw.age_posterior.median,
             hypotheses: raw.age_posterior.hypotheses ?? [],
+            evidence: raw.age_posterior.evidence ?? [],
             models: raw.age_posterior.models ?? [],
             calibrationCoverage: raw.age_posterior.calibration_coverage ?? null,
           }
         : null,
     modelMix:
       raw.model_mix !== undefined && raw.model_mix !== null
-        ? raw.model_mix.models.map((m) => ({ name: m.name, weight: m.weight }))
+        ? {
+            models: raw.model_mix.models.map((m) => ({ name: m.name, weight: m.weight })),
+            centroidSeparationKm: raw.model_mix.centroid_separation_km ?? null,
+          }
+        : null,
+    ageGate: raw.age_gate ?? null,
+    ageWeathering: raw.age_weathering ?? null,
+    ageRefusal:
+      raw.age_refusal !== undefined && raw.age_refusal !== null
+        ? {
+            reason: raw.age_refusal.reason,
+            infoGainNats: raw.age_refusal.info_gain_nats,
+            minGainNats: raw.age_refusal.min_gain_nats,
+          }
         : null,
   };
 }
