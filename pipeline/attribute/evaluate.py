@@ -223,6 +223,12 @@ def rank_of_offender(comps_by_vessel, offender_mmsi, drop=None):
     Re-ranks from components already computed, so an ablation costs a dictionary rebuild
     rather than a rescore. Rank is 1-based among the plausible set; None if the offender
     never reached it.
+
+    This function re-implements score.py's decision to name or withhold, so it has to move
+    WITH it. When score.py stopped discarding a ranking on a tie, a low top score or a crowded
+    box, an evaluate.py left behind would have gone on measuring a scorer that no longer
+    exists -- and every future weight ruling rests on the curve this produces. Abstention here
+    now means what it means in score.py: nothing was plausible at all.
     """
     rows = []
     for mmsi, comps in comps_by_vessel.items():
@@ -233,16 +239,7 @@ def rank_of_offender(comps_by_vessel, offender_mmsi, drop=None):
         rows.append((round(min(1.0, max(0.0, total)), 3), mmsi))
     rows.sort(key=lambda r: (-r[0], r[1]))
 
-    abstained = False
-    if not rows:
-        abstained = True
-    elif len(rows) > S.ABSTAIN_MAX_PLAUSIBLE_VESSELS:
-        abstained = True
-    elif rows[0][0] < S.ABSTAIN_SCORE_FLOOR:
-        abstained = True
-    elif (len(rows) > 1 and
-          rows[0][0] - rows[1][0] < S.ABSTAIN_TIE_FRACTION * max(rows[0][0], 1e-9)):
-        abstained = True
+    abstained = not rows
 
     rank = next((i for i, (_s, m) in enumerate(rows, 1) if m == offender_mmsi), None)
     return rank, abstained, len(rows)

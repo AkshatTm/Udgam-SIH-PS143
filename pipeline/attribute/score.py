@@ -80,10 +80,24 @@ SLOWDOWN_FRACTION    = 0.40   # SOG must fall this far below the under-way media
 SAMPLE_SECONDS       = 60     # walk each track at this cadence through the window
 EDGE_DEGREES         = 0.02   # "on the search-box boundary", ~2 km
 
-# ----------------------------------------------------------------------- abstention
-ABSTAIN_SCORE_FLOOR  = 0.25   # nothing scores convincingly
-ABSTAIN_TIE_FRACTION = 0.03   # top two indistinguishable
-ABSTAIN_MAX_PLAUSIBLE_VESSELS = 40   # density too high to discriminate
+# ------------------------------------------------------------ confidence, not abstention
+# These were ABSTAIN_* triggers: each one THREW THE RANKING AWAY. A tie inside 3 % returned no
+# suspects at all, which is how case-farallones-2023 and case-jamnagar-2024 shipped naming
+# nobody while holding three scored candidates each. And the band is RELATIVE, so on an hourly
+# case -- where the D28 gate strips type_prior and leaves score == proximity -- the difference
+# between the top two is routinely exactly 0.000 and the trigger always fires.
+#
+# "We cannot separate these two" is a statement about confidence, not a reason to withhold the
+# ranking. The same numbers now set a stated confidence LEVEL instead, and the suspects are
+# named. Abstention survives only where there is genuinely nothing to say (see below).
+#
+# Three of these four are the values that were already agreed, reused as labels rather than as
+# refusals. SEPARATION_CLEAR is the only new number in this change.
+SEPARATION_CLEAR = 0.10       # NEW -- above this the leader is clear of the field
+SEPARATION_WEAK  = 0.03       # was ABSTAIN_TIE_FRACTION
+SCORE_FLOOR_FOR_CONFIDENT_NAMING = 0.25   # was ABSTAIN_SCORE_FLOOR
+CROWDED_PLAUSIBLE_VESSELS        = 40     # was ABSTAIN_MAX_PLAUSIBLE_VESSELS
+WEIGHT_LIVE_THIN = 0.40       # NEW -- below this the score rests on a minority of components
 # NOTE the collision the master plan has not resolved: the abstain trigger on cloud
 # size is `radius_90_km > 40` (kilometres) and this one is 40 *vessels*. Two unrelated
 # 40s. The one on this side of the fence is now named for what it counts; renaming the
@@ -501,6 +515,63 @@ def reasons_for(s):
     return out[:4]
 
 
+
+CONFIDENCE_LEVELS = ("high", "moderate", "low", "indicative")
+
+
+def confidence_of(plausible, top, n_plausible):
+    """How well the named ranking separates. Called AFTER the sort, and returns no sort key.
+
+    This function cannot reorder anything -- it reads the finished list and describes it. That
+    is the whole argument that it is a presentation of the evidence rather than a thumb on it.
+
+    A four-level label plus the arithmetic it came from, deliberately not a 0-1 "confidence"
+    number: a float labelled confidence gets read as a calibrated probability, and we have no
+    calibration for one. evaluate.py measures rank, not probability.
+    """
+    if not top:
+        return None
+    sep = None
+    if len(plausible) > 1:
+        s0, s1 = plausible[0]["score"], plausible[1]["score"]
+        sep = (s0 - s1) / max(s0, 1e-9)
+    live = top[0].get("weight_live") or 0.0
+    basis = sorted(k for k, c in top[0]["components"].items() if c.applicable)
+
+    if n_plausible > CROWDED_PLAUSIBLE_VESSELS:
+        level = "indicative"
+        note = (f"{n_plausible} vessels were plausible; in traffic this dense the ranking "
+                f"orders the candidates but does not single one out")
+    elif (sep is not None and sep < SEPARATION_WEAK) or live < WEIGHT_LIVE_THIN \
+            or top[0]["score"] < SCORE_FLOOR_FOR_CONFIDENT_NAMING:
+        level = "low"
+        bits = []
+        if sep is not None and sep < SEPARATION_WEAK:
+            bits.append(f"the top two are separated by {100 * sep:.1f} % of the leading score")
+        if live < WEIGHT_LIVE_THIN:
+            bits.append(f"the score rests on {len(basis)} of {len(WEIGHTS)} components "
+                        f"({live:.2f} of the available weight)")
+        if top[0]["score"] < SCORE_FLOOR_FOR_CONFIDENT_NAMING:
+            bits.append(f"the leading score is {top[0]['score']:.2f}")
+        note = "; ".join(bits) + " -- ordered, but not a confident identification"
+    elif sep is not None and sep < SEPARATION_CLEAR:
+        level = "moderate"
+        note = (f"the leading candidate is {100 * sep:.1f} % clear of the next, which orders "
+                f"them but leaves the second a real possibility")
+    else:
+        level = "high"
+        note = (f"the leading candidate is {100 * sep:.1f} % clear of the next on "
+                f"{len(basis)} of {len(WEIGHTS)} components"
+                if sep is not None else
+                f"the only plausible candidate, scored on {len(basis)} of {len(WEIGHTS)} "
+                f"components")
+    return {"level": level,
+            "separation": None if sep is None else round(sep, 4),
+            "basis": basis,
+            "weight_live": round(live, 4),
+            "note": note}
+
+
 def rank_key(s):
     """A TOTAL order on scored candidates, so the same inputs name the same vessels.
 
@@ -589,7 +660,7 @@ def clipped_feature(track, t0, t1, pad_hours=TRACK_PAD_HOURS):
     }
 
 
-def build_outputs(scored, funnel, grid, abstained, abstain_reason):
+def build_outputs(scored, funnel, grid, abstained, abstain_reason, confidence=None):
     """`suspects.json` per 6.7 — including `component_notes` (D29) and `weight_live` /
     `components_available` / `components_total` (D37), blessed into the schema 14 Sept.
 
@@ -631,6 +702,10 @@ def build_outputs(scored, funnel, grid, abstained, abstain_reason):
                                        s["components"]["trajectory"].value > 0),
             "ais_gap_minutes": s["gap_minutes"],
             "edge_truncated": s["edge_truncated"],
+            # Named, but under the floor we would want before calling it a confident
+            # identification. The floor used to be tested only against the leader, so a
+            # sub-floor vessel shipped as card #2 or #3 with nothing saying so.
+            "below_score_floor": bool(s.get("below_score_floor")),
             "reasons": reasons_for(s),
         })
     return {
@@ -641,6 +716,12 @@ def build_outputs(scored, funnel, grid, abstained, abstain_reason):
         "excluded": [],
         "abstained": abstained,
         "abstain_reason": abstain_reason,
+        # Master 6.7 (proposed): how well the named ranking separates. `abstained` keeps its
+        # existing meaning exactly -- "there was genuinely nothing to say" -- so the invariant
+        # `abstained: true` requires empty suspects is untouched, and so is every validator
+        # rule that rests on it. What changed is that we stop SETTING abstained for a tie, a
+        # thin score or a crowded box; those now describe the answer instead of withholding it.
+        "ranking_confidence": confidence,
     }
 
 
@@ -799,22 +880,17 @@ def main():
     elif grid.abstain:
         abstained, why = True, ("Stage 2 flagged the origin cloud as too diffuse to "
                                 "attribute at acceptable confidence")
-    elif len(plausible) > ABSTAIN_MAX_PLAUSIBLE_VESSELS:
-        abstained, why = True, (f"{len(plausible)} vessels are plausible; above "
-                                f"{ABSTAIN_MAX_PLAUSIBLE_VESSELS} the search area is too "
-                                "crowded to discriminate between them")
     elif not plausible:
+        # The only surviving structural trigger, and it is genuinely "there is nothing to say":
+        # nobody entered the reconstructed origin during the window. Crowding, a low top score
+        # and an unseparated top two used to abstain here too; all three now set a confidence
+        # level on a ranking that still gets named.
         abstained, why = True, "no vessel entered the reconstructed origin during the window"
-    elif plausible[0]["score"] < ABSTAIN_SCORE_FLOOR:
-        abstained, why = True, (f"the best score is {plausible[0]['score']:.2f}, below the "
-                                f"{ABSTAIN_SCORE_FLOOR} floor for naming a vessel")
-    elif (len(plausible) > 1 and
-          plausible[0]["score"] - plausible[1]["score"] <
-          ABSTAIN_TIE_FRACTION * max(plausible[0]["score"], 1e-9)):
-        abstained, why = True, ("the top two vessels score within a few percent of each "
-                                "other and cannot be separated on this evidence")
 
     top = [] if abstained else plausible[:a.top]
+    confidence = confidence_of(plausible, top, len(plausible))
+    for _s in top:
+        _s["below_score_floor"] = _s["score"] < SCORE_FLOOR_FOR_CONFIDENT_NAMING
 
     funnel = {
         "in_region": in_region,
@@ -830,7 +906,7 @@ def main():
         "dropped_non_vessel": dropped_non_vessel,
     }
 
-    doc = build_outputs(top, funnel, grid, abstained, why)
+    doc = build_outputs(top, funnel, grid, abstained, why, confidence)
 
     # ---------------------------------------------------------------- fixed infrastructure
     # Phase 4. This runs regardless of whether we abstained on vessels, and deliberately so:
@@ -965,6 +1041,9 @@ def main():
         print(f"\nnon-vessels   {len(tdiag['non_vessel'])} identifier(s) rejected before scoring")
         for mmsi, nm, whynot in tdiag["non_vessel"]:
             print(f"  - {mmsi} {nm!r}: {whynot}")
+
+    if confidence:
+        print(f"\nconfidence    {confidence['level'].upper()} -- {confidence['note']}")
 
     print(f"\nfunnel        {funnel['in_region']} -> {funnel['in_window']} -> "
           f"{funnel['plausible']} -> {funnel['scored']}"

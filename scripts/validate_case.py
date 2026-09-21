@@ -1061,6 +1061,54 @@ def check_suspects(d, known_mmsi, origin, box=None, ais_source=None):
     if s.get("abstained") and s["suspects"]:
         err("suspects.json: abstained=true, so suspects must be empty")
 
+    # The mechanical encoding of "the site always names suspects unless there genuinely are
+    # none". Abstention means nobody was plausible -- not that the evidence was hard to read.
+    # A tie, a thin score or a crowded box used to throw the whole ranking away; they now set
+    # a confidence level instead, and these two rules stop that silently regressing.
+    _fn = s.get("funnel") or {}
+    _plaus = _fn.get("plausible")
+    if isinstance(_plaus, int) and _plaus > 0:
+        if s.get("abstained") and not (origin and origin.get("abstain")):
+            err(f"suspects.json: abstained=true with {_plaus} plausible vessel(s) and no "
+                f"Stage 2 abstain — an unseparated ranking is a confidence statement, not a "
+                f"reason to name nobody")
+        if not s.get("abstained") and not s["suspects"]:
+            err(f"suspects.json: {_plaus} plausible vessel(s) but no suspects named and "
+                f"abstained=false — the ranking was discarded without saying so")
+
+    rc = s.get("ranking_confidence")
+    if rc is not None:
+        if not isinstance(rc, dict):
+            err("suspects.json/ranking_confidence: must be an object")
+        else:
+            lvl = rc.get("level")
+            if lvl not in ("high", "moderate", "low", "indicative"):
+                err(f"suspects.json/ranking_confidence/level: must be "
+                    f"high|moderate|low|indicative, got {lvl!r}")
+            sep = rc.get("separation")
+            if sep is not None and not (isinstance(sep, (int, float)) and 0.0 <= sep <= 1.0):
+                err(f"suspects.json/ranking_confidence/separation: must be null or 0-1, "
+                    f"got {sep!r}")
+            if not isinstance(rc.get("basis"), list) or not rc["basis"]:
+                err("suspects.json/ranking_confidence/basis: must be a non-empty list of the "
+                    "component names counted for every scored candidate")
+            elif s["suspects"]:
+                for _sus in s["suspects"]:
+                    _live = {k for k, v in (_sus.get("components") or {}).items()
+                             if v is not None}
+                    _missing = [b for b in rc["basis"] if b not in _live]
+                    if _missing:
+                        err(f"suspects.json/ranking_confidence/basis names {_missing} but "
+                            f"MMSI {_sus.get('mmsi')} did not score on them — the basis is "
+                            f"what EVERY scored candidate was measured on")
+                        break
+            if lvl != "high" and not str(rc.get("note") or "").strip():
+                err("suspects.json/ranking_confidence/note: required whenever the level is "
+                    "not 'high' — an unexplained hedge is the thing this field exists to fix")
+    elif len(s["suspects"]) > 1:
+        warn("suspects.json: more than one suspect named with no ranking_confidence — the "
+             "cards show a score with no indication of how well it separates")
+
     # v3 extended source types (Master §6.7) — optional arrays, checked if present
     for i, dv in enumerate(s.get("dark_vessels", []) or []):
         w = f"suspects.json/dark_vessels[{i}]"
