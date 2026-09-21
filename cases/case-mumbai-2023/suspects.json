@@ -1,10 +1,11 @@
 {
   "funnel": {
     "in_region": 74,
-    "in_window": 66,
+    "in_window": 65,
     "plausible": 28,
     "scored": 3,
-    "dropped_short_track": 3
+    "dropped_short_track": 3,
+    "dropped_non_vessel": 1
   },
   "suspects": [
     {

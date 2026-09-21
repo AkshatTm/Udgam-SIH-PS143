@@ -4,7 +4,8 @@
     "in_window": 514,
     "plausible": 7,
     "scored": 3,
-    "dropped_short_track": 12
+    "dropped_short_track": 12,
+    "dropped_non_vessel": 0
   },
   "suspects": [
     {

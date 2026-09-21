@@ -45,7 +45,9 @@ import tracks                                  # noqa: E402
 import ingest                                  # noqa: E402
 import infrastructure                          # noqa: E402
 import score                                   # noqa: E402
-from tracks import MAX_INTERP_GAP_MIN, Track, load_tracks   # noqa: E402
+from tracks import (MAX_INTERP_GAP_MIN, Track, load_tracks,  # noqa: E402
+                    non_vessel_reason)
+from score import Component, WEIGHTS, rank_key   # noqa: E402
 
 UTC = timezone.utc
 
@@ -424,27 +426,100 @@ class TestTrackOutput(unittest.TestCase):
 
 
 class TestTrackLoading(TempDirCase):
+    # These fixtures used to carry MMSIs like "keeper" and "1". load_tracks now rejects an
+    # identifier that is not a real MMSI, so they are real 9-digit numbers with assigned MIDs:
+    # 367 (USA) and 210 (Cyprus). The old placeholders were never valid AIS.
+    KEEP, SHORT = "367000001", "367000002"
 
     def test_tracks_under_five_points_are_dropped(self):
-        rows = ([row("keeper", f"2023-01-25T00:0{i}:00", 29.0, -95.0) for i in range(5)] +
-                [row("tooshort", f"2023-01-25T00:0{i}:00", 29.0, -95.0) for i in range(4)])
+        rows = ([row(self.KEEP, f"2023-01-25T00:0{i}:00", 29.0, -95.0) for i in range(5)] +
+                [row(self.SHORT, f"2023-01-25T00:0{i}:00", 29.0, -95.0) for i in range(4)])
         tracks = load_tracks(self.ingest_rows(rows))
-        self.assertEqual(sorted(tracks), ["keeper"])
-        self.assertEqual(len(tracks["keeper"]), 5)
+        self.assertEqual(sorted(tracks), [self.KEEP])
+        self.assertEqual(len(tracks[self.KEEP]), 5)
 
     def test_reports_come_back_in_time_order_however_the_file_is_ordered(self):
-        rows = [row("1", f"2023-01-25T00:{m:02d}:00", 29.0, -95.0)
+        rows = [row(self.KEEP, f"2023-01-25T00:{m:02d}:00", 29.0, -95.0)
                 for m in (40, 10, 50, 20, 30)]
-        t = load_tracks(self.ingest_rows(rows))["1"]
+        t = load_tracks(self.ingest_rows(rows))[self.KEEP]
         self.assertEqual(t.ts, sorted(t.ts))
         self.assertEqual(t.max_gap_minutes, 10.0)
 
     def test_timestamps_come_back_timezone_aware_utc(self):
-        rows = [row("1", f"2023-01-25T00:0{i}:00", 29.0, -95.0) for i in range(5)]
-        t = load_tracks(self.ingest_rows(rows))["1"]
+        rows = [row(self.KEEP, f"2023-01-25T00:0{i}:00", 29.0, -95.0) for i in range(5)]
+        t = load_tracks(self.ingest_rows(rows))[self.KEEP]
         self.assertIsNotNone(t.ts[0].tzinfo)
         self.assertEqual(t.ts[0].utcoffset(), timedelta(0))
         self.assertEqual(t.start, dt("2023-01-25T00:00:00"))
+
+
+class TestNonVesselMmsi(TempDirCase):
+    """ITU-R M.585 station classes. A buoy scored as a pollution suspect is a category
+    error, not a ranking error -- case-gulf-alaska-2023 shipped with its only two
+    "suspects" being aids to navigation, one named MAJOR BUOY 4."""
+
+    def test_real_ships_survive(self):
+        # Every MMSI named or excluded across the six live bundles, by flag MID.
+        for mmsi in ("210145000", "563082600", "212656000", "338305838", "367415050",
+                     "419001555", "636019523", "353728000", "248264000", "372914000"):
+            self.assertIsNone(non_vessel_reason(mmsi), f"{mmsi} is a real ship")
+
+    def test_unassigned_mid_is_rejected(self):
+        # GFW presence records. 941 is not an assigned MID, which is the honest reason --
+        # not a pattern match on the literal prefix.
+        for mmsi in ("941201607", "941214805", "941216622", "100011740"):
+            self.assertIn("outside the ITU assigned range", non_vessel_reason(mmsi))
+
+    def test_station_classes_are_rejected(self):
+        self.assertIn("aid to navigation", non_vessel_reason("993672085"))
+        self.assertIn("SAR aircraft", non_vessel_reason("111260001"))
+        self.assertIn("coast station", non_vessel_reason("002442000"))
+        self.assertIn("parent ship", non_vessel_reason("982442000"))
+
+    def test_malformed_identifiers_are_rejected(self):
+        for mmsi in ("37053", "12345678", "abcdefghi", "1234567890"):
+            self.assertIn("not a 9-digit MMSI", non_vessel_reason(mmsi))
+
+    def test_load_tracks_drops_them_and_counts_them_separately(self):
+        rows = ([row("367000001", f"2023-01-25T00:0{i}:00", 29.0, -95.0) for i in range(5)] +
+                [row("941216622", f"2023-01-25T00:0{i}:00", 29.0, -95.0) for i in range(5)])
+        tracks, diag = load_tracks(self.ingest_rows(rows), diagnostics=True)
+        self.assertEqual(sorted(tracks), ["367000001"])
+        self.assertEqual(diag["dropped_non_vessel"], 1)
+        self.assertEqual(diag["non_vessel"][0][0], "941216622")
+
+
+class TestRankingIsDeterministic(unittest.TestCase):
+    """The suspect list must not depend on the order DuckDB happened to group in.
+
+    Measured on case-mumbai-2023, 2026-09-22: three consecutive runs over an unchanged
+    parquet named three different pairs at ranks 2 and 3, all tied at exactly 0.781.
+    """
+
+    @staticmethod
+    def _cand(mmsi, score, weight_live, navail, gridp, closest):
+        comp = {k: Component(1.0) for k in list(WEIGHTS)[:navail]}
+        for k in list(WEIGHTS)[navail:]:
+            comp[k] = Component.not_applicable("test")
+        return {"track": Track(mmsi, "", "cargo", 70, [], [], [], [], []),
+                "score": score, "weight_live": weight_live, "components": comp,
+                "grid_probability": gridp, "closest_km": closest}
+
+    def test_exact_tie_is_broken_the_same_way_every_time(self):
+        a = self._cand("367000001", 0.781, 0.35, 2, 0.745, 13.2)
+        b = self._cand("367000002", 0.781, 0.35, 2, 0.745, 13.2)
+        first = sorted([a, b], key=rank_key)
+        second = sorted([b, a], key=rank_key)
+        self.assertEqual([x["track"].mmsi for x in first],
+                         [x["track"].mmsi for x in second],
+                         "input order must not survive into the ranking")
+
+    def test_evidence_breadth_outranks_a_tie_on_score(self):
+        thin = self._cand("367000001", 0.90, 0.35, 2, 0.90, 1.0)
+        broad = self._cand("367000002", 0.90, 0.85, 6, 0.90, 1.0)
+        self.assertEqual([x["track"].mmsi for x in sorted([thin, broad], key=rank_key)],
+                         ["367000002", "367000001"],
+                         "more evidence wins an otherwise exact tie")
 
 
 # --------------------------------------------------------------------------- geometry

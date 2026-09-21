@@ -4,7 +4,8 @@
     "in_window": 102,
     "plausible": 21,
     "scored": 0,
-    "dropped_short_track": 3
+    "dropped_short_track": 3,
+    "dropped_non_vessel": 0
   },
   "suspects": [],
   "dark_vessels": [],

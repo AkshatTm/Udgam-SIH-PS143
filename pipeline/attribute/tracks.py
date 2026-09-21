@@ -158,8 +158,56 @@ class Track:
         }
 
 
-def load_tracks(parquet_path, min_points=MIN_POINTS):
-    """Parquet -> {mmsi: Track}. Sorted by time, short tracks dropped."""
+
+# WHAT COUNTS AS A VESSEL. ITU-R M.585 assigns MMSI number ranges by station type, and several
+# of them are not ships at all. Scoring one as a pollution suspect is not a ranking error, it
+# is a category error -- case-gulf-alaska-2023 shipped with its only two "suspects" being aids
+# to navigation, one of them named "MAJOR BUOY 4".
+#
+# Filtered HERE rather than at ingest or at scoring. Not at ingest, because the extract should
+# stay a faithful record of what the archive returned and re-deciding this rule should not mean
+# re-downloading. Not at scoring, because by then the buoy has already consumed a slot in
+# in_window and plausible, and the funnel -- which exists to make the search visible -- would be
+# counting things we do not consider candidates. tracks.py is where "what is a track" is already
+# decided (MIN_POINTS), so a counted, printed drop belongs beside dropped_short_track.
+NON_VESSEL_MMSI = (
+    ("99", "aid to navigation (99MIDxxxx -- physical or virtual AtoN)"),
+    ("98", "craft associated with a parent ship (98MIDxxxx -- tender, lifeboat)"),
+    ("97", "search-and-rescue transmitter / AIS-SART / MOB / EPIRB-AIS (97xxxxxxx)"),
+    ("111", "SAR aircraft (111MIDxxx)"),
+    ("00", "coast station (00MIDxxxx)"),
+    ("0", "group of ships or coast radio station (0MIDxxxxx)"),
+)
+# ITU maritime identification digits. A 9-digit MMSI whose first three are outside this range
+# belongs to no flag administration. This is what rejects GFW's 941* presence records -- 941 is
+# an unassigned MID, which is the honest reason, rather than pattern-matching the literal 941.
+MID_MIN, MID_MAX = 201, 775
+
+
+def non_vessel_reason(mmsi):
+    """Why this MMSI is not a ship, or None if it is one."""
+    m = str(mmsi)
+    if not (len(m) == 9 and m.isdigit()):
+        return f"not a 9-digit MMSI ({m!r})"
+    for prefix, why in NON_VESSEL_MMSI:
+        if m.startswith(prefix):
+            return why
+    mid = int(m[:3])
+    if not (MID_MIN <= mid <= MID_MAX):
+        return (f"MID {mid} is outside the ITU assigned range {MID_MIN}-{MID_MAX}, so this "
+                f"identifier belongs to no flag administration")
+    return None
+
+
+def load_tracks(parquet_path, min_points=MIN_POINTS, diagnostics=False):
+    """Parquet -> {mmsi: Track}. Sorted by time, short tracks dropped, non-vessels rejected.
+
+    With `diagnostics=True` returns `(tracks, diag)` where diag counts what was dropped and
+    why. score.py needs the breakdown: it derives dropped_short_track by subtracting from a
+    raw count(DISTINCT mmsi), so without it the AtoN drops would be silently absorbed into
+    dropped_short_track -- which is exactly the kind of hidden assumption the funnel exists
+    to prevent.
+    """
     con = duckdb.connect()
     con.execute("SET TimeZone='UTC'")
     # ts comes back as epoch seconds, not datetimes: DuckDB's Python conversion of
@@ -181,11 +229,18 @@ def load_tracks(parquet_path, min_points=MIN_POINTS):
     """, [str(parquet_path), min_points]).fetchall()
     con.close()
 
-    tracks = {}
+    tracks, rejected = {}, []
     for mmsi, name, vtype, tcode, ts, lon, lat, sog, cog in rows:
+        why = non_vessel_reason(mmsi)
+        if why:
+            rejected.append((mmsi, name or "", why))
+            continue
         ts = [datetime.fromtimestamp(e, timezone.utc) for e in ts]
         tracks[mmsi] = Track(mmsi, name, vtype, tcode, ts, lon, lat, sog, cog)
-    return tracks
+    rejected.sort()
+    if not diagnostics:
+        return tracks
+    return tracks, {"dropped_non_vessel": len(rejected), "non_vessel": rejected}
 
 
 def main():

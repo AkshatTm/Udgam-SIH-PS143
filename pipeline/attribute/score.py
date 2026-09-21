@@ -728,7 +728,7 @@ def main():
     else:
         in_window, plausible, near_miss, silent = [], [], [], []
         rg = regime(ais_source)
-        tracks = load_tracks(a.parquet, rg["min_points"])
+        tracks, tdiag = load_tracks(a.parquet, rg["min_points"], diagnostics=True)
 
         import duckdb
         con = duckdb.connect()
@@ -743,7 +743,11 @@ def main():
         box = SearchBox(west, south, east, north) if not searched_empty else None
 
         in_region = n_all
-        dropped_short = n_all - len(tracks)
+        # n_all counts every DISTINCT mmsi in the extract, including the ones tracks.py
+        # rejected as not being vessels at all. Subtracting blind would file a buoy under
+        # "dropped for too few reports", which is a different and untrue statement.
+        dropped_non_vessel = tdiag["dropped_non_vessel"]
+        dropped_short = n_all - len(tracks) - dropped_non_vessel
 
         for t in tracks.values():
             if t.end < t0 or t.start > t1:
@@ -820,6 +824,10 @@ def main():
         # and `3 suspects, none listed` would read as a bug rather than a refusal.
         "scored": len(top),
         "dropped_short_track": dropped_short,
+        # Master 6.7: a non-vessel was never a candidate, so it is dropped before the funnel
+        # rather than scored and excluded. Reported so the drop is auditable -- on
+        # case-gulf-alaska-2023 it is 11 of 14 "vessels".
+        "dropped_non_vessel": dropped_non_vessel,
     }
 
     doc = build_outputs(top, funnel, grid, abstained, why)
@@ -940,6 +948,8 @@ def main():
         contacts = (contacts or []) + ext
     scene_tracks = []
     if a.scene_parquet:
+        # The same rejection applies here. dark.py cross-checks radar contacts against AIS
+        # tracks, and a radar return that "matches" a navigation buoy has not been explained.
         scene_tracks = list(load_tracks(a.scene_parquet, 1).values())
     dark_list, dark_summary = dark.cross_check(
         contacts, scene_tracks, dark.scene_time(meta), ais_source, grid, detections_doc,
@@ -951,6 +961,11 @@ def main():
     (out_dir / "suspects.json").write_text(json.dumps(doc, indent=2), encoding="utf-8")
 
     # ------------------------------------------------------------------------ report
+    if tdiag["non_vessel"]:
+        print(f"\nnon-vessels   {len(tdiag['non_vessel'])} identifier(s) rejected before scoring")
+        for mmsi, nm, whynot in tdiag["non_vessel"]:
+            print(f"  - {mmsi} {nm!r}: {whynot}")
+
     print(f"\nfunnel        {funnel['in_region']} -> {funnel['in_window']} -> "
           f"{funnel['plausible']} -> {funnel['scored']}"
           f"   ({dropped_short} dropped for < {regime(ais_source)['min_points']} reports)")

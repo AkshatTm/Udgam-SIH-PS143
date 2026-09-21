@@ -1,96 +1,33 @@
 {
   "funnel": {
     "in_region": 14,
-    "in_window": 12,
-    "plausible": 2,
-    "scored": 2,
-    "dropped_short_track": 1
+    "in_window": 2,
+    "plausible": 0,
+    "scored": 0,
+    "dropped_short_track": 1,
+    "dropped_non_vessel": 10
   },
-  "suspects": [
+  "suspects": [],
+  "dark_vessels": [
     {
-      "source_type": "vessel",
-      "mmsi": "941201607",
-      "name": "941201607      11.7V",
-      "vessel_type": "other",
-      "score": 0.273,
-      "components": {
-        "proximity": 0.269,
-        "parity": null,
-        "temporality": 0.281,
-        "trajectory": null,
-        "gap": null,
-        "slowdown": null,
-        "type_prior": null
-      },
-      "component_notes": {
-        "proximity": "origin-grid probability at closest approach",
-        "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
-        "temporality": "closest approach 4.0 h from the centre of the release window",
-        "trajectory": "vessel was never outside the 3 km origin radius before closest approach, so it has no approach direction to assess",
-        "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
-        "slowdown": "speed over ground is not published by the hourly presence source; a speed derived from 1 km cell centres an hour apart is not a measurement",
-        "type_prior": "every scored candidate scores 0.5 here, so it separates nobody and is not counted (D28)"
-      },
-      "weight_live": 0.45,
-      "components_available": 2,
-      "components_total": 7,
-      "closest_km": 0.92,
-      "closest_time": "2023-05-16T06:00:00Z",
-      "grid_probability": 0.269,
-      "heading_consistent": false,
-      "ais_gap_minutes": 420.0,
-      "edge_truncated": false,
+      "source_type": "dark_vessel",
+      "mmsi": null,
+      "name": "Unidentified radar contact (GFW SAR vessel detections, not UDGAM's detector)",
+      "lon": -142.64,
+      "lat": 59.55,
+      "est_length_m": null,
+      "score": 0.274,
+      "angular_deviation_deg": 5.9,
       "reasons": [
-        "on the edge of the reconstructed origin during the release window"
-      ]
-    },
-    {
-      "source_type": "vessel",
-      "mmsi": "941214805",
-      "name": "941214805",
-      "vessel_type": "other",
-      "score": 0.225,
-      "components": {
-        "proximity": 0.287,
-        "parity": null,
-        "temporality": 0.1,
-        "trajectory": null,
-        "gap": null,
-        "slowdown": null,
-        "type_prior": null
-      },
-      "component_notes": {
-        "proximity": "origin-grid probability at closest approach",
-        "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
-        "temporality": "closest approach 5.0 h from the centre of the release window",
-        "trajectory": "vessel was never outside the 3 km origin radius before closest approach, so it has no approach direction to assess",
-        "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
-        "slowdown": "speed over ground is not published by the hourly presence source; a speed derived from 1 km cell centres an hour apart is not a measurement",
-        "type_prior": "every scored candidate scores 0.5 here, so it separates nobody and is not counted (D28)"
-      },
-      "weight_live": 0.45,
-      "components_available": 2,
-      "components_total": 7,
-      "closest_km": 2.25,
-      "closest_time": "2023-05-16T05:00:00Z",
-      "grid_probability": 0.287,
-      "heading_consistent": false,
-      "ais_gap_minutes": 240.0,
-      "edge_truncated": false,
-      "reasons": [
-        "on the edge of the reconstructed origin during the release window"
+        "radar contact from GFW SAR vessel detections \u2014 not produced by UDGAM's ship detector",
+        "no vessel in the hourly AIS record could have reached this position at acquisition time \u2014 hourly AIS is weaker evidence than dense AIS",
+        "3.6 km from the edge of an oil detection",
+        "single satellite pass: not persistence-checked, so it may be a fixed structure or a transponder outside the archive's receiver coverage"
       ]
     }
   ],
-  "dark_vessels": [],
   "infrastructure": [],
   "excluded": [
-    {
-      "mmsi": "941205333",
-      "name": "941205333      11.5V",
-      "closest_km": 5.22,
-      "reason": "3 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 5.2 km from the peak, at zero grid probability throughout"
-    },
     {
       "mmsi": "367415050",
       "name": "INTANGIBLE",
@@ -98,12 +35,12 @@
       "reason": "11 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 13.7 km from the peak, at zero grid probability throughout"
     },
     {
-      "mmsi": "941216622",
-      "name": "MAJOR BUOY 4",
-      "closest_km": 21.87,
-      "reason": "3 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 21.9 km from the peak, at zero grid probability throughout"
+      "mmsi": "367150410",
+      "name": "MAJOR",
+      "closest_km": 22.27,
+      "reason": "8 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 22.3 km from the peak, at zero grid probability throughout"
     }
   ],
-  "abstained": false,
-  "abstain_reason": null
+  "abstained": true,
+  "abstain_reason": "no vessel entered the reconstructed origin during the window"
 }
