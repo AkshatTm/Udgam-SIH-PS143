@@ -28,7 +28,7 @@
         "temporality": "closest approach 4.0 h from the centre of the release window",
         "trajectory": "vessel was never outside the 3 km origin radius before closest approach, so it has no approach direction to assess",
         "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
-        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "slowdown": "speed over ground is not published by the hourly presence source; a speed derived from 1 km cell centres an hour apart is not a measurement",
         "type_prior": "every scored candidate scores 0.5 here, so it separates nobody and is not counted (D28)"
       },
       "weight_live": 0.45,
@@ -65,7 +65,7 @@
         "temporality": "closest approach 5.0 h from the centre of the release window",
         "trajectory": "vessel was never outside the 3 km origin radius before closest approach, so it has no approach direction to assess",
         "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
-        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "slowdown": "speed over ground is not published by the hourly presence source; a speed derived from 1 km cell centres an hour apart is not a measurement",
         "type_prior": "every scored candidate scores 0.5 here, so it separates nobody and is not counted (D28)"
       },
       "weight_live": 0.45,

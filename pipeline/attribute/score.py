@@ -171,7 +171,7 @@ def component_proximity(track, grid, t0, t1, ais_source="noaa_dense"):
     return Component(value, note=note), (when, pos)
 
 
-def component_trajectory(track, grid, when, pos):
+def component_trajectory(track, grid, when, pos, ais_source="noaa_dense"):
     """Was the vessel heading in a way consistent with being the source?
 
     MEASURED AT THE APPROACH, NOT AT CLOSEST APPROACH — and that is a correctness fix,
@@ -214,6 +214,14 @@ def component_trajectory(track, grid, when, pos):
             "closest approach, so it has no approach direction to assess")
     cog = track.cog[idx]
     if cog is None:
+        # D29: the note has to be TRUE, not merely present. On an hourly-presence source COG is
+        # not published at all, so calling it an "AIS sentinel" (a vessel broadcasting 360) says
+        # the transponder reported something it never reported. Measured: every card on
+        # case-mumbai-2023 carries the sentinel wording today, and none of them is a sentinel.
+        if ais_source == "gfw_hourly":
+            return Component.not_applicable(
+                "course over ground is not published by the hourly presence source, and a "
+                "course derived from two 1 km cell centres an hour apart is not a measurement")
         return Component.not_applicable(
             "course over ground unavailable on approach (AIS sentinel)")
 
@@ -284,7 +292,8 @@ def component_slowdown(track, when, ais_source):
     """
     if ais_source == "gfw_hourly":
         return Component.not_applicable(
-            "AIS source is hourly — speed changes are not resolvable")
+            "speed over ground is not published by the hourly presence source; a speed "
+            "derived from 1 km cell centres an hour apart is not a measurement")
     underway = sorted(s for s in track.sog if s is not None and s >= UNDERWAY_KNOTS)
     if len(underway) < 3:
         return Component.not_applicable(
@@ -441,7 +450,7 @@ def score_vessel(track, grid, t0, t1, ais_source, discharge_class, box):
         "proximity": prox,
         "parity": component_parity(discharge_class),
         "temporality": component_temporality(track, when, grid),
-        "trajectory": component_trajectory(track, grid, when, pos),
+        "trajectory": component_trajectory(track, grid, when, pos, ais_source),
         "gap": component_gap(track, t0, t1, ais_source, box),
         "slowdown": component_slowdown(track, when, ais_source),
         "type_prior": component_type_prior(track.vessel_type),
@@ -492,6 +501,33 @@ def reasons_for(s):
     return out[:4]
 
 
+def rank_key(s):
+    """A TOTAL order on scored candidates, so the same inputs name the same vessels.
+
+    `plausible.sort(key=score)` alone is not deterministic. `tracks.load_tracks` groups by
+    MMSI in DuckDB, whose GROUP BY makes no ordering guarantee and parallelises, so the
+    input order varies between runs on identical data. Python's sort is stable, which
+    faithfully preserves that arbitrary order -- and on an hourly case, where the D28 gate
+    strips `type_prior` and leaves score == proximity, exact ties are the norm rather than
+    the exception.
+
+    Measured on case-mumbai-2023, 2026-09-22: three consecutive runs over an unchanged
+    parquet named three DIFFERENT pairs of vessels at rank 2 and 3 -- LISA / MSC MADELEINE,
+    then MSC MADELEINE / GENIUS ACE, then LISA / GENIUS ACE, all tied at exactly 0.781. We
+    were naming real vessels as pollution suspects and which ones got named was chance.
+
+    Every term is a number already on the card, and the order is "more evidence first, then
+    the primary evidence, then distance". MMSI last is the deterministic backstop: arbitrary,
+    but stated and stable, which an unstated arbitrary order is not.
+    """
+    return (-s["score"],
+            -(s.get("weight_live") or 0.0),
+            -sum(1 for c in s["components"].values() if c.applicable),
+            -(s.get("grid_probability") or 0.0),
+            s["closest_km"] if s.get("closest_km") is not None else float("inf"),
+            s["track"].mmsi)
+
+
 def exclusion_reason(s):
     """A stated disqualifying reason, or None if there is no clean one. An exclusion
     without a reason is worse than no exclusion — the validator rejects an empty
@@ -500,7 +536,13 @@ def exclusion_reason(s):
     if c["trajectory"].applicable and c["trajectory"].value == 0:
         return "heading away from the origin throughout the window"
     if c["gap"].applicable and c["gap"].value == 0 and c["proximity"].value < 0.3:
-        return "no transponder gap and continuous coverage through the window"
+        # Lead with the measured reason, not the absence. "No transponder gap" reads as an
+        # exoneration, and it is the weaker half of this test: what actually disqualifies the
+        # vessel is that it never reached the origin. Stating the absence first also becomes
+        # wrong under a merged AIS pool, where a vessel can have no gap MEASUREMENT at all
+        # rather than a measured absence of one.
+        return (f"never reached the high-probability region (peak grid probability "
+                f"{c['proximity'].value:.2f}), and broadcast continuously while under way")
     if c["proximity"].applicable and c["proximity"].value < 0.15:
         return (f"never entered the high-probability region of the origin "
                 f"(peak grid probability {c['proximity'].value:.2f})")
@@ -726,11 +768,12 @@ def main():
                 # real case, because every plausible vessel was also scored onto a card.
                 near_miss.append(s)
 
-        plausible.sort(key=lambda s: s["score"], reverse=True)
-        near_miss.sort(key=lambda s: s["grid_probability"], reverse=True)
+        plausible.sort(key=rank_key)
+        near_miss.sort(key=lambda s: (-(s["grid_probability"] or 0.0),
+                                      s["track"].mmsi))
         gated = gate_constant_components(plausible)
         if gated:
-            plausible.sort(key=lambda s: s["score"], reverse=True)
+            plausible.sort(key=rank_key)
             print(f"[gate]  {', '.join(gated)} is constant across all "
                   f"{len(plausible)} scored candidates -> null (D28)")
 
@@ -797,7 +840,19 @@ def main():
     # reason or they are not listed at all -- an exclusion without one is worse than none.
     pool = (plausible[len(top):] if not abstained else list(plausible)) + near_miss
     for s in pool:
-        r = exclusion_reason(s)
+        # A vessel that was SCORED and ranked below the cut was not disqualified by anything
+        # about itself -- it competed and lost. exclusion_reason() describes disqualification,
+        # so letting it run first here labels a ranked-but-unnamed vessel as excluded for a
+        # property it shares with the vessels we did name. The competed-and-lost sentence wins
+        # unconditionally for anything in `plausible`; exclusion_reason() applies to near
+        # misses, which really were dropped by the funnel.
+        ranked_and_beaten = s in plausible and not abstained
+        r = None if ranked_and_beaten else exclusion_reason(s)
+        if ranked_and_beaten:
+            lead = top[0]["score"] if top else 0.0
+            r = (f"scored {s['score']:.2f} against {lead:.2f} for the leading candidate on the "
+                 f"same {sum(1 for c in s['components'].values() if c.applicable)} components "
+                 f"-- considered and ranked below the top {len(top)}, not excluded")
         if not r and abstained and s in plausible:
             # On an abstention the plausible vessels are not excluded for anything about
             # themselves: they are the nearest candidates, and they are not named because the

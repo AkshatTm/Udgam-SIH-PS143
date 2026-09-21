@@ -162,7 +162,7 @@
       "mmsi": "368053000",
       "name": "MAERSK KANSAS",
       "closest_km": 21.8,
-      "reason": "no transponder gap and continuous coverage through the window"
+      "reason": "never reached the high-probability region (peak grid probability 0.00), and broadcast continuously while under way"
     },
     {
       "mmsi": "352476000",

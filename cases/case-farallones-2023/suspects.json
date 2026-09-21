@@ -14,7 +14,7 @@
       "mmsi": "248264000",
       "name": "TUGELA",
       "closest_km": 7.57,
-      "reason": "no transponder gap and continuous coverage through the window"
+      "reason": "never reached the high-probability region (peak grid probability 0.19), and broadcast continuously while under way"
     },
     {
       "mmsi": "212656000",
@@ -26,7 +26,7 @@
       "mmsi": "636016487",
       "name": "HORIZON",
       "closest_km": 6.84,
-      "reason": "no transponder gap and continuous coverage through the window"
+      "reason": "never reached the high-probability region (peak grid probability 0.18), and broadcast continuously while under way"
     }
   ],
   "abstained": true,

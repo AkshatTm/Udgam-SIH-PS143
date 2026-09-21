@@ -127,22 +127,22 @@
   "infrastructure": [],
   "excluded": [
     {
+      "mmsi": "338181167",
+      "name": "BUCKET LIST",
+      "closest_km": 2.16,
+      "reason": "scored 0.41 against 0.58 for the leading candidate on the same 5 components -- considered and ranked below the top 3, not excluded"
+    },
+    {
       "mmsi": "338120738",
       "name": "PER AMORE",
       "closest_km": 12.61,
-      "reason": "heading away from the origin throughout the window"
+      "reason": "scored 0.38 against 0.58 for the leading candidate on the same 6 components -- considered and ranked below the top 3, not excluded"
     },
     {
       "mmsi": "368014440",
       "name": "MONTE CARLO",
       "closest_km": 8.33,
-      "reason": "no transponder gap and continuous coverage through the window"
-    },
-    {
-      "mmsi": "367393270",
-      "name": "NICHOLAS L",
-      "closest_km": 10.18,
-      "reason": "heading away from the origin throughout the window"
+      "reason": "scored 0.22 against 0.58 for the leading candidate on the same 6 components -- considered and ranked below the top 3, not excluded"
     }
   ],
   "abstained": false,

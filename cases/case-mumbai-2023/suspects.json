@@ -26,9 +26,9 @@
         "proximity": "origin-grid probability at closest approach \u2014 position between two hourly fixes, linearly interpolated; the vessel's actual path between fixes is not observed",
         "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
         "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
-        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "trajectory": "course over ground is not published by the hourly presence source, and a course derived from two 1 km cell centres an hour apart is not a measurement",
         "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
-        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "slowdown": "speed over ground is not published by the hourly presence source; a speed derived from 1 km cell centres an hour apart is not a measurement",
         "type_prior": "vessel type other"
       },
       "weight_live": 0.35,
@@ -46,8 +46,8 @@
     },
     {
       "source_type": "vessel",
-      "mmsi": "636019523",
-      "name": "LISA",
+      "mmsi": "352823000",
+      "name": "GENIUS ACE",
       "vessel_type": "cargo",
       "score": 0.781,
       "components": {
@@ -63,16 +63,16 @@
         "proximity": "origin-grid probability at closest approach \u2014 position between two hourly fixes, linearly interpolated; the vessel's actual path between fixes is not observed",
         "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
         "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
-        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "trajectory": "course over ground is not published by the hourly presence source, and a course derived from two 1 km cell centres an hour apart is not a measurement",
         "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
-        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "slowdown": "speed over ground is not published by the hourly presence source; a speed derived from 1 km cell centres an hour apart is not a measurement",
         "type_prior": "vessel type cargo"
       },
       "weight_live": 0.35,
       "components_available": 2,
       "components_total": 7,
-      "closest_km": 13.37,
-      "closest_time": "2023-09-01T20:01:00Z",
+      "closest_km": 13.2,
+      "closest_time": "2023-09-01T10:13:00Z",
       "grid_probability": 0.745,
       "heading_consistent": false,
       "ais_gap_minutes": 60.0,
@@ -100,9 +100,9 @@
         "proximity": "origin-grid probability at closest approach \u2014 position between two hourly fixes, linearly interpolated; the vessel's actual path between fixes is not observed",
         "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
         "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
-        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "trajectory": "course over ground is not published by the hourly presence source, and a course derived from two 1 km cell centres an hour apart is not a measurement",
         "gap": "AIS source is hourly \u2014 a 30-minute silence cannot be observed",
-        "slowdown": "AIS source is hourly \u2014 speed changes are not resolvable",
+        "slowdown": "speed over ground is not published by the hourly presence source; a speed derived from 1 km cell centres an hour apart is not a measurement",
         "type_prior": "vessel type cargo"
       },
       "weight_live": 0.35,
@@ -123,22 +123,22 @@
   "infrastructure": [],
   "excluded": [
     {
-      "mmsi": "419001628",
-      "name": "SAGAR ENERGY",
-      "closest_km": 12.5,
-      "reason": "never entered the high-probability region of the origin (peak grid probability 0.13)"
+      "mmsi": "636019523",
+      "name": "LISA",
+      "closest_km": 13.37,
+      "reason": "scored 0.78 against 0.89 for the leading candidate on the same 2 components -- considered and ranked below the top 3, not excluded"
     },
     {
-      "mmsi": "419001116",
-      "name": "OCEAN TURQUOISE",
-      "closest_km": 9.06,
-      "reason": "never entered the high-probability region of the origin (peak grid probability 0.08)"
+      "mmsi": "636091384",
+      "name": "NORTHERN GUARD",
+      "closest_km": 13.21,
+      "reason": "scored 0.74 against 0.89 for the leading candidate on the same 2 components -- considered and ranked below the top 3, not excluded"
     },
     {
-      "mmsi": "419663000",
-      "name": "KAMET",
-      "closest_km": 13.24,
-      "reason": "never entered the high-probability region of the origin (peak grid probability 0.06)"
+      "mmsi": "257880000",
+      "name": "BOW ELM",
+      "closest_km": 13.26,
+      "reason": "scored 0.70 against 0.89 for the leading candidate on the same 2 components -- considered and ranked below the top 3, not excluded"
     }
   ],
   "abstained": false,
