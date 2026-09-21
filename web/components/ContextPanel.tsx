@@ -18,7 +18,6 @@ import type {
   DischargeClass,
   Provenance,
 } from "@/lib/contracts";
-import type { AgeMethod, OriginBundle } from "@/lib/origin";
 import type {
   DarkVessel,
   ExcludedVessel,
@@ -28,7 +27,6 @@ import type {
   SuspectsBundle,
 } from "@/lib/suspects";
 import InfoDot from "@/components/InfoDot";
-import AgePosteriorChart from "@/components/AgePosteriorChart";
 // Shared with VerifyScreen — moved out of this file verbatim so the same funnel and the same
 // component breakdown render identically on both screens (see components/attribution).
 import {
@@ -37,6 +35,13 @@ import {
   ComponentBars,
   FunnelBar,
 } from "@/components/attribution";
+import { Divider, SectionLabel, Row, MetricRow } from "@/components/PanelAtoms";
+import { fmt, fmtLat, fmtLon, fmtDay, fmtTime } from "@/lib/format";
+import TraceCard from "@/components/trace/TraceCard";
+import { spillGroupFor } from "@/lib/spillGroups";
+import { groupColor } from "@/lib/groupColors";
+import type { SpillGroup } from "@/lib/contracts";
+import type { GroupBundle } from "@/lib/store";
 
 // Classification colours. The comment always claimed these matched the map; they did not — the
 // panel was a hair redder and a shade lighter than the polygons beside it. Both now read the
@@ -44,46 +49,6 @@ import {
 // called red in this panel is the same red on the map.
 const OIL_COLOR = "var(--oil)";
 const LOOKALIKE_COLOR = "var(--reject)";
-
-const fmt = (x: number | undefined, digits: number): string =>
-  typeof x === "number" && Number.isFinite(x)
-    ? x.toFixed(digits).replace("-", "−") // real minus sign
-    : "—";
-
-// Coordinates render as magnitude + hemisphere, never a signed number beside a fixed "N"/"E"
-// (that printed "−79.68° E" on every US case). Bundles stay signed [lon, lat]; this is display.
-const fmtLat = (v: number | undefined, digits: number): string =>
-  typeof v === "number" && Number.isFinite(v)
-    ? `${Math.abs(v).toFixed(digits)}° ${v < 0 ? "S" : "N"}`
-    : "—";
-const fmtLon = (v: number | undefined, digits: number): string =>
-  typeof v === "number" && Number.isFinite(v)
-    ? `${Math.abs(v).toFixed(digits)}° ${v < 0 ? "W" : "E"}`
-    : "—";
-
-const fmtDay = (iso: string): string => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d
-    .toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      timeZone: "UTC",
-    })
-    .toUpperCase();
-};
-
-// HH:MM string only
-const fmtTime = (iso: string): string => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC",
-  });
-};
 
 /**
  * Display-only scaling for the "why this classification" bars.
@@ -113,68 +78,8 @@ function featureRows(
   ];
 }
 
-// ─── Shared small atoms ──────────────────────────────────────────────────────
-
-/** Dimmed uppercase section label */
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mt-5 t-label first:mt-0">
-      {children}
-    </div>
-  );
-}
-
-/** Hairline divider */
-function Divider() {
-  return <div className="my-4 border-t border-line" />;
-}
-
-/** One row: label left, monospace value right */
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-[3px]">
-      <span className="t-small text-ink-2">{label}</span>
-      <span className="font-mono text-[13px] text-ink tabular-nums">
-        {value}
-      </span>
-    </div>
-  );
-}
-
-/**
- * MetricRow — plain-language label first, muted technical term second,
- * optional InfoDot affordance (C4 + C5).
- */
-function MetricRow({
-  primary,
-  technical,
-  value,
-  tip,
-}: {
-  primary: string;
-  technical?: string;
-  value: string;
-  tip: string;
-}) {
-  return (
-    // `relative` — the InfoDot's tooltip anchors to this row (see InfoDot.tsx), not to the
-    // button itself, so it stays inside the panel regardless of how long `primary` is.
-    <div className="relative flex items-start justify-between gap-3 py-[3px]">
-      <span className="flex flex-col gap-0">
-        <span className="flex items-center gap-1 t-small text-ink">
-          {primary}
-          <InfoDot tip={tip} />
-        </span>
-        {technical && (
-          <span className="text-[11px] text-ink-3">{technical}</span>
-        )}
-      </span>
-      <span className="font-mono text-[13px] text-ink tabular-nums shrink-0">
-        {value}
-      </span>
-    </div>
-  );
-}
+// SectionLabel / Divider / Row / MetricRow now live in components/PanelAtoms.tsx (shared with
+// components/trace/TraceCard.tsx).
 
 // docs/team/harshita-frontend.md Phase 5.3 — discharge_class badge (Master §6.3). Plain language first, technical
 // enum second (C4), same convention as MetricRow. Renders the producer's value verbatim —
@@ -242,11 +147,45 @@ function confidenceLabel(
   return `marginal · ${db} vs ${rule}`;
 }
 
+/** D46 — [r,g,b,a] 0-255 (deck.gl convention) to a CSS rgba() string, for the swatches this
+ *  panel and MapView.tsx's deck.gl layers must agree on pixel-for-pixel. */
+function rgba([r, g, b, a]: readonly [number, number, number, number]): string {
+  return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(2)})`;
+}
+
+/** D46 — shown on `DetectionCard` only when a case has more than one independent spill group,
+ * so a single-spill case (the overwhelming majority) never grows an extra badge it has nothing
+ * to say. Names which group this specific detection belongs to (by area rank, matching the
+ * order MapView.tsx colours groups in) and, when the group merged several detections into one
+ * ribbon, which other detection ids came along with it. */
+function SpillGroupBadge({ groups, detectionId }: { groups: SpillGroup[]; detectionId: string }) {
+  const group = spillGroupFor(detectionId, groups);
+  if (!group) return null;
+  const index = groups.findIndex((g) => g.id === group.id);
+  const palette = groupColor(index);
+  const others = group.member_detection_ids.filter((id) => id !== detectionId);
+  return (
+    <div className="mt-1.5 inline-flex items-baseline gap-1.5 rounded border border-line-strong bg-white/[0.05] px-2 py-1">
+      <span
+        className="inline-block h-2 w-2 shrink-0 self-center rounded-full"
+        style={{ backgroundColor: rgba(palette.fill) }}
+      />
+      <span className="text-[12px] font-semibold text-ink">
+        Spill group {index + 1} of {groups.length}
+      </span>
+      <span className="font-mono text-[11px] text-ink-3">
+        {fmt(group.total_area_km2, 2)} km²{others.length > 0 ? ` · ribbon with ${others.join(", ")}` : ""}
+      </span>
+    </div>
+  );
+}
+
 function DetectionCard({ p }: { p: DetectionProperties }) {
   const isOil = p.classification === "oil";
   const rows = featureRows(p);
   const accentColor = isOil ? OIL_COLOR : LOOKALIKE_COLOR;
   const provenance = useAppStore((s) => s.meta?.provenance);
+  const spillGroups = useAppStore((s) => s.spillGroups);
 
   // Object number from id: "det-01" → "01"
   const objNum = p.id.replace(/^det-?/i, "").padStart(2, "0").toUpperCase();
@@ -268,6 +207,9 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
           {confidenceLabel(p, provenance)}
         </div>
         {p.discharge_class && <DischargeBadge value={p.discharge_class} />}
+        {isOil && spillGroups && spillGroups.length > 1 && (
+          <SpillGroupBadge groups={spillGroups} detectionId={p.id} />
+        )}
       </div>
 
       <Divider />
@@ -372,264 +314,57 @@ function DetectionCard({ p }: { p: DetectionProperties }) {
   );
 }
 
-// docs/team/harshita-frontend.md Phase 5.3 — age_method plain-language labels (Master §6.5, C4). "none" and
-// "disagreement" are genuine estimator outcomes, not errors — worded as such, not hidden.
-const AGE_METHOD_LABEL: Record<AgeMethod, string> = {
-  shear: "Estimated from current shear",
-  fay: "Estimated from spreading rate",
-  elongation: "Estimated from slick elongation",
-  track: "Estimated from how far a ship's track has widened",
-  combined: "Combined estimate",
-  disagreement: "Estimators disagree — range widened",
-  none: "No measured age",
-};
+// TraceCard now lives in components/trace/TraceCard.tsx (redesigned Trace-stage panel — capsule
+// layout + GSAP entrance/count-up/disclosure motion). AGE_METHOD_LABEL moved there with it.
 
-// D46 — a refusal says WHY, from the bundle's own age_refusal, and never claims the window is a
-// search bracket unless time_window_method says so (Huntington's is a convergence window).
-function ageRefusalText(origin: OriginBundle): string {
-  const r = origin.ageRefusal;
-  let why = "No measured age.";
-  if (r?.reason === "low_information") {
-    why =
-      r.infoGainNats !== null
-        ? `Estimators ran, but the evidence barely moved the prior (${fmt(r.infoGainNats, 3)} < ${fmt(r.minGainNats, 2)} nats), so no age is claimed.`
-        : "Estimators ran, but the evidence barely moved the prior, so no age is claimed.";
-  } else if (r?.reason === "no_estimator") {
-    why = "No estimator could read this slick, so no age is claimed.";
-  } else if (r?.reason === "no_detection") {
-    why = "No oil detection to read an age from.";
-  }
-  const window =
-    origin.timeWindowMethod === "convergence"
-      ? " Window from drift convergence."
-      : origin.timeWindowMethod === "bounded"
-        ? " Window is the search bracket."
-        : "";
-  return why + window;
-}
-
-const MODEL_NAME: Record<string, string> = {
-  udgam_rk2: "UDGAM RK2",
-  opendrift_oceandrift: "OpenDrift OceanDrift",
-  opendrift_openoil: "OpenDrift OpenOil",
-};
-const modelName = (n: string): string => MODEL_NAME[n] ?? n;
-
-const sameUtcDay = (a: string, b: string): boolean => a.slice(0, 10) === b.slice(0, 10);
-
-// ─── Trace stage card ─────────────────────────────────────────────────────────
-
-function TraceCard({ origin }: { origin: OriginBundle }) {
-  const [start, end] = origin.timeWindow;
-
+/**
+ * D46 — shown above `TraceCard` (which keeps rendering the PRIMARY group only, unchanged) when
+ * a case has more than one independent spill group, so a judge sees at a glance that every
+ * simultaneously-drifting cloud on the map is accounted for and which colour is which. Each
+ * group's own origin stats stream in independently as its bundle loads — never blocked on the
+ * others, matching the map's own per-group draw-on.
+ */
+function SpillGroupsSummary({ groups, bundles }: { groups: SpillGroup[]; bundles: GroupBundle[] }) {
   return (
-    <div className="flex flex-col">
-      {/* ── Header ── */}
-      <div>
-        <div className="t-label">
-          Stage 02 — Trace
-        </div>
-        <div className="mt-1 t-title text-ink">
-          Where the oil came from
-        </div>
-        <div className="mt-0.5 font-mono text-[11px] text-ink-3">
-          {origin.ensembleRuns} simulations
-        </div>
-      </div>
-
-      <Divider />
-
-      {/* ── Best estimate ── */}
-      <SectionLabel>Best estimate</SectionLabel>
-      {/* `relative` — see InfoDot.tsx: the tooltip anchors to this row, not the button. */}
-      <div className="relative mt-1.5 flex items-start gap-1">
-        <div className="flex-1">
-          <div className="font-mono text-[13px] leading-snug text-ink tabular-nums">
-            {fmtLat(origin.centroid[1], 5)}
-          </div>
-          <div className="font-mono text-[13px] leading-snug text-ink tabular-nums">
-            {fmtLon(origin.centroid[0], 5)}
-          </div>
-        </div>
-        <InfoDot
-          align="right"
-          tip="The centroid of the origin probability field — where the ensemble of backwards-drift runs most agree the oil entered the water."
-        />
-      </div>
-
-      <Divider />
-
-      {/* ── Uncertainty regions — plain-language first (C4 + C5) ── */}
-      <SectionLabel>Uncertainty</SectionLabel>
-      <div className="mt-1.5 space-y-1">
-        <MetricRow
-          primary="Half the runs land within"
-          technical="50 % radius"
-          value={`${fmt(origin.radius50Km, 1)} km`}
-          tip="Radius of the circle that contains half of the 50 backwards-drift simulations. Smaller means the origin is more certain."
-        />
-        <MetricRow
-          primary="Nine in ten within"
-          technical="90 % radius"
-          value={`${fmt(origin.radius90Km, 1)} km`}
-          tip="Radius of the circle that contains nine out of ten simulations. It measures how closely the runs agree with each other (precision), not how close they are to the true release point."
-        />
-      </div>
-      {origin.modelMix && origin.modelMix.models.length > 1 && (
-        <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
-          Pooled from{" "}
-          {origin.modelMix.models
-            .map((m) => `${modelName(m.name)} ${fmt(m.weight * 100, 0)} %`)
-            .join(" · ")}
-          {origin.modelMix.centroidSeparationKm !== null &&
-            ` (their centres ${fmt(origin.modelMix.centroidSeparationKm, 1)} km apart)`}
-        </p>
-      )}
-
-      <Divider />
-
-      {/* ── Release window — plain-language first (C4 + C5) ── */}
-      <SectionLabel>Released between</SectionLabel>
-      {/* `relative` — see InfoDot.tsx: the tooltip anchors to this row, not the button. */}
-      <div className="relative mt-1.5 flex items-start gap-1">
-        <div className="flex-1">
-          {sameUtcDay(start, end) ? (
-            <>
-              <div className="font-mono text-[15px] font-semibold text-ink">
-                {fmtDay(start)}
-              </div>
-              <div className="font-mono text-[13px] text-ink-2">
-                {fmtTime(start)} – {fmtTime(end)} UTC
-              </div>
-            </>
-          ) : (
-            // A window across midnight names both days — "01:11 – 01:11" read as zero length.
-            <div className="font-mono text-[13px] leading-snug text-ink">
-              <div>{fmtDay(start)} · {fmtTime(start)}</div>
-              <div>→ {fmtDay(end)} · {fmtTime(end)} UTC</div>
-            </div>
-          )}
-        </div>
-        <InfoDot
-          align="right"
-          tip={
-            origin.timeWindowMethod === "age"
-              ? "The 80 % interval of this slick's estimated age, counted back from the radar pass. The origin cloud is pooled over the same ages."
-              : origin.timeWindowMethod === "bounded"
-                ? "No release time could be measured, so this is the full span the backwards drift searched."
-                : "The time window during which the oil most plausibly entered the water, derived from backwards-drift timing across all simulations."
-          }
-        />
-      </div>
-
-      {/* D12 — the method line below says whether this window is a search bracket or a
-          measured estimate. No always-on caption: it contradicted "Measured estimate". */}
-      {origin.timeWindowMethod === "bounded" && (
-        <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
-          Search bracket (not a measured release time)
-        </p>
-      )}
-      {origin.timeWindowMethod === "convergence" && (
-        <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
-          Measured estimate
-        </p>
-      )}
-      {origin.timeWindowMethod === "age" && (
-        <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
-          Measured from the slick&apos;s estimated age (80% interval)
-        </p>
-      )}
-
-      {/* docs/team/harshita-frontend.md Phase 5.3 — estimated age (Master §6.5). ageHours and ageMethod are
-          independently optional (no invented pairing rule): each row renders only when its
-          own field is present, and the whole block hides when both are absent. */}
-      {(origin.ageHours || origin.ageMethod) && (
-        <>
-          <Divider />
-          <SectionLabel>Estimated age</SectionLabel>
-          {/* `relative` — see InfoDot.tsx: the tooltip anchors to this row, not the button. */}
-          <div className="relative mt-1.5 flex items-start gap-1">
-            <div className="flex-1">
-              {origin.ageHours && (
-                <div className="font-mono text-[15px] font-semibold text-ink">
-                  {fmt(origin.ageHours[0], 1)} – {fmt(origin.ageHours[1], 1)} hours
-                </div>
-              )}
-              {origin.ageMethod && origin.ageMethod !== "none" && (
-                <div className="mt-0.5 text-[13px] text-ink-2">
-                  {AGE_METHOD_LABEL[origin.ageMethod]}
-                </div>
-              )}
-              {origin.ageMethod === "none" && (
-                <div className="mt-0.5 text-[13px] leading-relaxed text-ink-2">
-                  {ageRefusalText(origin)}
-                </div>
-              )}
-            </div>
-            <InfoDot
-              align="right"
-              tip="How long ago the oil entered the water. An 80 % interval from a posterior that fuses the slick's shape (our drift model mixed with OpenDrift OpenOil), whether it would still be visible on radar, and how far a ship's track has widened. When the evidence barely moves the prior, no age is claimed."
-            />
-          </div>
-          {origin.agePosterior && (
-            <>
-              <AgePosteriorChart posterior={origin.agePosterior} />
-              <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
-                Shaded: 80 % interval · dashed: median {fmt(origin.agePosterior.median, 1)} h
-                {origin.agePosterior.models.length > 0 &&
-                  ` · shape from ${origin.agePosterior.models.map(modelName).join(" + ")}`}
-              </p>
-              {origin.agePosterior.calibrationCoverage !== null && (
-                <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
-                  Calibrated: on held-out synthetic twins, 80 % intervals contained the true age{" "}
-                  {fmt(origin.agePosterior.calibrationCoverage * 100, 0)} % of the time.
-                </p>
-              )}
-            </>
-          )}
-          {/* Per-estimator bands, collapsed. A null band is "not applicable" — never a zero. */}
-          {origin.ageEstimators && Object.keys(origin.ageEstimators).length > 0 && (
-            <details className="mt-2 text-[13px] text-ink-2">
-              <summary className="cursor-pointer select-none text-ink-3 hover:text-ink-2">
-                Per-estimator bands
-              </summary>
-              <div className="mt-1 space-y-0.5">
-                {Object.entries(origin.ageEstimators).map(([name, band]) => (
-                  <Row
-                    key={name}
-                    label={name.charAt(0).toUpperCase() + name.slice(1)}
-                    value={band === null ? "not applicable" : `${fmt(band[0], 1)} – ${fmt(band[1], 1)} h`}
-                  />
-                ))}
-              </div>
-            </details>
-          )}
-        </>
-      )}
-
-      {/* Origin-confidence state. The two branches are genuinely distinct:
-          abstain === true  → the origin cloud is too diffuse to attribute from,
-                              and Stage 3 names no suspects (docs/CONTRACTS.md §6);
-          abstain === false → the origin is tight enough for attribution to run. */}
-      {origin.abstain ? (
-        <div className="mt-3 rounded border border-line bg-raised px-2.5 py-1.5 text-[13px] leading-relaxed text-ink-2">
-          Origin cloud too diffuse — no suspects can be named.
-        </div>
-      ) : (
-        <div className="mt-3 rounded border border-line px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-ink-3">
-          Origin within attribution confidence
-        </div>
-      )}
-
-      {/* The drifting points are ONE control trajectory (particles.json); the
-          uncertainty lives in the origin field and the 50 / 90 % regions above. */}
-      <p className="mt-4 text-[13px] leading-relaxed text-ink-3">
-        The drifting points trace one representative path, not a spread. The
-        uncertainty is the origin probability field and the 50 / 90 % regions
-        above, stacked from {origin.ensembleRuns} perturbed runs
-        {origin.modelMix && origin.modelMix.models.length > 1 && " pooled with a second drift model"}
-        {origin.timeWindowMethod === "age" && ", weighted over the slick's estimated age"}.
+    <div className="mb-4 rounded border border-line bg-raised p-3">
+      <div className="t-label">{groups.length} independent spill groups</div>
+      <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
+        Each traced back separately — the map shows every cloud at once, one colour per group.
       </p>
+      <div className="mt-2.5 space-y-2.5">
+        {groups.map((g, i) => {
+          const bundle = bundles.find((b) => b.id === g.id);
+          const palette = groupColor(i);
+          return (
+            <div key={g.id} className="flex items-start gap-2">
+              <span
+                className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: rgba(palette.fill) }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold leading-tight text-ink">
+                  Group {i + 1} · {fmt(g.total_area_km2, 2)} km²
+                </div>
+                <div className="font-mono text-[11px] text-ink-3">
+                  {g.member_detection_ids.join(", ")}
+                </div>
+                {bundle?.status === "ready" && bundle.origin && (
+                  <div className="mt-0.5 text-[12px] text-ink-2">
+                    r50 {fmt(bundle.origin.radius50Km, 1)} km · r90 {fmt(bundle.origin.radius90Km, 1)} km
+                    {bundle.origin.abstain ? " · abstained" : ""}
+                  </div>
+                )}
+                {(!bundle || bundle.status === "loading") && (
+                  <div className="mt-0.5 text-[12px] text-ink-3">Loading…</div>
+                )}
+                {bundle?.status === "error" && (
+                  <div className="mt-0.5 text-[12px] text-alert">{bundle.error}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1185,6 +920,8 @@ export default function ContextPanel() {
   const bounds = useAppStore((s) => s.bounds);
   const revealed = useAppStore((s) => s.revealed);
   const running = useAppStore((s) => s.running);
+  const spillGroups = useAppStore((s) => s.spillGroups);
+  const groupBundles = useAppStore((s) => s.groupBundles);
 
   const oilCount =
     detections?.features.filter((f) => f.properties.classification === "oil")
@@ -1264,6 +1001,17 @@ export default function ContextPanel() {
                 <span style={{ color: OIL_COLOR }}>
                   {oilCount === 1 ? "1 is oil" : `${oilCount} are oil`}.
                 </span>
+                {/* D46 — told up front, before a judge clicks anything, that this case holds
+                    more than one independent spill (as opposed to one slick fragmented into
+                    several detections — a case with a single spill_groups entry says nothing
+                    extra here even with multiple oil detections). */}
+                {spillGroups && spillGroups.length > 1 && (
+                  <>
+                    {" "}
+                    These are {spillGroups.length} independent spill events, each traced
+                    separately in Trace.
+                  </>
+                )}
               </p>
             </div>
             {selected ? (
@@ -1293,7 +1041,12 @@ export default function ContextPanel() {
             </p>
           </div>
         ) : origin ? (
-          <TraceCard origin={origin} />
+          <>
+            {spillGroups && spillGroups.length > 1 && (
+              <SpillGroupsSummary groups={spillGroups} bundles={groupBundles} />
+            )}
+            <TraceCard origin={origin} />
+          </>
         ) : (
           <p className="text-[13px] text-ink-3">Loading origin estimate…</p>
         ))}

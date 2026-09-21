@@ -71,6 +71,51 @@ def r5(x):
 
 
 
+def truncate_to_age_horizon(history, integration_dt_min, age_block, output_dt_min):
+    """Cut the published rewind down to the age we actually measured.
+
+    THE INTEGRATION MUST NOT BE SHORTENED, and this is why it happens here instead. The
+    ensemble needs the full 72 h: the posterior's own shape evidence and
+    ensemble.age_weighted_pool both read those frames, and integrating only 14 h would make
+    "this slick might be 40 h old" unmeasurable -- the posterior would come out biased young
+    by construction. run.py:245 also clips the age candidates to span_h, so shortening the run
+    would close that into a loop. The physics stays unbiased; only the artefact the slider
+    scrubs changes, to match the claim the rest of the bundle already makes.
+
+    Every bundle in the library shipped 97 frames x 45 min = exactly 72.0 h backward, on every
+    case, while its own age posterior said the slick was hours old -- Jacksonville's median was
+    2.8 h against a 72 h rewind. The last 38 frames of that file were particles 380 km away,
+    which is what the validator's "falls well outside 300 km of the scene" warnings were.
+
+    Horizon is hpd80[1] rounded UP to a whole number of output steps. With no posterior it is
+    the full span: an unmeasured age must not masquerade as a short one.
+
+    Returns (history, output_dt_min) ready for subsample_for_output.
+    """
+    n = len(history)
+    span_h = (n - 1) * integration_dt_min / 60.0
+    post = (age_block or {}).get("age_posterior")
+    if not post or not post.get("hpd80"):
+        return history, output_dt_min
+    horizon_h = float(post["hpd80"][1])
+    if not (0 < horizon_h < span_h):
+        return history, output_dt_min
+
+    # Pick the finest output step that keeps the frame count sane. A 12 h window at 45 min is
+    # 17 frames, which scrubs badly; at 15 min it is 49. Shorter windows get BETTER resolution
+    # than the old fixed 45 min, not worse.
+    for dt in (15, 30, 45, 60):
+        if dt % integration_dt_min:
+            continue
+        stride = dt // integration_dt_min
+        n_int = int(math.ceil(horizon_h * 60.0 / integration_dt_min))
+        n_int += (-n_int) % stride                 # land on the stride lattice exactly
+        if n_int + 1 > n:                          # never ask for frames we did not integrate
+            n_int = ((n - 1) // stride) * stride
+        if n_int // stride + 1 <= 120:
+            return history[:n_int + 1], dt
+    return history, output_dt_min
+
 def subsample_for_output(history, integration_dt_min, output_dt_min):
     """Thin an integration history down to the frames that ship in particles.json.
 
@@ -692,9 +737,14 @@ def main():
 
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_frames, out_dt = subsample_for_output(np.asarray(positions), a.timestep_minutes,
-                                              a.output_timestep_minutes)
+    pub_hist, pub_dt = truncate_to_age_horizon(np.asarray(positions), a.timestep_minutes,
+                                               age_block, a.output_timestep_minutes)
+    out_frames, out_dt = subsample_for_output(pub_hist, a.timestep_minutes, pub_dt)
     write_particles(out_dir / "particles.json", t0, out_frames.tolist(), out_dt)
+    pub_span = (len(out_frames) - 1) * out_dt / 60.0
+    if pub_span < span_h - 1e-9:
+        print(f"              rewind    published {pub_span:.2f} h in {len(out_frames)} frames "
+              f"of {out_dt} min -- the measured age, not the {span_h:.0f} h search bracket")
     clon, clat, r50, r90, method, abstain = write_origin(
         out_dir / "origin.json", endpoints, conv_idx, members,
         t0, a.timestep_minutes, a.steps, a.runs, stranded_fraction=strand_frac,

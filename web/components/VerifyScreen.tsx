@@ -193,8 +193,18 @@ export default function VerifyScreen() {
 
   // A named MMSI is matched to its scored record so the shortlist can show the evidence. The
   // ORDER is always verification.json's — this only looks up what each entry refers to.
+  //
+  // `suspects` loads independently of `verification`, so `?? []` made a not-yet-arrived bundle
+  // indistinguishable from an arrived-and-missing one: every shortlist entry rendered the red
+  // "the two bundles disagree" card for the whole of the fetch. This is the same guard the A4
+  // block below already applies, for the same reason.
+  const suspectsReady = suspects !== null;
   const scoredByMmsi = new Map((suspects?.suspects ?? []).map((s) => [s.mmsi, s]));
-  const shortlist = nr.topSuspects.map((mmsi) => ({ mmsi, scored: scoredByMmsi.get(mmsi) }));
+  const shortlist = nr.topSuspects.map((mmsi) => ({
+    mmsi,
+    scored: scoredByMmsi.get(mmsi),
+    pending: !suspectsReady,
+  }));
 
   // A4 — the fact that turns an unexplained miss into a diagnosed one. Derived per case from
   // two already-loaded bundles; never a hardcoded MMSI, never a hardcoded case id. A party
@@ -267,8 +277,19 @@ export default function VerifyScreen() {
                 {/* Full width now buys room for two cards per row instead of one long stack —
                     each card is short by default since its score breakdown collapses. */}
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {shortlist.map(({ mmsi, scored }, i) =>
-                    scored ? (
+                  {shortlist.map(({ mmsi, scored, pending }, i) =>
+                    pending ? (
+                      // Still in flight. Not a disagreement, and must not be drawn as one.
+                      <div
+                        key={`${mmsi}-${i}`}
+                        className="rounded-lg border border-line bg-raised p-4"
+                      >
+                        <div className="font-mono text-[14px] tabular-nums text-ink-2">
+                          MMSI {mmsi}
+                        </div>
+                        <p className="mt-2 t-small text-ink-3">Loading the scored evidence…</p>
+                      </div>
+                    ) : scored ? (
                       <SuspectEvidence key={`${mmsi}-${i}`} s={scored} rank={i + 1} defaultOpen={i === 0} />
                     ) : (
                       // The bundles disagree: verification.json names an MMSI that

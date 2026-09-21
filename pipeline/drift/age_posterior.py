@@ -30,15 +30,36 @@ import math
 
 import numpy as np
 
-# The shared grid. 1 h resolution to the 72 h rewind horizon (check_gee.REWIND_HOURS).
-AGE_GRID_H = np.arange(1.0, 73.0, 1.0)
+# The shared grid. 15-MINUTE resolution to the 72 h rewind horizon (check_gee.REWIND_HOURS).
+#
+# It was 1 h resolution starting at 1.0 h, and that floor was a measurement artefact rather than
+# a modelling choice. Measured on the three cases that carried a posterior (2026-09-22):
+#
+#     case                  mode    mass in the single lowest cell
+#     jacksonville-2024     1.0 h   0.310
+#     farallones-2023       1.0 h   0.243
+#     gulf-alaska-2023      1.0 h   0.376
+#
+# The mode sat on the grid's lowest representable value on EVERY case, holding a quarter to a
+# third of the total mass. That is boundary pile-up: these slicks are detected minutes to an
+# hour after release and the engine had no way to say so. It also propagated downstream --
+# hpd() puts the band edge half a cell below grid[0], so every release window ended at
+# t0 - 0.5 h and the last half hour before the satellite pass was excluded from Stage 3
+# scoring entirely.
+#
+# 0.25 h is the finest age the rest of the pipeline can honour: run.py derives collect_steps as
+# h * 60 / timestep_minutes at a 15-minute integration step, so a finer grid would ask for
+# frames that were never integrated. The spacing stays UNIFORM deliberately -- hpd() takes its
+# half-cell from g[1] - g[0] and log_uniform_prior normalises per cell, so a variable-width
+# grid would silently change what every entry means.
+AGE_GRID_H = np.arange(0.25, 72.01, 0.25)
 
 # Prior support. Log-uniform: a slick is equally likely to be 1-2 h old as 10-20 h old. That is
 # the scale-free choice when nothing else is known, and it is deliberately NOT uniform in hours,
 # which would put 2/3 of the prior mass past 24 h -- i.e. assert that most slicks we see are old,
 # which nobody has measured. SAR-visible ship discharges are also short-lived (hours to a day or
 # two), which the log-uniform shape respects without inventing a lifetime.
-PRIOR_LO_H = 0.5
+PRIOR_LO_H = 0.25      # was 0.5; the grid now resolves a slick younger than an hour
 PRIOR_HI_H = 72.0
 
 HPD_MASS = 0.80
@@ -245,11 +266,15 @@ def summarise(post, used, grid=AGE_GRID_H, prior=None, min_gain=MIN_INFO_GAIN_NA
     out = {
         "status": "ok",
         "hours_grid": [float(x) for x in grid],
-        # 5 dp, not 4: 72 values each rounded by <= 5e-6 keep the sum within 4e-4 of 1, inside
-        # the validator's 1e-3 tolerance. At 4 dp the worst case (3.6e-3) is not.
-        "prob": [round(float(x), 5) for x in post],
-        "hpd80": [round(lo, 1), round(hi, 1)],
-        "median": round(quantile(post, 0.5, grid), 1),
+        # 6 dp, not 5. The grid went from 72 cells to 288, and at 5 dp the worst-case rounding
+        # drift is 288 * 5e-6 = 1.44e-3 -- OUTSIDE the validator's 1e-3 tolerance on sum(prob).
+        # At 6 dp it is 1.44e-4, comfortably inside.
+        "prob": [round(float(x), 6) for x in post],
+        # 3 dp, not 1 and not 2. At 0.25 h resolution the band edge is a half-cell, 0.125 h --
+        # and round(0.125, 2) is 0.12 under banker's rounding, which lands the edge OUTSIDE the
+        # grid and fails the validator's bounds check. 3 dp represents every half-cell exactly.
+        "hpd80": [round(lo, 3), round(hi, 3)],
+        "median": round(quantile(post, 0.5, grid), 3),
         "mode": float(np.asarray(grid)[int(np.argmax(post))]),
         "multimodal": multi,
         "info_gain_nats": round(gain, 3),

@@ -1744,6 +1744,26 @@ def estimate_age(field, feature, t0, candidate_hours, origin_lonlat, *, release_
                            "track": round_band(track_band)},
         "age_gate": gate,
     }
+    # Master 6.5 age_estimator_notes -- the D29 component_notes pattern, applied to the age
+    # panel. Every refusal path in this file already records WHY it refused, and every one of
+    # those strings was being thrown away, so the screen could only say "not applicable" four
+    # times. Huntington's Fay refusal is a finding, not an absence: "gravity-viscous spreading
+    # of 93.5 m3 reaches at most 0.880 km2 even at the 72 h ceiling, but the observed slick is
+    # 2.64 km2 -- 3x larger ... which is independent evidence that the shear estimator is
+    # modelling the right process."
+    #
+    # Introduces no new fact. It surfaces a string the pipeline already computed.
+    _diags = {"shear": shear_diag, "fay": fay_diag,
+              "elongation": elong_diag, "track": track_diag}
+    notes = {}
+    for _name, _band in block["age_estimators"].items():
+        if _band is not None:
+            continue
+        _why = (_diags.get(_name) or {}).get("skipped")
+        if _why:
+            notes[_name] = str(_why).strip()
+    if notes:
+        block["age_estimator_notes"] = notes
     if summary["status"] != "ok":
         # Master §6.5 age_refusal: WHY no age is claimed, so the panel does not have to guess.
         # "no_estimator" -- nothing produced a likelihood; "low_information" -- estimators ran but
@@ -1816,7 +1836,10 @@ def combine_bands(bands):
     return (min(b[0] for b in live.values()), max(b[1] for b in live.values())), "disagreement"
 
 
-def round_band(band, nd=1):
+def round_band(band, nd=3):
+    """2 dp since the age grid went to 0.25 h resolution -- at 1 dp a 0.125 h band edge rounds
+    to 0.1 and the validator's age_hours-vs-hpd80 equality check compares two different
+    numbers."""
     if band is None:
         return None
     return [round(float(band[0]), nd), round(float(band[1]), nd)]

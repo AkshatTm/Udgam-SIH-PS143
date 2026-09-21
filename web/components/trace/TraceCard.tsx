@@ -22,6 +22,7 @@ import { Divider, SectionLabel } from "@/components/PanelAtoms";
 import InfoDot from "@/components/InfoDot";
 import AnimatedNumber from "./AnimatedNumber";
 import AgeDisclosure from "./AgeDisclosure";
+import AgePosteriorChart from "@/components/AgePosteriorChart";
 import { gsap, useGSAP, prefersReducedMotion } from "@/lib/gsap";
 
 // docs/team/harshita-frontend.md Phase 5.3 — age_method plain-language labels (Master §6.5, C4).
@@ -204,9 +205,9 @@ export default function TraceCard({ origin }: { origin: OriginBundle }) {
               <div className="flex-1">
                 {origin.ageHours && (
                   <div className="font-mono text-[15px] font-semibold text-ink tabular-nums">
-                    <AnimatedNumber value={origin.ageHours[0]} digits={0} format={fmt} />
+                    <AnimatedNumber value={origin.ageHours[0]} digits={1} format={fmt} />
                     {" – "}
-                    <AnimatedNumber value={origin.ageHours[1]} digits={0} format={fmt} />
+                    <AnimatedNumber value={origin.ageHours[1]} digits={1} format={fmt} />
                     {" hours"}
                   </div>
                 )}
@@ -219,8 +220,39 @@ export default function TraceCard({ origin }: { origin: OriginBundle }) {
                 tip="How long ago the oil likely entered the water, estimated from how the slick has spread and sheared since release."
               />
             </div>
+            {origin.agePosterior && (
+              <>
+                <AgePosteriorChart posterior={origin.agePosterior} />
+                <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+                  Shaded: 80 % interval · dashed: most probable{" "}
+                  {fmt(origin.agePosterior.median, 1)} h
+                  {origin.agePosterior.models.length > 0 &&
+                    ` · shape from ${origin.agePosterior.models.join(" + ")}`}
+                </p>
+                {origin.agePosterior.calibrationCoverage !== null && (
+                  <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+                    Calibrated: on held-out synthetic twins, 80 % intervals contained the true
+                    age {fmt(origin.agePosterior.calibrationCoverage * 100, 0)} % of the time.
+                  </p>
+                )}
+              </>
+            )}
+            {origin.ageRefusal && (
+              // D46: say WHY no age is claimed rather than leaving the row blank. A refusal
+              // that survives real evidence is a result, not a failure.
+              <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+                {origin.ageRefusal.reason === "low_information"
+                  ? `The estimators ran but the posterior moved less than ${fmt(origin.ageRefusal.minGainNats, 2)} nats off the prior${origin.ageRefusal.infoGainNats !== null ? ` (${fmt(origin.ageRefusal.infoGainNats, 3)})` : ""} — too little to call a measurement.`
+                  : origin.ageRefusal.reason === "no_estimator"
+                    ? "No estimator could produce a likelihood for this slick, so no age is claimed."
+                    : "No detection to date: this case's source is documented rather than detected."}
+              </p>
+            )}
             {origin.ageEstimators && Object.keys(origin.ageEstimators).length > 0 && (
-              <AgeDisclosure estimators={origin.ageEstimators} />
+              <AgeDisclosure
+                estimators={origin.ageEstimators}
+                notes={origin.ageEstimatorNotes}
+              />
             )}
           </>
         )}

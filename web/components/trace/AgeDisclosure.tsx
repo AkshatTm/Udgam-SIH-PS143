@@ -11,8 +11,11 @@ import { fmt } from "@/lib/format";
 
 export default function AgeDisclosure({
   estimators,
+  notes,
 }: {
   estimators: Record<string, [number, number] | null>;
+  /** Why each refusing estimator refused (Master §6.5 age_estimator_notes). */
+  notes?: Record<string, string> | null;
 }) {
   const [open, setOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -66,13 +69,31 @@ export default function AgeDisclosure({
       </button>
       <div ref={contentRef} id={id} className="overflow-hidden" style={{ height: 0, opacity: 0 }}>
         <div className="mt-1 space-y-0.5 pb-0.5">
-          {Object.entries(estimators).map(([name, band]) => (
-            <Row
-              key={name}
-              label={name.charAt(0).toUpperCase() + name.slice(1)}
-              value={band === null ? "not applicable" : `${fmt(band[0], 0)} – ${fmt(band[1], 0)} h`}
-            />
-          ))}
+          {Object.entries(estimators).map(([name, band]) => {
+            // A refusing estimator is usually a FINDING, not an absence. Huntington's Fay
+            // refusal reads "gravity-viscous spreading of 93.5 m³ reaches at most 0.880 km²
+            // even at the 72 h ceiling, but the observed slick is 2.64 km² — 3× larger",
+            // which is independent evidence that the shear estimator is modelling the right
+            // process. Three of four rows on the hero case said only "not applicable".
+            const why = band === null ? notes?.[name] : undefined;
+            return (
+              <div key={name}>
+                <Row
+                  label={name.charAt(0).toUpperCase() + name.slice(1)}
+                  value={
+                    band === null
+                      ? why
+                        ? "no band"
+                        : "not applicable"
+                      : `${fmt(band[0], 0)} – ${fmt(band[1], 0)} h`
+                  }
+                />
+                {why && (
+                  <p className="mb-1 mt-0.5 text-[12px] leading-relaxed text-ink-3">{why}</p>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

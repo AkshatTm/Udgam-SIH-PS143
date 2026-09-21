@@ -96,6 +96,25 @@ export default function TimeSlider() {
   const t = tFromNorm(tNorm, nSteps);
   const minutesBack = canPlay ? t * particles!.timestepMinutes : 0;
 
+  // The rewind span comes from the bundle, exactly as the forward span does. The left label
+  // used to be the literal string "T−24h" while the readout beside it was computed — so on
+  // every case in the library the track said 24 h and the readout said 72 h. The rewind is
+  // now sized by the measured age, so the label has to be derived or it is wrong again.
+  const backSpanHours = canPlay ? ((nSteps - 1) * particles!.timestepMinutes) / 60 : 0;
+  const backSpanLabel = canPlay
+    ? `T−${backSpanHours >= 10 ? Math.round(backSpanHours) : backSpanHours.toFixed(1)}h`
+    : "T−0h";
+
+  // The single most probable release time inside that span. The scrubber shows the range the
+  // evidence allows; this shows where the evidence actually peaks, which is the question
+  // anyone watching the rewind is really asking.
+  const origin = useAppStore((s) => s.origin);
+  const medianAgeH = origin?.agePosterior?.median ?? null;
+  const medianPct =
+    medianAgeH !== null && backSpanHours > 0 && medianAgeH <= backSpanHours
+      ? 50 - (medianAgeH / backSpanHours) * 50
+      : null;
+
   // Forward half. `forward` is optional (Master §6.10) — null on a case Stage 2 produced no
   // forecast for, which leaves the right half of the slider inert rather than erroring.
   const canPlayForward = (forward?.envelope.length ?? 0) > 0;
@@ -201,7 +220,7 @@ export default function TimeSlider() {
           ? "unavailable"
           : "";
 
-  // Resting thumb pulse — when the Trace scrubber is stopped fully rewound at T−24h, or fully
+  // Resting thumb pulse — when the Trace scrubber is stopped fully rewound, or fully
   // forward at the horizon.
   const isResting =
     activeStage === "trace" &&
@@ -325,7 +344,7 @@ export default function TimeSlider() {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="shrink-0 font-mono text-[11px] text-ink-3">T−24h</span>
+            <span className="shrink-0 font-mono text-[11px] text-ink-3">{backSpanLabel}</span>
             <div className="relative w-full">
               <span
                 ref={t0Ref}
@@ -334,6 +353,24 @@ export default function TimeSlider() {
               >
                 T0
               </span>
+              {/* Most probable release age, from the posterior's median. Drawn only when the
+                  case carries a measured age — never a guess dressed as a tick. */}
+              {medianPct !== null && (
+                <>
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute top-1/2 h-[11px] w-px -translate-y-1/2 bg-drift/70"
+                    style={{ left: `${medianPct}%` }}
+                  />
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute top-[-11px] -translate-x-1/2 whitespace-nowrap font-mono text-[10px] text-drift/80"
+                    style={{ left: `${medianPct}%` }}
+                  >
+                    {medianAgeH! < 10 ? medianAgeH!.toFixed(1) : Math.round(medianAgeH!)}h
+                  </span>
+                </>
+              )}
               {/* Fill bar — weight cue, sits behind the native thumb/track. */}
               <div
                 ref={fillRef}

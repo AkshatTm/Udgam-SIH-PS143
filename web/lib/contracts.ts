@@ -35,6 +35,26 @@ export interface CaseGallery {
   difficulty?: Difficulty;
 }
 
+/**
+ * Master §6.1, D46 — which detections.geojson oil feature(s) seeded which drift bundle.
+ * `merge_oil_features()` (pipeline/drift/slick.py, unchanged) still picks the ONE canonical
+ * primary group (particles.json/origin.json); every oil feature it does NOT choose now seeds
+ * its own sibling particles_<id>.json/origin_<id>.json pair instead of being silently dropped —
+ * the bug this field exists to fix (Gulf of Alaska, Mumbai each used to lose a genuinely
+ * separate spill to a single highest-confidence fallback). Required whenever `detect` AND
+ * `trace` are both in `acts_available`; every case gets >=1 entry, ordered by descending
+ * `total_area_km2`, with exactly one `is_primary: true`.
+ */
+export interface SpillGroup {
+  id: string;
+  member_detection_ids: string[];
+  is_primary: boolean;
+  particles_file: string;
+  origin_file: string;
+  total_area_km2: number;
+  merged_ribbon: boolean;
+}
+
 export interface CaseMeta {
   case_id: string;
   title: string;
@@ -54,6 +74,7 @@ export interface CaseMeta {
   acts_available: Act[];
   ais_source?: AisSource; // required whenever `attribute` is available
   known_origin?: KnownOrigin; // optional, D16 — already flows through loadCase untouched
+  spill_groups?: SpillGroup[]; // D46 — required whenever detect+trace are both available
   gallery?: CaseGallery;
   notes?: string;
 }
@@ -211,14 +232,20 @@ export interface RawOriginBundle {
   age_weathering?: "fresh" | "weathered" | "unknown";
   /** Per-estimator band, or null where that estimator did not apply — never a zero band. */
   age_estimators?: Record<string, [number, number] | null>;
-  /** Which reading of the slick the age engine was allowed to use (D45). */
+  /**
+   * Why an estimator produced no band (Master §6.5). The D29 `component_notes` rule applied to
+   * the age panel: a bare "not applicable" invites exactly the question we want answered on
+   * screen, and the reason is already computed. Keyed like `age_estimators`, null bands only.
+   */
+  age_estimator_notes?: Record<string, string>;
+  /** Which reading of the slick the engine was allowed to use (D45). */
   age_gate?: "acute" | "chronic_track" | "unknown_both" | "no_detection";
-  /** D46: why no age is claimed. Only when age_method is "none"; never beside age_posterior. */
+  /** D46 — why no age is claimed. Present only on a refusal, never beside a posterior. */
   age_refusal?: {
     reason: "low_information" | "no_estimator" | "no_detection";
     info_gain_nats: number | null;
     min_gain_nats: number;
-  };
+  } | null;
   stranded_fraction?: number;
   opendrift_comparison?: { centroid_separation_km: number; r90_ratio: number };
 }

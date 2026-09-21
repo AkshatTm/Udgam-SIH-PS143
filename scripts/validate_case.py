@@ -720,7 +720,7 @@ def check_origin(d, box):
         err("origin.json: time_window_method is 'age' but there is no age_posterior — a window "
             "cannot claim to be measured from an age it does not carry")
     if ap_ is not None:
-        check_age_posterior(o, ap_)
+        check_age_posterior(o, ap_, d)
     ag = o.get("age_gate")
     if ag is not None and ag not in ("acute", "chronic_track", "unknown_both", "no_detection"):
         err(f"origin.json/age_gate: must be acute|chronic_track|unknown_both|no_detection, "
@@ -746,6 +746,12 @@ def check_origin(d, box):
             err(f"origin.json/age_hours: low {ah[0]} exceeds high {ah[1]}")
         elif ah[0] < 0:
             err(f"origin.json/age_hours: negative age {ah[0]}")
+    # age_estimator_notes (Master 6.5) -- the D29 rule applied to the age panel: an
+    # unexplained "not applicable" invites exactly the question we want answered on screen.
+    aen = o.get("age_estimator_notes")
+    if aen is not None and not isinstance(aen, dict):
+        err("origin.json/age_estimator_notes: must be an object of estimator -> short string")
+        aen = None
     ae = o.get("age_estimators")
     if ae is not None:
         if not isinstance(ae, dict):
@@ -757,6 +763,14 @@ def check_origin(d, box):
                     continue
                 if not (isinstance(v, list) and len(v) == 2 and v[0] <= v[1]):
                     err(f"origin.json/age_estimators.{k}: must be null or [low, high], got {v!r}")
+        for k, v in ae.items():
+            if v is None and not (aen or {}).get(k):
+                warn(f"origin.json: age_estimators.{k} is null with no age_estimator_notes "
+                     f"entry -- the panel can only say 'not applicable', and the reason the "
+                     f"estimator refused is already computed (D29 applied to the age panel)")
+            if v is not None and (aen or {}).get(k):
+                err(f"origin.json/age_estimator_notes.{k}: present but the estimator produced "
+                    f"a band -- a note explains a refusal, not a measurement")
     sf = o.get("stranded_fraction")
     if sf is not None and not (isinstance(sf, (int, float)) and 0 <= sf <= 1):
         err(f"origin.json/stranded_fraction: must be a fraction in 0-1, got {sf!r}")
@@ -779,7 +793,7 @@ def check_origin(d, box):
     return o
 
 
-def check_age_posterior(o, ap_):
+def check_age_posterior(o, ap_, case_dir=None):
     """age_posterior: {hours_grid, prob, hpd80, median, hypotheses, evidence, models, ...}."""
     where = "origin.json/age_posterior"
     if not isinstance(ap_, dict):
@@ -792,7 +806,10 @@ def check_age_posterior(o, ap_):
     if len(g) != len(p) or not g:
         err(f"{where}: hours_grid ({len(g)}) and prob ({len(p)}) must be the same non-zero length")
         return
-    if len(g) > 200:
+    # The cap exists to stop a raw sample dump being passed off as a posterior. A regular grid
+    # to the 72 h rewind horizon is a summary however fine it is; 288 cells is 0.25 h resolution,
+    # which is the finest age a 15-minute integration step can honour.
+    if len(g) > 320:
         err(f"{where}: {len(g)} grid points — the posterior is a summary, not a raw sample dump")
     if any(b <= a for a, b in zip(g, g[1:])):
         err(f"{where}/hours_grid: must be strictly ascending")
@@ -817,6 +834,19 @@ def check_age_posterior(o, ap_):
             (abs(ah[0] - h[0]) > 0.051 or abs(ah[1] - h[1]) > 0.051):
         err(f"origin.json/age_hours {ah} disagrees with age_posterior.hpd80 {h} — one number, "
             f"shown twice, must not say two things")
+    # The published rewind must reach the age it claims. particles.json shipped a flat 72 h on
+    # every case in the library while origin.json said the slick was hours old; nothing cross-
+    # checked the two, so the slider rewound three days on a 13 h claim.
+    _pj = load(case_dir / "particles.json") if case_dir is not None else None
+    if _pj and isinstance(_pj.get("n_steps"), int) and _pj.get("timestep_minutes"):
+        _span = (_pj["n_steps"] - 1) * _pj["timestep_minutes"] / 60.0
+        if _span + 1e-6 < h[1]:
+            err(f"particles.json spans {_span:.2f} h but age_posterior.hpd80 reaches "
+                f"{h[1]:.2f} h — the rewind stops short of the release it claims to bracket")
+        elif _span > h[1] + _pj["timestep_minutes"] / 60.0 + 1e-6:
+            warn(f"particles.json spans {_span:.2f} h against an age band reaching "
+                 f"{h[1]:.2f} h — the rewind runs well past any plausible release")
+
     tw = o.get("time_window")
     if o.get("time_window_method") == "age" and isinstance(tw, list) and len(tw) == 2:
         try:
