@@ -2,6 +2,99 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-22 21:30] D47–D55 — the rewind follows the measured age everywhere, suspects are always named, the merge's identity provenance was silently broken
+
+**Done:** Closed out the plan at `.claude/plans/serialized-brewing-pearl.md`. Landed the branch
+(16 prior commits) onto `main` and re-synced `web/public/cases/` — none of that work had ever
+reached a browser before today, which was the root cause of "nothing has improved." Then:
+
+- **The three cases with no measured age now have one.** Mumbai, Jamnagar, Huntington all sat in
+  `classify_discharge`'s genuine elongation gap (3.07–3.77, between the acute/chronic bands) and
+  refused under `discharge_class: "unknown"`'s old 50/50 patch/track average. Replaced with a
+  fusion rule that weights or selects each hypothesis by its OWN `info_gain_nats` (D54) — a first,
+  more textbook attempt (raw marginal-likelihood weighting) was tried, measured, and found to make
+  things WORSE on all three, because patch and track come from incommensurable model families;
+  KL-divergence-from-the-same-prior does not have that problem. All three now measure a real age
+  (Mumbai 15.0 h, Jamnagar 14.25 h, Huntington 18.0 h) and publish a truncated rewind instead of a
+  flat 72 h.
+- **`publish_all.py`'s shared `out/` directory hazard is closed further.** The staleness guard
+  previously checked `particles_forward.json` only; it now checks every trace output, `origin.json`
+  gained a `case_id` field so it can be checked too (it was the one file with no identity at all),
+  and each case sweeps its own stale trace files from `out/` before its own run — a failure now
+  leaves an absent file, not a stale one. Caught live: `out/` still held Jamnagar's leftover
+  `particles.json` from an earlier diagnostic, and the guard correctly refused to publish it under
+  Jacksonville's name.
+- **Jamnagar's missing forward layer is fixed without a new dependency.** It has 28.8 h of forward
+  field but was requesting the shared 72 h default; `publish_all.py:forward_run_args` now sizes the
+  request to what each case's cached field actually covers, computed from the field itself, not
+  hardcoded. **The HYCOM-successor question is answered: HYCOM was never the blocker.** Both Indian
+  cases have full backward coverage at the same cadence as the working US cases and complete
+  OpenOil age curves; verified directly rather than assumed.
+- **Suspects are always named when any are plausible.** `ranking_confidence` (D49) replaces four of
+  the seven old abstain triggers (the tie rule alone fired at exactly 0.000 on every `gfw_hourly`
+  case). `parity` no longer occupies a `WEIGHTS` slot (D48) — provably score-neutral, since it was
+  already excluded from every renormalisation; only `weight_live`'s ceiling moves, from 0.85 to
+  1.0. `trajectory` joins `type_prior` under the existing D28 gate.
+- **A real defect in the merged AIS pool, found while re-scoring, not looked for:** two of the
+  three `*_gfw.parquet` files on disk (Farallones, Huntington) were missing the `source` column
+  the current `ingest_gfw.py` writes — written before that column existed, never regenerated,
+  because `data/` is gitignored and re-ingest is skipped when a file already exists. With both
+  files in the union lacking it, every GFW row was silently read as NOAA, defeating the merge's
+  entire identity-preference and coverage-hole logic (D50, D55) on data that predates this
+  session. Caught by a vessel_type flip (PANAGIA THALASSINI: tanker single-file, "other" merged).
+  Backfilled `source='gfw'` into the two stale files — every row in a `*_gfw.parquet` file is
+  GFW-origin by construction, so this is a metadata correction, not synthesised data.
+- **`assessment.disputes_reference` (D52) is built end to end** — schema, validator, TS types,
+  parse, and a Verify-screen panel — and deliberately left unpopulated on all six live cases: the
+  one case it was built for (Jacksonville, STENA's transponder gap outranking MENUETT) was
+  resolved into agreement by the coverage-hole fix instead of staying a disagreement.
+- **Calibration declared, not silent** (Master Part 16.2, new): the Jacksonville rank flip as a
+  defect fix with a target-shaped side effect whose specific route the written prediction got
+  wrong; the `parity` rescale as a weight change made after the sealed answers were known, safe
+  because it is provably score-neutral; the GFW merge's real value stated as the coverage-hole
+  correction, not new candidates (it adds only 5/1/90 vessels, all tugs, buoys and pleasure craft).
+
+**A finding for Soumirya, not acted on here (deliberately, per Akshat's ruling — Stage 1 thresholds
+were left untouched):** `classify_discharge` (`detect/ships.py:272`) has a genuine dead band between
+`ACUTE_ELONGATION = 3.0` and `CHRONIC_ELONGATION = 5.0` where a slick reads `"unknown"` not because
+data is missing but because elongation alone cannot resolve it. All three cases with no age fell in
+that exact band (3.07, 3.35, 3.77). The age engine's fix (D54) resolves it downstream by trusting
+whichever hypothesis is actually informative; Stage 1's classification itself is unchanged and still
+worth a look with fresh eyes — retuning the band would also move Anushka's seeding geometry and
+`component_parity`, so it's your call, not one to make from inside the age engine.
+
+**Files touched:** `pipeline/drift/age.py`, `pipeline/drift/publish_all.py`, `pipeline/export/build_case.py`, `pipeline/drift/run.py` (modified — `case_id` on `write_origin`) · `pipeline/attribute/score.py`, `pipeline/attribute/tests.py` (modified) · `scripts/validate_case.py` (modified — `disputes_reference` schema, softened the top-N-only constant-component warning) · `web/lib/contracts.ts`, `web/lib/verification.ts`, `web/components/VerifyScreen.tsx`, `web/components/trace/TraceCard.tsx` (modified) · `docs/00_MASTER_PLAN.md` (D47–D55, Part 16.2, stale `t0−24h` prose fixed) · `data/ais/farallones_gfw.parquet`, `data/ais/huntington_gfw.parquet` (gitignored, backfilled `source` column) · all six `cases/*/suspects.json`, `verification/*.json` (regenerated).
+
+**Run command:**
+```bash
+python pipeline/drift/publish_all.py --opendrift --case case-mumbai-2023 case-jamnagar-2024 case-huntington-2021
+python scripts/run_attribute_all.py --only case-jacksonville-2024 case-farallones-2023 case-gulf-alaska-2023
+python scripts/scaffold_verification.py --update --all && for c in case-jacksonville-2024 case-farallones-2023 case-gulf-alaska-2023 case-huntington-2021 case-jamnagar-2024 case-mumbai-2023; do python scripts/scaffold_verification.py --publish $c; done
+python scripts/validate_case.py cases
+```
+Expected output: `PASS   cases/index.json + all listed cases`, zero errors.
+
+**Checkpoint artefact:** 12/12 drift suites (101 assertions), 124/124 attribute tests, 36/36
+validator mutations, all green. Rankings vs `docs/ANSWERS.md`: Jacksonville MENUETT #1 (matches),
+Farallones PANAGIA THALASSINI #1 at 0.651 (matches, stronger than before the schema fix), Gulf of
+Alaska abstains on AIS with a dark vessel 0.45 km from the reference (matches), Huntington honest
+`miss` (infrastructure deferred), Mumbai `partial`, Jamnagar `not_applicable` (Cerulean's own
+candidates all score below zero).
+
+**Open issues:**
+- The `weight_live` renormalisation penalty flagged in the plan as a merge prerequisite was not
+  built. `parity`'s removal (D48) already relieves most of the pressure it was meant to address;
+  adding it now would move two cases that currently match the sealed answers for a reason that
+  cannot be stated independently of that fact.
+- The `classify_discharge` elongation dead band (above) is a live finding, not a fix.
+- Huntington's infrastructure scorer stays deferred to the planned pipeline/oil-well map layer
+  (Akshat's ruling); its verdict is an honest `miss` naming three transiting vessels.
+- `web/node_modules` in this worktree predates the `gsap` dependency (added by an earlier,
+  unrelated commit) — `npx tsc --noEmit` errors on `lib/gsap.ts` only; every file touched this
+  phase typechecks clean. Needs `npm install`, not a code fix.
+
+**Next:** none pending from this phase. Awaiting whatever Akshat opens next.
+
 ## [2026-09-17 12:00] D46 — multi-spill backward drift: every independent spill now gets its own trace
 
 **Done:** Fixed the reported bug where Trace only ever showed drift for one region on a

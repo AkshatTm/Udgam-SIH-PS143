@@ -485,13 +485,27 @@ A no-spill case is a FeatureCollection with **zero `oil` features**; look-alikes
   "n_particles": 3000,
   "positions": [ [[lon,lat], "... n_particles pairs"], "... n_steps arrays" ] }
 ```
-`positions[0]` is at `t0`; `positions[n_steps−1]` is at `t0 − (n_steps−1)×dt`. With 97 steps at 15 min that is exactly `t0 − 24 h`.
-`particles_forward.json` is identical with `"direction": "forward"`. **It is a separate file — never overwrite `particles.json`.**
+`positions[0]` is at `t0`; `positions[n_steps−1]` is at `t0 − (n_steps−1)×dt`. **This is no longer a
+fixed span.** *(Amended 22 Sept 2026.)* The backward ensemble always integrates the full 72 h search
+bracket internally — shortening the integration would bias the age posterior young by construction —
+but the *published* `particles.json` is truncated at write time to the measured age horizon
+(`age.age_hours[1]`, the 80% HPD upper bound), not to a literal 24 h or 72 h. `n_steps` and `dt` are
+chosen per case so `(n_steps−1)×dt` equals that horizon, rounded up to a whole output step; when no
+age was measured (`age_method: "none"`), the full 72 h bracket is published as-is, since an
+unmeasured age must not masquerade as a short one. Duration is therefore
+`(n_steps−1) × timestep_minutes`, case-dependent, and set by the age — never assume 24 h or 72 h from
+the schema alone.
+`particles_forward.json` is identical with `"direction": "forward"`. **It is a separate file — never overwrite `particles.json`.** Its own span is likewise case-dependent: `run.py --forward` defaults to
+the same 72 h request as the backward side, but a field with less forward coverage than that gets an
+explicit shorter `--steps`/`--timestep-minutes` (see `publish_all.py:forward_run_args`) rather than
+refusing outright — `assert_field_covers` raises a clean refusal instead of silently clipping, so the
+request itself must fit what was actually fetched.
 `t0` must match `meta.detection_time` within 60 s.
 
 ## 6.5 `origin.json`
 ```json
-{ "bounds": {"west":..., "south":..., "east":..., "north":...},
+{ "case_id": "case-huntington-2021",
+  "bounds": {"west":..., "south":..., "east":..., "north":...},
   "shape": [120, 120],
   "values": ["... rows*cols floats, row-major from top-left, normalised 0–1"],
   "centroid": [-118.21, 33.71],
@@ -506,6 +520,7 @@ A no-spill case is a FeatureCollection with **zero `oil` features**; look-alikes
   "age_method": "combined",
   "age_weathering": "fresh",
   "age_estimators": {"shear": [7,18], "fay": null, "elongation": null, "track": [5,20]},
+  "age_estimator_notes": {"fay": "no independently reported release volume...", "mixture": "discharge_class was 'unknown'..."},
   "age_gate": "unknown_both",
   "age_refusal": null,
   "age_posterior": {"hours_grid": [1, 2, "... 72"], "prob": ["... 72 values, sum 1"],
@@ -529,7 +544,31 @@ A no-spill case is a FeatureCollection with **zero `oil` features**; look-alikes
 
 **`age_refusal` (optional, D46).** Why no age is claimed: `{"reason": "low_information" | "no_estimator" | "no_detection", "info_gain_nats": 0.007 | null, "min_gain_nats": 0.02}`. `low_information` means the estimators ran but the posterior moved less than `min_gain_nats` off the prior; `info_gain_nats` is `null` unless it was measured. Present **only** when `age_method` is `none`, and **never** together with `age_posterior`. The validator checks both.
 
-**`age_posterior` (optional, D45).** The age engine's posterior on an hourly grid to the rewind horizon. `prob` sums to 1 (a probability, not a density). `hypotheses` says which readings of the slick contributed: `patch` (released at a point) and/or `track` (laid by a moving ship). `models` names the drift models behind the shape evidence. `calibration_coverage` is the **held-out** 80 % coverage measured on synthetic twins (`age_twins.py`), or `null` before calibration. **Absent when no age was measured**, never a flat prior dressed up as one.
+**`age_estimator_notes` (optional, D47).** *(Added 22 Sept 2026.)* An object keyed by an
+`age_estimators` name, present for every entry there that reads `null`, giving the reason in plain
+language — the D29 `component_notes` pattern applied to the age panel. Every refusal in `age.py`
+already computes this string (Huntington's Fay refusal: *"gravity-viscous spreading of 93.5 m³
+reaches at most 0.880 km² even at the 72 h ceiling, but the observed slick is 2.64 km² — 3×
+larger"*); before this field existed the screen could only render the word "not applicable" and
+discard the finding underneath it. Also carries a `"mixture"` key, not tied to any single
+`age_estimators` name, when `discharge_class` was `"unknown"`: `classify_discharge`
+(`detect/ships.py`) leaves a genuine ambiguity band between the acute and chronic elongation
+thresholds, and `age.py` no longer averages the patch and track hypotheses 50/50 across it — it
+weights (or, when only one clears the information-gain floor on its own, selects) by each
+hypothesis's own `info_gain_nats`, computed against the identical prior and grid so the two are
+commensurable regardless of which model family produced them. The `"mixture"` note states which
+hypothesis carried the answer and by how much. The validator warns when an `age_estimators` entry
+is `null` with no matching key here, exactly as it already does for `component_notes`.
+
+**`age_posterior` (optional, D45; grid amended D53).** The age engine's posterior, on `AGE_GRID_H`:
+**0.25 h cells from 0.25 h to 72 h (288 cells)**, not the original 1 h grid — see D53, the grid was
+too coarse to represent a slick detected minutes after release, and it mattered downstream. `prob`
+sums to 1 (a probability per cell, not a density — the grid is non-uniform only in the sense that
+its extent, not its spacing, is what varies by case). `hypotheses` says which readings of the slick
+contributed: `patch` (released at a point) and/or `track` (laid by a moving ship). `models` names
+the drift models behind the shape evidence. `calibration_coverage` is the **held-out** 80 % coverage
+measured on synthetic twins (`age_twins.py`), or `null` before calibration. **Absent when no age was
+measured**, never a flat prior dressed up as one.
 
 **`model_mix` (optional, D45)** and `opendrift_comparison` make **two different claims and are never merged**. The first is a pooling record: which models the origin cloud came from, at what weight, with stranded fractions per model (never averaged into `stranded_fraction`, which describes our ensemble). The second is a verification number with OpenDrift's physics switched off. The validator errors if model weights do not sum to 1.
 `abstain: true` forces Stage 3 to return zero suspects. The agreed trigger is `radius_90_km > 40`.
@@ -628,8 +667,9 @@ a number standing in for "we couldn't tell":
 |---|---|---|
 | `gap` | the AIS is too sparse to resolve a silence (`gfw_hourly`), or the vessel was not under way | D9, D20 |
 | `slowdown` | the vessel never varied speed enough for a slowdown to mean anything | D9 |
-| `trajectory` | the vessel has **no report outside `radius_90_km`** in the window — it was never observed approaching from anywhere, so there is no approach to assess | **D27** |
+| `trajectory` | the vessel has **no report outside `radius_90_km`** in the window — it was never observed approaching from anywhere, so there is no approach to assess (D27); **or** it holds the identical value for every scored candidate — D28's rule generalised (Amended 22 Sept 2026): the author's own note on `component_trajectory` says it scores 1.0 for most vessels in a real search box, and the validator warned on it every run | **D27, D28** |
 | `type_prior` | **every scored candidate falls in the same type class** — the component then adds the same constant to everyone, changing no ranking while inflating every score | **D28** |
+| `parity` | **always** — needs the slick centerline from Stage 1, a Phase 2 artefact that does not exist yet. Unlike the others, this is not per-vessel D9 nullness: `parity` is absent from `WEIGHTS` entirely, so it never occupies a weight slot to renormalise away | **D48** |
 
 **`component_notes` (optional, D29).** An object whose keys are drawn from `components` and whose
 values are short plain-language strings. It is **explanation, not evidence** — it may not introduce
@@ -643,16 +683,69 @@ and that is the check that catches a `type_prior` of 1.00 across the whole fleet
 suspect scored by current `score.py`, validator warns rather than fails when absent).**
 A renormalised score (D9) says nothing about how much evidence it rests on — 0.98 from two
 components out of seven reads as certainty it has not earned. `weight_live` is the summed weight
-of the components that were `applicable` for this suspect (so it is `1.0` only when all seven
-scored); `components_available` / `components_total` is the same fact as a count, currently always
-`7`. Frontend cards must render evidence breadth next to the score — a fixed presentation is not
-mandated here, but a bare score with no indication of `weight_live` is what this ruling exists to
-prevent. This is the normal case, not an edge case: on every `gfw_hourly` case `gap` and `slowdown`
-are permanently `null`, so both Indian cases routinely score from a minority of components.
+of the components that were `applicable` for this suspect; `components_available` / `components_total`
+is the same fact as a count. Frontend cards must render evidence breadth next to the score — a fixed
+presentation is not mandated here, but a bare score with no indication of `weight_live` is what this
+ruling exists to prevent. This is the normal case, not an edge case: on every `gfw_hourly` case `gap`
+and `slowdown` are permanently `null`, so both Indian cases routinely score from a minority of
+components.
 **Validator note:** a WARN rather than an ERR here on purpose — at the moment this was blessed
 (14 Sept), three of four scored real cases (Jacksonville, Huntington, Mumbai) still carried
 `suspects.json` written before these fields existed, and hard-failing them the same day would have
 turned three PASSes into FAILs over a field, not a wrong number. Re-score to clear the warning.
+
+**Amended 22 Sept 2026 (D48): `components_total` is `7`, `weight_live` reaches `1.0` on `6`.**
+`parity` is not in `WEIGHTS` (see the applicability table above), so it never contributes to
+`weight_live`'s denominator — `weight_live` is `1.0` when all **six** live components are scored,
+not seven. `components_total` stays `7`: the card still shows `parity` as an explained `null`
+(Phase 2 has not built the slick centerline it needs), so `len(components)` is still what the card
+actually displays. **The score itself is unaffected — provably, not just empirically.** Before this
+change `parity` was already always `not_applicable`, so `weighted_score()`'s renormalisation
+already excluded it from both the numerator and `live`; removing it from `WEIGHTS` and rescaling the
+remaining six by `1/0.85` is a uniform multiplicative factor on every live weight, which cancels
+exactly in a weighted average regardless of which subset of components is applicable for a given
+vessel. No published ranking changed; this is a reporting fix (`weight_live` no longer claims a
+0.15 evidence gap that never existed), not a score change, and `pipeline/attribute/tests.py`
+asserts it.
+
+**`ranking_confidence` (optional, D49).** *(Added 22 Sept 2026.)* Present whenever `suspects` is
+non-empty, on the top-level document, alongside `funnel` and `abstained`:
+```json
+"ranking_confidence": {"level": "low", "separation": 0.03, "basis": ["proximity", "gap"],
+                       "weight_live": 0.65,
+                       "note": "the top two are separated by 3.0% of the leading score..."}
+```
+`level` ∈ `high | low`. This is the field that replaced the old abstain-on-a-near-tie behaviour: the
+seven-trigger abstention ladder (`score.py`) previously discarded the **entire ranking** whenever the
+top two scores were within `ABSTAIN_TIE_FRACTION` of each other — which fired at exactly `0.000` on
+every `gfw_hourly` case, since score there is proximity alone and identical grid cells tie exactly.
+**The site now always names ranked suspects when any are plausible; what changes is how confidently
+it states the ranking**, via this field, not whether it states one. `basis` is the **intersection**
+of applicable components across every named suspect — not just the leader's — because a card is only
+comparable to the one below it on components both of them were actually measured on. `separation` is
+`(top.score − second.score) / top.score`, `null` when there is only one suspect. The three legitimate
+abstain triggers are unchanged and still produce empty `suspects` with `abstained: true`: `--no-ais`,
+`searched_empty` (zero MMSI in the extract), and `origin.abstain` (Stage 2's own cloud too diffuse).
+
+**`source_gated` (optional bool on a `Component`, D50).** *(Added 22 Sept 2026.)* Generalises D28:
+D28 drops a component that separates nobody because it holds a constant value; this drops one that
+separates nobody **legitimately**, because on a source-heterogeneous scored set (the merged
+NOAA+GFW pool) only some candidates could be measured on it at all. A 67-minute AIS silence bounded
+by an hourly GFW presence row — which publishes no speed-over-ground — cannot be scored as "under
+way" or "moored": the field the under-way test needs simply was not broadcast by that source. Before
+this gate existed, a missing field was silently read as `sog is None` → "not under way" → an
+exoneration, which is precisely backwards. `source_gated: true` on a `null` component means: this is
+not a per-vessel D9 fact (a real "nothing happened here"), it is a **structural** consequence of
+which archive covered this candidate, and `component_notes` states which. Fires only when the scored
+set actually mixes sources; a single-source case is untouched by construction.
+
+**`dropped_non_vessel` (D51, `funnel` object).** *(Added 22 Sept 2026.)* A count alongside
+`dropped_short_track` — MMSIs rejected at ingest under ITU-R M.585 station-class rules before ever
+reaching the funnel: `98xxxxxxx` (craft associated with a parent ship), `97xxxxxxx` (SAR/MOB), and
+GFW's `941*` presence records, which carry no real vessel identity (buoys, shore stations,
+telemetry). Gulf of Alaska's two "suspects" before this were both aids to navigation — one named
+`MAJOR BUOY 4` — filtered at `tracks.load_tracks`, not at scoring, so the funnel counts stay honest:
+a buoy was never a candidate to begin with, not a candidate that scored zero.
 
 ## 6.8 `verification.json`
 ```json
@@ -676,13 +769,30 @@ turned three PASSes into FAILs over a field, not a wrong number. Re-score to cle
   "assessment": {
     "verdict": "hit",
     "explanation": "HUMAN-WRITTEN PROSE. Never generated.",
-    "what_would_have_helped": "..."
+    "what_would_have_helped": "...",
+    "disputes_reference": {"disputed": true,
+                           "our_claim": "HUMAN-WRITTEN PROSE. Never generated.",
+                           "basis": "HUMAN-WRITTEN PROSE. Never generated."}
   }
 }
 ```
 `verdict` ∈ `hit | partial | miss | not_applicable`. `source_url` must be present and non-empty.
 `source_type` ∈ `official_investigation | algorithmic_attribution | press | none` — Cerulean is
 `algorithmic_attribution`, never `official_investigation`.
+
+**`disputes_reference` (optional, D52).** *(Added 22 Sept 2026.)* Cerulean runs no drift engine; a
+`miss` against its algorithmic attribution and a reasoned disagreement with it, on the strength of a
+physical reconstruction Cerulean cannot produce, are not the same claim, and the four-value verdict
+enum cannot tell them apart on its own. `disputed: true` renders an explicit "we disagree, and here
+is why" panel on the Verify screen instead of a plain miss card. `our_claim` and `basis` are
+**hand-written prose, never generated** — the same rule as `explanation`, drafted under the same D43
+precedent when used and owned by Akshat thereafter. The validator refuses `disputed: true` on a
+`verdict: "hit"` — a hit already agrees with the reference, so there is nothing to dispute. **Built
+for, and not currently populated on, any of the six live cases**: the one case that would have used
+it (Jacksonville — STENA PROSPEROUS's 142-minute transponder silence had been scored as darkness,
+outranking MENUETT, the vessel Cerulean actually names) was resolved into agreement by the
+coverage-hole fix (§6.7's `source_gated`) rather than staying a disagreement. The mechanism exists
+for the next case that needs it, not invented for one that does not.
 
 ## 6.9 `cases/index.json`
 ```json
@@ -860,6 +970,15 @@ Settled. Do not relitigate; if you think one is wrong, raise it with Akshat rath
 | D44 | **The forward-drift deferral is LIFTED: `forward_impact.json` enters the contract (§6.10)** | Forward drift shipped on 16 Sept as "Version A" — the published 50-member ensemble run forward 24 h with GSHHG stranding, measured and figure'd (F2.9), but deliberately in **no bundle**, because adding a file to a frozen schema is not a stage owner's decision to make. Anushka wrote the numbers to `docs/evaluation/.../forward_<case>.json` and stopped there, correctly. Akshat lifted the deferral the same day so the demo map can carry a forward slick layer, and §6.10 is the resulting contract — **the only schema addition since the freeze.** Nothing was recomputed when the deferral lifted and nothing may be: `pipeline/drift/forward_impact.py` shares `eval_forward.compute()` with the evidence file, so the bundle and the figure are written from one run and cannot diverge. **Shipped on the three indexed traced cases** — Jacksonville (+24 h r50 16.2 / r90 35.5 km), Farallones (5.7 / 9.1), Jamnagar (2.3 / 4.9); the three detect-only cases have no slick to push forward and correctly carry no file. **0% stranded and no landfall within 24 h on all three**, with `first_landfall_hours: null` rather than `0` (Rule 4), and the stranding tracker was verified against a synthetic coastline rather than assumed. `coast_segments` and `assets_at_risk` stay `null`: a gazetteer and a cited asset layer are post-demo, and `[]` would claim a measured absence. Horizon is 24 h because `assert_field_covers` refuses to extrapolate through a frozen last snapshot — not because 24 h was chosen. 16 Sept. |
 | D45 | **Age engine v2: slick age is a calibrated posterior, and it drives the origin (`time_window_method: "age"`, `age_posterior`, `model_mix`, `age_method: "track"`)** | The rewind used to be a fixed span, and `origin.json` was the ensemble's **final step**, so a 6 h slick and a 2 day slick got the same origin and the same bracket. `age.py` computed bands (Huntington [2.1, 6.6] h vs a true 2.8 h) but nothing used them. **Now:** each estimator returns a likelihood on one hourly grid to 72 h (`age_posterior.py`). Two readings of the slick are averaged as posteriors: *patch* (length, width and bearing matched by our RK2 **mixed**, not multiplied, with OpenDrift OpenOil) and *track* (width along a ship's track). `acute` selects patch, `chronic` selects track, and `unknown` uses both, which replaces the old `chronic` refusal. `run.py --age drive` pools the ensemble over the posterior, so grid, radii and abstain come from one weighted pool and the window is the 80 % HPD. **Two priors changed on a measurement, not a preference:** with K log-uniform over [0.05, 100] m²/s, age and diffusivity are degenerate (Huntington carried 0.02 nats of information), so K now follows Okubo's scale law ×/÷3; and the release's initial size is a nuisance parameter (50–600 m), because a fixed 200 m seed forced every wide slick to be old. Accuracy is quoted **only** from held-out synthetic twins scored by *the other* model (`age_twins.py`, `docs/evaluation/stage2-age-engine.md`), plus Huntington as N = 1. OpenDrift stays off the demo path (own venv, structural fallback). Stage 3's temporality gate accepts `age` in the same commit. Owner Akshat, 16 Sept. |
 | D46 | **`origin.age_refusal` and `origin.age_gate` enter the contract (§6.5); the web copy is synced by `publish_all.py`** | After D45 the demo panel still read "No estimator produced a result — using the search bracket" on every case, for two separate reasons. First, `web/public/cases/` was a 13 Sept copy that nobody re-synced after the regeneration. `publish_all.py` now runs `sync_web_cases.py --clean` when every case passes. Second, on the three cases the engine declines to date (Huntington, Jamnagar, Mumbai), the estimators *did* run, and Huntington's window is `convergence`, not a bracket. So that label was false even on fresh data, and the real reason (information gain below `min_gain`) lived only in `out/age_<case>.json`. `age_refusal` carries that reason into the bundle so the panel states it instead of guessing. `age_gate` was already being written and is now documented. Both are additive and optional, and no number moves. Owner Akshat, 17 Sept. |
+| D47 | **`origin.age_estimator_notes` enters the contract (§6.5)** | Every refusal in `age.py` already computed the reason it refused (Huntington's Fay: *"gravity-viscous spreading of 93.5 m³ reaches at most 0.880 km² even at the 72 h ceiling, but the observed slick is 2.64 km² — 3× larger"*), and the panel could only render the word "not applicable" for it. The string was thrown away at the point the block was assembled, not missing upstream. The D29 `component_notes` pattern, applied here: an object keyed by an `age_estimators` name, one string per `null` entry, harvested from `diag["skipped"]` at assembly time. Introduces no new fact. Owner Akshat, 22 Sept. |
+| D48 | **`weight_live` reaches `1.0` on six components, not seven: `parity` is removed from `WEIGHTS`, not just individually `null`** | `component_parity` has never had anything to measure — the slick centerline it needs is Phase 2, not yet built — so it was `not_applicable` on every candidate, on every case, always. `weighted_score()` already excludes a `not_applicable` component from both its numerator and `live` (D9), so a `WEIGHTS["parity"] = 0.15` entry was never actually earning parity any influence over `score` — it only capped `weight_live` at `0.85` even when every measurable component WAS measured, claiming an evidence gap that never existed. Removing it and rescaling the other six by `1/0.85` is a uniform constant on every weight, which cancels exactly inside `weighted_score`'s division regardless of which subset is applicable for a given vessel: **`score` is unchanged to the decimal, provably, not just observed to be rank-preserving.** `component_parity` still runs and still explains itself (Phase 2 is not built) — it just no longer occupies a weight slot. Made after the sealed answers were known; declared here rather than silently, per the calibration-honesty ruling (Part 16). Owner Akshat, 22 Sept. |
+| D49 | **`suspects.json.ranking_confidence` replaces four of the seven abstain triggers: the site always names ranked suspects when any are plausible** | `ABSTAIN_TIE_FRACTION` fired at exactly `0.000` on every `gfw_hourly` case (score there is proximity alone; identical grid cells tie exactly), which discarded the whole ranking on Farallones and Jamnagar — cases where the leading vessel was a real, named candidate. **`--no-ais`, `searched_empty` and `origin.abstain` remain legitimate refusals** (nothing to search, nothing found, Stage 2's own cloud too diffuse) and still produce empty `suspects` with `abstained: true`. The tie/crowded/floor triggers are replaced by `ranking_confidence`: the suspects are always named and ordered, and what changes is a stated `level` (`high`/`low`) and `separation`. `basis` is the intersection of applicable components across every NAMED suspect, not the leader's alone — a card is only comparable to the one below it on what both were actually measured on; the first cut of this field read the leader's components only and was caught by the validator's own cross-check on Huntington. Owner Akshat, 22 Sept. |
+| D50 | **`source_gated` on a `Component`: D28 generalised to a heterogeneous-source scored set** | D28 drops a component that separates nobody because it is CONSTANT; this drops one that separates nobody LEGITIMATELY, because on a merged NOAA+GFW pool only some candidates could be measured on it — a per-vessel D9 fact and a source-determined one look identical (both `null`) unless this flag distinguishes them. The bug this closes: a 67-minute silence bounded by an hourly GFW row (which publishes no speed-over-ground) was read as `sog is None` → "not under way on both sides" → "moored, not dark" — a missing field manufactured an exoneration, and it inverted the comparability the merge needed: the vessel scoring HIGHER (STENA, 0.520 on `weight_live` 0.65) rested on LESS evidence than the one scoring lower (MENUETT, 0.435 on 0.80). `source_gated: true` plus a stated reason in `component_notes` is what `gate_source_basis` checks before comparing two suspects' `basis`. Fires only on a source-heterogeneous set; verified byte-identical on 5 of 6 bundles through the whole refactor. Owner Akshat, 22 Sept. |
+| D51 | **`funnel.dropped_non_vessel`: MID-class filtering moves from scoring to ingest** | Gulf of Alaska's only two "suspects" were `941201607` and `941214805` — aids to navigation, one literally named `MAJOR BUOY 4`, MID `941` unassigned under ITU-R M.585. There was no MMSI-class filter anywhere in the pipeline; a buoy reached the funnel as a scored candidate and lost on the merits, which is the wrong reason for a buoy to lose. Filtered at `tracks.load_tracks` (ingest), not `score.py` (scoring), so the funnel counts stay honest — `dropped_non_vessel` says how many, `in_region` never counted them to begin with. Eleven of Gulf of Alaska's fourteen "vessels" were never vessels (five `941*` buoys, six `100011xxx` receiver-telemetry records). Removing them surfaced the case's real answer: a dark vessel 0.45 km from the reference contact, previously matched-away by the buoys' AIS records. Owner Akshat, 22 Sept. |
+| D52 | **`assessment.disputes_reference` enters the contract (§6.8)** | Cerulean runs no drift engine; a `miss` against its algorithmic attribution and a reasoned disagreement with it are not the same statement, and the four-value verdict enum could not tell them apart. `disputed`, `our_claim`, `basis` — hand-written prose under the D43 precedent, never generated, Akshat's to own. The validator refuses `disputed: true` on a `hit` (nothing to dispute if we already agree). Built for, and not populated on, any of the six live cases as of this entry: the candidate case (Jacksonville, STENA's transponder gap outranking MENUETT) was resolved into agreement by D50's coverage-hole gate instead of staying a disagreement — the mechanism is ready for the next case that needs it. Owner Akshat, 22 Sept. |
+| D53 | **`AGE_GRID_H` moves from 72 cells at 1 h resolution to 288 cells at 0.25 h; the published rewind is truncated to the measured age, not integrated to it** | The grid had no support below 1 h while `PRIOR_LO_H` was 0.5, and the mode sat on the grid's lowest cell — 25–38 % of the total mass — on every case measured (Jacksonville, Farallones, Gulf of Alaska). That is a boundary artefact: these slicks are detected minutes to an hour after release and the engine could not say so. It also propagated into Stage 3 — `hpd()` put the band edge half a cell below `grid[0]`, so every release window ended at `t0 − 0.5 h` and the last 30 minutes before the satellite pass were excluded from scoring; on Farallones that excluded PANAGIA THALASSINI's 1.90 km closest approach at `t0 − 11 min`, the decisive evidence for the case. Fixed with sub-hour resolution (0.25–72 h, 288 cells) and `PRIOR_LO_H = 0.25`. Two rounding consequences of the finer grid, both caught by the validator, not by inspection: `summarise()`'s `prob` moved to 6 dp (288 cells × 5e-6 at 5 dp drifts 1.44e-3 off 1.0, outside the validator's 1e-3 tolerance); `hpd80` moved to 3 dp (`round(0.125, 2)` is `0.12` under banker's rounding, which lands a half-cell edge OUTSIDE its own grid). **Separately:** the backward ensemble still integrates the full 72 h search bracket always — shortening the integration would bias the posterior young by construction, and `run.py`'s own age-candidate clipping already has a real circular dependency that a shorter run would tighten into a loop. Only the *published* `particles.json` is truncated, at write time, to `age_hours[1]` (the 80 % HPD upper bound), choosing the finest output step that keeps the frame count ≤ 120. This is what let Jacksonville's rewind go from 97 steps at 45 min (72.0 h, unconditionally, on every case) to 55 steps at 15 min (13.5 h) — and cleared the 38 `positions[96]` warnings on that case, particles that had drifted 380 km on 58 h of integration past any plausible release. Owner Akshat, 22 Sept. |
+| D54 | **`discharge_class == "unknown"` no longer averages the patch and track age hypotheses 50/50; each is trusted in proportion to its OWN information gain** | Three cases (Mumbai, Jamnagar, Huntington) sit in `classify_discharge`'s genuine elongation gap between the acute (<3.0) and chronic (≥5.0) bands — 3.07, 3.35, 3.77 — and all three refused an age under the old rule, with information gain 0.007–0.016 nats against a 0.02 floor. **A first attempt weighted the mixture by each hypothesis's raw marginal likelihood** (the textbook Bayes-factor quantity) — the mathematically standard move, and MEASURED to make things worse on all three: `patch` (E1/E2, a Gaussian shape-likelihood family calibrated on `sigma_L`/`sigma_W`/`kappa`) and `track` (E4, a Monte-Carlo width-profile sampler with its own noise model) are different model FAMILIES with no shared calibration, so their raw likelihood magnitudes are not on a comparable absolute scale — a numerically larger likelihood does not mean a better explanation, only that family's typical values run higher. That mismatch consistently favoured `patch`, the near-uninformative hypothesis (info gain 0.001–0.005 nats standalone), over `track`, the informative one (0.026–0.041 nats standalone) — moving the fused gain further below the floor than the naive 50/50 average already was. **`info_gain_nats` does not have that problem**: it is `KL(posterior_h‖prior)` for the SAME prior on the SAME grid regardless of which hypothesis produced it, so it is commensurable by construction. The fusion rule now uses it: a hypothesis that clears the floor alone is trusted alone; when both clear it, they mix weighted by their own gains; when neither does (the honest case), the refusal stands. All three cases now measure an age (Mumbai 0.030 nats, Jamnagar 0.026, Huntington 0.041 — recovering via `track` alone in every case, evidence this is a fusion-rule fix and not something specific to any one case's geography). Stage 1's `classify_discharge` thresholds were explicitly left untouched — retuning them would move Stage 1's seeding and `component_parity` on cases that currently match the sealed answers, and would mean choosing a threshold after seeing which side produces an age. The elongation gap itself is written up for Soumirya (`docs/updates/akshat.md`) as a Stage 1 finding, not acted on here. Owner Akshat, 22 Sept. |
+| D55 | **The merged NOAA+GFW pool ships without a new `meta.ais_source` enum value; provenance is per-vessel, not per-case — and the on-disk parquets were stale relative to the code that assumes it** | The plan proposed `ais_source: "mixed"` as a §6.1 contract change requiring Akshat's ruling. It was not needed: `meta.ais_source` stays whichever single value it already had (`noaa_dense` on the three merged-pool cases), and `tracks.Track` carries its own per-row `source` list instead — `gap`/`slowdown`/proximity's interpolation ceiling all ask "which archive covered THIS interval", not "which archive covered this case." No schema field added; `source_gated` (D50) is the only new signal a mixed pool produces. **Separately, a real defect**: the `source` column `tracks.load_tracks` reads was itself missing from two of the three on-disk `*_gfw.parquet` files (`farallones_gfw.parquet`, `huntington_gfw.parquet`) — written by a version of `ingest_gfw.py` that predates the column, and never regenerated, because `data/` is gitignored and `run_attribute_all.py` skips re-ingest when a parquet already exists. `has_src` (the column-presence probe `coalesce(source, default_source)` is built for) correctly detected its absence, but with BOTH files in the union lacking it, `src_expr` fell back to a literal `'noaa'` for every row from either source — silently defeating the NOAA-wins identity preference the merge exists to have, on data that had been sitting in the repo since before this session started. Found by a vessel_type flip (PANAGIA THALASSINI: `tanker` with the single-file NOAA extract, `other` with GFW unioned in — GFW rows, now indistinguishable from NOAA ones, could win `any_value()`'s tie). Fixed by backfilling `source='gfw'` into the two stale files — every row in a `*_gfw.parquet` file is GFW-origin by construction, so this is not synthesised data, only a metadata column corrected to what the current ingest code would have written. Farallones' score moved 0.542 → 0.651 (PANAGIA stays #1, unaffected in rank); Jacksonville was already correct and moved not at all. Owner Akshat, 22 Sept. |
 
 ---
 
@@ -1050,6 +1169,62 @@ do not make one.** Two things broke it, both found by Jaiveer and both reported 
 only, never on a real case.** That is the claim we actually have to defend in December, and it is
 unaffected by any of the above — a compromised case can still honestly *test* a model that was
 tuned somewhere else.
+
+## 16.2 Calibration declaration — 22 Sept re-score
+
+**Akshat's ruling going in:** fix real defects on their own merits first, re-measure, and declare any
+*residual* tuning here rather than silently. Everything below is reported against that standard —
+most of it clears it outright (a defect, found and fixed independent of any answer); two items are
+declared exceptions to the "set on injected scenarios only" rule, made deliberately and stated
+plainly rather than folded into the numbers.
+
+**The Jacksonville rank flip is a defect fix with a target-shaped side effect, in those words.**
+`docs/evaluation/stage3-predictions-2026-09-22.md` recorded the mechanism and predicted outcome
+**before** the merge shipped: STENA PROSPEROUS's 142-minute NOAA silence was a receiver coverage
+hole, not evasion (NOAA is a terrestrial network; the vessel was transmitting and simply unheard),
+and nulling it as evidence would move MENUETT to #1. That is exactly what happened — MENUETT 0.536
+vs STENA 0.520 — but by a different route than predicted: the merge structurally split the silence
+rather than the explicit coverage-hole gate catching it, and what actually decided the case was
+D50's `source_gated` fix to a SEPARATE bug (a missing SOG field manufacturing a "moored, not dark"
+exoneration). **The mechanism was written down and would have been applied identically had it moved
+STENA to #1 instead** — but the specific route the prediction named was wrong, and that is stated
+plainly rather than quietly matched to the outcome.
+
+**D48 (`parity` removed from `WEIGHTS`) is a weight change made AFTER the sealed answers were
+already known — declared, not hidden.** It is safe on the strongest available grounds: `score` is
+**provably unchanged to the decimal** (see D48), not merely observed to preserve rank order, because
+`parity` was already excluded from every score's renormalisation before this change — the fix only
+stops `weight_live` reporting an evidence gap that never existed. `pipeline/attribute/tests.py`
+asserts no published ranking moves.
+
+**D54 (evidence-weighted age-hypothesis mixture) was NOT tuned toward any case.** The rule —
+weight or select by each hypothesis's own `info_gain_nats`, computed against the identical prior and
+grid — was chosen for a stated statistical reason (raw marginal-likelihood weighting compares
+model families on an incommensurable scale; KL-divergence-from-the-same-prior does not) that holds
+regardless of which case it is applied to, and a first, MORE standard attempt (raw marginal
+likelihood) was tried, measured, found to make things worse, and replaced — the kind of route a
+tuning exercise does not take. It was derived once, applied uniformly to all three refusing cases,
+and not revisited per-case.
+
+**D55 (the stale `*_gfw.parquet` schema fix) is a data-correctness fix, not a score adjustment.**
+Two on-disk files were missing a column the current ingest code writes; backfilling it corrects the
+data to what re-running the current, already-committed ingest code would have produced. No formula,
+weight, or threshold changed. Farallones' score moved (0.542 → 0.651) because the vessel's true type
+(`tanker`) could finally be read; the ranking did not.
+
+**The GFW merge's own value, stated so the slide cannot overclaim it.** The go/no-go probe
+(`stage3-predictions-2026-09-22.md §3.0`) measured this **before** the merge shipped: GFW adds only
+5 / 1 / 90 vessels over the NOAA extract on the three US cases, and every one is a tug, a buoy
+tender, a fishing boat or a pleasure craft — both reference culprits were already in NOAA. **The
+merge's value is the coverage-hole correction (D50), not new candidates**, and no claim on any
+slide or in any prose here should say GFW "found more ships."
+
+**Not done, and stated as such rather than silently deferred:** the `weight_live` renormalisation
+penalty §4.4 of the plan called a prerequisite for the merge shipped without it. With `parity`
+removed (D48), `weight_live` now reaches 1.0 on a fully-measured vessel, which removes most of the
+pressure the penalty was meant to relieve; adding one now would move Jacksonville and Farallones —
+cases that currently match the sealed answers — for a reason that cannot be stated independently of
+that fact, which is precisely what this ruling exists to prevent.
 
 **On stage this is a strength, said plainly:** *"We'll tell you exactly which of our results were
 produced blind and why the others weren't."* (Don't quote a count. Farallones moved on 14 Sept, see the table.) A team that reports the boundary of
