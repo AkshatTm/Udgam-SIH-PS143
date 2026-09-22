@@ -247,6 +247,10 @@ hypotheses and models contributed, and the held-out synthetic-twin coverage (or 
 when no age was measured. `model_mix` (D45, optional): the models pooled into the origin grid,
 weights summing to 1. A different claim from `opendrift_comparison`; never merge them.
 
+`age_gate` (D45) ∈ `acute | chronic_track | unknown_both | no_detection`. `age_refusal` (D46,
+optional): `{reason: low_information | no_estimator | no_detection, info_gain_nats, min_gain_nats}`,
+only when `age_method` is `none` and never alongside `age_posterior`. Live text: Master §6.5.
+
 `abstain: true` forces Stage 3 to return zero suspects. Agreed trigger: `radius_90_km > 40`.
 
 The age, posterior, stranding, wind, comparison and model-mix blocks are **optional** — absence

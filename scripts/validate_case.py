@@ -721,6 +721,17 @@ def check_origin(d, box):
             "cannot claim to be measured from an age it does not carry")
     if ap_ is not None:
         check_age_posterior(o, ap_)
+    ag = o.get("age_gate")
+    if ag is not None and ag not in ("acute", "chronic_track", "unknown_both", "no_detection"):
+        err(f"origin.json/age_gate: must be acute|chronic_track|unknown_both|no_detection, "
+            f"got {ag!r}")
+    # age_refusal (D46): WHY no age is claimed. Only on a refusal, never beside a posterior.
+    ar = o.get("age_refusal")
+    if ar is not None:
+        check_age_refusal(o, ar)
+    elif am == "none":
+        warn("origin.json: age_method is 'none' but there is no age_refusal — the panel cannot "
+             "say why no age is claimed (D46; re-run Stage 2 to add it)")
     mm = o.get("model_mix")
     if mm is not None:
         check_model_mix(mm)
@@ -817,6 +828,27 @@ def check_age_posterior(o, ap_):
                     f"come from spans {h[1] - h[0]:.2f} h")
         except Exception:                          # parse errors are reported elsewhere
             pass
+
+
+def check_age_refusal(o, ar):
+    where = "origin.json/age_refusal"
+    if not isinstance(ar, dict):
+        err(f"{where}: must be an object")
+        return
+    if ar.get("reason") not in ("low_information", "no_estimator", "no_detection"):
+        err(f"{where}/reason: must be low_information|no_estimator|no_detection, "
+            f"got {ar.get('reason')!r}")
+    g = ar.get("info_gain_nats")
+    if g is not None and not (isinstance(g, (int, float)) and not isinstance(g, bool) and g >= 0):
+        err(f"{where}/info_gain_nats: must be null or a non-negative number, got {g!r}")
+    mg = ar.get("min_gain_nats")
+    if not (isinstance(mg, (int, float)) and not isinstance(mg, bool) and mg > 0):
+        err(f"{where}/min_gain_nats: must be a positive number, got {mg!r}")
+    if o.get("age_posterior") is not None:
+        err("origin.json: carries both age_posterior and age_refusal — an age cannot be "
+            "measured and refused at once")
+    if o.get("age_method") != "none":
+        err(f"{where}: present but age_method is {o.get('age_method')!r}, not 'none'")
 
 
 def check_model_mix(mm):

@@ -28,6 +28,7 @@ import type {
   SuspectsBundle,
 } from "@/lib/suspects";
 import InfoDot from "@/components/InfoDot";
+import AgePosteriorChart from "@/components/AgePosteriorChart";
 // Shared with VerifyScreen — moved out of this file verbatim so the same funnel and the same
 // component breakdown render identically on both screens (see components/attribution).
 import {
@@ -380,8 +381,41 @@ const AGE_METHOD_LABEL: Record<AgeMethod, string> = {
   track: "Estimated from how far a ship's track has widened",
   combined: "Combined estimate",
   disagreement: "Estimators disagree — range widened",
-  none: "No estimator produced a result — using the search bracket",
+  none: "No measured age",
 };
+
+// D46 — a refusal says WHY, from the bundle's own age_refusal, and never claims the window is a
+// search bracket unless time_window_method says so (Huntington's is a convergence window).
+function ageRefusalText(origin: OriginBundle): string {
+  const r = origin.ageRefusal;
+  let why = "No measured age.";
+  if (r?.reason === "low_information") {
+    why =
+      r.infoGainNats !== null
+        ? `Estimators ran, but the evidence barely moved the prior (${fmt(r.infoGainNats, 3)} < ${fmt(r.minGainNats, 2)} nats), so no age is claimed.`
+        : "Estimators ran, but the evidence barely moved the prior, so no age is claimed.";
+  } else if (r?.reason === "no_estimator") {
+    why = "No estimator could read this slick, so no age is claimed.";
+  } else if (r?.reason === "no_detection") {
+    why = "No oil detection to read an age from.";
+  }
+  const window =
+    origin.timeWindowMethod === "convergence"
+      ? " Window from drift convergence."
+      : origin.timeWindowMethod === "bounded"
+        ? " Window is the search bracket."
+        : "";
+  return why + window;
+}
+
+const MODEL_NAME: Record<string, string> = {
+  udgam_rk2: "UDGAM RK2",
+  opendrift_oceandrift: "OpenDrift OceanDrift",
+  opendrift_openoil: "OpenDrift OpenOil",
+};
+const modelName = (n: string): string => MODEL_NAME[n] ?? n;
+
+const sameUtcDay = (a: string, b: string): boolean => a.slice(0, 10) === b.slice(0, 10);
 
 // ─── Trace stage card ─────────────────────────────────────────────────────────
 
@@ -441,6 +475,16 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
           tip="Radius of the circle that contains nine out of ten simulations. It measures how closely the runs agree with each other (precision), not how close they are to the true release point."
         />
       </div>
+      {origin.modelMix && origin.modelMix.models.length > 1 && (
+        <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
+          Pooled from{" "}
+          {origin.modelMix.models
+            .map((m) => `${modelName(m.name)} ${fmt(m.weight * 100, 0)} %`)
+            .join(" · ")}
+          {origin.modelMix.centroidSeparationKm !== null &&
+            ` (their centres ${fmt(origin.modelMix.centroidSeparationKm, 1)} km apart)`}
+        </p>
+      )}
 
       <Divider />
 
@@ -449,16 +493,32 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
       {/* `relative` — see InfoDot.tsx: the tooltip anchors to this row, not the button. */}
       <div className="relative mt-1.5 flex items-start gap-1">
         <div className="flex-1">
-          <div className="font-mono text-[15px] font-semibold text-ink">
-            {fmtDay(start)}
-          </div>
-          <div className="font-mono text-[13px] text-ink-2">
-            {fmtTime(start)} – {fmtTime(end)} UTC
-          </div>
+          {sameUtcDay(start, end) ? (
+            <>
+              <div className="font-mono text-[15px] font-semibold text-ink">
+                {fmtDay(start)}
+              </div>
+              <div className="font-mono text-[13px] text-ink-2">
+                {fmtTime(start)} – {fmtTime(end)} UTC
+              </div>
+            </>
+          ) : (
+            // A window across midnight names both days — "01:11 – 01:11" read as zero length.
+            <div className="font-mono text-[13px] leading-snug text-ink">
+              <div>{fmtDay(start)} · {fmtTime(start)}</div>
+              <div>→ {fmtDay(end)} · {fmtTime(end)} UTC</div>
+            </div>
+          )}
         </div>
         <InfoDot
           align="right"
-          tip="The time window during which the oil most plausibly entered the water, derived from backwards-drift timing across all simulations."
+          tip={
+            origin.timeWindowMethod === "age"
+              ? "The 80 % interval of this slick's estimated age, counted back from the radar pass. The origin cloud is pooled over the same ages."
+              : origin.timeWindowMethod === "bounded"
+                ? "No release time could be measured, so this is the full span the backwards drift searched."
+                : "The time window during which the oil most plausibly entered the water, derived from backwards-drift timing across all simulations."
+          }
         />
       </div>
 
@@ -492,20 +552,41 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
             <div className="flex-1">
               {origin.ageHours && (
                 <div className="font-mono text-[15px] font-semibold text-ink">
-                  {fmt(origin.ageHours[0], 0)} – {fmt(origin.ageHours[1], 0)} hours
+                  {fmt(origin.ageHours[0], 1)} – {fmt(origin.ageHours[1], 1)} hours
                 </div>
               )}
-              {origin.ageMethod && (
+              {origin.ageMethod && origin.ageMethod !== "none" && (
                 <div className="mt-0.5 text-[13px] text-ink-2">
                   {AGE_METHOD_LABEL[origin.ageMethod]}
+                </div>
+              )}
+              {origin.ageMethod === "none" && (
+                <div className="mt-0.5 text-[13px] leading-relaxed text-ink-2">
+                  {ageRefusalText(origin)}
                 </div>
               )}
             </div>
             <InfoDot
               align="right"
-              tip="How long ago the oil likely entered the water, estimated from how the slick has spread and sheared since release."
+              tip="How long ago the oil entered the water. An 80 % interval from a posterior that fuses the slick's shape (our drift model mixed with OpenDrift OpenOil), whether it would still be visible on radar, and how far a ship's track has widened. When the evidence barely moves the prior, no age is claimed."
             />
           </div>
+          {origin.agePosterior && (
+            <>
+              <AgePosteriorChart posterior={origin.agePosterior} />
+              <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+                Shaded: 80 % interval · dashed: median {fmt(origin.agePosterior.median, 1)} h
+                {origin.agePosterior.models.length > 0 &&
+                  ` · shape from ${origin.agePosterior.models.map(modelName).join(" + ")}`}
+              </p>
+              {origin.agePosterior.calibrationCoverage !== null && (
+                <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+                  Calibrated: on held-out synthetic twins, 80 % intervals contained the true age{" "}
+                  {fmt(origin.agePosterior.calibrationCoverage * 100, 0)} % of the time.
+                </p>
+              )}
+            </>
+          )}
           {/* Per-estimator bands, collapsed. A null band is "not applicable" — never a zero. */}
           {origin.ageEstimators && Object.keys(origin.ageEstimators).length > 0 && (
             <details className="mt-2 text-[13px] text-ink-2">
@@ -517,7 +598,7 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
                   <Row
                     key={name}
                     label={name.charAt(0).toUpperCase() + name.slice(1)}
-                    value={band === null ? "not applicable" : `${fmt(band[0], 0)} – ${fmt(band[1], 0)} h`}
+                    value={band === null ? "not applicable" : `${fmt(band[0], 1)} – ${fmt(band[1], 1)} h`}
                   />
                 ))}
               </div>
@@ -545,7 +626,9 @@ function TraceCard({ origin }: { origin: OriginBundle }) {
       <p className="mt-4 text-[13px] leading-relaxed text-ink-3">
         The drifting points trace one representative path, not a spread. The
         uncertainty is the origin probability field and the 50 / 90 % regions
-        above, stacked from {origin.ensembleRuns} perturbed runs.
+        above, stacked from {origin.ensembleRuns} perturbed runs
+        {origin.modelMix && origin.modelMix.models.length > 1 && " pooled with a second drift model"}
+        {origin.timeWindowMethod === "age" && ", weighted over the slick's estimated age"}.
       </p>
     </div>
   );

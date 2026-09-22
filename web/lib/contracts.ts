@@ -211,6 +211,14 @@ export interface RawOriginBundle {
   age_weathering?: "fresh" | "weathered" | "unknown";
   /** Per-estimator band, or null where that estimator did not apply — never a zero band. */
   age_estimators?: Record<string, [number, number] | null>;
+  /** Which reading of the slick the age engine was allowed to use (D45). */
+  age_gate?: "acute" | "chronic_track" | "unknown_both" | "no_detection";
+  /** D46: why no age is claimed. Only when age_method is "none"; never beside age_posterior. */
+  age_refusal?: {
+    reason: "low_information" | "no_estimator" | "no_detection";
+    info_gain_nats: number | null;
+    min_gain_nats: number;
+  };
   stranded_fraction?: number;
   opendrift_comparison?: { centroid_separation_km: number; r90_ratio: number };
 }

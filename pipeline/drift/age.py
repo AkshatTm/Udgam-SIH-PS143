@@ -1744,6 +1744,15 @@ def estimate_age(field, feature, t0, candidate_hours, origin_lonlat, *, release_
                            "track": round_band(track_band)},
         "age_gate": gate,
     }
+    if summary["status"] != "ok":
+        # Master §6.5 age_refusal: WHY no age is claimed, so the panel does not have to guess.
+        # "no_estimator" -- nothing produced a likelihood; "low_information" -- estimators ran but
+        # the posterior barely moved off the prior, which is a refusal, not a failure.
+        block["age_refusal"] = {
+            "reason": "low_information" if "info_gain_nats" in summary else "no_estimator",
+            "info_gain_nats": summary.get("info_gain_nats"),
+            "min_gain_nats": float(cal.get("min_gain") or AP.MIN_INFO_GAIN_NATS),
+        }
     if summary["status"] == "ok":
         block["age_posterior"] = {
             "hours_grid": summary["hours_grid"],
@@ -1902,10 +1911,14 @@ def main():
             reason += (" -- this is a known_origin case (D16): the source is documented rather "
                        "than detected, so age is genuinely not available, not merely unmeasured.")
         print(f"\n  age_method = none\n        {reason}")
+        import age_posterior as AP
         block = {"age_hours": None, "age_method": "none", "age_weathering": "unknown",
                  "age_estimators": {"shear": None, "fay": None, "elongation": None,
                                     "track": None},
-                 "age_gate": "no_detection"}
+                 "age_gate": "no_detection",
+                 "age_refusal": {"reason": "no_detection", "info_gain_nats": None,
+                                 "min_gain_nats": float(load_calibration().get("min_gain")
+                                                        or AP.MIN_INFO_GAIN_NATS)}}
         _finish(a, origin_path, origin, block, {"skipped": reason, "case": a.case}, out_dir)
         return 0
 

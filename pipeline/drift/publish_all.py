@@ -266,6 +266,15 @@ def main():
     print("=" * 78)
     for case, state, edited in summary:
         print(f"  {case:<28} {state:<28} {'meta.json edited' if edited else ''}")
+    # D46: the browser reads web/public/cases/, a copy. A regeneration that is not synced looks
+    # stale rather than broken -- which is how the age engine went unseen on the demo panel.
+    if summary and all(state == "PASS" for _, state, _ in summary):
+        rc = sh([py, REPO / "scripts" / "sync_web_cases.py", "--clean"], "sync web cases",
+                a.dry_run)
+        print(f"\n  web/public/cases/ {'synced' if rc == 0 else 'NOT synced -- run it by hand'}")
+    else:
+        print("\n  web/public/cases/ NOT synced: fix the failures above, then run "
+              "scripts/sync_web_cases.py --clean")
     edits = [c for c, _, e in summary if e]
     if edits:
         print(f"\n  {len(edits)} meta.json file(s) in cases/ were edited to add 'trace'.")
