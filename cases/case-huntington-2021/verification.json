@@ -29,7 +29,7 @@
     "caveat": "The anchor strike preceded the release by eight months -- no vessel was the proximate source at detection time. UDGAM's own infrastructure scorer does not currently name the pipeline: a fixed-source module requires a declared candidate structure and a proximity floor calibrated to the origin cloud's radius, and this case's pipeline candidate falls just under that floor after the age-engine re-run widened the cloud. A dedicated pipeline/oil-well map layer is planned as a separate phase; until it lands, this case is scored purely on transiting vessels, which is the wrong question for it."
   },
   "udgam_result": {
-    "origin_summary": "Origin cloud centred at 33.5328\u00b0 N, 118.1443\u00b0 W; half the ensemble lands within 3.8 km and nine in ten within 7.1 km. Release window 2021-10-01T17:41:51Z to 2021-10-01T19:58:21Z (convergence). Stage 3 funnel 686 \u2192 578 \u2192 7 \u2192 3.",
+    "origin_summary": "Origin cloud centred at 33.6235\u00b0 N, 118.0988\u00b0 W; half the ensemble lands within 2.18 km and nine in ten within 4.59 km. Release window 2021-10-01T08:05:51Z to 2021-10-02T01:50:51Z (age). Stage 3 funnel 686 \u2192 587 \u2192 7 \u2192 3.",
     "top_suspects": [
       "368117160",
       "372914000",

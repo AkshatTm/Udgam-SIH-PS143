@@ -22,7 +22,7 @@
     "caveat": "Nobody adjudicated this one: five infrastructure candidates, one dark vessel, zero vessel candidates, and a model class that says 'vessel' anyway, with no human review. A claim that Cerulean flags this area as a known natural-seep zone could not be substantiated against their published AOI layers (EEZ, IHO Sea Areas, MPA, user-generated) -- there is no seep layer in their schema, and this slick is classed VESSEL, not NATURAL."
   },
   "udgam_result": {
-    "origin_summary": "Origin cloud centred at 18.9070\u00b0 N, 71.9043\u00b0 E; half the ensemble lands within 7.25 km and nine in ten within 11.07 km. Release window 2023-08-31T01:03:33Z to 2023-09-02T01:03:33Z (bounded). Stage 3 funnel 74 \u2192 65 \u2192 14 \u2192 3.",
+    "origin_summary": "Origin cloud centred at 18.4900\u00b0 N, 72.1589\u00b0 E; half the ensemble lands within 2.57 km and nine in ten within 4.73 km. Release window 2023-09-02T10:11:03Z to 2023-09-03T00:56:03Z (age). Stage 3 funnel 74 \u2192 65 \u2192 14 \u2192 3.",
     "top_suspects": [
       "636019523",
       "477636200",

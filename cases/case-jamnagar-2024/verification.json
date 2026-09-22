@@ -9,7 +9,7 @@
     "caveat": "There is no answer for this case, and that is the finding. Cerulean's own detector logged it, listed candidates, scored every one of them below zero, and no human ever looked. Naming a real vessel as a polluter here, on a source score the reference system itself rejected, with no investigation behind it, is a real exposure -- responsible_parties is left empty above for that reason. UDGAM's own suspect list (see udgam_result) is scored independently and does not use or confirm any of Cerulean's four candidates; the two lists do not even overlap."
   },
   "udgam_result": {
-    "origin_summary": "Origin cloud centred at 20.4640\u00b0 N, 71.3904\u00b0 E; half the ensemble lands within 4.87 km and nine in ten within 11.12 km. Release window 2024-02-20T01:11:14Z to 2024-02-22T01:11:14Z (bounded). Stage 3 funnel 111 \u2192 102 \u2192 10 \u2192 3.",
+    "origin_summary": "Origin cloud centred at 20.1799\u00b0 N, 71.8954\u00b0 E; half the ensemble lands within 2.81 km and nine in ten within 5.21 km. Release window 2024-02-22T11:03:44Z to 2024-02-23T01:03:44Z (age). Stage 3 funnel 111 \u2192 102 \u2192 10 \u2192 3.",
     "top_suspects": [
       "419476000",
       "419012000",
