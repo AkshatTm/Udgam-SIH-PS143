@@ -32,7 +32,7 @@
         "slowdown": "10.8 kn at closest approach against an under-way median of 11.5 kn",
         "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
       },
-      "weight_live": 0.65,
+      "weight_live": 0.765,
       "components_available": 4,
       "components_total": 7,
       "closest_km": 3.75,
@@ -71,7 +71,7 @@
         "slowdown": "13.3 kn at closest approach against an under-way median of 13.3 kn",
         "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
       },
-      "weight_live": 0.65,
+      "weight_live": 0.765,
       "components_available": 4,
       "components_total": 7,
       "closest_km": 8.41,
@@ -110,7 +110,7 @@
         "slowdown": "11.9 kn at closest approach against an under-way median of 12.1 kn",
         "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
       },
-      "weight_live": 0.65,
+      "weight_live": 0.765,
       "components_available": 4,
       "components_total": 7,
       "closest_km": 29.18,
@@ -189,7 +189,7 @@
       "temporality",
       "trajectory"
     ],
-    "weight_live": 0.65,
+    "weight_live": 0.765,
     "note": "the top two are separated by 3.0 % of the leading score -- ordered, but not a confident identification"
   }
 }

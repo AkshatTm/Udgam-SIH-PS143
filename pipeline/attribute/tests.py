@@ -726,17 +726,31 @@ def origin_doc(method="convergence",
 
 
 class TestWeights(unittest.TestCase):
-    """The seven weights are the contract. A typo here is silent and changes every
-    ranking in the library, so the total is pinned to a literal rather than derived."""
+    """The six live weights are the contract. A typo here is silent and changes every
+    ranking in the library, so the total is pinned to a literal rather than derived.
 
-    def test_the_seven_weights_sum_to_one(self):
+    `parity` is deliberately absent -- it has never had anything to measure (needs the Stage 1
+    slick centerline, Phase 2, not yet built), so it was always `not_applicable` and its 0.15
+    WEIGHTS entry was never actually earning it any influence over a score. Removing it and
+    rescaling the other six to sum to 1.0 changes score arithmetic not at all (see score.py's
+    comment above WEIGHTS) -- it only lets `weight_live` reach 1.0 on a fully-measured vessel
+    instead of capping at 0.85 forever."""
+
+    def test_the_six_weights_sum_to_one(self):
         self.assertAlmostEqual(sum(score.WEIGHTS.values()), 1.0, places=9)
 
-    def test_there_are_exactly_seven_components(self):
-        self.assertEqual(len(score.WEIGHTS), 7)
+    def test_there_are_exactly_six_live_components(self):
+        self.assertEqual(len(score.WEIGHTS), 6)
         self.assertEqual(set(score.WEIGHTS), {
-            "proximity", "parity", "temporality", "trajectory",
+            "proximity", "temporality", "trajectory",
             "gap", "slowdown", "type_prior"})
+
+    def test_parity_component_exists_but_carries_no_weight(self):
+        """component_parity() still runs and still explains itself on every card (Phase 2 is
+        not built, so the explanation is still owed) -- it just cannot move a score."""
+        self.assertNotIn("parity", score.WEIGHTS)
+        c = score.component_parity("chronic")
+        self.assertFalse(c.applicable)
 
 
 class TestTemporalityGate(unittest.TestCase):
@@ -848,16 +862,20 @@ class TestEvidenceBreadthReachesTheCard(unittest.TestCase):
             geo.OriginGrid(origin_doc()), False, None)
         return doc["suspects"][0]
 
-    def test_two_live_components_are_reported_as_two_of_seven(self):
+    def test_two_live_components_are_reported_as_two_of_six(self):
+        # weights are 0.30/0.15/0.15/0.15/0.05/0.05 rescaled by 1/0.85 (parity carries no
+        # weight -- see score.py's comment above WEIGHTS), so proximity+type_prior of the
+        # LIVE total is (0.30+0.05)/0.85, unchanged as a fraction of what parity's removal
+        # left behind.
         s = self.build({"proximity", "type_prior"})
         self.assertEqual(s["components_available"], 2)
-        self.assertEqual(s["components_total"], 7)
-        self.assertAlmostEqual(s["weight_live"], 0.35, places=3,
-                               msg="proximity 0.30 + type_prior 0.05")
+        self.assertEqual(s["components_total"], 6)
+        self.assertAlmostEqual(s["weight_live"], 0.35 / 0.85, places=3,
+                               msg="(proximity 0.30 + type_prior 0.05) / 0.85")
 
-    def test_all_seven_live_gives_a_full_weight(self):
+    def test_all_six_live_gives_a_full_weight(self):
         s = self.build(set(score.WEIGHTS))
-        self.assertEqual(s["components_available"], 7)
+        self.assertEqual(s["components_available"], 6)
         self.assertAlmostEqual(s["weight_live"], 1.0, places=3)
 
     def test_components_available_counts_nulls_out(self):
@@ -874,10 +892,11 @@ class TestConstantComponentGate(unittest.TestCase):
     all three suspects — a tanker and two cargo ships, different type strings, identical
     value — so the gate is on the VALUE, which is also what the validator checks.
 
-    Hand-computed. Two vessels, all seven components live, everything 1.0 except proximity
-    (0.90 and 0.50) and a constant type_prior of 1.0. Removing a constant of weight 0.05:
-        before  A = 1 - 0.30*0.10 = 0.970          B = 1 - 0.30*0.50 = 0.850
-        after   A = (0.970 - 0.05) / 0.95 = 0.9684 B = (0.850 - 0.05) / 0.95 = 0.8421
+    Hand-computed. Two vessels, all six LIVE components (parity carries no weight -- see
+    score.py's comment above WEIGHTS), everything 1.0 except proximity (0.90 and 0.50) and a
+    constant type_prior of 1.0. Weights are 0.30/0.15/0.15/0.15/0.05/0.05 each divided by 0.85:
+        before  A = 0.965   ( = 1 - (0.30/0.85)*0.10 )   B = 0.824   ( = 1 - (0.30/0.85)*0.50 )
+        after   A = 0.963   ( = (0.965 - 0.05/0.85) / (1 - 0.05/0.85) )   B = 0.812
     Ranking is unchanged by construction: (S - w·c)/(1 - w) is monotonic in S.
     """
 
@@ -890,14 +909,14 @@ class TestConstantComponentGate(unittest.TestCase):
 
     def test_a_constant_type_prior_gates_to_null_and_rescores(self):
         a, b = self.entry(0.90, 1.0), self.entry(0.50, 1.0)
-        self.assertEqual(a["score"], 0.97)
+        self.assertAlmostEqual(a["score"], 0.965, places=3)
         self.assertEqual(score.gate_constant_components([a, b]), ["type_prior"])
         self.assertFalse(a["components"]["type_prior"].applicable,
                          "a component that separates nobody must reach the card as null")
         self.assertIsNone(a["components"]["type_prior"].value)
-        self.assertAlmostEqual(a["score"], 0.968, places=3)
-        self.assertAlmostEqual(b["score"], 0.842, places=3)
-        self.assertAlmostEqual(a["weight_live"], 0.95, places=3)
+        self.assertAlmostEqual(a["score"], 0.963, places=3)
+        self.assertAlmostEqual(b["score"], 0.812, places=3)
+        self.assertAlmostEqual(a["weight_live"], 1 - 0.05 / 0.85, places=3)
         self.assertIn("D28", a["components"]["type_prior"].note)
 
     def test_the_gate_is_rank_preserving(self):
@@ -911,7 +930,8 @@ class TestConstantComponentGate(unittest.TestCase):
         a, b = self.entry(0.90, 1.0), self.entry(0.50, 0.5)
         self.assertEqual(score.gate_constant_components([a, b]), [])
         self.assertTrue(a["components"]["type_prior"].applicable)
-        self.assertEqual(a["score"], 0.97, "a live component must not be rescored")
+        self.assertAlmostEqual(a["score"], 0.965, places=3,
+                               msg="a live component must not be rescored")
 
     def test_one_candidate_alone_is_never_constant(self):
         a = self.entry(0.90, 1.0)

@@ -57,15 +57,28 @@ REPO = HERE.parents[1]
 # Named constants, deterministic, explainable. Master plan Part 6 / 06_JAIVEER_AIS B4.
 # v4 moved 0.10 off proximity into parity and temporality: geometry and timing are
 # stronger evidence than raw closeness.
-W_PROXIMITY   = 0.30
-W_PARITY      = 0.15
-W_TEMPORALITY = 0.15
-W_TRAJECTORY  = 0.15
-W_GAP         = 0.15
-W_SLOWDOWN    = 0.05
-W_TYPE_PRIOR  = 0.05
+#
+# `parity` is NOT in WEIGHTS. component_parity() (below) has never had anything to measure --
+# it needs the slick centerline from Stage 1, a Phase 2 artefact that does not exist yet -- so
+# it is `not_applicable` on every candidate, on every case, always. weighted_score() already
+# excludes a not_applicable component from BOTH the numerator and `live` (D9), so a WEIGHTS
+# entry for parity was never actually earning it any influence over `score`: removing it changes
+# no score, by construction, not just "preserves rank order" -- the arithmetic is identical to
+# the decimal place. What it fixes is `weight_live`, which is `live` reported back on the card:
+# with parity in WEIGHTS that number topped out at 0.85 even when all six REAL components were
+# measured, silently claiming an evidence gap that was never there. Declared in Master Part 16
+# as a weight-shape change made after the sealed answers were known; the no-flip argument above
+# is what makes that safe. Building parity for real is Phase 2 work, not this fix.
+W_PROXIMITY   = 0.30 / 0.85
+W_PARITY      = 0.15   # kept as a named constant only so component_parity's caller reads
+                       # naturally; NOT a WEIGHTS key -- see above.
+W_TEMPORALITY = 0.15 / 0.85
+W_TRAJECTORY  = 0.15 / 0.85
+W_GAP         = 0.15 / 0.85
+W_SLOWDOWN    = 0.05 / 0.85
+W_TYPE_PRIOR  = 0.05 / 0.85
 
-WEIGHTS = {"proximity": W_PROXIMITY, "parity": W_PARITY, "temporality": W_TEMPORALITY,
+WEIGHTS = {"proximity": W_PROXIMITY, "temporality": W_TEMPORALITY,
            "trajectory": W_TRAJECTORY, "gap": W_GAP, "slowdown": W_SLOWDOWN,
            "type_prior": W_TYPE_PRIOR}
 
@@ -825,7 +838,10 @@ def build_outputs(scored, funnel, grid, abstained, abstain_reason, confidence=No
             "component_notes": {k: c.note for k, c in s["components"].items()},
             "weight_live": s["weight_live"],
             "components_available": applicable,
-            "components_total": len(WEIGHTS),
+            # NOT len(WEIGHTS) (6, live components only) -- this counts what the card actually
+            # shows, and parity is shown (as a permanently explained null; see score.py's
+            # comment above WEIGHTS). len(s["components"]) is 7 for exactly that reason.
+            "components_total": len(s["components"]),
             "closest_km": s["closest_km"],
             "closest_time": iso(s["closest_time"]),
             "grid_probability": s["grid_probability"],
@@ -991,7 +1007,12 @@ def main():
         plausible.sort(key=rank_key)
         near_miss.sort(key=lambda s: (-(s["grid_probability"] or 0.0),
                                       s["track"].mmsi))
-        gated = gate_constant_components(plausible)
+        # trajectory joins type_prior under D28: the author's own comment on component_trajectory
+        # (below) says it scores 1.0 for most vessels in a real search box, and
+        # validate_case.py has warned "trajectory is 1.0 for all N scored suspects" on every
+        # case since the warning was added. Gating it here, not just flagging it, is what
+        # actually stops it inflating every score by its weight when it distinguishes nobody.
+        gated = gate_constant_components(plausible, names=("type_prior", "trajectory"))
         gate_source_basis(plausible)
         if gated:
             plausible.sort(key=rank_key)

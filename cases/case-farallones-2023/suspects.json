@@ -4,7 +4,7 @@
     "in_window": 7,
     "plausible": 2,
     "scored": 2,
-    "dropped_short_track": 1,
+    "dropped_short_track": 0,
     "dropped_non_vessel": 0
   },
   "suspects": [
@@ -12,38 +12,39 @@
       "source_type": "vessel",
       "mmsi": "212656000",
       "name": "PANAGIA THALASSINI",
-      "vessel_type": "other",
-      "score": 0.542,
+      "vessel_type": "tanker",
+      "score": 0.651,
       "components": {
         "proximity": 0.908,
         "parity": null,
         "temporality": 0.003,
-        "trajectory": null,
+        "trajectory": 1.0,
         "gap": null,
         "slowdown": 0.0,
-        "type_prior": 0.5
+        "type_prior": null
       },
       "component_notes": {
         "proximity": "origin-grid probability at closest approach",
         "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
         "temporality": "closest approach 7.5 h from the centre of the release window",
-        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
-        "gap": "60-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
+        "trajectory": "on approach 11 km out, course 320 deg against 329 deg toward the origin (9 deg off)",
+        "gap": "not measurable for this vessel, but not counted: 1 of 2 scored candidates appear only in the hourly presence record and could not be tested on it, so counting it would rank vessels on how well they were OBSERVED",
         "slowdown": "12.4 kn at closest approach against an under-way median of 12.8 kn",
-        "type_prior": "vessel type other"
+        "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
       },
-      "weight_live": 0.55,
+      "weight_live": 0.765,
       "components_available": 4,
       "components_total": 7,
       "closest_km": 0.82,
       "closest_time": "2023-03-17T14:15:41Z",
       "grid_probability": 0.908,
-      "heading_consistent": false,
-      "ais_gap_minutes": 60.0,
+      "heading_consistent": true,
+      "ais_gap_minutes": 63.6,
       "edge_truncated": false,
       "below_score_floor": false,
       "reasons": [
-        "inside the high-probability region of the reconstructed origin during the release window"
+        "inside the high-probability region of the reconstructed origin during the release window",
+        "tanker on a course consistent with the origin"
       ]
     },
     {
@@ -51,7 +52,7 @@
       "mmsi": "248264000",
       "name": "TUGELA",
       "vessel_type": "cargo",
-      "score": 0.297,
+      "score": 0.243,
       "components": {
         "proximity": 0.172,
         "parity": null,
@@ -59,27 +60,27 @@
         "trajectory": 0.0,
         "gap": null,
         "slowdown": 0.0,
-        "type_prior": 1.0
+        "type_prior": null
       },
       "component_notes": {
         "proximity": "origin-grid probability at closest approach",
         "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
         "temporality": "closest approach 2.2 h from the centre of the release window",
         "trajectory": "on approach 13 km out, course 340 deg against 139 deg toward the origin (159 deg off)",
-        "gap": "23-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
+        "gap": "measured 0 for this vessel, but not counted: 1 of 2 scored candidates appear only in the hourly presence record and could not be tested on it, so counting it would rank vessels on how well they were OBSERVED",
         "slowdown": "16.8 kn at closest approach against an under-way median of 16.9 kn",
-        "type_prior": "vessel type cargo"
+        "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
       },
-      "weight_live": 0.7,
-      "components_available": 5,
+      "weight_live": 0.765,
+      "components_available": 4,
       "components_total": 7,
       "closest_km": 9.25,
       "closest_time": "2023-03-17T08:58:59Z",
       "grid_probability": 0.172,
       "heading_consistent": false,
-      "ais_gap_minutes": 23.1,
+      "ais_gap_minutes": 1.2,
       "edge_truncated": false,
-      "below_score_floor": false,
+      "below_score_floor": true,
       "reasons": [
         "on the edge of the reconstructed origin during the release window"
       ]
@@ -98,27 +99,27 @@
       "mmsi": "338221000",
       "name": "OVERSEAS BOSTON",
       "closest_km": 18.04,
-      "reason": "199 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 18.0 km from the peak, at zero grid probability throughout"
+      "reason": "196 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 18.0 km from the peak, at zero grid probability throughout"
     },
     {
       "mmsi": "367008770",
       "name": "NAVAJO",
       "closest_km": 27.04,
-      "reason": "246 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 27.0 km from the peak, at zero grid probability throughout"
+      "reason": "241 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 27.0 km from the peak, at zero grid probability throughout"
     }
   ],
   "abstained": false,
   "abstain_reason": null,
   "ranking_confidence": {
     "level": "high",
-    "separation": 0.452,
+    "separation": 0.6267,
     "basis": [
       "proximity",
       "slowdown",
       "temporality",
-      "type_prior"
+      "trajectory"
     ],
-    "weight_live": 0.55,
-    "note": "the leading candidate is 45.2 % clear of the next on 4 of 7 components"
+    "weight_live": 0.765,
+    "note": "the leading candidate is 62.7 % clear of the next on 4 of 6 components"
   }
 }

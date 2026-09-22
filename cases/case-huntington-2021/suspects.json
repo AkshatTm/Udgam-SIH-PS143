@@ -1,25 +1,25 @@
 {
   "funnel": {
     "in_region": 686,
-    "in_window": 578,
+    "in_window": 587,
     "plausible": 7,
     "scored": 3,
-    "dropped_short_track": 42,
+    "dropped_short_track": 17,
     "dropped_non_vessel": 0
   },
   "suspects": [
     {
       "source_type": "vessel",
       "mmsi": "368117160",
-      "name": "GOOD JUJU",
+      "name": "GOOD JU JU",
       "vessel_type": "other",
-      "score": 0.58,
+      "score": 0.704,
       "components": {
         "proximity": 0.795,
         "parity": null,
         "temporality": 0.527,
         "trajectory": 1.0,
-        "gap": 0.0,
+        "gap": null,
         "slowdown": 0.0,
         "type_prior": 0.5
       },
@@ -28,12 +28,12 @@
         "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
         "temporality": "closest approach 0.5 h from the centre of the release window",
         "trajectory": "on approach 8 km out, course 43 deg against 38 deg toward the origin (5 deg off)",
-        "gap": "longest silence overlapping the window: 16 minutes",
+        "gap": "measured 0 for this vessel, but not counted: 4 of 7 scored candidates appear only in the hourly presence record and could not be tested on it, so counting it would rank vessels on how well they were OBSERVED",
         "slowdown": "15.4 kn at closest approach against an under-way median of 14.3 kn",
         "type_prior": "vessel type other"
       },
-      "weight_live": 0.85,
-      "components_available": 6,
+      "weight_live": 0.824,
+      "components_available": 5,
       "components_total": 7,
       "closest_km": 1.09,
       "closest_time": "2021-10-01T18:17:51Z",
@@ -67,11 +67,11 @@
         "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
         "temporality": "closest approach 0.6 h from the centre of the release window",
         "trajectory": "on approach 8 km out, course 165 deg against 127 deg toward the origin (39 deg off)",
-        "gap": "175-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
+        "gap": "not measurable for this vessel, but not counted: 4 of 7 scored candidates appear only in the hourly presence record and could not be tested on it, so counting it would rank vessels on how well they were OBSERVED",
         "slowdown": "9.8 kn at closest approach against an under-way median of 9.8 kn",
         "type_prior": "vessel type cargo"
       },
-      "weight_live": 0.7,
+      "weight_live": 0.824,
       "components_available": 5,
       "components_total": 7,
       "closest_km": 2.04,
@@ -89,7 +89,7 @@
     {
       "source_type": "vessel",
       "mmsi": "367492920",
-      "name": "WYATT M",
+      "name": "KENNETH CARL",
       "vessel_type": "other",
       "score": 0.415,
       "components": {
@@ -106,11 +106,11 @@
         "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
         "temporality": "closest approach 1.1 h from the centre of the release window",
         "trajectory": "on approach 7 km out, course 151 deg against 174 deg toward the origin (23 deg off)",
-        "gap": "2-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
+        "gap": "not measurable for this vessel, but not counted: 4 of 7 scored candidates appear only in the hourly presence record and could not be tested on it, so counting it would rank vessels on how well they were OBSERVED",
         "slowdown": "1.1 kn at closest approach against an under-way median of 10.4 kn",
         "type_prior": "vessel type other"
       },
-      "weight_live": 0.7,
+      "weight_live": 0.824,
       "components_available": 5,
       "components_total": 7,
       "closest_km": 9.96,
@@ -131,29 +131,29 @@
   "infrastructure": [],
   "excluded": [
     {
-      "mmsi": "368014440",
-      "name": "MONTE CARLO",
-      "closest_km": 8.33,
-      "reason": "scored 0.27 against 0.58 for the leading candidate on the same 5 components -- considered and ranked below the top 3, not excluded"
+      "mmsi": "338181167",
+      "name": "BUCKET LIST",
+      "closest_km": 2.16,
+      "reason": "scored 0.41 against 0.70 for the leading candidate on the same 5 components -- considered and ranked below the top 3, not excluded"
     },
     {
       "mmsi": "338120738",
       "name": "PER AMORE",
       "closest_km": 12.61,
-      "reason": "scored 0.23 against 0.58 for the leading candidate on the same 5 components -- considered and ranked below the top 3, not excluded"
+      "reason": "scored 0.25 against 0.70 for the leading candidate on the same 5 components -- considered and ranked below the top 3, not excluded"
     },
     {
-      "mmsi": "338181167",
-      "name": "BUCKET LIST",
-      "closest_km": 2.16,
-      "reason": "scored 0.22 against 0.58 for the leading candidate on the same 4 components -- considered and ranked below the top 3, not excluded"
+      "mmsi": "368014440",
+      "name": "MONTE CARLO",
+      "closest_km": 8.33,
+      "reason": "scored 0.27 against 0.70 for the leading candidate on the same 5 components -- considered and ranked below the top 3, not excluded"
     }
   ],
   "abstained": false,
   "abstain_reason": null,
   "ranking_confidence": {
     "level": "high",
-    "separation": 0.1431,
+    "separation": 0.294,
     "basis": [
       "proximity",
       "slowdown",
@@ -161,7 +161,7 @@
       "trajectory",
       "type_prior"
     ],
-    "weight_live": 0.85,
-    "note": "the leading candidate is 14.3 % clear of the next on 5 of 7 components"
+    "weight_live": 0.824,
+    "note": "the leading candidate is 29.4 % clear of the next on 5 of 6 components"
   }
 }
