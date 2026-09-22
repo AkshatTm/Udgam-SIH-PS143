@@ -94,6 +94,27 @@ def main():
                 absent.append((act, s))
                 print(f"  MISS   {act:<10} {s}")
                 continue
+            # `pipeline/drift/out/` is SHARED across every case's run (publish_all.py:9-18's own
+            # invariant is "run AND publish before the next case"). When a downstream step for
+            # THIS case fails -- the forward run refusing on field coverage is the real one that
+            # surfaced this -- the file already sitting in out/ still belongs to whichever case
+            # ran last, and nothing before this checked. Caught only because
+            # case-jamnagar-2024's particles_forward.json carried case-mumbai-2023's t0, byte
+            # for byte identical (same size, same mtime), and validate_case.py's cross-check
+            # flagged it AFTER the copy. That is too late -- ship-then-detect is not the
+            # contract. Verify the one field that proves whose run this is, BEFORE copying.
+            if src_name == "particles_forward.json":
+                try:
+                    fwd_t0 = json.loads(s.read_text(encoding="utf-8")).get("t0")
+                except Exception:
+                    fwd_t0 = None
+                meta_t0 = meta.get("detection_time")
+                if fwd_t0 and meta_t0 and fwd_t0 != meta_t0:
+                    print(f"  STALE  {act:<10} {src_name} carries t0={fwd_t0!r} but this case's "
+                          f"detection_time is {meta_t0!r} — belongs to a different case's run "
+                          f"in the shared out/ directory. Refusing to copy it. Re-run the "
+                          f"forward step for {a.case} and rebuild.")
+                    continue
             if a.dry_run:
                 print(f"  would  {act:<10} {s}  ->  {case_dir / dest_name}")
             else:

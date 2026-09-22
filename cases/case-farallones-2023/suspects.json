@@ -1,35 +1,124 @@
 {
   "funnel": {
-    "in_region": 11,
-    "in_window": 8,
-    "plausible": 3,
-    "scored": 0,
-    "dropped_short_track": 0,
+    "in_region": 12,
+    "in_window": 7,
+    "plausible": 2,
+    "scored": 2,
+    "dropped_short_track": 1,
     "dropped_non_vessel": 0
   },
-  "suspects": [],
+  "suspects": [
+    {
+      "source_type": "vessel",
+      "mmsi": "212656000",
+      "name": "PANAGIA THALASSINI",
+      "vessel_type": "other",
+      "score": 0.542,
+      "components": {
+        "proximity": 0.908,
+        "parity": null,
+        "temporality": 0.003,
+        "trajectory": null,
+        "gap": null,
+        "slowdown": 0.0,
+        "type_prior": 0.5
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
+        "temporality": "closest approach 7.5 h from the centre of the release window",
+        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "gap": "60-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
+        "slowdown": "12.4 kn at closest approach against an under-way median of 12.8 kn",
+        "type_prior": "vessel type other"
+      },
+      "weight_live": 0.55,
+      "components_available": 4,
+      "components_total": 7,
+      "closest_km": 0.82,
+      "closest_time": "2023-03-17T14:15:41Z",
+      "grid_probability": 0.908,
+      "heading_consistent": false,
+      "ais_gap_minutes": 60.0,
+      "edge_truncated": false,
+      "below_score_floor": false,
+      "reasons": [
+        "inside the high-probability region of the reconstructed origin during the release window"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "248264000",
+      "name": "TUGELA",
+      "vessel_type": "cargo",
+      "score": 0.297,
+      "components": {
+        "proximity": 0.172,
+        "parity": null,
+        "temporality": 0.707,
+        "trajectory": 0.0,
+        "gap": null,
+        "slowdown": 0.0,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "parity requires the slick centerline from Stage 1 (Phase 2, not yet built)",
+        "temporality": "closest approach 2.2 h from the centre of the release window",
+        "trajectory": "on approach 13 km out, course 340 deg against 139 deg toward the origin (159 deg off)",
+        "gap": "23-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
+        "slowdown": "16.8 kn at closest approach against an under-way median of 16.9 kn",
+        "type_prior": "vessel type cargo"
+      },
+      "weight_live": 0.7,
+      "components_available": 5,
+      "components_total": 7,
+      "closest_km": 9.25,
+      "closest_time": "2023-03-17T08:58:59Z",
+      "grid_probability": 0.172,
+      "heading_consistent": false,
+      "ais_gap_minutes": 23.1,
+      "edge_truncated": false,
+      "below_score_floor": false,
+      "reasons": [
+        "on the edge of the reconstructed origin during the release window"
+      ]
+    }
+  ],
   "dark_vessels": [],
   "infrastructure": [],
   "excluded": [
     {
-      "mmsi": "248264000",
-      "name": "TUGELA",
-      "closest_km": 7.57,
-      "reason": "never reached the high-probability region (peak grid probability 0.19), and broadcast continuously while under way"
+      "mmsi": "210007000",
+      "name": "AURORA SB",
+      "closest_km": 7.68,
+      "reason": "never reached the high-probability region (peak grid probability 0.01), and broadcast continuously while under way"
     },
     {
-      "mmsi": "212656000",
-      "name": "PANAGIA THALASSINI",
-      "closest_km": 13.36,
-      "reason": "plausible candidate \u2014 score 0.35 on 5 of 7 components, peak grid probability 0.43 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
+      "mmsi": "338221000",
+      "name": "OVERSEAS BOSTON",
+      "closest_km": 18.04,
+      "reason": "199 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 18.0 km from the peak, at zero grid probability throughout"
     },
     {
-      "mmsi": "636016487",
-      "name": "HORIZON",
-      "closest_km": 6.84,
-      "reason": "never reached the high-probability region (peak grid probability 0.18), and broadcast continuously while under way"
+      "mmsi": "367008770",
+      "name": "NAVAJO",
+      "closest_km": 27.04,
+      "reason": "246 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 27.0 km from the peak, at zero grid probability throughout"
     }
   ],
-  "abstained": true,
-  "abstain_reason": "the top two vessels score within a few percent of each other and cannot be separated on this evidence"
+  "abstained": false,
+  "abstain_reason": null,
+  "ranking_confidence": {
+    "level": "high",
+    "separation": 0.452,
+    "basis": [
+      "proximity",
+      "slowdown",
+      "temporality",
+      "type_prior"
+    ],
+    "weight_live": 0.55,
+    "note": "the leading candidate is 45.2 % clear of the next on 4 of 7 components"
+  }
 }

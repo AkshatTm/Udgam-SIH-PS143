@@ -601,7 +601,15 @@ def confidence_of(plausible, top, n_plausible):
         s0, s1 = plausible[0]["score"], plausible[1]["score"]
         sep = (s0 - s1) / max(s0, 1e-9)
     live = top[0].get("weight_live") or 0.0
-    basis = sorted(k for k, c in top[0]["components"].items() if c.applicable)
+    # The INTERSECTION across every NAMED suspect, not just the leader. gate_source_basis
+    # already equalises applicability across the SCORED set when the gap is source-determined
+    # (D48), but a per-vessel D9 null (a moored vessel's legitimate gap=null) is real evidence
+    # and survives that gate on purpose -- so top[0] can still be measured on a component a
+    # lower-ranked suspect was not. "basis" claims "what every scored candidate was measured
+    # on"; computing it from one candidate broke that claim on case-huntington-2021, where the
+    # leader had `gap` applicable and suspect #2 did not.
+    basis = sorted(set.intersection(
+        *[{k for k, c in s_["components"].items() if c.applicable} for s_ in top]))
 
     if n_plausible > CROWDED_PLAUSIBLE_VESSELS:
         level = "indicative"

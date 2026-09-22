@@ -1,17 +1,17 @@
 {
   "funnel": {
-    "in_region": 596,
-    "in_window": 514,
+    "in_region": 686,
+    "in_window": 578,
     "plausible": 7,
     "scored": 3,
-    "dropped_short_track": 12,
+    "dropped_short_track": 42,
     "dropped_non_vessel": 0
   },
   "suspects": [
     {
       "source_type": "vessel",
       "mmsi": "368117160",
-      "name": "GOOD JU JU",
+      "name": "GOOD JUJU",
       "vessel_type": "other",
       "score": 0.58,
       "components": {
@@ -41,6 +41,7 @@
       "heading_consistent": true,
       "ais_gap_minutes": 15.9,
       "edge_truncated": false,
+      "below_score_floor": false,
       "reasons": [
         "inside the high-probability region of the reconstructed origin during the release window",
         "other on a course consistent with the origin"
@@ -66,7 +67,7 @@
         "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
         "temporality": "closest approach 0.6 h from the centre of the release window",
         "trajectory": "on approach 8 km out, course 165 deg against 127 deg toward the origin (39 deg off)",
-        "gap": "237-minute silence begins on the search-box boundary \u2014 the vessel left the search area and returned, which is not a transponder gap",
+        "gap": "175-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
         "slowdown": "9.8 kn at closest approach against an under-way median of 9.8 kn",
         "type_prior": "vessel type cargo"
       },
@@ -77,8 +78,9 @@
       "closest_time": "2021-10-01T19:28:51Z",
       "grid_probability": 0.276,
       "heading_consistent": true,
-      "ais_gap_minutes": 237.0,
+      "ais_gap_minutes": 175.3,
       "edge_truncated": false,
+      "below_score_floor": false,
       "reasons": [
         "on the edge of the reconstructed origin during the release window",
         "cargo on a course consistent with the origin"
@@ -87,7 +89,7 @@
     {
       "source_type": "vessel",
       "mmsi": "367492920",
-      "name": "KENNETH CARL",
+      "name": "WYATT M",
       "vessel_type": "other",
       "score": 0.415,
       "components": {
@@ -117,6 +119,7 @@
       "heading_consistent": true,
       "ais_gap_minutes": 1.5,
       "edge_truncated": false,
+      "below_score_floor": false,
       "reasons": [
         "on the edge of the reconstructed origin during the release window",
         "other on a course consistent with the origin",
@@ -128,24 +131,37 @@
   "infrastructure": [],
   "excluded": [
     {
-      "mmsi": "338181167",
-      "name": "BUCKET LIST",
-      "closest_km": 2.16,
-      "reason": "scored 0.41 against 0.58 for the leading candidate on the same 5 components -- considered and ranked below the top 3, not excluded"
+      "mmsi": "368014440",
+      "name": "MONTE CARLO",
+      "closest_km": 8.33,
+      "reason": "scored 0.27 against 0.58 for the leading candidate on the same 5 components -- considered and ranked below the top 3, not excluded"
     },
     {
       "mmsi": "338120738",
       "name": "PER AMORE",
       "closest_km": 12.61,
-      "reason": "scored 0.38 against 0.58 for the leading candidate on the same 6 components -- considered and ranked below the top 3, not excluded"
+      "reason": "scored 0.23 against 0.58 for the leading candidate on the same 5 components -- considered and ranked below the top 3, not excluded"
     },
     {
-      "mmsi": "368014440",
-      "name": "MONTE CARLO",
-      "closest_km": 8.33,
-      "reason": "scored 0.22 against 0.58 for the leading candidate on the same 6 components -- considered and ranked below the top 3, not excluded"
+      "mmsi": "338181167",
+      "name": "BUCKET LIST",
+      "closest_km": 2.16,
+      "reason": "scored 0.22 against 0.58 for the leading candidate on the same 4 components -- considered and ranked below the top 3, not excluded"
     }
   ],
   "abstained": false,
-  "abstain_reason": null
+  "abstain_reason": null,
+  "ranking_confidence": {
+    "level": "high",
+    "separation": 0.1431,
+    "basis": [
+      "proximity",
+      "slowdown",
+      "temporality",
+      "trajectory",
+      "type_prior"
+    ],
+    "weight_live": 0.85,
+    "note": "the leading candidate is 14.3 % clear of the next on 5 of 7 components"
+  }
 }

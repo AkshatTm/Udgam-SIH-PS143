@@ -26,16 +26,20 @@
     "source_url": "https://www.ntsb.gov/investigations/AccidentReports/Reports/MIR2401.pdf",
     "source_type": "official_investigation",
     "volume_reported": "588 barrels (~24,700 gallons)",
-    "caveat": "The anchor strikes preceded the oil release by ~8-9 months. No vessel was transiting or the proximate source at detection time (2 Oct 2021). The source at detection time is fixed infrastructure \u2014 the pipeline itself. MIR-24-01's casualty fact table gives the location as 33\u00b034.20' N, 118\u00b07.26' W, 4.75 nm off Huntington Beach. The ~33.66 N figure that circulated earlier was not the NTSB coordinate."
+    "caveat": "The anchor strike preceded the release by eight months -- no vessel was the proximate source at detection time. UDGAM's own infrastructure scorer does not currently name the pipeline: a fixed-source module requires a declared candidate structure and a proximity floor calibrated to the origin cloud's radius, and this case's pipeline candidate falls just under that floor after the age-engine re-run widened the cloud. A dedicated pipeline/oil-well map layer is planned as a separate phase; until it lands, this case is scored purely on transiting vessels, which is the wrong question for it."
   },
   "udgam_result": {
-    "origin_summary": "Origin cloud centred at 33.5945\u00b0 N, 118.0519\u00b0 W; half the ensemble lands within 1.35 km and nine in ten within 2.46 km. Release window 2021-10-01T17:41:51Z to 2021-10-01T19:58:21Z (convergence). Stage 3 funnel 106 \u2192 75 \u2192 5 \u2192 0. Abstained: the top two vessels score within a few percent of each other and cannot be separated on this evidence",
-    "top_suspects": [],
-    "abstained": true
+    "origin_summary": "Origin cloud centred at 33.5328\u00b0 N, 118.1443\u00b0 W; half the ensemble lands within 3.8 km and nine in ten within 7.1 km. Release window 2021-10-01T17:41:51Z to 2021-10-01T19:58:21Z (convergence). Stage 3 funnel 686 \u2192 578 \u2192 7 \u2192 3.",
+    "top_suspects": [
+      "368117160",
+      "372914000",
+      "367492920"
+    ],
+    "abstained": false
   },
   "assessment": {
-    "verdict": "partial",
-    "explanation": "Partial in both directions, and written down in advance (D38). NTSB concluded that no transiting vessel was the proximate source in October 2021: the source was the pipeline itself, cracked eight months earlier by two dragging anchors. UDGAM agreed with the half it could reach \u2014 106 vessels in the box, 75 in the window, 5 plausible, then an abstention rather than a name, because the top two scored 0.73 and 0.73 and could not be separated on this evidence. Naming either would have been wrong, and the system declined. It did not reach the other half. meta.json declares the San Pedro Bay Pipeline at NTSB's casualty coordinate, and the infrastructure module scored it about 0.006, far below the 0.25 floor, because our reconstructed origin peak sits 6.74 km from that coordinate with an r90 of 2.46 km and a grid probability of 0.0000 there. The origin is a confident cloud in the wrong place, and the precision is real while the accuracy is not. MSC DANIT and Beijing appear in neither our release-window nor our scene-time extract, which is correct: they were not in these waters at detection time, and no system could name them from this scene alone.",
-    "what_would_have_helped": "An origin that reached the pipeline. 6.74 km of displacement with an r90 of 2.46 km is a precision the result does not earn, and the likeliest cause is the current field: this is a nearshore case with a 0.38 wind share, where HYCOM's 0.08\u00b0 cells and the unresolved tidal component matter most. A higher-resolution nearshore current field, or assimilating the observed slick shape into the rewind rather than only seeding it, is what closes that gap. Second, a chronic-versus-acute classifier: the evidence for a fixed source was on the screen \u2014 a slick anchored in a platform field, no vessel able to explain it \u2014 and the system had no way to say 'this looks like infrastructure' out loud, which is what NTSB found."
+    "verdict": "miss",
+    "explanation": "UDGAM names three transiting vessels (GOOD JU JU, MORNING CONDUCTOR, WYATT M) at HIGH confidence -- and all three are the wrong answer. The true cause is fixed infrastructure: the San Pedro Bay Pipeline, struck by an anchor eight months before the release NTSB documents. This is stated plainly rather than softened, because the honest reading of the evidence the scorer produced is that it named ships on a case whose source was never a ship. Naming a transiting vessel here is the worst outcome this stage can produce -- a real hull accused of something a federal investigation already attributed elsewhere.",
+    "what_would_have_helped": "The infrastructure/pipeline map layer, next phase: a declared candidate structure and a proximity rule that is not silently miscalibrated when the origin cloud's radius changes. Until that lands, this case should be read as 'vessel scoring is the wrong tool here', not as a near-miss on the vessel list."
   }
 }

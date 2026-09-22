@@ -2,34 +2,159 @@
   "funnel": {
     "in_region": 111,
     "in_window": 102,
-    "plausible": 21,
-    "scored": 0,
-    "dropped_short_track": 3,
-    "dropped_non_vessel": 0
+    "plausible": 10,
+    "scored": 3,
+    "dropped_short_track": 2,
+    "dropped_non_vessel": 1
   },
-  "suspects": [],
+  "suspects": [
+    {
+      "source_type": "vessel",
+      "mmsi": "419476000",
+      "name": "AMBUJA SHAKTI",
+      "vessel_type": "cargo",
+      "score": 0.617,
+      "components": {
+        "proximity": 0.553,
+        "parity": null,
+        "temporality": null,
+        "trajectory": null,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
+        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "gap": "60-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
+        "slowdown": "vessel was never meaningfully under way, so there is no cruising speed to have slowed down from",
+        "type_prior": "vessel type cargo"
+      },
+      "weight_live": 0.35,
+      "components_available": 2,
+      "components_total": 7,
+      "closest_km": 2.35,
+      "closest_time": "2024-02-20T07:00:00Z",
+      "grid_probability": 0.553,
+      "heading_consistent": false,
+      "ais_gap_minutes": 60.0,
+      "edge_truncated": false,
+      "below_score_floor": false,
+      "reasons": [
+        "on the edge of the reconstructed origin during the release window"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "419012000",
+      "name": "AMBUJA SHIKHAR",
+      "vessel_type": "cargo",
+      "score": 0.52,
+      "components": {
+        "proximity": 0.44,
+        "parity": null,
+        "temporality": null,
+        "trajectory": null,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
+        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "gap": "120-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
+        "slowdown": "vessel was never meaningfully under way, so there is no cruising speed to have slowed down from",
+        "type_prior": "vessel type cargo"
+      },
+      "weight_live": 0.35,
+      "components_available": 2,
+      "components_total": 7,
+      "closest_km": 3.76,
+      "closest_time": "2024-02-20T23:00:00Z",
+      "grid_probability": 0.44,
+      "heading_consistent": false,
+      "ais_gap_minutes": 120.0,
+      "edge_truncated": false,
+      "below_score_floor": false,
+      "reasons": [
+        "on the edge of the reconstructed origin during the release window"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "419475000",
+      "name": "AMBUJA KEERTI",
+      "vessel_type": "cargo",
+      "score": 0.507,
+      "components": {
+        "proximity": 0.424,
+        "parity": null,
+        "temporality": null,
+        "trajectory": null,
+        "gap": null,
+        "slowdown": null,
+        "type_prior": 1.0
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "origin time window is a search bracket, not a measured release time (time_window_method='bounded')",
+        "trajectory": "course over ground unavailable on approach (AIS sentinel)",
+        "gap": "60-minute silence, but the vessel was not under way on both sides of it \u2014 moored, not dark",
+        "slowdown": "vessel was never meaningfully under way, so there is no cruising speed to have slowed down from",
+        "type_prior": "vessel type cargo"
+      },
+      "weight_live": 0.35,
+      "components_available": 2,
+      "components_total": 7,
+      "closest_km": 9.14,
+      "closest_time": "2024-02-22T01:00:00Z",
+      "grid_probability": 0.424,
+      "heading_consistent": false,
+      "ais_gap_minutes": 60.0,
+      "edge_truncated": false,
+      "below_score_floor": false,
+      "reasons": [
+        "on the edge of the reconstructed origin during the release window"
+      ]
+    }
+  ],
   "dark_vessels": [],
   "infrastructure": [],
   "excluded": [
     {
-      "mmsi": "419012000",
-      "name": "AMBUJA SHIKHAR",
-      "closest_km": 0.21,
-      "reason": "plausible candidate \u2014 score 1.00 on 2 of 7 components, peak grid probability 1.00 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
+      "mmsi": "419001055",
+      "name": "SAVYA",
+      "closest_km": 5.37,
+      "reason": "scored 0.43 against 0.62 for the leading candidate on the same 2 components -- considered and ranked below the top 3, not excluded"
     },
     {
-      "mmsi": "219216000",
-      "name": "MAERSK BOSTON",
-      "closest_km": 0.78,
-      "reason": "plausible candidate \u2014 score 1.00 on 2 of 7 components, peak grid probability 1.00 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
+      "mmsi": "419013000",
+      "name": "AMBUJA VAIBHAVA",
+      "closest_km": 5.73,
+      "reason": "scored 0.42 against 0.62 for the leading candidate on the same 2 components -- considered and ranked below the top 3, not excluded"
     },
     {
-      "mmsi": "419476000",
-      "name": "AMBUJA SHAKTI",
-      "closest_km": 2.19,
-      "reason": "plausible candidate \u2014 score 0.97 on 2 of 7 components, peak grid probability 0.97 \u2014 not named because the top two vessels score within a few percent of each other and cannot be separated on this evidence"
+      "mmsi": "372747000",
+      "name": "CYGNUS LEADER",
+      "closest_km": 9.93,
+      "reason": "scored 0.35 against 0.62 for the leading candidate on the same 2 components -- considered and ranked below the top 3, not excluded"
     }
   ],
-  "abstained": true,
-  "abstain_reason": "the top two vessels score within a few percent of each other and cannot be separated on this evidence"
+  "abstained": false,
+  "abstain_reason": null,
+  "ranking_confidence": {
+    "level": "low",
+    "separation": 0.1572,
+    "basis": [
+      "proximity",
+      "type_prior"
+    ],
+    "weight_live": 0.35,
+    "note": "the score rests on 2 of 7 components (0.35 of the available weight) -- ordered, but not a confident identification"
+  }
 }

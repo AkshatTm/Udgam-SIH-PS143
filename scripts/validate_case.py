@@ -1200,15 +1200,19 @@ def check_verification(d):
             f"disagreeing with itself")
     fn = suspects.get("funnel") or {}
     if fn:
-        # ASCII: the validator prints to a Windows console under cp1252, where a U+2192
-        # raises UnicodeEncodeError while REPORTING an error -- the crash replaces the
-        # message it was trying to show.
-        live = (f"{fn.get('in_region')} -> {fn.get('in_window')} -> "
-                f"{fn.get('plausible')} -> {fn.get('scored')}")
+        # scaffold_verification.py writes the funnel into origin_summary with a Unicode arrow
+        # (U+2192) -- that is what must be matched here, an ASCII arrow never appears in the
+        # file. The PRINTED error below is ASCII only because this validator can run under a
+        # Windows console using cp1252, where a raw U+2192 raises UnicodeEncodeError while
+        # REPORTING the error -- a crash that would replace the message it was trying to show.
+        live_unicode = (f"{fn.get('in_region')} → {fn.get('in_window')} → "
+                       f"{fn.get('plausible')} → {fn.get('scored')}")
+        live_ascii = (f"{fn.get('in_region')} -> {fn.get('in_window')} -> "
+                     f"{fn.get('plausible')} -> {fn.get('scored')}")
         summary = str(nr.get("origin_summary") or "")
-        if "funnel" in summary.lower() and live not in summary:
+        if "funnel" in summary.lower() and live_unicode not in summary:
             err(f"verification.json/udgam_result/origin_summary quotes a funnel that is not "
-                f"the one in suspects.json ({live}) — regenerate it rather than editing it")
+                f"the one in suspects.json ({live_ascii}) — regenerate it rather than editing it")
 
 
 def check_index(cases_root):

@@ -4,8 +4,8 @@
     "in_window": 2,
     "plausible": 0,
     "scored": 0,
-    "dropped_short_track": 1,
-    "dropped_non_vessel": 10
+    "dropped_short_track": 0,
+    "dropped_non_vessel": 11
   },
   "suspects": [],
   "dark_vessels": [
@@ -31,16 +31,17 @@
     {
       "mmsi": "367415050",
       "name": "INTANGIBLE",
-      "closest_km": 13.66,
-      "reason": "11 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 13.7 km from the peak, at zero grid probability throughout"
+      "closest_km": 13.84,
+      "reason": "7 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 13.8 km from the peak, at zero grid probability throughout"
     },
     {
       "mmsi": "367150410",
       "name": "MAJOR",
-      "closest_km": 22.27,
-      "reason": "8 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 22.3 km from the peak, at zero grid probability throughout"
+      "closest_km": 22.41,
+      "reason": "5 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 22.4 km from the peak, at zero grid probability throughout"
     }
   ],
   "abstained": true,
-  "abstain_reason": "no vessel entered the reconstructed origin during the window"
+  "abstain_reason": "no vessel entered the reconstructed origin during the window",
+  "ranking_confidence": null
 }
