@@ -14,11 +14,32 @@ import { hoursBackFromNorm, longestSpanHours, normFromHoursBack } from "./timest
 // one knob — raise it for a faster scrub, lower it to linger. Retune at the Monday checkpoint.
 export const PLAYBACK_STEPS_PER_SEC = 8;
 
-// The one-time Trace arrival rewind runs faster so it reads as a quick "here is where it
-// came from" flourish rather than a slow scrub the judge has to wait out: 24 steps/s puts
-// the 96-step / 24-hour case-000 rewind at ~4 s. Any manual play afterwards uses
-// PLAYBACK_STEPS_PER_SEC. Selected via the store's `autoPlaying` flag, set by initTrace().
-export const AUTOPLAY_STEPS_PER_SEC = 24;
+// The one-time Trace arrival rewind. It used to be a fixed 24 steps/s, which worked only while
+// every bundle was the same 97 frames long.
+//
+// SINCE THE REWIND RESTS ON THE MEDIAN (D56) THE ARRIVAL IS ONLY A HANDFUL OF FRAMES — seven on
+// Jacksonville (1.845 h at 15 min), five on Gulf of Alaska. At 24 steps/s that is 0.3 s: the
+// cloud flicks and stops, which reads as a glitch rather than a rewind, and it did so on every
+// case at once. So the arrival is paced by DURATION instead: however many frames a case's
+// measured age works out to, travelling them takes about the same two and a half seconds.
+//
+// A low steps/s is not a stutter — MapView sets the particle layer's getPosition transition to
+// 1000/stepsPerSec, so deck.gl tweens the GPU buffer between frames and a 3-steps/s rewind is
+// smooth, just unhurried. The floor exists so a one-frame case still animates at all.
+export const ARRIVAL_DURATION_MS = 2600;
+const ARRIVAL_MIN_STEPS_PER_SEC = 2;
+const ARRIVAL_MAX_STEPS_PER_SEC = 24;
+
+/** Steps per second that walks `steps` frames in ARRIVAL_DURATION_MS. Shared with MapView so the
+ *  position transition and the clock that drives it are never tuned apart. */
+export function arrivalStepsPerSec(steps: number): number {
+  if (!(steps > 0)) return ARRIVAL_MAX_STEPS_PER_SEC;
+  const rate = steps / (ARRIVAL_DURATION_MS / 1000);
+  return Math.min(ARRIVAL_MAX_STEPS_PER_SEC, Math.max(ARRIVAL_MIN_STEPS_PER_SEC, rate));
+}
+
+/** Back-compat export: the ceiling the arrival is clamped to. */
+export const AUTOPLAY_STEPS_PER_SEC = ARRIVAL_MAX_STEPS_PER_SEC;
 
 // Fallback cadence when no bundle has declared one yet. Every bundle in the library integrates
 // at 15 min and, since D56, publishes at 15 min too.
@@ -60,10 +81,12 @@ export function usePlayback(): void {
     // flips together with `playing`, so the effect already re-runs when it matters and the
     // rAF loop never restarts mid-pass.
     const autoPlaying = useAppStore.getState().autoPlaying;
-    const stepsPerSec = autoPlaying ? AUTOPLAY_STEPS_PER_SEC : PLAYBACK_STEPS_PER_SEC;
     const stopAt = autoPlaying ? restHours : spanHours;
-    const stepMs = 1000 / stepsPerSec;
     const stepHours = stepMinutes / 60;
+    const stepsPerSec = autoPlaying
+      ? arrivalStepsPerSec(stopAt / stepHours)
+      : PLAYBACK_STEPS_PER_SEC;
+    const stepMs = 1000 / stepsPerSec;
     let raf = 0;
     let last = performance.now();
     let acc = 0;

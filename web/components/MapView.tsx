@@ -15,7 +15,7 @@
 //     no aggregation at all — a scrub only updates the layer's opacity uniform.
 // The timestep only ever updates deck layers, never the map.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AttributionControl,
   Map as MlMap,
@@ -32,15 +32,13 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import { BitmapLayer, IconLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { PathStyleExtension, type PathStyleExtensionProps } from "@deck.gl/extensions";
 import { RUN_DURATION_MS, useAppStore } from "@/lib/store";
-import type { ParticleBundle } from "@/lib/particles";
-import type { OriginBundle } from "@/lib/origin";
 import {
   bundleSpanHours,
   frameForHoursBack,
   hoursBackFromNorm,
   longestSpanHours,
 } from "@/lib/timestep";
-import { AUTOPLAY_STEPS_PER_SEC, PLAYBACK_STEPS_PER_SEC } from "@/lib/usePlayback";
+import { arrivalStepsPerSec, PLAYBACK_STEPS_PER_SEC } from "@/lib/usePlayback";
 import {
   buildOriginImage,
   buildOriginRadiusRings,
@@ -474,6 +472,30 @@ export default function MapView() {
     [particles, groupBundles],
   );
   const hoursBack = hoursBackFromNorm(tNorm, spanHours);
+
+  // QUANTISE BEFORE ANYTHING DOWNSTREAM TOUCHES IT. `hoursBack` is continuous — the slider has
+  // step 0.005, so a single drag emits hundreds of distinct values — but what the layers
+  // actually consume is an integer frame per group. Keying the layer memos on the float rebuilt
+  // every ScatterplotLayer, re-uploaded the origin BitmapLayer's texture and restarted the
+  // rings' 900 ms getPath transition on EVERY pointer event: measured at ~1 s of work per scrub
+  // step on Jacksonville, which froze the renderer outright over a full drag. The string key is
+  // what makes `groupFrames` referentially stable between frame boundaries, so the memos below
+  // recompute at most n_steps times across a whole scrub instead of once per pointer move.
+  const groupFrameKey = useMemo(
+    () =>
+      groupBundles
+        .map((gb) =>
+          gb.particles
+            ? frameForHoursBack(hoursBack, gb.particles.timestepMinutes, gb.particles.nSteps)
+            : -1,
+        )
+        .join(","),
+    [groupBundles, hoursBack],
+  );
+  const groupFrames = useMemo(
+    () => (groupFrameKey === "" ? [] : groupFrameKey.split(",").map(Number)),
+    [groupFrameKey],
+  );
   // Only used to decide whether/how fast the particle layer's getPosition transition runs below
   // — a manual drag must snap 1:1 to the dragged-to frame (transitions off) or the cloud would
   // lag visibly behind the thumb.
@@ -485,6 +507,15 @@ export default function MapView() {
   // memoised on the bundle identity — never rebuilt on a scrub, and origin.json is never
   // re-fetched.
   const origin = useAppStore((s) => s.origin);
+
+  // How many frames the arrival rewind travels — the same quantity usePlayback paces over
+  // ARRIVAL_DURATION_MS, recomputed here so the position transition matches its cadence.
+  const arrivalSteps = useMemo(() => {
+    const stepHours = (particles?.timestepMinutes ?? 15) / 60;
+    const median = origin?.agePosterior?.median ?? null;
+    const stop = median !== null && median > 0 ? Math.min(median, spanHours) : spanHours;
+    return stepHours > 0 ? stop / stepHours : 0;
+  }, [particles, origin, spanHours]);
   const originVisible = useAppStore((s) => s.layers.origin);
   // D46 — one image/ring-set per spill group, each tinted with that group's own palette
   // (groupColor(i).originRgb). Memoised on `groupBundles` alone (never on opacity/scrub) so the
@@ -1062,21 +1093,35 @@ export default function MapView() {
   // (rewind 0) there and would otherwise make "Origin" a no-op until the user drags it.
   // Per group, because each group's rewind is a different length: a fade keyed to the primary's
   // frame count would hold a shorter group's cloud dim long after that group was fully rewound.
-  const originOpacityFor = useCallback(
-    (bundle: ParticleBundle | null, own: OriginBundle | null) => {
-      if (!originVisible) return 0;
-      if (activeStage !== "trace") return 1;
-      const rewind = originRewindFractionAtAge(
-        hoursBack,
-        own?.agePosterior?.median ?? null,
-        bundleSpanHours(bundle?.timestepMinutes ?? 0, bundle?.nSteps ?? 0),
-      );
-      return (
-        ORIGIN_OPACITY_FLOOR +
-        (1 - ORIGIN_OPACITY_FLOOR) * smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind)
-      );
-    },
-    [originVisible, activeStage, hoursBack],
+  // Read off the same integer frame the particles are drawn at, so the cloud and the cloud's
+  // fade can never disagree, and so this changes at most n_steps times across a scrub.
+  const originOpacityKey = useMemo(
+    () =>
+      groupBundles
+        .map((gb, i) => {
+          if (!originVisible) return 0;
+          if (activeStage !== "trace") return 1;
+          const p = gb.particles;
+          const frame = groupFrames[i] ?? 0;
+          const hours = p ? (frame * p.timestepMinutes) / 60 : 0;
+          const rewind = originRewindFractionAtAge(
+            hours,
+            gb.origin?.agePosterior?.median ?? null,
+            bundleSpanHours(p?.timestepMinutes ?? 0, p?.nSteps ?? 0),
+          );
+          return (
+            ORIGIN_OPACITY_FLOOR +
+            (1 - ORIGIN_OPACITY_FLOOR) *
+              smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind)
+          );
+        })
+        .map((o) => o.toFixed(4))
+        .join(","),
+    [groupBundles, groupFrames, originVisible, activeStage],
+  );
+  const originOpacities = useMemo(
+    () => (originOpacityKey === "" ? [] : originOpacityKey.split(",").map(Number)),
+    [originOpacityKey],
   );
 
   // Origin cloud + 50/90 % rings — the backdrop the particles rewind into, drawn UNDERNEATH
@@ -1099,7 +1144,7 @@ export default function MapView() {
       const image = originImages[i];
       if (!gb.origin || !image) return;
       const palette = groupColor(i);
-      const groupOpacity = originOpacityFor(gb.particles, gb.origin);
+      const groupOpacity = originOpacities[i] ?? 0;
       list.push(
         new BitmapLayer({
           id: `origin-${gb.id}`,
@@ -1143,7 +1188,7 @@ export default function MapView() {
       );
     });
     return list;
-  }, [groupBundles, originImages, originGroupRings, originOpacityFor, drawnGroupIds]);
+  }, [groupBundles, originImages, originGroupRings, originOpacities, drawnGroupIds]);
 
   // Forward cone + centroid track. Ring/track geometry is built once per bundle; what changes on
   // a scrub is only which prefix of that geometry is visible (`visibleForwardRings` /
@@ -1214,7 +1259,12 @@ export default function MapView() {
     // of "feels alive". deck.gl interpolates the GPU position buffer itself — no extra JS work
     // in this component's render path either way. Shared across every group so they all step
     // (and ease) in lockstep.
-    const stepsPerSec = autoPlaying ? AUTOPLAY_STEPS_PER_SEC : PLAYBACK_STEPS_PER_SEC;
+    // Matched to the clock in usePlayback, including the arrival's duration-based pacing —
+    // a fixed transition against a variable step rate would either lag behind the playhead or
+    // arrive early and sit still.
+    const stepsPerSec = autoPlaying
+      ? arrivalStepsPerSec(arrivalSteps)
+      : PLAYBACK_STEPS_PER_SEC;
     const transitionMs = playing ? Math.round(1000 / stepsPerSec) : 0;
     const layers: ScatterplotLayer[] = [];
     groupBundles.forEach((gb, i) => {
@@ -1222,10 +1272,7 @@ export default function MapView() {
       // This group's own frame at the shared wall-clock hour, clamped to its last frame. No
       // `?? frames[0]` fallback: that used to teleport a short group's whole cloud back onto
       // the slick the moment the primary out-ran it.
-      const frame =
-        gb.particles.frames[
-          frameForHoursBack(hoursBack, gb.particles.timestepMinutes, gb.particles.nSteps)
-        ];
+      const frame = gb.particles.frames[groupFrames[i] ?? 0];
       if (!frame) return;
       const palette = groupColor(i);
       layers.push(
@@ -1251,7 +1298,7 @@ export default function MapView() {
       );
     });
     return layers;
-  }, [groupBundles, particlesVisible, hoursBack, playing, autoPlaying]);
+  }, [groupBundles, particlesVisible, groupFrames, playing, autoPlaying, arrivalSteps]);
 
   // Push the composed list into the deck overlay. Order is bottom→top: origin bitmap, rings,
   // forward cone + centroid track, vessel tracks, particles, dark-vessel markers,
