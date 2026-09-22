@@ -142,6 +142,10 @@ def to_records(rows, start, end):
             "name": (r.get("shipName") or "").strip(),
             "type_code": None,
             "vessel_type": GFW_TYPE.get((r.get("vesselType") or "").upper(), "other"),
+            # Per-ROW provenance, not per-file. A merged pool puts NOAA fixes and GFW cells in
+            # the SAME track, and component_gap has to ask which rows bound a given silence --
+            # a per-track flag cannot answer that.
+            "source": "gfw",
         })
     out.sort(key=lambda x: (x["mmsi"], x["ts"]))
     return out
@@ -153,13 +157,14 @@ def write_parquet(records, out_path):
     con.execute("""
         CREATE TABLE ais (mmsi VARCHAR, ts TIMESTAMPTZ, lon DOUBLE, lat DOUBLE,
                           sog DOUBLE, cog DOUBLE, heading DOUBLE, name VARCHAR,
-                          type_code INTEGER, vessel_type VARCHAR)
+                          type_code INTEGER, vessel_type VARCHAR, source VARCHAR)
     """)
     if records:
         con.executemany(
-            "INSERT INTO ais VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO ais VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             [(r["mmsi"], r["ts"], r["lon"], r["lat"], r["sog"], r["cog"], r["heading"],
-              r["name"], r["type_code"], r["vessel_type"]) for r in records])
+              r["name"], r["type_code"], r["vessel_type"], r.get("source", "gfw"))
+             for r in records])
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     con.execute("COPY ais TO ? (FORMAT PARQUET)", [str(out_path)])
     con.close()

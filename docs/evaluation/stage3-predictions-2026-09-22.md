@@ -124,3 +124,74 @@ the ranking.
 
 Unchanged (case deferred to the infrastructure-layer phase). Confirm the merge does not disturb
 it.
+
+---
+
+# RESULTS, recorded against the predictions above
+
+## P1 — the mechanism was right, the route was not
+
+**Predicted:** STENA's 142-minute gap is a coverage hole, an explicit gate nulls it, and MENUETT
+takes #1 at ~0.643 against ~0.589.
+
+**Measured:** MENUETT takes #1 at **0.536** against STENA **0.520**, `LOW` confidence, 3.0 %
+separation. The rank flip happened. The arithmetic did not, and neither did the mechanism I
+named.
+
+What actually occurred, in order:
+
+1. Merging the hourly rows into the dense track **split the 142-minute silence structurally** —
+   GFW saw the vessel at 17:00, 18:00 and 19:00, so the longest remaining silence in the window
+   is 67 minutes, not 142. The explicit coverage-hole gate I wrote for this never fired on
+   Jacksonville, because there was no longer a single silence for it to catch.
+2. That 67-minute remainder is now **bounded by hourly rows, which publish no SOG**. The
+   under-way test read `sog is None` and fell through to *"not under way on both sides —
+   moored, not dark"*.
+
+Step 2 was a bug of exactly the kind this work exists to find: a **missing field being converted
+into an exoneration**. It also went the wrong way twice over — it left STENA scoring 0.520 on
+`weight_live` 0.65 against MENUETT's 0.435 on 0.80, i.e. the higher score resting on *less*
+evidence, which is the comparability failure `gate_source_basis` was written to prevent and
+could not see, because a "moored" null is a legitimate per-vessel D9 fact and is not
+source-gated.
+
+A silence bounded by a row that carries no speed is now `not_applicable` and **source-gated**,
+with the reason stated. That is what moved the ranking.
+
+**Declared, in the terms the owner set:** this is a defect fix with a target-shaped side effect.
+The defect is real and was found by measurement, not by aiming — and the correction would have
+been written identically had the reference named STENA. But it must be said plainly that the
+route to it ran through a prediction that was wrong in its specifics, and that the final margin
+is 3.0 %, which the bundle itself now reports as `LOW` confidence rather than as an
+identification.
+
+**The caveat that belongs on the slide:** a 142-minute gap was never good evidence, and the old
+bundle's #1 rested on it. That is a defect we found in our own scorer.
+
+## P2 — confirmed, both halves
+
+AtoN filter: Gulf of Alaska `in_region` 14 unchanged, `dropped_non_vessel` **10**, `plausible`
+2 → 0, and the case now abstains on *"no vessel entered the reconstructed origin during the
+window"*. Eleven of its fourteen "vessels" were never vessels — five `941*` buoys plus six
+`100011xxx` receiver-telemetry records named `TRA.4-99%` and the like.
+
+The second-order effect, flagged in advance as uncertain, **happened**: the dark cross-check
+went from *"2 radar contacts, 2 matched to AIS, 0 listed"* to *"1 matched, 1 unmatched, 1 near
+the slick/origin, 1 listed"*. The buoys were what the radar contacts had been matching to. The
+dark vessel now surfaced sits **0.45 km** from the contact the reference names.
+
+## Not predicted, and worse than anything that was
+
+`suspects.json` was **not reproducible**. Three consecutive runs of case-mumbai-2023 over an
+unchanged parquet named three different pairs of real vessels at ranks 2 and 3 — LISA / MSC
+MADELEINE, then MSC MADELEINE / GENIUS ACE, then LISA / GENIUS ACE — all tied at exactly 0.781.
+`load_tracks` groups by MMSI in DuckDB, whose `GROUP BY` makes no ordering guarantee and
+parallelises, and Python's stable sort preserved that arbitrary order faithfully. Fixed by a
+total order ending in MMSI.
+
+## Also measured
+
+The merge itself nearly shipped broken: NOAA parquets predate the `source` column, so under
+`union_by_name` their rows returned `source = NULL`, matched neither archive, and **every dense
+row was dropped from the merged pool** while the hourly ones survived. Caught because STENA
+PROSPEROUS came back typed `other` instead of `tanker`.

@@ -252,7 +252,8 @@ def ingest(csv_paths, bbox, window, out_path, keep_cargo):
                 nullif(trim(VesselName), '')        AS name,
                 try_cast(VesselType AS INTEGER)     AS type_code,
                 {VESSEL_TYPE_SQL}                   AS vessel_type,
-                {"try_cast(Cargo AS INTEGER)" if keep_cargo else "NULL"} AS cargo_code
+                {"try_cast(Cargo AS INTEGER)" if keep_cargo else "NULL"} AS cargo_code,
+                'noaa'                              AS source
             FROM read_csv(?, header=true, union_by_name=true, ignore_errors=true,
                           types={{'MMSI': 'VARCHAR', 'VesselName': 'VARCHAR'}})
             WHERE {' AND '.join(where)}

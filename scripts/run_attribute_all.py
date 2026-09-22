@@ -127,7 +127,17 @@ def one_case(case_id, refresh, csv_dir):
             run([PY, ATTR / "ingest_gfw.py", "--bbox", *box, "--start", iso(t0 - half),
                  "--end", iso(t0 + half), "--allow-empty", "--out", scene_pq])
 
-    score = [PY, ATTR / "score.py", "--case", case_id, "--parquet", origin_pq,
+    # D48 -- the merged pool. On a dense-AIS case we ALSO pass the hourly presence extract,
+    # when one has been fetched. It adds almost no new candidates (measured: 5 / 1 / 90 on the
+    # three US cases, all of them tugs, buoy tenders, fishing boats and pleasure craft), and
+    # that is not what it is for. It is for telling a transponder gap apart from a receiver
+    # coverage hole: NOAA Marine Cadastre is a terrestrial network, and offshore a vessel can
+    # be transmitting normally and simply not be heard.
+    pool = [origin_pq]
+    gfw_pq = AIS / f"{name}_gfw.parquet"
+    if src == "noaa_dense" and gfw_pq.exists():
+        pool.append(gfw_pq)
+    score = [PY, ATTR / "score.py", "--case", case_id, "--parquet", *pool,
              "--scene-parquet", scene_pq]
     if case_id in EXTERNAL_SAR:
         sar = AIS / f"{name}_sar_contacts.json"

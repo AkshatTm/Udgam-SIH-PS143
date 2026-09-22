@@ -1200,8 +1200,11 @@ def check_verification(d):
             f"disagreeing with itself")
     fn = suspects.get("funnel") or {}
     if fn:
-        live = (f"{fn.get('in_region')} → {fn.get('in_window')} → "
-                f"{fn.get('plausible')} → {fn.get('scored')}")
+        # ASCII: the validator prints to a Windows console under cp1252, where a U+2192
+        # raises UnicodeEncodeError while REPORTING an error -- the crash replaces the
+        # message it was trying to show.
+        live = (f"{fn.get('in_region')} -> {fn.get('in_window')} -> "
+                f"{fn.get('plausible')} -> {fn.get('scored')}")
         summary = str(nr.get("origin_summary") or "")
         if "funnel" in summary.lower() and live not in summary:
             err(f"verification.json/udgam_result/origin_summary quotes a funnel that is not "

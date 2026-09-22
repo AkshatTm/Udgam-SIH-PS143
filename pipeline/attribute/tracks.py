@@ -65,9 +65,11 @@ def regime(ais_source):
 class Track:
     """One vessel's time-ordered path. Timestamps are tz-aware UTC."""
 
-    __slots__ = ("mmsi", "name", "vessel_type", "type_code", "ts", "lon", "lat", "sog", "cog")
+    __slots__ = ("mmsi", "name", "vessel_type", "type_code", "ts", "lon", "lat", "sog", "cog",
+                 "src")
 
-    def __init__(self, mmsi, name, vessel_type, type_code, ts, lon, lat, sog, cog):
+    def __init__(self, mmsi, name, vessel_type, type_code, ts, lon, lat, sog, cog,
+                 src=None):
         self.mmsi = mmsi
         self.name = name
         self.vessel_type = vessel_type
@@ -77,6 +79,42 @@ class Track:
         self.lat = lat
         self.sog = sog
         self.cog = cog
+        # Per-FIX provenance: "noaa" or "gfw", one per timestamp. A merged pool puts dense
+        # NOAA fixes and hourly GFW cells in the SAME track, and component_gap has to ask
+        # which rows bound a given silence -- a per-track flag cannot answer that.
+        # None means "provenance not recorded" -- an old bundle or a hand-built Track. That is
+        # not the same as "all NOAA", and assuming it would silently impose the 30-minute dense
+        # ceiling on hourly data.
+        self.src = list(src) if src is not None else None
+
+    @property
+    def sources(self):
+        return frozenset(self.src or ["noaa"])
+
+    @property
+    def source_label(self):
+        """What this ONE vessel was seen by. The case-level ais_source is the densest archive
+        queried; on a merged case it is not true of every candidate in it."""
+        srcs = self.sources
+        if srcs == {"noaa"}:
+            return "noaa_dense"
+        if srcs == {"gfw"}:
+            return "gfw_hourly"
+        return "mixed"
+
+    def source_rows(self):
+        src = self.src or []
+        return {"noaa": src.count("noaa"), "gfw": src.count("gfw")}
+
+    def interp_ceiling(self, a, b):
+        """Longest silence we may draw a position across, for the interval between fix `a`
+        and fix `b`. You may bridge two hourly cells; you may NOT bridge a 45-minute silence
+        between two dense fixes, because at 71-second reporting that silence is real."""
+        if self.src is None:
+            return float("inf")          # unlabelled: whatever the caller asked for stands
+        if a < len(self.src) and b < len(self.src)                 and self.src[a] == "noaa" and self.src[b] == "noaa":
+            return REGIME["noaa_dense"]["max_interp_gap_min"]
+        return REGIME["gfw_hourly"]["max_interp_gap_min"]
 
     def __len__(self):
         return len(self.ts)
@@ -119,6 +157,10 @@ class Track:
         if self.ts[i] == when:
             return (self.lon[i], self.lat[i])
         a, b = i - 1, i
+        # The ceiling is a property of the INTERVAL, not of the case. On a merged track the
+        # honest rule differs fix by fix, so take the stricter of what the caller asked for
+        # and what these two particular fixes allow.
+        max_gap_min = min(max_gap_min, self.interp_ceiling(a, b))
         span_s = (self.ts[b] - self.ts[a]).total_seconds()
         if span_s <= 0:
             return (self.lon[a], self.lat[a])   # duplicate timestamps: no interval to divide by
@@ -199,7 +241,8 @@ def non_vessel_reason(mmsi):
     return None
 
 
-def load_tracks(parquet_path, min_points=MIN_POINTS, diagnostics=False):
+def load_tracks(parquet_path, min_points=MIN_POINTS, diagnostics=False,
+                default_source="noaa"):
     """Parquet -> {mmsi: Track}. Sorted by time, short tracks dropped, non-vessels rejected.
 
     With `diagnostics=True` returns `(tracks, diag)` where diag counts what was dropped and
@@ -213,34 +256,82 @@ def load_tracks(parquet_path, min_points=MIN_POINTS, diagnostics=False):
     # ts comes back as epoch seconds, not datetimes: DuckDB's Python conversion of
     # TIMESTAMPTZ wants pytz, which is not in requirements.txt and is not worth adding.
     # Epoch -> datetime is also several times faster than parsing ISO strings.
-    rows = con.execute("""
+    paths = [str(parquet_path)] if isinstance(parquet_path, (str, Path)) else \
+        [str(x) for x in parquet_path]
+
+    # Older extracts predate the `source` column. Probe rather than assume, so a single-source
+    # parquet written before this change behaves exactly as it did.
+    cols = {r[0] for r in con.execute(
+        "DESCRIBE SELECT * FROM read_parquet(?, union_by_name=true)", [paths]).fetchall()}
+    # A file written before the column existed contributes NULL under union_by_name -- and a
+    # NULL matches neither 'noaa' nor 'gfw', which silently dropped EVERY dense row from the
+    # merged pool while leaving the hourly ones. coalesce is not cosmetic here.
+    has_src = "source" in cols
+    src_expr = (f"coalesce(source, '{default_source}')" if has_src
+                else f"'{default_source}'")
+
+    # NOAA WINS. A GFW row survives only for an (mmsi, hour) the dense archive did not cover.
+    # GFW positions are 0.01 deg cell centres (~1 km); dropping one into an hour NOAA already
+    # covers at 71 s would inject a kilometre of jitter into a dense track and corrupt
+    # max_gap_minutes and the under-way median for no gain. union_by_name is required: the two
+    # ingests do NOT write identical schemas (ingest.py carries an extra cargo_code column).
+    rows = con.execute(f"""
+        WITH r AS (
+            SELECT mmsi, ts, lon, lat, sog, cog, name, type_code, vessel_type,
+                   {src_expr} AS source, date_trunc('hour', ts) AS hr
+            FROM read_parquet(?, union_by_name=true)
+        ),
+        noaa_hours AS (SELECT DISTINCT mmsi, hr FROM r WHERE source = 'noaa'),
+        kept AS (
+            SELECT * FROM r
+            WHERE source = 'noaa'
+               OR NOT EXISTS (SELECT 1 FROM noaa_hours n
+                              WHERE n.mmsi = r.mmsi AND n.hr = r.hr)
+        )
         SELECT mmsi,
-               max(name)                          AS name,
-               any_value(vessel_type)             AS vessel_type,
-               max(type_code)                     AS type_code,
+               -- IDENTITY PREFERS THE DENSE ARCHIVE. GFW's presence layer types most hulls
+               -- "other"; NOAA carries the real AIS ship-type code. any_value() picked
+               -- arbitrarily between them, which silently retyped STENA PROSPEROUS from
+               -- tanker to other on the merged pool and moved its type_prior with it.
+               coalesce(max(name) FILTER (WHERE source = 'noaa'), max(name))   AS name,
+               coalesce(any_value(vessel_type) FILTER (WHERE source = 'noaa'),
+                        any_value(vessel_type))                                AS vessel_type,
+               coalesce(max(type_code) FILTER (WHERE source = 'noaa'),
+                        max(type_code))                                        AS type_code,
                list(epoch(ts) ORDER BY ts)        AS ts,
                list(lon ORDER BY ts)              AS lon,
                list(lat ORDER BY ts)              AS lat,
                list(sog ORDER BY ts)              AS sog,
-               list(cog ORDER BY ts)              AS cog
-        FROM read_parquet(?)
+               list(cog ORDER BY ts)              AS cog,
+               list(source ORDER BY ts)           AS src
+        FROM kept
         GROUP BY mmsi
-        HAVING count(*) >= ?
-    """, [str(parquet_path), min_points]).fetchall()
+    """, [paths]).fetchall()
     con.close()
 
-    tracks, rejected = {}, []
-    for mmsi, name, vtype, tcode, ts, lon, lat, sog, cog in rows:
+    tracks, rejected, short = {}, [], 0
+    for mmsi, name, vtype, tcode, ts, lon, lat, sog, cog, src in rows:
         why = non_vessel_reason(mmsi)
         if why:
             rejected.append((mmsi, name or "", why))
             continue
+        # min_points is a noise filter calibrated to the SAMPLING INTERVAL (D41), so on a
+        # merged track the binding constraint is the sparsest evidence that can still be a
+        # path. D41 already ruled that two hourly fixes make one. Four dense fixes plus an
+        # hourly confirmation is more evidence than five dense fixes, not less.
+        n_noaa = src.count("noaa")
+        has_gfw = "gfw" in src
+        if not (n_noaa >= min_points
+                or (has_gfw and len(src) >= REGIME["gfw_hourly"]["min_points"])):
+            short += 1
+            continue
         ts = [datetime.fromtimestamp(e, timezone.utc) for e in ts]
-        tracks[mmsi] = Track(mmsi, name, vtype, tcode, ts, lon, lat, sog, cog)
+        tracks[mmsi] = Track(mmsi, name, vtype, tcode, ts, lon, lat, sog, cog, src)
     rejected.sort()
     if not diagnostics:
         return tracks
-    return tracks, {"dropped_non_vessel": len(rejected), "non_vessel": rejected}
+    return tracks, {"dropped_non_vessel": len(rejected), "non_vessel": rejected,
+                    "dropped_short": short}
 
 
 def main():

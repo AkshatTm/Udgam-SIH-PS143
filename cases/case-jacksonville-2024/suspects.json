@@ -1,85 +1,47 @@
 {
   "funnel": {
-    "in_region": 32,
+    "in_region": 38,
     "in_window": 22,
     "plausible": 3,
     "scored": 3,
-    "dropped_short_track": 0,
+    "dropped_short_track": 1,
     "dropped_non_vessel": 0
   },
   "suspects": [
     {
       "source_type": "vessel",
-      "mmsi": "210145000",
-      "name": "STENA PROSPEROUS",
-      "vessel_type": "tanker",
-      "score": 0.734,
-      "components": {
-        "proximity": 0.859,
-        "parity": null,
-        "temporality": 0.109,
-        "trajectory": 1.0,
-        "gap": 1.0,
-        "slowdown": 0.0,
-        "type_prior": 1.0
-      },
-      "component_notes": {
-        "proximity": "origin-grid probability at closest approach",
-        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
-        "temporality": "closest approach 5.8 h from the centre of the release window",
-        "trajectory": "on approach 35 km out, course 337 deg against 329 deg toward the origin (8 deg off)",
-        "gap": "longest silence overlapping the window: 142 minutes",
-        "slowdown": "13.3 kn at closest approach against an under-way median of 13.3 kn",
-        "type_prior": "vessel type tanker"
-      },
-      "weight_live": 0.85,
-      "components_available": 6,
-      "components_total": 7,
-      "closest_km": 5.07,
-      "closest_time": "2024-07-30T22:08:51Z",
-      "grid_probability": 0.859,
-      "heading_consistent": true,
-      "ais_gap_minutes": 142.3,
-      "edge_truncated": false,
-      "reasons": [
-        "inside the high-probability region of the reconstructed origin during the release window",
-        "142-minute transponder gap overlapping the window",
-        "tanker on a course consistent with the origin"
-      ]
-    },
-    {
-      "source_type": "vessel",
       "mmsi": "563082600",
       "name": "MENUETT",
       "vessel_type": "tanker",
-      "score": 0.593,
+      "score": 0.536,
       "components": {
-        "proximity": 0.926,
+        "proximity": 0.617,
         "parity": null,
-        "temporality": 0.173,
+        "temporality": 0.088,
         "trajectory": 1.0,
-        "gap": 0.0,
+        "gap": null,
         "slowdown": 0.0,
-        "type_prior": 1.0
+        "type_prior": null
       },
       "component_notes": {
         "proximity": "origin-grid probability at closest approach",
         "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
-        "temporality": "closest approach 5.4 h from the centre of the release window",
-        "trajectory": "on approach 34 km out, course 174 deg against 183 deg toward the origin (9 deg off)",
-        "gap": "longest silence overlapping the window: 2 minutes",
-        "slowdown": "11.1 kn at closest approach against an under-way median of 11.5 kn",
-        "type_prior": "vessel type tanker"
+        "temporality": "closest approach 4.6 h from the centre of the release window",
+        "trajectory": "on approach 29 km out, course 175 deg against 179 deg toward the origin (4 deg off)",
+        "gap": "measured 0 for this vessel, but not counted: 1 of 3 scored candidates appear only in the hourly presence record and could not be tested on it, so counting it would rank vessels on how well they were OBSERVED",
+        "slowdown": "10.8 kn at closest approach against an under-way median of 11.5 kn",
+        "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
       },
-      "weight_live": 0.85,
-      "components_available": 6,
+      "weight_live": 0.65,
+      "components_available": 4,
       "components_total": 7,
-      "closest_km": 20.99,
-      "closest_time": "2024-07-30T21:44:02Z",
-      "grid_probability": 0.926,
+      "closest_km": 3.75,
+      "closest_time": "2024-07-30T22:47:42Z",
+      "grid_probability": 0.617,
       "heading_consistent": true,
       "ais_gap_minutes": 2.2,
       "edge_truncated": false,
+      "below_score_floor": false,
       "reasons": [
         "inside the high-probability region of the reconstructed origin during the release window",
         "tanker on a course consistent with the origin"
@@ -87,41 +49,79 @@
     },
     {
       "source_type": "vessel",
-      "mmsi": "338305838",
-      "name": "PATRIOT",
-      "vessel_type": "other",
-      "score": 0.569,
+      "mmsi": "210145000",
+      "name": "STENA PROSPEROUS",
+      "vessel_type": "tanker",
+      "score": 0.52,
       "components": {
-        "proximity": 0.051,
+        "proximity": 0.518,
         "parity": null,
-        "temporality": 0.956,
+        "temporality": 0.218,
         "trajectory": 1.0,
-        "gap": 1.0,
+        "gap": null,
         "slowdown": 0.0,
-        "type_prior": 0.5
+        "type_prior": null
       },
       "component_notes": {
         "proximity": "origin-grid probability at closest approach",
         "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
-        "temporality": "closest approach 0.3 h from the centre of the release window",
-        "trajectory": "on approach 35 km out, course 4 deg against 18 deg toward the origin (14 deg off)",
-        "gap": "longest silence overlapping the window: 75 minutes",
-        "slowdown": "32.4 kn at closest approach against an under-way median of 31.2 kn",
-        "type_prior": "vessel type other"
+        "temporality": "closest approach 3.9 h from the centre of the release window",
+        "trajectory": "on approach 33 km out, course 337 deg against 337 deg toward the origin (0 deg off)",
+        "gap": "not measurable for this vessel, but not counted: 1 of 3 scored candidates appear only in the hourly presence record and could not be tested on it, so counting it would rank vessels on how well they were OBSERVED",
+        "slowdown": "13.3 kn at closest approach against an under-way median of 13.3 kn",
+        "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
       },
-      "weight_live": 0.85,
-      "components_available": 6,
+      "weight_live": 0.65,
+      "components_available": 4,
       "components_total": 7,
-      "closest_km": 26.66,
-      "closest_time": "2024-07-30T16:04:20Z",
-      "grid_probability": 0.051,
+      "closest_km": 8.41,
+      "closest_time": "2024-07-30T22:08:41Z",
+      "grid_probability": 0.518,
       "heading_consistent": true,
-      "ais_gap_minutes": 74.8,
+      "ais_gap_minutes": 66.7,
       "edge_truncated": false,
+      "below_score_floor": false,
       "reasons": [
         "on the edge of the reconstructed origin during the release window",
-        "75-minute transponder gap overlapping the window",
-        "other on a course consistent with the origin"
+        "tanker on a course consistent with the origin"
+      ]
+    },
+    {
+      "source_type": "vessel",
+      "mmsi": "352980797",
+      "name": "AMETHYST ACE",
+      "vessel_type": "cargo",
+      "score": 0.228,
+      "components": {
+        "proximity": 0.234,
+        "parity": null,
+        "temporality": 0.52,
+        "trajectory": 0.0,
+        "gap": null,
+        "slowdown": 0.0,
+        "type_prior": null
+      },
+      "component_notes": {
+        "proximity": "origin-grid probability at closest approach",
+        "parity": "slick is unknown \u2014 parity needs a linear slick with a centerline",
+        "temporality": "closest approach 2.4 h from the centre of the release window",
+        "trajectory": "on approach 32 km out, course 267 deg against 185 deg toward the origin (82 deg off)",
+        "gap": "measured 0 for this vessel, but not counted: 1 of 3 scored candidates appear only in the hourly presence record and could not be tested on it, so counting it would rank vessels on how well they were OBSERVED",
+        "slowdown": "11.9 kn at closest approach against an under-way median of 12.1 kn",
+        "type_prior": "every scored candidate scores 1 here, so it separates nobody and is not counted (D28)"
+      },
+      "weight_live": 0.65,
+      "components_available": 4,
+      "components_total": 7,
+      "closest_km": 29.18,
+      "closest_time": "2024-07-30T15:49:59Z",
+      "grid_probability": 0.234,
+      "heading_consistent": false,
+      "ais_gap_minutes": 2.0,
+      "edge_truncated": false,
+      "below_score_floor": true,
+      "reasons": [
+        "on the edge of the reconstructed origin during the release window"
       ]
     }
   ],
@@ -133,11 +133,11 @@
       "lon": -79.6346,
       "lat": 30.35297,
       "est_length_m": 90,
-      "score": 0.991,
+      "score": 0.99,
       "angular_deviation_deg": 2.5,
       "reasons": [
         "radar return with no AIS broadcast within 1 km at acquisition time",
-        "sits inside the reconstructed origin (grid probability 0.00)",
+        "sits inside the reconstructed origin (grid probability 0.57)",
         "single satellite pass: not persistence-checked, so it may be a fixed structure or a transponder outside the archive's receiver coverage"
       ]
     },
@@ -148,7 +148,7 @@
       "lon": -79.59244,
       "lat": 30.3918,
       "est_length_m": 50,
-      "score": 0.892,
+      "score": 0.874,
       "angular_deviation_deg": 80.9,
       "reasons": [
         "radar return with no AIS broadcast within 1 km at acquisition time",
@@ -160,24 +160,36 @@
   "infrastructure": [],
   "excluded": [
     {
+      "mmsi": "338305838",
+      "name": "PATRIOT",
+      "closest_km": 30.23,
+      "reason": "never entered the high-probability region of the origin (peak grid probability 0.05)"
+    },
+    {
       "mmsi": "368053000",
       "name": "MAERSK KANSAS",
-      "closest_km": 21.8,
+      "closest_km": 24.96,
       "reason": "never reached the high-probability region (peak grid probability 0.00), and broadcast continuously while under way"
     },
     {
       "mmsi": "352476000",
       "name": "MANIZALES",
-      "closest_km": 29.17,
-      "reason": "290 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 29.2 km from the peak, at zero grid probability throughout"
-    },
-    {
-      "mmsi": "352980797",
-      "name": "AMETHYST ACE",
-      "closest_km": 32.23,
-      "reason": "376 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 32.2 km from the peak, at zero grid probability throughout"
+      "closest_km": 27.23,
+      "reason": "306 AIS reports inside the release window and never entered the reconstructed origin \u2014 closest approach 27.2 km from the peak, at zero grid probability throughout"
     }
   ],
   "abstained": false,
-  "abstain_reason": null
+  "abstain_reason": null,
+  "ranking_confidence": {
+    "level": "low",
+    "separation": 0.0299,
+    "basis": [
+      "proximity",
+      "slowdown",
+      "temporality",
+      "trajectory"
+    ],
+    "weight_live": 0.65,
+    "note": "the top two are separated by 3.0 % of the leading score -- ordered, but not a confident identification"
+  }
 }

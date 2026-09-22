@@ -127,19 +127,38 @@ class Component:
     which is different from measuring it and getting zero, and the difference reaches
     the suspect card as `null` versus `0`."""
 
-    __slots__ = ("value", "applicable", "note")
+    __slots__ = ("value", "applicable", "note", "source_gated")
 
-    def __init__(self, value=None, applicable=True, note=""):
+    def __init__(self, value=None, applicable=True, note="", source_gated=False):
         self.applicable = applicable and value is not None
         self.value = float(value) if self.applicable else None
         self.note = note
+        # True only when the reason this is not applicable is WHERE THE POSITIONS CAME FROM,
+        # rather than how the vessel behaved. gate_source_basis has to tell a GFW-only
+        # vessel's null `gap` (could not be tested) from a moored NOAA vessel's null `gap`
+        # (tested, and legitimately not applicable under D9) -- the second is real per-vessel
+        # evidence and must survive.
+        self.source_gated = source_gated
 
     @classmethod
-    def not_applicable(cls, why):
-        return cls(None, False, why)
+    def not_applicable(cls, why, source_gated=False):
+        return cls(None, False, why, source_gated)
 
 
 # ---------------------------------------------------------------------- the components
+
+def _hourly_only(track, ais_source):
+    """Is THIS vessel's evidence hourly-presence only?
+
+    Per-vessel where provenance was recorded, per-case where it was not. A merged pool holds
+    both kinds of track in one case, so the case-level string is no longer the whole answer --
+    but on a single-source bundle (every one written before this change) it still is.
+    """
+    srcs = getattr(track, "sources", None) if track is not None else None
+    if srcs:
+        return "noaa" not in srcs
+    return ais_source == "gfw_hourly"
+
 
 def component_proximity(track, grid, t0, t1, ais_source="noaa_dense"):
     """Highest origin-grid probability the vessel touched during the window.
@@ -232,10 +251,12 @@ def component_trajectory(track, grid, when, pos, ais_source="noaa_dense"):
         # not published at all, so calling it an "AIS sentinel" (a vessel broadcasting 360) says
         # the transponder reported something it never reported. Measured: every card on
         # case-mumbai-2023 carries the sentinel wording today, and none of them is a sentinel.
-        if ais_source == "gfw_hourly":
+        from_gfw = track.src[idx] == "gfw" if track.src else ais_source == "gfw_hourly"
+        if from_gfw:
             return Component.not_applicable(
                 "course over ground is not published by the hourly presence source, and a "
-                "course derived from two 1 km cell centres an hour apart is not a measurement")
+                "course derived from two 1 km cell centres an hour apart is not a measurement",
+                source_gated=True)
         return Component.not_applicable(
             "course over ground unavailable on approach (AIS sentinel)")
 
@@ -266,9 +287,15 @@ def component_gap(track, t0, t1, ais_source, box):
       box is not going dark, and the under-way test does not catch it because they
       were under way on both sides.
     """
-    if ais_source == "gfw_hourly":
+    # Per-VESSEL, not per-case. On a merged pool one case holds both kinds of track, and a
+    # 30-minute silence is observable in one and structurally invisible in the other.
+    if _hourly_only(track, ais_source):
+        n = len(track.ts) if track is not None else 0
         return Component.not_applicable(
-            "AIS source is hourly — a 30-minute silence cannot be observed")
+            f"this vessel appears only in the hourly presence record ({n} row"
+            f"{'' if n == 1 else 's'}, one per hour) — a 30-minute silence cannot be observed "
+            f"at that sampling, so no gap was measured for it",
+            source_gated=True)
 
     best, best_i = 0.0, None
     for i in range(len(track.ts) - 1):
@@ -282,6 +309,19 @@ def component_gap(track, t0, t1, ais_source, box):
         return Component(0.0, note="continuous coverage through the window")
 
     sa, sb = track.sog[best_i], track.sog[best_i + 1]
+    # A silence bounded by an hourly presence row cannot be put through the under-way test at
+    # all: that source does not publish SOG. Falling through to "moored, not dark" would turn a
+    # MISSING FIELD into an exoneration -- and on a merged pool that is not hypothetical, since
+    # inserting hourly fixes into a dense track is exactly what splits a long silence and
+    # re-bounds the remainder on rows that have no speed.
+    bounded_by_hourly = track.src is not None and "gfw" in (track.src[best_i],
+                                                            track.src[best_i + 1])
+    if bounded_by_hourly and (sa is None or sb is None):
+        return Component.not_applicable(
+            f"the {best:.0f}-minute silence is bounded by an hourly presence row, which "
+            f"publishes no speed over ground — whether the vessel was under way across it "
+            f"cannot be established, so no gap was scored",
+            source_gated=True)
     if sa is None or sb is None or sa < UNDERWAY_KNOTS or sb < UNDERWAY_KNOTS:
         return Component.not_applicable(
             f"{best:.0f}-minute silence, but the vessel was not under way on both sides "
@@ -291,6 +331,30 @@ def component_gap(track, t0, t1, ais_source, box):
         return Component.not_applicable(
             f"{best:.0f}-minute silence begins on the search-box boundary — the vessel "
             "left the search area and returned, which is not a transponder gap")
+
+    # * **A receiver coverage hole is not darkness.** NOAA Marine Cadastre is a TERRESTRIAL
+    #   receiver network: offshore, a vessel can be transmitting normally and simply not be
+    #   heard. A silence in NOAA is therefore not by itself evidence of anything. If a second,
+    #   independently received source shows the vessel broadcasting INSIDE that silence, the
+    #   silence belongs to the receiver network rather than to the vessel.
+    #
+    #   Measured on case-jacksonville-2024: STENA PROSPEROUS's 142.3-minute "gap" -- the one
+    #   component that put it above Cerulean's named vessel -- contains three GFW presence
+    #   rows, at 17:00, 18:00 and 19:00, at lon -79.38..-79.42 / lat 29.50..29.69, well inside
+    #   the extract box. The vessel was in the searched area, transmitting, and unheard. Scored
+    #   as deliberate darkness it is a false positive, and a 142-minute gap was never good
+    #   evidence to rank a polluter on in the first place.
+    if track.src is not None and "gfw" in track.src:
+        a, b = track.ts[best_i], track.ts[best_i + 1]
+        heard = [t for t, sc in zip(track.ts, track.src)
+                 if sc == "gfw" and a < t < b]
+        if heard:
+            return Component.not_applicable(
+                f"the {best:.0f}-minute silence in the dense archive contains "
+                f"{len(heard)} hourly presence record{'' if len(heard) == 1 else 's'} "
+                f"({', '.join(t.strftime('%H:%MZ') for t in heard[:3])}) — the vessel was "
+                f"transmitting, so this is a receiver coverage hole, not a transponder gap",
+                source_gated=True)
 
     return Component(1.0 if best >= GAP_MINUTES_MIN else 0.0,
                      note=f"longest silence overlapping the window: {best:.0f} minutes")
@@ -304,10 +368,11 @@ def component_slowdown(track, when, ais_source):
     the fleet, so the test was unreachable by construction: you cannot go slower than
     stopped (D9).
     """
-    if ais_source == "gfw_hourly":
+    if _hourly_only(track, ais_source):
         return Component.not_applicable(
             "speed over ground is not published by the hourly presence source; a speed "
-            "derived from 1 km cell centres an hour apart is not a measurement")
+            "derived from 1 km cell centres an hour apart is not a measurement",
+            source_gated=True)
     underway = sorted(s for s in track.sog if s is not None and s >= UNDERWAY_KNOTS)
     if len(underway) < 3:
         return Component.not_applicable(
@@ -572,6 +637,64 @@ def confidence_of(plausible, top, n_plausible):
             "note": note}
 
 
+
+# Components whose APPLICABILITY is decided by where a candidate's positions came from, rather
+# than by anything the candidate did.
+SOURCE_DETERMINED = ("gap", "slowdown", "trajectory")
+
+
+def gate_source_basis(scored, names=SOURCE_DETERMINED):
+    """Make the scored set comparable when its candidates were not all seen the same way.
+
+    THE FAILURE THIS PREVENTS, precisely. weighted_score renormalises over applicable
+    components. A NOAA vessel that SAT THE EXAM AND SCORED ZERO on `gap` carries that zero in
+    its numerator and the weight in its denominator. A GFW-only vessel that COULD NOT SIT THE
+    EXAM carries neither. The sparse vessel gets a free pass on every test it could not take
+    and outranks a denser vessel with identical proximity -- "unexamined" quietly becomes
+    "innocent", and then "innocent" becomes "higher-ranked".
+
+    This is visible today between cases (Mumbai scores 0.888 off weight_live 0.35). A merged
+    pool makes it a WITHIN-case comparison, which is far worse, because the two numbers sit
+    side by side on one screen.
+
+    The rule is D28's argument generalised. D28 drops a component that separates nobody because
+    it is constant; this drops one that separates nobody legitimately, because only some
+    candidates could be tested on it. It inherits D28's safety property too: every score
+    becomes (S - w*c)/(1 - w) for those that had it and is unchanged for those that did not, so
+    the two groups become comparable rather than one being pushed around arbitrarily.
+
+    Only fires when the scored set is genuinely source-heterogeneous, which leaves every
+    NOAA-only and GFW-only case byte-identical -- the D41 precedent.
+
+    Nothing measured is lost from the screen: the measured value moves into component_notes
+    and into reasons_for, so a card still says what its gap was, only that it did not count.
+    """
+    if len(scored) < 2:
+        return []
+    gated = []
+    for name in names:
+        comps = [s_["components"].get(name) for s_ in scored]
+        if any(c is None for c in comps):
+            continue
+        applicable = [c for c in comps if c.applicable]
+        if not applicable or len(applicable) == len(comps):
+            continue                      # everyone measured, or nobody did -- comparable
+        if not any((not c.applicable) and c.source_gated for c in comps):
+            continue                      # the nulls are per-vessel facts (D9), not source
+        n_missing = len(comps) - len(applicable)
+        for s_ in scored:
+            c = s_["components"][name]
+            measured = (f"measured {c.value:g} for this vessel" if c.applicable
+                        else "not measurable for this vessel")
+            s_["components"][name] = Component.not_applicable(
+                f"{measured}, but not counted: {n_missing} of {len(comps)} scored candidates "
+                f"appear only in the hourly presence record and could not be tested on it, so "
+                f"counting it would rank vessels on how well they were OBSERVED")
+            rescore(s_)
+        gated.append(name)
+    return gated
+
+
 def rank_key(s):
     """A TOTAL order on scored candidates, so the same inputs name the same vessels.
 
@@ -730,7 +853,10 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--case", help="case id under cases/")
     g.add_argument("--case-dir", help="explicit path to a case bundle")
-    ap.add_argument("--parquet", help="output of ingest.py")
+    ap.add_argument("--parquet", nargs="+",
+                    help="one or more ingest outputs. Several are merged per vessel, "
+                         "NOAA positions preferred, a GFW row kept only for an "
+                         "(mmsi, hour) the dense archive did not cover.")
     ap.add_argument("--no-ais", action="store_true",
                     help="run without any AIS at all: fixed-source association only. For a "
                          "case in a region no AIS archive we hold covers. Must be passed "
@@ -815,7 +941,8 @@ def main():
         con = duckdb.connect()
         n_all, west, east, south, north = con.execute(
             "SELECT count(DISTINCT mmsi), min(lon), max(lon), min(lat), max(lat) "
-            "FROM read_parquet(?)", [str(a.parquet)]).fetchone()
+            "FROM read_parquet(?, union_by_name=true)",
+            [[str(x) for x in a.parquet]]).fetchone()
         con.close()
         # An empty extract is a searched negative (`ingest_gfw.py --allow-empty`): the query
         # ran and the water held no broadcasting vessel. That is a different sentence from
@@ -857,6 +984,7 @@ def main():
         near_miss.sort(key=lambda s: (-(s["grid_probability"] or 0.0),
                                       s["track"].mmsi))
         gated = gate_constant_components(plausible)
+        gate_source_basis(plausible)
         if gated:
             plausible.sort(key=rank_key)
             print(f"[gate]  {', '.join(gated)} is constant across all "
