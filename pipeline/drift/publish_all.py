@@ -36,6 +36,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 
@@ -57,6 +59,83 @@ CASES = [
 VOLUMES_M3 = {
     "case-huntington-2021": (93.5, "588 barrels, NTSB MIR-24-01"),
 }
+
+
+# run.py writes these under FIXED names into the shared out/ directory regardless of --case
+# (run.py:51 OUT = HERE / "out"; write_particles(out_dir / "particles.json", ...)). If a run
+# fails partway -- the backward ensemble crashing, the forward step refusing on field coverage
+# -- whatever was written by the PREVIOUS case's successful run is still sitting there, and
+# build_case.py's identity guard can only refuse to copy a file it can prove is stale; a file
+# this case's own earlier attempt left behind carries the right case_id and passes. Sweep this
+# case's own trace outputs before its own run starts, so a failure this attempt leaves an
+# ABSENT file (build_case.py already reports that plainly) rather than a file that looks right
+# because it is this case's, just from an earlier attempt.
+_TRACE_OUT_FILES = ("particles.json", "origin.json", "particles_forward.json",
+                   "forward_impact.json")
+
+
+DEFAULT_FORWARD_HOURS = 72.0   # run.py's own --steps/--timestep-minutes defaults (289 @ 15 min)
+
+
+def forward_hours_available(case):
+    """Hours of ocean-current field AFTER t0, from the cached field this case actually has.
+
+    run.py's --forward defaults to a 72 h request (its own --steps default), and
+    assert_field_covers() REFUSES outright -- it does not clip -- when the field falls short
+    by more than the larger of 1 h or 5% of the span. Jamnagar's field extends only 28.8 h past
+    t0 and Huntington's only 22.0 h, so an unqualified `--forward` call on either is a refusal,
+    not a short-but-working run. Mumbai's 70.9 h clears the tolerance on the 72 h default as-is.
+
+    Returns None (meaning: use the default, unmodified) when the cache is missing or unreadable
+    -- a forward run should still be ATTEMPTED and let assert_field_covers give its own honest
+    refusal, rather than this helper inventing a number.
+    """
+    p = REPO / "data" / "fields" / f"{case}.npz"
+    if not p.exists():
+        return None
+    try:
+        z = np.load(p, allow_pickle=True)
+        t0 = float(z["t0_epoch"])
+        ct = np.asarray(z["current_times"], dtype=np.float64)
+        if ct.size == 0:
+            return None
+        return float((ct.max() - t0) / 3600.0)
+    except Exception:
+        return None
+
+
+def forward_run_args(case):
+    """Extra run.py args for THIS case's --forward call, or [] to leave the defaults alone.
+
+    Only overrides when the field genuinely cannot support the 72 h default; a case with full
+    coverage is left exactly as it was (no behaviour change for the four cases that already
+    pass). --timestep-minutes stays at run.py's own default (15 min); only --steps is sized
+    down, to the largest whole number of 15-min steps the field actually covers, minus a small
+    safety margin so a t0 that sits a few minutes into an hourly cell does not itself trip the
+    refusal this is trying to avoid.
+    """
+    avail = forward_hours_available(case)
+    if avail is None or avail >= DEFAULT_FORWARD_HOURS:
+        return []
+    usable_h = max(avail - 0.25, 0.0)   # 15 min of margin
+    n_steps = max(5, int(usable_h * 60.0 / 15.0) + 1)   # >=5 steps: a forward layer worth having
+    print(f"  forward horizon  field covers {avail:.1f} h past t0 (< the {DEFAULT_FORWARD_HOURS:.0f} h "
+          f"default) -- requesting {n_steps} steps of 15 min = {(n_steps - 1) * 15 / 60:.1f} h "
+          f"instead of a refusal")
+    return ["--steps", str(n_steps), "--timestep-minutes", "15"]
+
+
+def sweep_trace_out(dry):
+    out_dir = REPO / "pipeline" / "drift" / "out"
+    swept = []
+    for name in _TRACE_OUT_FILES:
+        p = out_dir / name
+        if p.exists():
+            swept.append(name)
+            if not dry:
+                p.unlink()
+    if swept:
+        print(f"  sweep  removed stale {', '.join(swept)} from out/ before this case's run")
 
 
 def sh(cmd, label, dry):
@@ -230,6 +309,8 @@ def main():
                     "--jobs", str(a.od_jobs)],
                    "OceanDrift origin frames", a.dry_run)
 
+        sweep_trace_out(a.dry_run)
+
         # The age now runs INSIDE run.py (before the ensemble, which needs to know which
         # steps to keep), so there is one writer of origin.json and no separate age step.
         cmd = [py, drift / "run.py", "--case", case, "--real", "--particles", str(a.particles),
@@ -246,7 +327,8 @@ def main():
             sh([py, drift / "pool_models.py", "--case", case], "pool models", a.dry_run)
 
         if not a.skip_forward:
-            sh([py, drift / "run.py", "--case", case, "--real", "--forward"],
+            sh([py, drift / "run.py", "--case", case, "--real", "--forward"]
+               + forward_run_args(case),
                "forward", a.dry_run)
 
         edited = ensure_trace(case, a.dry_run)

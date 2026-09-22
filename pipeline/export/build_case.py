@@ -42,6 +42,42 @@ SCENE_FILES = ["meta.json", "bounds.json", "sar.png"]
 SCENE_OPTIONAL = ["sar_vv_vh.tif", "thumb.png"]
 
 
+# Files copied out of a SHARED stage `out/` directory, and the fields that prove whose run each
+# one is. `case_id` is compared against meta.case_id, `t0` against meta.detection_time. A file
+# listed here carrying NEITHER is reported rather than silently trusted -- see the copy site.
+_IDENTITY_GUARDED = {"particles.json", "origin.json", "particles_forward.json",
+                     "forward_impact.json"}
+
+
+def _stale_reason(act, src_name, path, meta):
+    """-> a sentence saying why this file belongs to another case's run, or None."""
+    if src_name not in _IDENTITY_GUARDED:
+        return None
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return f"could not be parsed as JSON ({exc.__class__.__name__})."
+    if not isinstance(doc, dict):
+        return None
+
+    case_id, want_case = doc.get("case_id"), meta.get("case_id")
+    if case_id and want_case and case_id != want_case:
+        return (f"carries case_id={case_id!r} but this case is {want_case!r} - it belongs to a "
+                f"different case's run in the shared out/ directory.")
+
+    t0, want_t0 = doc.get("t0"), meta.get("detection_time")
+    if t0 and want_t0 and t0 != want_t0:
+        return (f"carries t0={t0!r} but this case's detection_time is {want_t0!r} - it belongs "
+                f"to a different case's run in the shared out/ directory.")
+
+    if not case_id and not t0:
+        # Not fatal -- the file may simply predate the identity field -- but it is the one file
+        # the guard cannot check, so it must not pass in silence.
+        print(f"  NOIDENT {act:<9} {src_name} carries neither case_id nor t0, so it cannot be "
+              f"checked against this case. Re-run the stage to stamp it.")
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description="Assemble a case bundle and validate it")
     ap.add_argument("--case", required=True, help="case id, e.g. case-ennore-2017")
@@ -95,26 +131,27 @@ def main():
                 print(f"  MISS   {act:<10} {s}")
                 continue
             # `pipeline/drift/out/` is SHARED across every case's run (publish_all.py:9-18's own
-            # invariant is "run AND publish before the next case"). When a downstream step for
-            # THIS case fails -- the forward run refusing on field coverage is the real one that
-            # surfaced this -- the file already sitting in out/ still belongs to whichever case
-            # ran last, and nothing before this checked. Caught only because
-            # case-jamnagar-2024's particles_forward.json carried case-mumbai-2023's t0, byte
-            # for byte identical (same size, same mtime), and validate_case.py's cross-check
-            # flagged it AFTER the copy. That is too late -- ship-then-detect is not the
-            # contract. Verify the one field that proves whose run this is, BEFORE copying.
-            if src_name == "particles_forward.json":
-                try:
-                    fwd_t0 = json.loads(s.read_text(encoding="utf-8")).get("t0")
-                except Exception:
-                    fwd_t0 = None
-                meta_t0 = meta.get("detection_time")
-                if fwd_t0 and meta_t0 and fwd_t0 != meta_t0:
-                    print(f"  STALE  {act:<10} {src_name} carries t0={fwd_t0!r} but this case's "
-                          f"detection_time is {meta_t0!r} — belongs to a different case's run "
-                          f"in the shared out/ directory. Refusing to copy it. Re-run the "
-                          f"forward step for {a.case} and rebuild.")
-                    continue
+            # invariant is "run AND publish before the next case"). When a step for THIS case
+            # fails, the file already sitting in out/ still belongs to whichever case ran last,
+            # and nothing before this checked. Caught only because case-jamnagar-2024's
+            # particles_forward.json carried case-mumbai-2023's t0, byte for byte identical
+            # (same size, same mtime), and validate_case.py's cross-check flagged it AFTER the
+            # copy. That is too late -- ship-then-detect is not the contract.
+            #
+            # The first version of this guard checked particles_forward.json ALONE, which was
+            # the file that happened to expose the bug -- not the file most worth guarding.
+            # particles.json and origin.json are the PRIMARY trace outputs and come from the
+            # same shared directory: a failed backward run publishes the previous case's cloud
+            # under this case's name, which is the Ennore-under-Jacksonville failure that
+            # publish_all.py exists to prevent. Guard every file that can carry another case's
+            # identity, and say so loudly when one carries no identity at all.
+            stale = _stale_reason(act, src_name, s, meta)
+            if stale:
+                print(f"  STALE  {act:<10} {src_name} {stale} Refusing to copy it. "
+                      f"Re-run the '{act}' step for {a.case} and rebuild.")
+                if name in required:
+                    absent.append((act, s))
+                continue
             if a.dry_run:
                 print(f"  would  {act:<10} {s}  ->  {case_dir / dest_name}")
             else:

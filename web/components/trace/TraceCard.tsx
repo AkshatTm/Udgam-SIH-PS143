@@ -214,6 +214,14 @@ export default function TraceCard({ origin }: { origin: OriginBundle }) {
                 {origin.ageMethod && (
                   <div className="mt-0.5 text-[13px] text-ink-2">{AGE_METHOD_LABEL[origin.ageMethod]}</div>
                 )}
+                {/* When discharge_class was "unknown" (elongation between the acute and chronic
+                    bands), age.py weights the patch and track hypotheses by evidence instead of
+                    averaging them 50/50 — say which one carried the answer and by how much. */}
+                {origin.ageEstimatorNotes?.mixture && (
+                  <div className="mt-1 text-[12px] leading-snug text-ink-3">
+                    {origin.ageEstimatorNotes.mixture}
+                  </div>
+                )}
               </div>
               <InfoDot
                 align="right"

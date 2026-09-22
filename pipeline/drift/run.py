@@ -214,7 +214,7 @@ def wind_share_of_drift(field, history, times, wind_coeff=step.WIND_COEFF):
 
 def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_steps,
                  n_runs, stranded_fraction=None, wind_share=None, pool=None,
-                 age_block=None, model_mix=None):
+                 age_block=None, model_mix=None, case_id=None):
     """The real thing: a histogram of every ensemble endpoint, radii measured from the raw
     points, and a time window that is honest about whether it was measured or bounded.
 
@@ -244,6 +244,11 @@ def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_ste
 
     rows, cols = values.shape
     doc = {
+        # Whose run this is. out/ is SHARED across every case (see publish_all.py), and until
+        # this field existed origin.json was the ONE trace output carrying no identity at all --
+        # a failed backward run would publish the previous case's cloud under this case's name
+        # with nothing able to detect it. build_case.py checks it before copying.
+        "case_id": case_id,
         "bounds": bounds,
         "shape": [rows, cols],
         "values": [float(v) for v in values.reshape(-1)],
@@ -510,7 +515,8 @@ def run_backward_group(a, t0, field, land, seed_feat, particles_path, origin_pat
     write_particles(particles_path, t0, out_frames.tolist(), out_dt)
     clon, clat, r50, r90, method, abstain = write_origin(
         origin_path, endpoints, conv_idx, members, t0, a.timestep_minutes, a.steps, a.runs,
-        stranded_fraction=strand_frac, wind_share=wind_share, pool=None, age_block=None)
+        stranded_fraction=strand_frac, wind_share=wind_share, pool=None, age_block=None,
+        case_id=a.case)
     med_km = assert_displacement_plausible(history[0], history[-1], hours=span_h)
 
     np.savez_compressed(particles_path.parent / f"ensemble_{a.case}_{group_label}.npz",
@@ -748,7 +754,7 @@ def main():
     clon, clat, r50, r90, method, abstain = write_origin(
         out_dir / "origin.json", endpoints, conv_idx, members,
         t0, a.timestep_minutes, a.steps, a.runs, stranded_fraction=strand_frac,
-        wind_share=wind_share, pool=pool, age_block=age_block)
+        wind_share=wind_share, pool=pool, age_block=age_block, case_id=a.case)
 
     # The endpoint pool, kept so plot_heatmap.py can draw the cloud without rerunning 50 runs.
     np.savez_compressed(out_dir / f"ensemble_{a.case}.npz",

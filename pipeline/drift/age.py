@@ -1704,15 +1704,72 @@ def estimate_age(field, feature, t0, candidate_hours, origin_lonlat, *, release_
         patch_post = None
     if not {"track"} & set(track_used):
         track_post = None
+
+    floor = cal.get("min_gain") or AP.MIN_INFO_GAIN_NATS
+    mixture_note = None
     if discharge == "acute":
         post, hyp = patch_post, ["patch"]
     elif discharge == "chronic":
         post, hyp = track_post, ["track"]
     else:
-        post = AP.average_posteriors([patch_post, track_post])
-        hyp = [h for h, p in (("patch", patch_post), ("track", track_post)) if p is not None]
-    summary = AP.summarise(post, hyp,
-                           min_gain=cal.get("min_gain") or AP.MIN_INFO_GAIN_NATS)
+        # discharge_class == "unknown": classify_discharge's elongation bands (detect/ships.py)
+        # leave a real gap between "acute" (<3.0) and "chronic" (>=5.0, and straight), and a
+        # slick sitting IN that gap is not evidence-free -- it is just evidence the label
+        # collapsed. Averaging patch_post and track_post 50/50 assumes the two hypotheses are
+        # equally likely regardless of how well either explains the observed shape.
+        #
+        # A first attempt weighted by each hypothesis's raw marginal likelihood (the textbook
+        # Bayes-factor quantity). MEASURED, that made things worse on all three cases it was
+        # meant to fix: patch (E1/E2, a Gaussian shape-likelihood model calibrated on
+        # sigma_L/sigma_W/kappa) and track (E4, a Monte-Carlo width-profile sampler with its
+        # own noise model) are different model FAMILIES with no shared calibration, so their
+        # raw likelihood magnitudes are not on a comparable absolute scale -- one being
+        # numerically larger everywhere does not mean it explains the data better, only that
+        # its family's typical likelihood values run higher. On Mumbai/Jamnagar/Huntington that
+        # scale mismatch consistently favoured patch, the near-uninformative hypothesis
+        # (info_gain_nats 0.001-0.005) over track, the informative one (0.026-0.041) -- moving
+        # the fused gain FURTHER below the 0.02 floor than the plain 50/50 average already was.
+        #
+        # info_gain_nats does not have that problem: it is KL(posterior_h || the SAME prior on
+        # the SAME grid) for every hypothesis, so it is commensurable across families by
+        # construction, independent of how either likelihood was computed. Weight by that
+        # instead -- and only trust a hypothesis's contribution once it independently clears
+        # the same honesty floor every other estimator in this file is held to (D9/D28's
+        # pattern: an untrusted measurement does not get to vote).
+        if patch_post is not None and track_post is not None:
+            gp = AP.summarise(patch_post, ["patch"], min_gain=0.0)["info_gain_nats"]
+            gt = AP.summarise(track_post, ["track"], min_gain=0.0)["info_gain_nats"]
+            clears_patch, clears_track = gp >= floor, gt >= floor
+            if clears_patch and not clears_track:
+                post, hyp = patch_post, ["patch"]
+                mixture_note = (
+                    f"discharge_class was 'unknown' (elongation {elong:.2f} falls between the "
+                    f"acute and chronic bands). Of the two hypotheses, only the patch/spreading "
+                    f"one moved the prior enough to call a measurement ({gp:.3f} nats vs "
+                    f"{gt:.3f} for the track hypothesis), so it alone is reported.")
+            elif clears_track and not clears_patch:
+                post, hyp = track_post, ["track"]
+                mixture_note = (
+                    f"discharge_class was 'unknown' (elongation {elong:.2f} falls between the "
+                    f"acute and chronic bands). Of the two hypotheses, only the moving-source "
+                    f"track one moved the prior enough to call a measurement ({gt:.3f} nats vs "
+                    f"{gp:.3f} for the patch hypothesis), so it alone is reported.")
+            elif clears_patch and clears_track:
+                w = [gp / (gp + gt), gt / (gp + gt)]
+                post = AP.average_posteriors([patch_post, track_post], weights=w)
+                hyp = ["patch", "track"]
+                mixture_note = (
+                    f"discharge_class was 'unknown' (elongation {elong:.2f} falls between the "
+                    f"acute and chronic bands). Both hypotheses independently cleared the "
+                    f"information floor, so they were mixed in proportion to how much each "
+                    f"moved the prior on its own: patch {w[0]:.0%}, track {w[1]:.0%}.")
+            else:
+                post = AP.average_posteriors([patch_post, track_post])
+                hyp = ["patch", "track"]
+        else:
+            post = AP.average_posteriors([patch_post, track_post])
+            hyp = [h for h, p in (("patch", patch_post), ("track", track_post)) if p is not None]
+    summary = AP.summarise(post, hyp, min_gain=floor)
 
     models = []
     if ll_ours is not None:
@@ -1762,6 +1819,8 @@ def estimate_age(field, feature, t0, candidate_hours, origin_lonlat, *, release_
         _why = (_diags.get(_name) or {}).get("skipped")
         if _why:
             notes[_name] = str(_why).strip()
+    if mixture_note:
+        notes["mixture"] = mixture_note
     if notes:
         block["age_estimator_notes"] = notes
     if summary["status"] != "ok":
