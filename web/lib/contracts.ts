@@ -362,9 +362,11 @@ export interface RawDarkVessel {
   name?: string;
   lon: number;
   lat: number;
-  est_length_m?: number;
+  // `number | null`: dark.py emits an explicit null when the source publishes no length
+  // (GFW SAR), and null is "not measurable here", never zero — frozen convention 4.
+  est_length_m?: number | null;
   score: number; // [0, 1]
-  angular_deviation_deg?: number;
+  angular_deviation_deg?: number | null;
   reasons?: string[];
 }
 

@@ -57,6 +57,10 @@ export interface GalleryCase {
   difficulty?: Difficulty;
   /** Resolved `/cases/<id>/<file>`. The card still probes that the image loads before showing it. */
   thumbnailUrl?: string;
+  /** How many radar contacts this case's suspects.json carries with no AIS identity.
+   *  0 when the case has a suspects.json with none; undefined when it has no suspects.json at
+   *  all (a detect-only case). The two are different claims and the card must not merge them. */
+  darkVesselCount?: number;
   loadError?: string;
 }
 
@@ -141,9 +145,34 @@ function normaliseMeta(id: string, raw: unknown): GalleryCase {
  */
 export async function loadGalleryCase(id: string): Promise<GalleryCase> {
   try {
-    return normaliseMeta(id, await fetchJson(`/cases/${id}/meta.json`));
+    const base = normaliseMeta(id, await fetchJson(`/cases/${id}/meta.json`));
+    return { ...base, darkVesselCount: await countDarkVessels(id) };
   } catch (err) {
     return { id, ok: false, loadError: (err as Error).message };
+  }
+}
+
+/**
+ * Ghost-ship count for the gallery badge, read from the bundle the Find stage already ships.
+ *
+ * Deliberately NOT a new meta.json field: the schema is frozen (Master §6, frozen convention 6)
+ * and this number is already stated, authoritatively, in suspects.json. Reading it here keeps
+ * one source of truth — a badge that disagreed with the Find screen would be worse than none.
+ *
+ * Absent or unreadable suspects.json returns undefined, not 0: three cases in the library are
+ * detect-only and never ran attribution, and "we did not look" is not "we looked and found
+ * none". No validation and no throwing — a bad suspects.json must not blank a gallery card;
+ * the Find screen is where that error belongs, and it already reports it.
+ */
+async function countDarkVessels(id: string): Promise<number | undefined> {
+  try {
+    const raw = (await fetchJson(`/cases/${id}/suspects.json`)) as {
+      dark_vessels?: unknown;
+    };
+    if (!Array.isArray(raw.dark_vessels)) return undefined;
+    return raw.dark_vessels.length;
+  } catch {
+    return undefined;
   }
 }
 

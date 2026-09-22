@@ -19,7 +19,17 @@ import { loadVesselBundle, type VesselBundle } from "./vessels";
 import { loadSuspectsBundle, type SuspectsBundle } from "./suspects";
 import { loadVerificationBundle, type VerificationBundle } from "./verification";
 
-export type LayerId = "sar" | "detections" | "particles" | "origin" | "forward" | "vessels";
+export type LayerId =
+  | "sar"
+  | "detections"
+  | "particles"
+  | "origin"
+  | "forward"
+  | "vessels"
+  // A ghost ship is a radar contact with no AIS identity. Its own layer, not part of
+  // "vessels": turning the AIS tracks off must leave the ghost alone on the water, which
+  // is the whole reveal (MapView.tsx, darkVesselLayer).
+  | "darkVessels";
 
 export type LoadStatus = "idle" | "loading" | "ready" | "error";
 
@@ -269,6 +279,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     // moment, and the forward cone overlaps the origin cloud at t0 by construction.
     forward: false,
     vessels: false,
+    // On by default: a ghost ship only ever renders once attribution has run, and when it does
+    // it is the answer on cases like Gulf of Alaska. The chip is there to turn it OFF.
+    darkVessels: true,
   },
   traceEntranceKey: 0,
   tNorm: 1,
@@ -618,6 +631,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         origin: false,
         forward: false,
         vessels: false,
+        darkVessels: true,
       },
       playing: false,
       autoPlaying: false,

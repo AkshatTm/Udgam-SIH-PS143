@@ -8,12 +8,12 @@
 // out of ContextPanel.tsx so this file can own its own GSAP wiring without touching the other
 // stage cards. No raw hex/px — every size/colour below resolves to an existing globals.css token.
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useAppStore } from "@/lib/store";
-import { tFromNorm } from "@/lib/timestep";
+import { hoursBackFromNorm, longestSpanHours } from "@/lib/timestep";
 import {
   ORIGIN_FADE_IN_FULL,
-  originRewindFraction,
+  originRewindFractionAtAge,
   type AgeMethod,
   type OriginBundle,
 } from "@/lib/origin";
@@ -55,10 +55,22 @@ export default function TraceCard({ origin }: { origin: OriginBundle }) {
   const [start, end] = origin.timeWindow;
 
   const tNorm = useAppStore((s) => s.tNorm);
-  const nSteps = useAppStore((s) => s.particles?.nSteps ?? 0);
+  const particles = useAppStore((s) => s.particles);
+  const groupBundles = useAppStore((s) => s.groupBundles);
   const traceEntranceKey = useAppStore((s) => s.traceEntranceKey);
 
-  const rewind = originRewindFraction(tFromNorm(tNorm, nSteps), nSteps);
+  // Same wall-clock timebase and the same age anchor MapView's origin cloud uses, so this
+  // capsule's "the origin is now knowable" glow fires at the exact slider position the cloud
+  // reaches full opacity — the posterior's median, which is the number printed just below.
+  const spanHours = useMemo(
+    () => longestSpanHours([particles, ...groupBundles.map((gb) => gb.particles)]),
+    [particles, groupBundles],
+  );
+  const rewind = originRewindFractionAtAge(
+    hoursBackFromNorm(tNorm, spanHours),
+    origin.agePosterior?.median ?? null,
+    spanHours,
+  );
   const originKnowable = rewind >= ORIGIN_FADE_IN_FULL;
 
   const cardRef = useRef<HTMLDivElement>(null);
@@ -79,12 +91,36 @@ export default function TraceCard({ origin }: { origin: OriginBundle }) {
         footnoteRef.current,
       ].filter(Boolean) as HTMLElement[];
       if (els.length === 0) return;
-      if (prefersReducedMotion()) {
-        gsap.set(els, { opacity: 1, y: 0 });
-        return;
-      }
+      // TWO ENTRANCES RACE HERE, AND THE LOSER USED TO FREEZE THE PANEL.
+      // TraceCard mounts and fires entrance #1, then initTrace() (store.ts:569) bumps
+      // traceEntranceKey and fires #2 — while #1 is still tweening the same nodes. useGSAP does
+      // not revert on update (revertOnUpdate defaults false), `gsap.from` does not overwrite by
+      // default, and this card re-renders ~24x/s during the arrival autoplay because it
+      // subscribes to tNorm. Whichever tween stopped first left its inline `opacity` behind:
+      // measured stuck at 0.21 fifteen seconds after the run, which is the translucent sidebar.
+      // So: kill anything already running, start from a known state, declare the END state
+      // explicitly (fromTo, not from), overwrite conflicting tweens, and clear the inline props
+      // on completion AND on teardown. There is no path through this that leaves opacity < 1.
+      gsap.killTweensOf(els);
       gsap.set(els, { clearProps: "all" });
-      gsap.from(els, { opacity: 0, y: 10, duration: 0.45, stagger: 0.07, ease: "power2.out" });
+      if (prefersReducedMotion()) return;
+      const tween = gsap.fromTo(
+        els,
+        { opacity: 0, y: 10 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.45,
+          stagger: 0.07,
+          ease: "power2.out",
+          overwrite: "auto",
+          clearProps: "opacity,transform",
+        },
+      );
+      return () => {
+        tween.kill();
+        gsap.set(els, { clearProps: "all" });
+      };
     },
     { dependencies: [traceEntranceKey], scope: cardRef },
   );

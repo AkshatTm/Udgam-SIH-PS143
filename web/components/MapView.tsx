@@ -15,7 +15,7 @@
 //     no aggregation at all — a scrub only updates the layer's opacity uniform.
 // The timestep only ever updates deck layers, never the map.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AttributionControl,
   Map as MlMap,
@@ -32,14 +32,21 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import { BitmapLayer, IconLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { PathStyleExtension, type PathStyleExtensionProps } from "@deck.gl/extensions";
 import { RUN_DURATION_MS, useAppStore } from "@/lib/store";
-import { tFromNorm } from "@/lib/timestep";
+import type { ParticleBundle } from "@/lib/particles";
+import type { OriginBundle } from "@/lib/origin";
+import {
+  bundleSpanHours,
+  frameForHoursBack,
+  hoursBackFromNorm,
+  longestSpanHours,
+} from "@/lib/timestep";
 import { AUTOPLAY_STEPS_PER_SEC, PLAYBACK_STEPS_PER_SEC } from "@/lib/usePlayback";
 import {
   buildOriginImage,
   buildOriginRadiusRings,
   ORIGIN_FADE_IN_FULL,
   ORIGIN_FADE_IN_START,
-  originRewindFraction,
+  originRewindFractionAtAge,
   type OriginRing,
 } from "@/lib/origin";
 import { buildForwardRings, buildForwardTrack, forwardSpanHours, type ForwardRing } from "@/lib/forward";
@@ -452,14 +459,21 @@ export default function MapView() {
   // Guided flow: each stage's overlays stay hidden until its Run button has been pressed.
   const detectRevealed = useAppStore((s) => s.revealed.detect);
   const attributeRevealed = useAppStore((s) => s.revealed.attribute);
+  const darkVesselsVisible = useAppStore((s) => s.layers.darkVessels);
   const running = useAppStore((s) => s.running);
 
-  // Phase 2 particle playback. `t` is the integer timestep the slider currently points at;
-  // it only changes ~8×/s during playback, so the deck layer effect below stays cheap.
+  // Phase 2 particle playback. The master clock is HOURS BEFORE DETECTION, not a frame index:
+  // every spill group ships its own bundle, truncated to its own measured age (D56), so the
+  // bundles differ in length and each one must answer for itself where it is at a given hour.
+  // See lib/timestep.ts for why indexing every group with the primary's `t` was wrong.
   const particles = useAppStore((s) => s.particles);
   const particlesVisible = useAppStore((s) => s.layers.particles);
   const tNorm = useAppStore((s) => s.tNorm);
-  const t = tFromNorm(tNorm, particles?.nSteps ?? 0);
+  const spanHours = useMemo(
+    () => longestSpanHours([particles, ...groupBundles.map((gb) => gb.particles)]),
+    [particles, groupBundles],
+  );
+  const hoursBack = hoursBackFromNorm(tNorm, spanHours);
   // Only used to decide whether/how fast the particle layer's getPosition transition runs below
   // — a manual drag must snap 1:1 to the dragged-to frame (transitions off) or the cloud would
   // lag visibly behind the thumb.
@@ -700,7 +714,7 @@ export default function MapView() {
   }, [suspects]);
 
   const darkVesselLayer = useMemo(() => {
-    if (!attributeRevealed || darkVesselItems.length === 0) return null;
+    if (!attributeRevealed || !darkVesselsVisible || darkVesselItems.length === 0) return null;
     return new ScatterplotLayer<DarkVesselMapItem>({
       id: "dark-vessels",
       data: darkVesselItems,
@@ -714,7 +728,7 @@ export default function MapView() {
       stroked: true,
       pickable: true,
     });
-  }, [darkVesselItems, attributeRevealed]);
+  }, [darkVesselItems, attributeRevealed, darkVesselsVisible]);
 
   // docs/team/harshita-frontend.md Phase 3.6 — infrastructure markers. Same independent-of-`vesselsVisible` reasoning
   // as dark vessels doesn't apply here (no toggle-driven reveal is described for infrastructure
@@ -1046,16 +1060,24 @@ export default function MapView() {
   // Outside Trace (e.g. Attribute), there is no rewind narrative to earn — the toggle alone
   // should show the cloud at full opacity, since the footer's slider still defaults to T−0
   // (rewind 0) there and would otherwise make "Origin" a no-op until the user drags it.
-  const originOpacity = useMemo(() => {
-    if (!originVisible) return 0;
-    if (activeStage !== "trace") return 1;
-    const nSteps = particles?.nSteps ?? 0;
-    const rewind = originRewindFraction(t, nSteps);
-    return (
-      ORIGIN_OPACITY_FLOOR +
-      (1 - ORIGIN_OPACITY_FLOOR) * smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind)
-    );
-  }, [originVisible, activeStage, t, particles]);
+  // Per group, because each group's rewind is a different length: a fade keyed to the primary's
+  // frame count would hold a shorter group's cloud dim long after that group was fully rewound.
+  const originOpacityFor = useCallback(
+    (bundle: ParticleBundle | null, own: OriginBundle | null) => {
+      if (!originVisible) return 0;
+      if (activeStage !== "trace") return 1;
+      const rewind = originRewindFractionAtAge(
+        hoursBack,
+        own?.agePosterior?.median ?? null,
+        bundleSpanHours(bundle?.timestepMinutes ?? 0, bundle?.nSteps ?? 0),
+      );
+      return (
+        ORIGIN_OPACITY_FLOOR +
+        (1 - ORIGIN_OPACITY_FLOOR) * smoothstep(ORIGIN_FADE_IN_START, ORIGIN_FADE_IN_FULL, rewind)
+      );
+    },
+    [originVisible, activeStage, hoursBack],
+  );
 
   // Origin cloud + 50/90 % rings — the backdrop the particles rewind into, drawn UNDERNEATH
   // them. Ruling D11: a BitmapLayer, never a HeatmapLayer. HeatmapLayer aggregates its points
@@ -1077,6 +1099,7 @@ export default function MapView() {
       const image = originImages[i];
       if (!gb.origin || !image) return;
       const palette = groupColor(i);
+      const groupOpacity = originOpacityFor(gb.particles, gb.origin);
       list.push(
         new BitmapLayer({
           id: `origin-${gb.id}`,
@@ -1087,7 +1110,7 @@ export default function MapView() {
             gb.origin.bounds.east,
             gb.origin.bounds.north,
           ],
-          opacity: originOpacity,
+          opacity: groupOpacity,
           pickable: false,
           // Smooths both the per-timestep fade (already continuous in value, but previously
           // snapped instantly to each new value) and the discrete Origin layer-toggle case.
@@ -1110,7 +1133,7 @@ export default function MapView() {
           widthMinPixels: 1,
           capRounded: true,
           jointRounded: true,
-          opacity: originOpacity,
+          opacity: groupOpacity,
           pickable: false,
           transitions: {
             getPath: { duration: 900, easing: (x: number) => x * x * (3 - 2 * x) },
@@ -1120,7 +1143,7 @@ export default function MapView() {
       );
     });
     return list;
-  }, [groupBundles, originImages, originGroupRings, originOpacity, drawnGroupIds]);
+  }, [groupBundles, originImages, originGroupRings, originOpacityFor, drawnGroupIds]);
 
   // Forward cone + centroid track. Ring/track geometry is built once per bundle; what changes on
   // a scrub is only which prefix of that geometry is visible (`visibleForwardRings` /
@@ -1196,7 +1219,14 @@ export default function MapView() {
     const layers: ScatterplotLayer[] = [];
     groupBundles.forEach((gb, i) => {
       if (!gb.particles) return;
-      const frame = gb.particles.frames[t] ?? gb.particles.frames[0];
+      // This group's own frame at the shared wall-clock hour, clamped to its last frame. No
+      // `?? frames[0]` fallback: that used to teleport a short group's whole cloud back onto
+      // the slick the moment the primary out-ran it.
+      const frame =
+        gb.particles.frames[
+          frameForHoursBack(hoursBack, gb.particles.timestepMinutes, gb.particles.nSteps)
+        ];
+      if (!frame) return;
       const palette = groupColor(i);
       layers.push(
         new ScatterplotLayer({
@@ -1221,7 +1251,7 @@ export default function MapView() {
       );
     });
     return layers;
-  }, [groupBundles, particlesVisible, t, playing, autoPlaying]);
+  }, [groupBundles, particlesVisible, hoursBack, playing, autoPlaying]);
 
   // Push the composed list into the deck overlay. Order is bottom→top: origin bitmap, rings,
   // forward cone + centroid track, vessel tracks, particles, dark-vessel markers,

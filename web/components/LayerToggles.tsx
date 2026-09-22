@@ -15,6 +15,9 @@ const TOGGLES: { id: LayerId; label: string; swatch: string }[] = [
   { id: "origin", label: "Origin", swatch: "var(--drift)" },
   { id: "forward", label: "Forward slick", swatch: "var(--drift)" },
   { id: "vessels", label: "Ship tracks", swatch: "var(--contact)" },
+  // The one marker on the map with no track and no name. It had no chip at all, so the
+  // rose dot was the only thing on screen a judge could not look up in the legend.
+  { id: "darkVessels", label: "Ghost ships", swatch: "var(--dark-vessel)" },
 ];
 
 export default function LayerToggles() {
@@ -51,7 +54,7 @@ export default function LayerToggles() {
       {TOGGLES.map(({ id, label, swatch }) => {
         const needsTrace = id === "particles" || id === "origin";
         const needsForward = id === "forward";
-        const needsAttribute = id === "vessels";
+        const needsAttribute = id === "vessels" || id === "darkVessels";
         const enabled =
           (id !== "detections" || revealed.detect) &&
           (!needsTrace || traceAvailable) &&

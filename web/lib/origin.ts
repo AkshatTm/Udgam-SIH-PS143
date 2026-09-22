@@ -108,6 +108,27 @@ export function originRewindFraction(t: number, nSteps: number): number {
 }
 
 /**
+ * Rewind fraction against the age the case actually claims — 1 at the posterior's median.
+ *
+ * The track spans the whole 80 % band because that band is the evidence, but the band's upper
+ * edge is not the answer. Fading the origin cloud in across the full span meant it only reached
+ * full opacity out at the edge: on Jacksonville the arrival rewind now rests at 1.8 h of a
+ * 10.25 h band, which on the old denominator is 18 % — a cloud still at its opacity floor at the
+ * exact moment the panel beside it states the origin. Anchoring on the median puts the cloud at
+ * full strength where the rewind comes to rest, and dragging deeper into the band keeps it
+ * there. With no posterior (an unmeasured age) this falls back to the full span, unchanged.
+ */
+export function originRewindFractionAtAge(
+  hoursBack: number,
+  medianAgeHours: number | null,
+  spanHours: number,
+): number {
+  const denom = medianAgeHours !== null && medianAgeHours > 0 ? medianAgeHours : spanHours;
+  if (!(denom > 0)) return 0;
+  return Math.min(1, Math.max(0, hoursBack / denom));
+}
+
+/**
  * Rasterise the row-major probability grid onto an `OffscreenCanvas` and hand back its
  * `ImageBitmap` for a deck.gl `BitmapLayer` (ruling D11 — never a `HeatmapLayer`; docs/team/harshita-frontend.md
  * Phase 5.1). One texel per grid cell, so the image is `cols × rows` (120 × 120 for case-000).

@@ -364,11 +364,21 @@ function validateDarkVessel(dv: RawDarkVessel, i: number, id: string): void {
   if (dv.mmsi !== undefined && dv.mmsi !== null) {
     throw new Error(`${where}: a dark vessel has no AIS identity — "mmsi" must be null or absent`);
   }
-  if (dv.est_length_m !== undefined && (typeof dv.est_length_m !== "number" || !Number.isFinite(dv.est_length_m) || dv.est_length_m < 0)) {
+  // `null` is a MEASUREMENT THAT COULD NOT BE MADE, not a malformed field — frozen convention 4,
+  // and dark.py writes it deliberately: `round(float(length)) if length else None` (dark.py:96).
+  // Gulf of Alaska's contact comes from GFW SAR vessel detections, which publish no length, so it
+  // ships `"est_length_m": null` and a `!== undefined` guard alone rejected the whole bundle —
+  // hiding the dark vessel that IS that case's answer. Both arms, exactly like `mmsi` above.
+  if (
+    dv.est_length_m !== undefined &&
+    dv.est_length_m !== null &&
+    (typeof dv.est_length_m !== "number" || !Number.isFinite(dv.est_length_m) || dv.est_length_m < 0)
+  ) {
     throw new Error(`${where}: "est_length_m" must be a non-negative finite number when present`);
   }
   if (
     dv.angular_deviation_deg !== undefined &&
+    dv.angular_deviation_deg !== null &&
     (typeof dv.angular_deviation_deg !== "number" || !Number.isFinite(dv.angular_deviation_deg))
   ) {
     throw new Error(`${where}: "angular_deviation_deg" must be a finite number when present`);

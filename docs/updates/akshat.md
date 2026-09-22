@@ -2,6 +2,71 @@
 
 *Newest entry at the TOP. Format: `docs/updates/TEMPLATE.md`.*
 
+## [2026-09-22 23:55] D56–D57 — every spill group gets its own age, the rewind rests on the best estimate, ghost ships are labelled
+
+**Done:** Seven reported defects reduced to five root causes, all fixed. (1) `run_backward_group()`
+now runs the age engine per spill group, so a secondary group's origin is its own age-weighted
+pool instead of "wherever a particle is after 72 h" — Alaska's two secondary origins moved from
+28.6/30.2 km off their detections to 1.21/0.84 km, Mumbai's from 50.3/50.7 km to 4.20/1.80 km, and
+every group now reports `time_window_method: "age"`. (2) The frontend played every group's
+particles off the PRIMARY bundle's frame index, which froze longer groups partway, put groups at
+different wall-clock times, and teleported shorter ones back onto the slick via a silent
+`?? frames[0]`; playback is now on one hours-before-detection clock with each bundle clamped to
+its own last frame. (3) The arrival rewind rests on the posterior's median (Jacksonville T−1h51m,
+not T−10h) with the full 80 % band still draggable, and the origin cloud reaches full opacity
+there instead of at the band edge. (4) An interrupted GSAP entrance left inline `opacity: 0.21` on
+the Trace panel — the translucent sidebar — now killed and cleared on every path. (5) A
+`!== undefined` guard rejected Alaska's deliberate `est_length_m: null`, which threw away the whole
+suspects bundle and hid the dark vessel that IS that case's answer. Ghost ships gained a colour
+token, a legend chip and a gallery badge.
+
+**Files touched:** `pipeline/drift/run.py` (modified — `run_age(label=)`, `run_backward_group()`) ·
+`pipeline/drift/regen_secondary_spill_groups.py` (modified — `--age/--age-members/--volume-m3`) ·
+`web/lib/timestep.ts` (modified — wall-clock helpers) · `web/lib/usePlayback.ts` (rewritten onto
+hours) · `web/lib/origin.ts` (`originRewindFractionAtAge`) · `web/lib/suspects.ts` (null guards) ·
+`web/lib/contracts.ts` · `web/lib/cases.ts` (`darkVesselCount`) · `web/lib/store.ts` (`darkVessels`
+layer) · `web/components/MapView.tsx` · `web/components/TimeSlider.tsx` ·
+`web/components/trace/TraceCard.tsx` · `web/components/ContextPanel.tsx` ·
+`web/components/LayerToggles.tsx` · `web/components/Gallery.tsx` · `web/app/globals.css` ·
+`web/tailwind.config.ts` · `cases/case-{gulf-alaska-2023,mumbai-2023}/{origin,particles}_group-{1,3}.json`
+(output) · `docs/00_MASTER_PLAN.md` (D56, D57)
+
+**Run command:**
+```bash
+python pipeline/drift/regen_secondary_spill_groups.py --case case-gulf-alaska-2023 --real
+python pipeline/drift/regen_secondary_spill_groups.py --case case-mumbai-2023 --real
+python scripts/validate_case.py cases/case-mumbai-2023
+```
+Expected output: per group, `age [lo, hi] h (80% HPD), median M h` then
+`rewind published N h ... this group's measured age, not the 72 h search bracket`, then `PASS`.
+
+**Checkpoint artefact:** all nine cases PASS the validator; `pipeline/drift/tests.py` 12/12
+(101 assertions), `pipeline/attribute/tests.py` 124/124. Verified in Chrome on all six live cases:
+playhead parks on the median tick (Jacksonville 1.8h, Farallones 2.9h, Jamnagar 2.7h, Huntington
+4.1h, Mumbai 3.1h, Alaska 1.2h), zero elements below `opacity: 1` in the Trace sidebar at rest,
+Alaska Stage 3 renders its dark vessel instead of "Suspects bundle failed to load".
+
+**Open issues:**
+- **D57 — Mumbai's cross-check double-counts and nothing was re-run.** A maximum bipartite matching
+  between Mumbai's 21 radar contacts and the vessels whose prism claims them has size 7, so 14
+  cannot be jointly explained (one MMSI is credited with 17 contacts). But zero contacts are
+  unmatched in EVERY maximum matching, so no single one is provably dark and naming one would be
+  arbitrary. `dark.py` is unchanged; only the Find panel's empty-state wording was corrected. If
+  exclusivity is ever added to `dark.py` it must be re-checked against Jacksonville (2 contacts,
+  0 claimed) and Huntington (43 of 280), which are exact under both rules today.
+- Stage 3 reads the PRIMARY group's `origin.json` only, so Mumbai's attribution still rests on
+  det-01 (1.48 km²) while the largest patch is det-02 (7.61 km²). Now that every group carries a
+  real age posterior, feeding Stage 3 a per-group funnel is possible — not attempted here.
+- `ContextPanel.SpillGroupsSummary` labels groups by descending area while `is_primary` is chosen
+  by confidence, so the on-screen "Group 1" is not the primary on either multi-group case. Nothing
+  marks which one Stage 3 actually used.
+- The Trace camera no longer over-frames (bundles now carry only displayed frames), so
+  `lib/extent.ts` was left untouched — revisit if a case ever ships an untruncated group again.
+
+**Next:** decide whether Stage 3 should score against every spill group rather than the primary
+alone — that is the remaining gap between what Stage 2 now measures and what Stage 3 uses.
+
+
 ## [2026-09-22 21:30] D47–D55 — the rewind follows the measured age everywhere, suspects are always named, the merge's identity provenance was silently broken
 
 **Done:** Closed out the plan at `.claude/plans/serialized-brewing-pearl.md`. Landed the branch

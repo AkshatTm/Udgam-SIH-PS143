@@ -38,6 +38,7 @@ const config: Config = {
         contact: "rgb(var(--contact-rgb) / <alpha-value>)",
         infra: "rgb(var(--infra-rgb) / <alpha-value>)",
         reject: "rgb(var(--reject-rgb) / <alpha-value>)",
+        "dark-vessel": "rgb(var(--dark-vessel-rgb) / <alpha-value>)",
         alert: "rgb(var(--alert-rgb) / <alpha-value>)",
       },
       fontFamily: {

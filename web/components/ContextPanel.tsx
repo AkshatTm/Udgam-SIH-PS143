@@ -642,6 +642,9 @@ function AttributeCard({
   /** Length of detections.ship_detections, or null when the ship detector was not recorded. */
   shipContacts: number | null;
 }) {
+  // Hourly AIS changes what a "matched" radar contact is allowed to claim — see the
+  // dark-vessel empty state below.
+  const hourlyAis = aisSource === "gfw_hourly";
   return (
     <div className="flex flex-col">
       <div>
@@ -776,9 +779,22 @@ function AttributeCard({
                 ? "No radar-contact list was recorded for this scene, so darkness was not assessed."
                 : shipContacts === 0
                   ? "UDGAM's ship detector found no radar contact on this scene, and no listed radar contact is unexplained by AIS."
-                  : `UDGAM's ship detector found ${shipContacts} radar contact${
-                      shipContacts === 1 ? "" : "s"
-                    } on this scene. None is both unexplained by AIS at acquisition time and near the slick or origin.`}
+                  : hourlyAis
+                    ? // D57 — this case's AIS is hourly, and hourly sampling cannot PLACE a
+                      // vessel, so dark.py falls back to a reachability prism: "could some
+                      // vessel have got here in time?". That test has no exclusivity — one
+                      // vessel's prism can be credited with many contacts at once, and on
+                      // case-mumbai-2023 a single MMSI is credited with 17 of 21. Under a
+                      // one-vessel-one-place accounting only 7 of those 21 can be explained.
+                      // So this panel must not repeat the old claim that none is unexplained.
+                      // It also must not name one: no contact is unmatched in EVERY maximum
+                      // matching, so which of them is dark is not determined by the evidence.
+                      `UDGAM's ship detector found ${shipContacts} radar contact${
+                        shipContacts === 1 ? "" : "s"
+                      } on this scene. This case's AIS is sampled hourly, which can show that a vessel was in the area but cannot place it on a specific contact — so each contact is tested for whether any vessel could have reached it, and several contacts can share one candidate. That is not enough to name any single contact as unexplained, and UDGAM does not name one.`
+                    : `UDGAM's ship detector found ${shipContacts} radar contact${
+                        shipContacts === 1 ? "" : "s"
+                      } on this scene. None is both unexplained by AIS at acquisition time and near the slick or origin.`}
             </p>
           )}
 

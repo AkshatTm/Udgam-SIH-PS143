@@ -21,11 +21,11 @@
 // on the play/pause icon swap instead of the previous instant cut). None of this touches
 // MapView.tsx — the map keeps reading tNorm/forwardNorm via updateTriggers exactly as before.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { usePlayback } from "@/lib/usePlayback";
 import { useForwardPlayback } from "@/lib/useForwardPlayback";
-import { tFromNorm } from "@/lib/timestep";
+import { hoursBackFromNorm, longestSpanHours, tFromNorm } from "@/lib/timestep";
 import { forwardSpanHours } from "@/lib/forward";
 import { gsap, useGSAP, prefersReducedMotion } from "@/lib/gsap";
 
@@ -78,6 +78,7 @@ export default function TimeSlider() {
   const setForwardPlaying = useAppStore((s) => s.setForwardPlaying);
   const particles = useAppStore((s) => s.particles);
   const particlesStatus = useAppStore((s) => s.particlesStatus);
+  const groupBundles = useAppStore((s) => s.groupBundles);
   const forward = useAppStore((s) => s.forward);
   const activeStage = useAppStore((s) => s.activeStage);
   const activeCaseId = useAppStore((s) => s.activeCaseId);
@@ -92,15 +93,23 @@ export default function TimeSlider() {
   };
 
   const nSteps = particles?.nSteps ?? 0;
-  const canPlay = nSteps > 1;
-  const t = tFromNorm(tNorm, nSteps);
-  const minutesBack = canPlay ? t * particles!.timestepMinutes : 0;
 
-  // The rewind span comes from the bundle, exactly as the forward span does. The left label
+  // The rewind span comes from the bundles, exactly as the forward span does. The left label
   // used to be the literal string "T−24h" while the readout beside it was computed — so on
   // every case in the library the track said 24 h and the readout said 72 h. The rewind is
   // now sized by the measured age, so the label has to be derived or it is wrong again.
-  const backSpanHours = canPlay ? ((nSteps - 1) * particles!.timestepMinutes) / 60 : 0;
+  //
+  // Across EVERY spill group, not just the primary: each group's rewind is truncated to its
+  // own measured age (D56), so on Gulf of Alaska the primary reaches 7.75 h while group-1
+  // reaches 10.5 h. Sizing the track to the primary would label the case "T−8h" and put two
+  // and a half hours of a real group's rewind past the end of the track.
+  const backSpanHours = useMemo(
+    () => longestSpanHours([particles, ...groupBundles.map((gb) => gb.particles)]),
+    [particles, groupBundles],
+  );
+  const canPlay = backSpanHours > 0;
+  const t = tFromNorm(tNorm, nSteps);
+  const minutesBack = canPlay ? hoursBackFromNorm(tNorm, backSpanHours) * 60 : 0;
   const backSpanLabel = canPlay
     ? `T−${backSpanHours >= 10 ? Math.round(backSpanHours) : backSpanHours.toFixed(1)}h`
     : "T−0h";

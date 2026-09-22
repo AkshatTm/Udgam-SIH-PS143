@@ -92,6 +92,7 @@ function CaseCard({ c, first }: { c: GalleryCase; first: boolean }) {
 
   const date = c.detectionTime ? formatAcquisitionDate(c.detectionTime) : null;
   const type = c.caseType ? CASE_TYPE[c.caseType] : null;
+  const ghosts = c.darkVesselCount ?? 0;
 
   return (
     <Link
@@ -124,6 +125,17 @@ function CaseCard({ c, first }: { c: GalleryCase; first: boolean }) {
               style={{ background: type.color }}
             />
             {type.label}
+          </span>
+        )}
+        {ghosts > 0 && (
+          // Sits under the case-type badge, same solid treatment for the same reason. This is
+          // the one thing a card can say that the title and blurb cannot: the answer on this
+          // case is a ship that was not broadcasting. Rendered only when suspects.json actually
+          // carries one — a detect-only case (darkVesselCount undefined) never shows it, and
+          // neither does a case whose cross-check found none.
+          <span className="absolute right-4 top-12 flex items-center gap-1.5 rounded-full bg-abyss/90 px-2.5 py-1 text-[11px] font-medium text-[#fda4af] ring-1 ring-inset ring-[#f43f5e]/40">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-dark-vessel" />
+            {ghosts === 1 ? "Ghost ship" : `${ghosts} ghost ships`}
           </span>
         )}
       </div>

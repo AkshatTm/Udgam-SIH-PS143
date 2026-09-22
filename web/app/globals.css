@@ -54,6 +54,7 @@
   --contact-rgb: 45 212 191;   /* radar ship contact, a confirmed match */
   --infra-rgb:   167 139 250;  /* fixed infrastructure (platform, pipeline) */
   --reject-rgb:  122 136 153;  /* look-alike, excluded vessel */
+  --dark-vessel-rgb: 244 63 94;  /* ghost ship: radar contact with no AIS identity */
   --alert-rgb:   255 77 77;    /* a genuine failure: data that did not load */
 
   --drift:   rgb(var(--drift-rgb));
@@ -61,6 +62,7 @@
   --contact: rgb(var(--contact-rgb));
   --infra:   rgb(var(--infra-rgb));
   --reject:  rgb(var(--reject-rgb));
+  --dark-vessel: rgb(var(--dark-vessel-rgb));
   --alert:   rgb(var(--alert-rgb));
 
   --drift-dim:   rgba(249, 115, 22, 0.14);

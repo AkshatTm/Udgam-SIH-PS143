@@ -282,12 +282,18 @@ def write_origin(path, endpoints, conv_idx, members, t0, timestep_minutes, n_ste
     return clon, clat, r50, r90, method, doc["abstain"]
 
 
-def run_age(a, meta, t0, field, feat, history, case_dir, land, span_h):
-    """Age engine v2 inside the main run. Returns the age block for origin.json.
+def run_age(a, meta, t0, field, feat, history, case_dir, land, span_h, label=None):
+    """Age engine v2. Returns the age block for origin.json.
 
     Release points come from THIS run's control rewind (`history`), so the ages and the
     origin cloud are built on one backward trajectory. The full diagnostic record goes to
     out/age_<case>.json (working space, never in the bundle).
+
+    `label` names a secondary spill group (D56). It does two things, both about not letting one
+    slick's evidence leak into another's: the diagnostic is written to age_<case>_<label>.json
+    instead of overwriting the primary's, and the cached OpenOil run is NOT loaded, because
+    opendrift_age.py is run for the primary slick only -- mixing its posterior into a different
+    patch's would be borrowing evidence that was never gathered about that patch.
     """
     import age as age_engine
     lo, hi, st = 2.0, 72.0, 4.0
@@ -298,7 +304,7 @@ def run_age(a, meta, t0, field, feat, history, case_dir, land, span_h):
         cands, dropped, _ = age_engine.clip_candidates_to_coverage(cands, t0, cov)
     release = age_engine.release_points_from_history(history, cands, a.timestep_minutes)
     out_dir = Path(a.out)
-    opendrift = age_engine.load_opendrift_age(out_dir, a.case)
+    opendrift = None if label else age_engine.load_opendrift_age(out_dir, a.case)
     c_centre, c_edge, cdiag = age_engine.sar_contrast(case_dir, feat)
     props = feat["properties"]
     print(f"              age  {len(cands)} candidates, OpenOil "
@@ -311,7 +317,7 @@ def run_age(a, meta, t0, field, feat, history, case_dir, land, span_h):
     report.update({"case": a.case, "t0": meta["detection_time"], "sar_contrast": cdiag,
                    "release_points": [[round(x, 5), round(y, 5)] for x, y in release]})
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / f"age_{a.case}.json").write_text(
+    (out_dir / (f"age_{a.case}_{label}.json" if label else f"age_{a.case}.json")).write_text(
         json.dumps(report, indent=1, default=age_engine._json_default))
     post = report["posterior"]
     if post["status"] == "ok":
@@ -471,14 +477,33 @@ def run_forward(a, meta, t0, field, seed, feat, out_dir):
 
 
 def run_backward_group(a, t0, field, land, seed_feat, particles_path, origin_path,
-                       group_label, seed_offset):
-    """D46: one full backward control run + 50-member ensemble for a single independent spill
-    GROUP's seed geometry. Sibling to the primary run in main() -- same integrate_stranding, same
-    run_ensemble, same edge/plausibility guards -- with NO age engine (age is a single-slick
-    concept; age.py is not touched by this fix) so age_block/pool stay None, reproducing the
-    pre-age-engine origin.json shape. `seed_offset` keeps this group's RNG stream independent of
-    the primary run's and of every other secondary group's. Returns a small diagnostic dict for
-    the console summary and the meta.spill_groups entry.
+                       group_label, seed_offset, meta=None, case_dir=None):
+    """D46 (+D56): one full backward control run + 50-member ensemble for a single independent
+    spill GROUP's seed geometry. Sibling to the primary run in main() -- same integrate_stranding,
+    same run_ensemble, same edge/plausibility guards, and since D56 the same age engine.
+    `seed_offset` keeps this group's RNG stream independent of the primary run's and of every
+    other secondary group's. Returns a small diagnostic dict for the console summary and the
+    meta.spill_groups entry.
+
+    D56 -- WHY THE AGE ENGINE RUNS HERE NOW. D46 shipped this function with the age engine off,
+    on the reasoning that "age is a single-slick concept". That reasoning is right, and it is
+    exactly why the engine belongs here: an independent spill group IS a single slick -- its own
+    feature, its own geometry, its own width. What it is not is the SAME slick as the primary,
+    which is why it gets its own posterior rather than a copy of the primary's.
+
+    Leaving it off had a mechanical cost that reached the screen. With age_block=None,
+    write_origin falls through to ens.time_window's `bounded` branch -- [t0-72h, t0-24h], a search
+    bracket -- the cloud becomes the raw endpoints after the FULL 72 h rewind rather than an
+    age-weighted pool, and particles_<group>.json ships 97 frames x 45 min. Measured against each
+    group's own detection before this change: Alaska group-1 28.6 km and group-3 30.2 km, Mumbai
+    group-1 50.3 km and group-3 50.7 km -- against 1.1 km and 2.7 km for the two primaries, the
+    tightest origins in the library. The panel draws every group at once and labels them by
+    descending area (ContextPanel.SpillGroupsSummary), so on both cases the first and largest
+    cloud on screen was the one with no age engine: three days of drift the evidence never claimed.
+
+    If the posterior refuses (information gain below the gate), age_block carries age_method
+    "none" + age_refusal, `drive` stays False, and this falls back to exactly the D46 behaviour.
+    An unmeasured age must not masquerade as a short one.
     """
     rng = random.Random(a.seed + seed_offset)
     seed = seed_particles(seed_feat, a.particles, rng)
@@ -495,10 +520,40 @@ def run_backward_group(a, t0, field, land, seed_feat, particles_path, origin_pat
         seed, t0, field, a.steps, a.timestep_minutes, direction="backward", is_land=land)
     positions = np.round(history, 5).tolist()
 
+    # ---- age engine, on this group's own geometry (D56) --------------------------------
+    # Same narrow-except contract as the primary run: a failure here degrades to "no age",
+    # which reproduces the D46 origin exactly rather than blocking the bundle.
+    age_block = None
+    if getattr(a, "age", "report") != "off" and not getattr(a, "stub", False) and meta is not None:
+        try:
+            age_block = run_age(a, meta, t0, field, seed_feat, history, case_dir, land, span_h,
+                                label=group_label)
+        except Exception as exc:                                     # noqa: BLE001
+            print(f"              !! AGE ENGINE FAILED for {group_label}, continuing without "
+                  f"an age: {type(exc).__name__}: {exc}")
+            age_block = None
+    post = (age_block or {}).get("age_posterior")
+    drive = getattr(a, "age", "report") == "drive" and post is not None
+    collect = None
+    if drive:
+        collect = [int(round(h * 60.0 / a.timestep_minutes)) for h in post["hours_grid"]]
+
     nprng = np.random.default_rng(a.seed + seed_offset)
-    endpoints, conv_idx, members = ens.run_ensemble(
+    res = ens.run_ensemble(
         seed, t0, field, a.steps, a.timestep_minutes, n_runs=a.runs, rng=nprng,
-        is_land=land, current_sigma=a.current_sigma)
+        is_land=land, current_sigma=a.current_sigma, collect_steps=collect)
+    pool = None
+    if drive:
+        endpoints, conv_idx, members, collected = res
+        pool = ens.age_weighted_pool(collected, post["hours_grid"], post["prob"],
+                                     a.timestep_minutes, hpd=post["hpd80"])
+        if pool[0] is None:
+            pool = None
+        else:
+            print(f"              age pool  {len(pool[0]):,} points over "
+                  f"{len(set(collect))} frames, weighted by this group's posterior")
+    else:
+        endpoints, conv_idx, members = res
     strand_frac = (float(np.mean([m["stranded_fraction"] for m in members]))
                   if land is not None else None)
 
@@ -510,12 +565,21 @@ def run_backward_group(a, t0, field, land, seed_feat, particles_path, origin_pat
     ws = wind_share_of_drift(field, history, times)
     wind_share = ws[0] if ws is not None else None
 
-    out_frames, out_dt = subsample_for_output(np.asarray(positions), a.timestep_minutes,
-                                              a.output_timestep_minutes)
+    # Same two-step publish as the primary run: cut the rewind to the age we actually measured,
+    # THEN thin to the output cadence. Without the truncate this group ships the full 72 h search
+    # bracket while its own origin.json claims a window of hours.
+    pub_hist, pub_dt = truncate_to_age_horizon(np.asarray(positions), a.timestep_minutes,
+                                               age_block, a.output_timestep_minutes)
+    out_frames, out_dt = subsample_for_output(pub_hist, a.timestep_minutes, pub_dt)
     write_particles(particles_path, t0, out_frames.tolist(), out_dt)
+    pub_span = (len(out_frames) - 1) * out_dt / 60.0
+    if pub_span < span_h - 1e-9:
+        print(f"              rewind    published {pub_span:.2f} h in {len(out_frames)} frames "
+              f"of {out_dt} min -- this group's measured age, not the "
+              f"{span_h:.0f} h search bracket")
     clon, clat, r50, r90, method, abstain = write_origin(
         origin_path, endpoints, conv_idx, members, t0, a.timestep_minutes, a.steps, a.runs,
-        stranded_fraction=strand_frac, wind_share=wind_share, pool=None, age_block=None,
+        stranded_fraction=strand_frac, wind_share=wind_share, pool=pool, age_block=age_block,
         case_id=a.case)
     med_km = assert_displacement_plausible(history[0], history[-1], hours=span_h)
 
@@ -820,7 +884,8 @@ def main():
               f"area {g['total_area_km2']:.3f} km2  seeding independently")
         gdiag = run_backward_group(a, t0, field, land, g["feature"],
                                    out_dir / pfile, out_dir / ofile,
-                                   group_label=gid, seed_offset=1000 * gi)
+                                   group_label=gid, seed_offset=1000 * gi,
+                                   meta=meta, case_dir=case_dir)
         print(f"              wrote {out_dir / pfile}")
         print(f"              wrote {out_dir / ofile}")
         print(f"              origin r50={gdiag['r50']:.1f} km  r90={gdiag['r90']:.1f} km  "

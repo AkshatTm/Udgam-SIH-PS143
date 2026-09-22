@@ -6,6 +6,9 @@ for every group EXCEPT the primary one, and write meta.spill_groups.
     python pipeline/drift/regen_secondary_spill_groups.py --case case-gulf-alaska-2023 --real
 
 WHY A SEPARATE SCRIPT, NOT `run.py --real` DIRECTLY
+    (D56: `run_backward_group` now runs the age engine per group -- see its docstring. This
+    script still never touches the primary bundle.)
+
     `run.py`'s primary control run + 50-member ensemble (age engine included) is orchestrated by
     `publish_all.py` together with `pool_models.py` (OpenDrift pooling -> `model_mix`) and a
     separate publish step (`pipeline/export/build_case.py`) that copies `pipeline/drift/out/`
@@ -56,6 +59,19 @@ def main():
     ap.add_argument("--seed", type=int, default=143)
     ap.add_argument("--merge-oil", choices=["auto", "always", "never"], default="auto")
     ap.add_argument("--current-sigma", type=float, default=None)
+    # D56: the age engine now runs per secondary group, so this script needs the same three
+    # knobs run.py's main() has. Defaults match publish_all.py's primary invocation
+    # (--age drive), because a secondary group published beside an age-driven primary must be
+    # built the same way or the two clouds are answering different questions.
+    ap.add_argument("--age", choices=["off", "report", "drive"], default="drive",
+                    help="off: no age engine (pre-D56 behaviour, 72 h bounded rewind). "
+                         "report: measure but do not drive the cloud. "
+                         "drive: measure, pool the ensemble by the posterior, truncate the "
+                         "published rewind to the measured horizon.")
+    ap.add_argument("--age-members", type=int, default=20)
+    ap.add_argument("--volume-m3", type=float, default=None,
+                    help="independently reported release volume, for the Fay estimator. Almost "
+                         "never available -- deriving it from area is circular.")
     ap.add_argument("--out", default=str(HERE / "out"))
     a = ap.parse_args()
     if not (a.real or a.fake):
@@ -111,7 +127,8 @@ def main():
         print(f"[regen-groups]  {gid}  {g['member_ids']}  "
               f"area {g['total_area_km2']:.3f} km2  seeding independently")
         gdiag = run_backward_group(a, t0, field, land, g["feature"], work_p, work_o,
-                                   group_label=gid, seed_offset=1000 * gi)
+                                   group_label=gid, seed_offset=1000 * gi,
+                                   meta=meta, case_dir=case_dir)
         print(f"                origin r50={gdiag['r50']:.1f} km  r90={gdiag['r90']:.1f} km  "
               f"abstain={gdiag['abstain']}  method={gdiag['method']}")
         (case_dir / pfile).write_text(work_p.read_text())
