@@ -448,6 +448,22 @@ function VerdictSection({ assessment: a }: { assessment: Assessment }) {
                 </p>
               </div>
             )}
+            {/* A `miss` against Cerulean's algorithmic attribution and a reasoned disagreement
+                with it are not the same claim — Cerulean runs no drift engine, we do, and when
+                the evidence genuinely points elsewhere that is worth saying plainly rather than
+                folding into a verdict badge that reads the same as "we found nothing". Blue,
+                not amber: this is an active counter-claim, not a caveat about missing data. */}
+            {a.disputesReference?.disputed && (
+              <div className="mt-6 rounded-lg border border-[#60a5fa]/30 bg-[#60a5fa]/[0.07] p-5">
+                <div className="t-label text-[#93c5fd]/80">We disagree with the reference</div>
+                <p className="mt-2 t-small text-pretty text-[#bfdbfe]/90">
+                  {a.disputesReference.ourClaim}
+                </p>
+                <p className="mt-3 t-small text-pretty text-[#bfdbfe]/70">
+                  {a.disputesReference.basis}
+                </p>
+              </div>
+            )}
             <button
               type="button"
               onClick={toggle}

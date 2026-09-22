@@ -446,10 +446,25 @@ export interface RawUdgamResult {
   abstained: boolean;
 }
 
+/**
+ * Optional. Cerulean's `source_type` is `algorithmic_attribution`, never
+ * `official_investigation` — it runs no drift engine. A `miss` against that reference and a
+ * reasoned disagreement with it are not the same statement, and the four-value verdict enum
+ * cannot tell them apart on its own. `disputed: true` renders an explicit "we disagree, and
+ * here is why" panel instead of a plain miss card. Hand-written prose, same as `explanation` —
+ * never generated.
+ */
+export interface RawDisputesReference {
+  disputed: boolean;
+  our_claim: string; // required, non-empty, human-written
+  basis: string; // required, non-empty, human-written — why the reference lacks what we have
+}
+
 export interface RawAssessment {
   verdict: Verdict;
   explanation: string; // required, non-empty, human-written
   what_would_have_helped?: string;
+  disputes_reference?: RawDisputesReference;
 }
 
 export interface RawVerification {

@@ -1038,9 +1038,17 @@ def check_suspects(d, known_mmsi, origin, box=None, ais_source=None):
             # RAISE every score on the case, which is the direction no automated advice should
             # ever push. Non-zero constants stay a warning: those are the inflating kind.
             if len(set(vals)) == 1 and vals[0] != 0:
+                # This checks only the PUBLISHED cards -- gate_constant_components (score.py)
+                # gates on the full plausible pool, which excluded[] does not carry back to the
+                # bundle, so the validator cannot see it. A component can be genuinely constant
+                # among the top N shown while varying in the wider pool score.py actually
+                # screened -- that is D28 correctly declining to gate, not a defect. Read as a
+                # prompt to check the producing run's own [gate] log before assuming one.
                 warn(f"suspects.json: components.{cname} is {vals[0]} for all {len(scored)} "
-                     "scored suspects — it separates nobody, so it only inflates every score "
-                     "by its weight. Gate it to null instead (D28).")
+                     "PUBLISHED suspects -- it separates nobody among them. If the wider scored "
+                     "pool agrees, D28 should have gated it (score.py: "
+                     "gate_constant_components); check that run's [gate] log, since this check "
+                     "cannot see excluded candidates.")
     scores = [x.get("score", 0) for x in s["suspects"]]
     if scores != sorted(scores, reverse=True):
         err("suspects.json: suspects are not sorted by descending score")
@@ -1175,6 +1183,28 @@ def check_verification(d):
                 f"got {a['verdict']!r}")
         if not str(a["explanation"]).strip():
             err("verification.json/assessment/explanation: human-written prose, must not be empty")
+        # OPTIONAL. Cerulean runs no drift engine; when we do, and the evidence genuinely
+        # points elsewhere, that is a reasoned disagreement, not a miss -- the four-value
+        # verdict enum cannot say which. `disputed` lets the Verify screen render an explicit
+        # "we disagree, and here is why" panel instead of a plain miss card.
+        dr = a.get("disputes_reference")
+        if dr is not None:
+            if not isinstance(dr, dict):
+                err("verification.json/assessment/disputes_reference: must be an object")
+            elif need_keys(dr, ["disputed", "our_claim", "basis"],
+                          "verification.json/assessment/disputes_reference"):
+                if not isinstance(dr["disputed"], bool):
+                    err("verification.json/assessment/disputes_reference/disputed: must be a bool")
+                if not str(dr["our_claim"]).strip():
+                    err("verification.json/assessment/disputes_reference/our_claim: human-written "
+                        "prose, must not be empty")
+                if not str(dr["basis"]).strip():
+                    err("verification.json/assessment/disputes_reference/basis: human-written "
+                        "prose, must not be empty")
+                if dr["disputed"] and a["verdict"] == "hit":
+                    err("verification.json/assessment: disputes_reference/disputed is true on a "
+                        "'hit' verdict — a hit already agrees with the reference; there is "
+                        "nothing to dispute")
 
     # ---- does the Verify screen describe the bundle it sits in? ----------------------------
     # This check exists because it did not. verification.json is generated FROM suspects.json by

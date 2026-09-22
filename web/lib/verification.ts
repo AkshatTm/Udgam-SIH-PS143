@@ -10,6 +10,7 @@
 
 import type {
   RawAssessment,
+  RawDisputesReference,
   RawUdgamResult,
   RawOfficialFinding,
   RawResponsibleParty,
@@ -45,11 +46,20 @@ export interface UdgamResult {
   abstained: boolean;
 }
 
+/** Optional. Cerulean runs no drift engine, so a case where we disagree with it on the
+ *  evidence is not the same statement as a `miss` — see contracts.ts's RawDisputesReference. */
+export interface DisputesReference {
+  disputed: boolean;
+  ourClaim: string;
+  basis: string;
+}
+
 export interface Assessment {
   verdict: Verdict;
   /** Human-written prose, rendered verbatim. */
   explanation: string;
   whatWouldHaveHelped: string | null;
+  disputesReference: DisputesReference | null;
 }
 
 export interface VerificationBundle {
@@ -138,6 +148,29 @@ function validateAssessment(a: RawAssessment, id: string): void {
     );
   }
   nonEmptyString(a.explanation, `${where}.explanation`);
+  if (a.disputes_reference !== undefined && a.disputes_reference !== null) {
+    const dwhere = `${where}.disputes_reference`;
+    const dr = a.disputes_reference;
+    if (!dr || typeof dr !== "object") {
+      throw new Error(`${dwhere}: must be an object when present`);
+    }
+    if (typeof dr.disputed !== "boolean") {
+      throw new Error(`${dwhere}.disputed: must be a boolean`);
+    }
+    nonEmptyString(dr.our_claim, `${dwhere}.our_claim`);
+    nonEmptyString(dr.basis, `${dwhere}.basis`);
+    if (dr.disputed && a.verdict === "hit") {
+      throw new Error(
+        `${dwhere}: disputed is true on a 'hit' verdict — nothing to dispute if we already agree`,
+      );
+    }
+  }
+}
+
+function parseDisputesReference(a: RawAssessment): DisputesReference | null {
+  const dr: RawDisputesReference | undefined = a.disputes_reference;
+  if (!dr) return null;
+  return { disputed: dr.disputed, ourClaim: dr.our_claim, basis: dr.basis };
 }
 
 export async function loadVerificationBundle(id: string): Promise<VerificationBundle> {
@@ -181,6 +214,7 @@ export async function loadVerificationBundle(id: string): Promise<VerificationBu
         a.what_would_have_helped,
         `${where}/assessment/what_would_have_helped`,
       ),
+      disputesReference: parseDisputesReference(a),
     },
   };
 }
